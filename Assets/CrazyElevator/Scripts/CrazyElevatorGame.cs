@@ -63,7 +63,7 @@ namespace CrazyElevator
         Vector2 dragScreenStart;
         float dragPlaneLocalY;
         bool draggedWasBoarded;
-        bool paused, tutorialSeen, musicMuted, stampPlayed;
+        bool paused, tutorialSeen, musicMuted, stampPlayed, generatedGroove;
         string notice = "Welcome aboard. Your shift starts when you are ready.";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -86,7 +86,13 @@ namespace CrazyElevator
             speaker = gameObject.AddComponent<AudioSource>(); speaker.volume = .24f;
             chime = Tone(660, .28f); ding = DingTone(); click = Tone(420, .08f); buzz = Tone(130, .18f); stamp = StampTone();
             music = gameObject.AddComponent<AudioSource>(); music.loop = true; music.volume = .16f;
-            groove = Groove(); music.clip = groove; music.Play();
+            groove = Resources.Load<AudioClip>("Crazy Elevator Main Theme V2");
+            if (groove == null)
+            {
+                groove = Groove(); generatedGroove = true;
+                Debug.LogWarning("Crazy Elevator theme not found in Resources; using the built-in placeholder groove.");
+            }
+            music.clip = groove; music.Play();
             phase = Phase.Intro;
             introTime = 0;
             doors = 0;
@@ -136,7 +142,7 @@ namespace CrazyElevator
             // centred like a real elevator, with the mirrored control columns at
             // the left and right edges of the frame.
             eye.transform.position = new Vector3(0f, 2.08f, 4.86f);
-            eye.transform.LookAt(new Vector3(0, 1.42f, -.05f)); eye.orthographic = false; eye.fieldOfView = 62;
+            eye.transform.LookAt(new Vector3(0, 1.42f, -.05f)); eye.orthographic = false; eye.fieldOfView = 68;
             cameraHome = eye.transform.position; cameraHomeRotation = eye.transform.rotation;
             eye.clearFlags = CameraClearFlags.SolidColor; eye.backgroundColor = new Color32(42, 48, 66, 255);
             eye.nearClipPlane = .1f; eye.farClipPlane = 100;
@@ -160,8 +166,8 @@ namespace CrazyElevator
             Box("Left wall", new Vector3(-2.9f, 1.5f, 2.58f), new Vector3(.18f, 3, 5.0f), new Color32(164, 117, 83, 255));
             Box("Right wall", new Vector3(2.9f, 1.5f, 2.58f), new Vector3(.18f, 3, 5.0f), new Color32(164, 117, 83, 255));
             for (int i = -2; i <= 2; i++) Box("Back metal rib", new Vector3(i, 1.5f, 5.06f), new Vector3(.035f, 2.8f, .05f), new Color32(171, 183, 198, 255));
-            Box("Left handrail", new Vector3(-2.67f, .92f, 2.58f), new Vector3(.08f, .08f, 4.18f), Cream);
-            Box("Right handrail", new Vector3(2.67f, .92f, 2.58f), new Vector3(.08f, .08f, 4.18f), Cream);
+            BuildHandrail(-1);
+            BuildHandrail(1);
             Box("Door jamb left", new Vector3(-2.8f, 1.55f, 0), new Vector3(.25f, 3.1f, .28f), Cream);
             Box("Door jamb right", new Vector3(2.8f, 1.55f, 0), new Vector3(.25f, 3.1f, .28f), Cream);
             Box("Door header", new Vector3(0, 3.05f, 0), new Vector3(5.8f, .2f, .28f), Cream);
@@ -170,7 +176,7 @@ namespace CrazyElevator
             leftDoor = Box("Sliding door L", new Vector3(-1.32f, 1.35f, .08f), new Vector3(2.64f, 2.65f, .1f), new Color32(255, 242, 198, 255));
             rightDoor = Box("Sliding door R", new Vector3(1.32f, 1.35f, .08f), new Vector3(2.64f, 2.65f, .1f), new Color32(255, 242, 198, 255));
             // A compact in-world floor display replaces the old top HUD.
-            floorSign = Sign("00", floorSignHome, .04f, Cream);
+            floorSign = Sign("0", floorSignHome, .04f, Cream);
             // TextMesh is created facing the opposite side of the cabin in the
             // player build; turn the display toward the straight-on camera.
             floorSign.transform.rotation = Quaternion.Euler(0, 180, 0);
@@ -183,13 +189,34 @@ namespace CrazyElevator
             Shape("Plant", PrimitiveType.Sphere, new Vector3(3, 1, -3), new Vector3(.75f, 1.25f, .75f), Teal, stage);
         }
 
+        void BuildHandrail(float side)
+        {
+            // A rounded rail with two wall mounts. Its front end stops behind
+            // the controls, keeping the buttons clear from this camera angle.
+            Color metal = new Color32(154, 168, 180, 255);
+            float x = side * 2.70f;
+            Transform rail = Shape("Handrail tube", PrimitiveType.Cylinder,
+                new Vector3(x, .92f, 3.05f), new Vector3(.07f, 1.5f, .07f), metal, stage);
+            rail.localRotation = Quaternion.Euler(90, 0, 0);
+            foreach (float z in new[] { 1.55f, 4.55f })
+                Shape("Handrail end", PrimitiveType.Sphere,
+                    new Vector3(x, .92f, z), Vector3.one * .07f, metal, stage);
+            foreach (float z in new[] { 1.75f, 4.35f })
+            {
+                Box("Handrail wall mount", new Vector3(side * 2.795f, .92f, z), new Vector3(.035f, .14f, .14f), metal);
+                Box("Handrail bracket", new Vector3(side * 2.755f, .92f, z), new Vector3(.12f, .05f, .06f), metal);
+            }
+        }
+
         void BuildControlPanel()
         {
             // Real elevator cars place controls on the front side walls beside
             // the doors. The plates are mounted close to the walls rather than
             // floating in the cabin, and each has a two-column button layout.
-            BuildControlColumn(-2.42f, 0, ElevatorRound.Floors / 2);
-            BuildControlColumn(2.42f, ElevatorRound.Floors / 2, ElevatorRound.Floors / 2);
+            // The front-facing camera mirrors world X, so put low floors on
+            // camera-left and high floors on camera-right.
+            BuildControlColumn(-2.42f, ElevatorRound.Floors / 2, ElevatorRound.Floors / 2);
+            BuildControlColumn(2.42f, 0, ElevatorRound.Floors / 2);
         }
 
         void BuildControlColumn(float panelX, int firstFloor, int floorCount)
@@ -198,10 +225,12 @@ namespace CrazyElevator
             const float faceZ = panelZ + .11f;
             Transform trim = Box("Wall control trim", new Vector3(panelX, 1.30f, panelZ), new Vector3(.78f, 2.28f, .16f), new Color32(171, 183, 198, 255));
             Transform panel = Box("Wall control panel", new Vector3(panelX, 1.30f, panelZ + .08f), new Vector3(.64f, 2.12f, .08f), Ink);
-            string range = firstFloor.ToString("00") + "–" + (firstFloor + floorCount - 1).ToString("00");
-            TextMesh heading = Sign(range, new Vector3(panelX, 2.20f, faceZ), .012f, Cream);
+            string range = firstFloor.ToString() + "–" + (firstFloor + floorCount - 1).ToString();
+            TextMesh heading = Sign(range, new Vector3(panelX, 2.20f, faceZ), .017f, Cream);
+            heading.fontStyle = FontStyle.Bold;
             heading.transform.rotation = Quaternion.Euler(0, 180, 0);
-            TextMesh status = Sign("READY", new Vector3(panelX, .23f, faceZ), .009f, Cream);
+            TextMesh status = Sign("READY", new Vector3(panelX, .23f, faceZ), .013f, Cream);
+            status.fontStyle = FontStyle.Bold;
             status.transform.rotation = Quaternion.Euler(0, 180, 0);
             controlStatuses.Add(status);
             if (controlStatus == null || panelX < 0) controlStatus = status;
@@ -212,10 +241,11 @@ namespace CrazyElevator
             for (int i = 0; i < floorCount; i++)
             {
                 int row = i / 2, column = i % 2;
-                float y = 1.35f - row * .28f;
-                float x = panelX + (column == 0 ? -.14f : .14f);
-                int floor = firstFloor + i;
-                Collider button = ControlButton(floor.ToString("00"), new Vector3(x, y, faceZ), Teal, floor + 1, 0, true);
+                float y = 1.35f - row * .34f;
+                float x = panelX + (column == 0 ? -.17f : .17f);
+                // Put the lowest floors at the bottom and the highest at the top.
+                int floor = firstFloor + floorCount - 1 - i;
+                Collider button = ControlButton(floor.ToString(), new Vector3(x, y, faceZ), Teal, floor + 1, 0, true);
                 floorButtons[button] = floor;
                 Renderer visual = button.GetComponent<Renderer>();
                 visual.material = new Material(visual.sharedMaterial);
@@ -227,13 +257,14 @@ namespace CrazyElevator
         Collider ControlButton(string label, Vector3 position, Color color, int action, float yaw, bool roundButton = false)
         {
             Transform button = roundButton
-                ? Shape("Round button " + label, PrimitiveType.Cylinder, position, new Vector3(.085f, .035f, .085f), color, stage)
-                : Box("Button " + label, position, new Vector3(.32f, .10f, .06f), color);
+                ? Shape("Round button " + label, PrimitiveType.Cylinder, position, new Vector3(.19f, .04f, .19f), color, stage)
+                : Box("Button " + label, position, new Vector3(.50f, .15f, .06f), color);
             button.localRotation = roundButton ? Quaternion.Euler(90, yaw, 0) : Quaternion.Euler(0, yaw, 0);
             Collider collider = button.GetComponent<Collider>();
             if (action > 0) floorButtons[collider] = action - 1;
             Vector3 normal = Quaternion.Euler(0, yaw, 0) * Vector3.forward;
-            TextMesh text = Sign(label, position + normal * (roundButton ? .055f : .045f), roundButton ? .008f : .010f, Ink);
+            TextMesh text = Sign(label, position + normal * .085f, .018f, Color.black);
+            text.fontStyle = FontStyle.Bold;
             text.transform.rotation = Quaternion.Euler(0, yaw - 180, 0);
             return collider;
         }
@@ -282,7 +313,7 @@ namespace CrazyElevator
             var destinationObject = new GameObject("Destination badge");
             destinationObject.transform.SetParent(root, false); destinationObject.transform.localPosition = new Vector3(0, 2.08f, 0);
             var destinationTag = destinationObject.AddComponent<TextMesh>();
-            destinationTag.text = p.Badge + "  " + p.Destination.ToString("00");
+            destinationTag.text = p.Badge + "  " + p.Destination.ToString();
             destinationTag.fontSize = 48; destinationTag.characterSize = .024f; destinationTag.fontStyle = FontStyle.Bold;
             destinationTag.anchor = TextAnchor.MiddleCenter; destinationTag.alignment = TextAlignment.Center;
             destinationTags[p] = destinationTag;
@@ -366,7 +397,7 @@ namespace CrazyElevator
                 }
                 if (destinationTags.TryGetValue(p, out var destinationTag))
                 {
-                    destinationTag.text = p.Badge + "  " + p.Destination.ToString("00");
+                    destinationTag.text = p.Badge + "  " + p.Destination.ToString();
                     destinationTag.color = p.Mood < 2 ? Coral : p.Boarded || isExiting ? Teal : Gold;
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
@@ -384,7 +415,7 @@ namespace CrazyElevator
             if (p.Boarded && p.Destination == round.Floor && phase == Phase.Boarding) return "\"My stop! Drag me out.\"";
             if (p.Boarded && !string.IsNullOrEmpty(p.Status)) return "\"" + p.Status + "\"";
             if (p.Boarded && p.HoldRequired > 0 && !p.HoldSatisfied) return "\"Hold OPEN!\"";
-            if (p.Boarded) return IsComplaining(p) ? "\"Please hurry!\"" : "\"Floor " + p.Destination.ToString("00") + "\"";
+            if (p.Boarded) return IsComplaining(p) ? "\"Please hurry!\"" : "\"Floor " + p.Destination.ToString() + "\"";
             return "\"" + p.Request + "\"";
         }
 
@@ -448,7 +479,7 @@ namespace CrazyElevator
                     if (phaseTime >= travelDuration)
                     {
                         int count = round.Arrive(destination);
-                        floorSign.text = destination.ToString("00");
+                        floorSign.text = destination.ToString();
                         floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
                         selectedFloor = -1; destination = -1; RefreshFloorButtons(); SetControlStatus("READY");
                         phase = Phase.Opening; phaseTime = 0; arrivalImpact = 1f; Play(ding);
@@ -499,7 +530,7 @@ namespace CrazyElevator
             int shownFloor = origin + direction * completedStep;
             float betweenFloors = exactStep - completedStep;
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
-            floorSign.text = shownFloor.ToString("00");
+            floorSign.text = shownFloor.ToString();
             floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
             floorSign.characterSize = .04f + .006f * pulse;
         }
@@ -588,7 +619,7 @@ namespace CrazyElevator
             int next = AutomaticNextFloor();
             selectedFloor = next; destination = next; RefreshFloorButtons();
             phase = Phase.Closing; phaseTime = 0;
-            SetControlStatus("AUTO " + next.ToString("00")); Play(click);
+            SetControlStatus("AUTO " + next.ToString()); Play(click);
             notice = "Doors timed out. Continuing to " + FloorNames[next] + ".";
         }
 
@@ -606,7 +637,7 @@ namespace CrazyElevator
             int missed = round.LeaveFloor();
             travelDuration = 1.1f + Mathf.Abs(destination - origin) * .8f;
             phase = Phase.Moving; phaseTime = 0;
-            SetControlStatus("GOING " + destination.ToString("00"));
+            SetControlStatus("GOING " + destination.ToString());
             notice = missed > 0 ? "You passed someone's floor. Their mood dropped." : "Next stop: " + FloorNames[destination] + ".";
         }
 
@@ -620,7 +651,7 @@ namespace CrazyElevator
             }
             if (phase != Phase.Boarding && phase != Phase.Closing && phase != Phase.Closed) return;
             selectedFloor = floor; destination = floor; RefreshFloorButtons();
-            SetControlStatus("GOING " + destination.ToString("00")); Play(click);
+            SetControlStatus("GOING " + destination.ToString()); Play(click);
             if (phase == Phase.Closed) StartMoving();
             else if (phase == Phase.Boarding) { phase = Phase.Closing; phaseTime = 0; }
         }
@@ -908,7 +939,7 @@ namespace CrazyElevator
             draggedRider = null;
             round = new ElevatorRound(); phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            floorSign.text = "00"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
+            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Drag passengers into any clear floor space, then choose a floor.";
             SyncFigures(0); Play(chime);
@@ -1060,7 +1091,7 @@ namespace CrazyElevator
             if (paused) copy = "The clock is paused.\n\nPress Escape or resume when you are ready.";
             else if (phase == Phase.Welcome) copy = "Reach the DREAM DECK as fast as you can. Deliver as many riders happily as possible on the way.\nDrag waiting riders into any clear cabin space. Rearrange riders sideways or toward the back.\n\nAt their floor, drag them back through the doorway. Missing a stop or using the wrong floor makes riders unhappy.\nHold OPEN for slow riders and the boss bonus.";
             else if (phase == Phase.Tutorial) copy = "Three things to know.\n\nRead the short badge above each rider: type first, destination second.";
-            else copy = "Highest floor: " + round.PeakFloor.ToString("00") + " / " + (ElevatorRound.Floors - 1).ToString("00")
+            else copy = "Highest floor: " + round.PeakFloor.ToString() + " / " + (ElevatorRound.Floors - 1).ToString()
                 + "\nHappy riders: " + round.Happy + "  •  Delivered: " + round.Delivered
                 + "\nClimb time: " + round.PeakTime.ToString("0.0") + " sec  •  Score: " + round.Score
                 + "\n\n" + (round.Won ? "You reached the Dream Deck!" : "Reach higher, faster, and keep the riders happy.");
@@ -1148,7 +1179,9 @@ namespace CrazyElevator
         void OnDestroy()
         {
             foreach (var m in materials.Values) Destroy(m);
-            if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz); if (groove) Destroy(groove); if (stamp) Destroy(stamp);
+            if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
+            if (generatedGroove && groove) Destroy(groove);
+            if (stamp) Destroy(stamp);
         }
     }
 }
