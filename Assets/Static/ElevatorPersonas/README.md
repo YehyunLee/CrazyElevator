@@ -2,7 +2,7 @@
 
 Open `Assets/Scenes/Main.unity` and press Play. This scene supports both single-player and 1v1. Gameplay scripts are in `Assets/Scripts/Gameplay`, and the editable cabin/persona prefabs are in this folder.
 
-The existing floor numbering is preserved: **0–7 are cotton candy; 8–11 are underwater**. Change `Underwater Starts At Floor` on the scene's game component to move the boundary. The personality changes on arrival, before the doors open.
+World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**. Tune `Candy Starts At Floor` / `Underwater Starts At Floor` on the player elevator. The cabin host stays friendly in office + candy, and goes rusty underwater.
 
 | Action | Controller (button position) | Keyboard |
 | --- | --- | --- |

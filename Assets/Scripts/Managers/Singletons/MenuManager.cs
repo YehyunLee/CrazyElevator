@@ -24,6 +24,18 @@ namespace CrazyElevator.Managers
         // Survives Main reloads after the player picks a mode (LoadScene).
         static bool sessionReady;
 
+        // Enter Play Mode Options can skip Domain Reload; reset statics manually.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetSessionStatics()
+        {
+            sessionReady = false;
+            IsOpen = false;
+            pauseOpen = false;
+            passengerOverlayOpen = false;
+            startDuelOnLoad = false;
+            overlayGame = null;
+        }
+
         void Awake()
         {
             // Scene object in Main — do not spawn a hidden DDOL menu.
@@ -98,11 +110,11 @@ namespace CrazyElevator.Managers
                 "CHOOSE YOUR MODE", caption);
 
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "Patience, passenger perks & mouse controls", SinglePlayerScene, false);
+                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", SinglePlayerScene, false);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "Local duel • NPC rival for now", DuelScene, true);
+                "1V1", "Local duel  ·  NPC rival for now", DuelScene, true);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
-                "CHOOSE A MODE TO BEGIN", caption);
+                "PICK A MODE", caption);
         }
 
         void DrawPassengerOverlay()

@@ -14,8 +14,8 @@ namespace CrazyElevator.Managers
 
         public DimensionRange[] dimensions =
         {
-            new DimensionRange("office", 0, 5),
-            new DimensionRange("candyland", 6, 7),
+            new DimensionRange("office", 0, 3),
+            new DimensionRange("candyland", 4, 7),
             new DimensionRange("underwater", 8, 11)
         };
 

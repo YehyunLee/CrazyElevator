@@ -7,8 +7,8 @@ namespace CrazyElevator.Shared
     [DisallowMultipleComponent]
     public sealed class PassengerPatienceBar : MonoBehaviour
     {
-        [SerializeField, Min(.2f)] float width = .52f;
-        [SerializeField, Min(.02f)] float height = .03f;
+        [SerializeField, Min(.2f)] float width = .38f;
+        [SerializeField, Min(.02f)] float height = .022f;
         [SerializeField] Color frameColor = new Color32(35, 39, 57, 255);
         [SerializeField] Color patientColor = new Color32(87, 222, 103, 255);
         [SerializeField] Color impatientColor = new Color32(244, 58, 49, 255);
@@ -54,7 +54,7 @@ namespace CrazyElevator.Shared
                 Vector3 awayFromCamera = transform.position - cameraToFace.transform.position;
                 if (awayFromCamera.sqrMagnitude > .0001f)
                     transform.rotation = Quaternion.LookRotation(awayFromCamera, cameraToFace.transform.up);
-                float distanceScale = Mathf.Clamp(awayFromCamera.magnitude / 5f, .48f, .88f);
+                float distanceScale = Mathf.Clamp(awayFromCamera.magnitude / 5f, .38f, .72f);
                 transform.localScale = Vector3.one * distanceScale;
             }
 

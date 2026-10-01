@@ -198,7 +198,8 @@ namespace CrazyElevator.Managers
             eye.targetTexture = null;
             exteriorCamera.enabled = false;
             if (sceneView.clearCamera != null) sceneView.clearCamera.enabled = true;
-            foreach (var light in sceneView.lights) if (light != null) light.enabled = true;
+            if (sceneView.lights != null)
+                foreach (var light in sceneView.lights) if (light != null) light.enabled = true;
 
             // The action is Inspector data, independent of the button's appearance.
             foreach (var button in stage.GetComponentsInChildren<ElevatorButton>(true))
@@ -523,6 +524,7 @@ namespace CrazyElevator.Managers
         [Header("Extended interior")]
         public bool extendedInterior;
         public ElevatorPersonaRig personaPrefab;
+        [Range(1, 11)] public int candyStartsAtFloor = 4;
         [Range(1, 11)] public int underwaterStartsAtFloor = 8;
         ElevatorPersonaRig persona;
         float repairProgress;
@@ -538,7 +540,17 @@ namespace CrazyElevator.Managers
             public bool gentle;
         }
 
-        bool FriendlyInterior => round != null && round.Floor < underwaterStartsAtFloor;
+        enum WorldBand { Office, Candy, Water }
+
+        WorldBand BandForFloor(float floor)
+        {
+            if (floor >= underwaterStartsAtFloor) return WorldBand.Water;
+            if (floor >= candyStartsAtFloor) return WorldBand.Candy;
+            return WorldBand.Office;
+        }
+
+        // Cabin persona stays gentle in office + candy; only water goes rusty.
+        bool FriendlyInterior => BandForFloor(round != null ? round.Floor : 0) != WorldBand.Water;
         bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
         static readonly Vector3[] ClearDoorwayCabinSpots =
@@ -582,22 +594,27 @@ namespace CrazyElevator.Managers
             repairedFor = Mathf.Max(0, repairedFor - dt);
             persona.SetWorld(FriendlyInterior, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
-            int world = FriendlyInterior ? 0 : 1;
+            int world = (int)BandForFloor(round.Floor);
             if (appliedWorld != world)
             {
                 appliedWorld = world;
                 var tint = new MaterialPropertyBlock();
+                Color wall = world == (int)WorldBand.Office ? new Color(.78f, .74f, .68f)
+                    : world == (int)WorldBand.Candy ? new Color(.86f, .68f, .82f)
+                    : new Color(.22f, .38f, .36f);
+                Color lamp = world == (int)WorldBand.Office ? new Color(1f, .95f, .88f)
+                    : world == (int)WorldBand.Candy ? new Color(1, .9f, .83f)
+                    : new Color(.65f, .88f, 1);
                 foreach (var surface in stage.GetComponentsInChildren<Renderer>(true))
                 {
                     string part = surface.name;
                     if (part != "Right wall" && part != "Left wall" && !part.StartsWith("Sliding door")) continue;
                     surface.GetPropertyBlock(tint);
-                    Color color = FriendlyInterior ? new Color(.86f, .68f, .82f) : new Color(.22f, .38f, .36f);
-                    tint.SetColor("_BaseColor", color); tint.SetColor("_Color", color);
+                    tint.SetColor("_BaseColor", wall); tint.SetColor("_Color", wall);
                     surface.SetPropertyBlock(tint);
                 }
-                foreach (var lamp in sceneView.lights)
-                    if (lamp) lamp.color = FriendlyInterior ? new Color(1, .9f, .83f) : new Color(.65f, .88f, 1);
+                foreach (var lampLight in sceneView.lights ?? System.Array.Empty<Light>())
+                    if (lampLight) lampLight.color = lamp;
             }
             persona.Tick(dt, phase == Phase.Moving, PersonaBusy);
         }
@@ -763,18 +780,15 @@ namespace CrazyElevator.Managers
             else if (!compactTopHud)
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
-                Label(new Rect(24, 49, 444, 25), FriendlyInterior ? "COTTON CANDY  /  your gentle host" : "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair"), body);
+                Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
                 Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders to board, move, or eject", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
-            Panel(new Rect(12, screenHeight - 114, width, 102), new Color(Ink.r, Ink.g, Ink.b, .88f));
-            string prompt = selectedRider == null ? "Drag a rider in / out   |   E / bottom button: confirm highlighted rider"
-                : selectedRider.Name + " - floor " + selectedRider.Destination + " - DRAG or CONFIRM TO " + (selectedRider.Boarded ? "UNLOAD" : "BOARD");
-            Label(new Rect(24, screenHeight - 108, width - 24, 26), BuildingView ? "Click STOP or press E near the highlighted floor" : prompt, body);
-            Label(new Rect(24, screenHeight - 78, width - 24, 24), BuildingView
-                ? "Shift / left shoulder + up/down: build speed   Opposite direction: brake / reverse"
-                : "C / top: close & travel   H / right: hold door   R / RB: patch rust   FIX rider: full repair", small);
-            Label(new Rect(24, screenHeight - 49, width - 24, 32), notice, small);
+            Panel(new Rect(12, screenHeight - 54, width, 42), new Color(Ink.r, Ink.g, Ink.b, .88f));
+            string prompt = selectedRider == null
+                ? (BuildingView ? "E / STOP near a floor   |   Shift+↑↓ to build speed" : "Drag riders to board or kick   |   C close & travel")
+                : selectedRider.Name + " → F" + selectedRider.Destination + (selectedRider.Boarded ? "  ·  drag out to kick" : "  ·  drag in to board");
+            Label(new Rect(24, screenHeight - 48, width - 24, 30), BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
     }
 }
@@ -885,7 +899,45 @@ namespace CrazyElevator.Managers
         Camera exteriorCamera;
         Transform exteriorCar;
         bool showingTravelView;
-        string WorldName(float floor) => floor < underwaterStartsAtFloor ? "COTTON CANDY" : "UNDERWATER";
+        string WorldName(float floor)
+        {
+            switch (BandForFloor(floor))
+            {
+                case WorldBand.Office: return "OFFICE";
+                case WorldBand.Candy: return "CANDY";
+                default: return "UNDERWATER";
+            }
+        }
+
+        string WorldStatusLine(float floor)
+        {
+            switch (BandForFloor(floor))
+            {
+                case WorldBand.Office: return "OFFICE  /  floors 0–3";
+                case WorldBand.Candy: return "CANDY  /  floors 4–7";
+                default: return "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair");
+            }
+        }
+
+        Color WorldAccent(float floor)
+        {
+            switch (BandForFloor(floor))
+            {
+                case WorldBand.Office: return new Color32(120, 148, 186, 255);
+                case WorldBand.Candy: return new Color32(232, 132, 196, 255);
+                default: return Sky;
+            }
+        }
+
+        Color WorldSky(float floor)
+        {
+            switch (BandForFloor(floor))
+            {
+                case WorldBand.Office: return new Color32(168, 186, 210, 255);
+                case WorldBand.Candy: return new Color32(200, 172, 241, 255);
+                default: return new Color32(12, 78, 115, 255);
+            }
+        }
 
         // The cabin closes first. The building stays visible until docking and door opening finish.
         void LateUpdate()
@@ -905,8 +957,7 @@ namespace CrazyElevator.Managers
             exteriorCamera.transform.rotation = Quaternion.Euler(5, 0, 0);
             if (Match != null)
                 exteriorCamera.orthographicSize = Mathf.Max(9.5f, (Match.shaftSpacing + 3f) / exteriorCamera.aspect);
-            exteriorCamera.backgroundColor = travelFloor < underwaterStartsAtFloor
-                ? new Color32(200, 172, 241, 255) : new Color32(12, 78, 115, 255);
+            exteriorCamera.backgroundColor = WorldSky(travelFloor);
         }
 
         void DrawTravelView()
@@ -917,11 +968,12 @@ namespace CrazyElevator.Managers
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
             float x = point.x, y = Screen.height - point.y;
-            Color color = CanStopAtFloor ? Teal : Cream;
-            Panel(new Rect(x - 80 * size, y + 44 * size, 160 * size, 3 * size), color);
-            var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(16 * size) };
-            Panel(new Rect(x - 92 * size, y + 49 * size, 184 * size, 30 * size), Ink);
-            Label(new Rect(x - 90 * size, y + 51 * size, 180 * size, 28 * size), "FLOOR " + floor + (CanStopAtFloor ? " - STOP READY" : ""), markerStyle);
+            Color accent = CanStopAtFloor ? Teal : WorldAccent(floor);
+            Panel(new Rect(x - 70 * size, y + 44 * size, 140 * size, 3 * size), accent);
+            var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
+            Panel(new Rect(x - 78 * size, y + 49 * size, 156 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
+            Label(new Rect(x - 76 * size, y + 50 * size, 152 * size, 26 * size),
+                CanStopAtFloor ? "F" + floor + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
         }
 
         void ReleaseCabinPreview() { if (eye) eye.targetTexture = null; }
@@ -1156,6 +1208,7 @@ namespace CrazyElevator.Managers
             target.passengerCatalog = passengerCatalog;
             target.extendedInterior = extendedInterior;
             target.personaPrefab = personaPrefab;
+            target.candyStartsAtFloor = candyStartsAtFloor;
             target.underwaterStartsAtFloor = underwaterStartsAtFloor;
             target.passengerPatienceBarPrefab = passengerPatienceBarPrefab;
             target.zeroScoreWhenMad = zeroScoreWhenMad;

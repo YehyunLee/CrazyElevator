@@ -70,6 +70,9 @@ namespace CrazyElevator.Managers
         void OnGUI()
         {
             if (round == null || eye == null || Match != null) return;
+            // Mode select owns the first screen. Don't paint the intro curtain over it —
+            // Update also freezes introTime while the menu is open, which would stick on black.
+            if (MenuManager.IsOpen) return;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             GUI.enabled = true;
@@ -170,8 +173,8 @@ namespace CrazyElevator.Managers
 
             Panel(new Rect(x - 5, y - 5, totalWidth + 10, 58), new Color(Ink.r, Ink.g, Ink.b, .96f));
             float cursor = x;
-            DrawHudTile(new Rect(cursor, y, 190, 48), FriendlyInterior ? Teal : Sky,
-                FriendlyInterior ? "COTTON CANDY" : "UNDERWATER", "FLOOR " + round.Floor); cursor += 192;
+            DrawHudTile(new Rect(cursor, y, 190, 48), WorldAccent(round.Floor),
+                WorldName(round.Floor), "FLOOR " + round.Floor); cursor += 192;
             DrawHudTile(new Rect(cursor, y, 144, 48), Gold, "LOAD", round.Load + "/" + ElevatorRound.Capacity); cursor += 146;
             DrawHudTile(new Rect(cursor, y, 150, 48), new Color32(94, 188, 156, 255), "SCORE", round.Score.ToString()); cursor += 152;
             DrawHudTile(new Rect(cursor, y, 132, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 134;
@@ -323,12 +326,12 @@ namespace CrazyElevator.Managers
             Label(new Rect(372, 256, 700, 52), heading, title);
             string copy;
             if (paused) copy = "The clock is paused.\n\nPress Start / Escape or resume when you are ready.";
-            else if (phase == Phase.Welcome) copy = "You have 3 minutes to earn as many passenger points as possible.\nDifferent riders offer different bonuses. Points are earned when you drop them off, not just when they board.\n\nMouse: drag riders into the cabin, rearrange them, or drag them through the doorway to eject. You can also hover and press E.\nClick CLOSE & TRAVEL, then hold UP / DOWN and click STOP near a floor. Keyboard and controller still work. Candy below, underwater above.";
+            else if (phase == Phase.Welcome) copy = "3 minutes. Drop riders at their floors for points.\n\nOffice (0–3) → Candy (4–7) → Underwater (8–11).\n\nDrag to board or kick. CLOSE & TRAVEL, then hold UP/DOWN and STOP near a floor.";
             else if (phase == Phase.Tutorial) copy = "Three things to know.\n\nRead the short badge above each rider: type first, destination second.";
             else copy = "FINAL SCORE: " + round.Score
                 + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                 + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
-                + "\n\nYour 3-minute shift is over. Try a different passenger mix to beat your score!";
+                + "\n\nYour 3-minute shift is over. Try again for a better mix!";
             Label(new Rect(374, 322, 690, 240), copy, body);
             if (phase == Phase.Tutorial)
             {
@@ -336,7 +339,7 @@ namespace CrazyElevator.Managers
                 Label(new Rect(392, 432, 174, 78), "1  BOARD\nDrag a rider inside.\nDrag onboard riders to move.", inkBody);
                 Label(new Rect(620, 432, 174, 78), "2  TRAVEL\nClick CLOSE & TRAVEL.\nHold UP / DOWN to move.", inkBody);
                 Label(new Rect(848, 432, 174, 78), "3  STOP / EJECT\nClick STOP near a floor.\nDrag rider out to eject.", inkBody);
-                Label(new Rect(374, 542, 690, 48), "Hold Shift / left shoulder + up/down to build speed.\nMore starfish = more rust. A FIX handyman aboard restores full power.", small);
+                Label(new Rect(374, 542, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
             }
             string action = paused ? "RESUME SHIFT  /  CLICK, START or ESC"
                 : phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
