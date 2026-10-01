@@ -39,17 +39,9 @@ namespace CrazyElevator.Managers
         public event Action OnCloseDoors;
         public event Action OnStart;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Bootstrap()
-        {
-            if (Instance != null) return;
-            var go = new GameObject("InputManager");
-            DontDestroyOnLoad(go);
-            go.AddComponent<InputManager>();
-        }
-
         void Awake()
         {
+            // Scene object in Main — do not spawn a hidden runtime singleton.
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
         }

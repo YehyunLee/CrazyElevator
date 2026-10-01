@@ -21,18 +21,21 @@ namespace CrazyElevator.Managers
         static ElevatorManager overlayGame;
         public static bool IsOpen { get; private set; }
         public static bool PauseOpen => pauseOpen;
+        // Survives Main reloads after the player picks a mode (LoadScene).
+        static bool sessionReady;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void ShowBeforeTheGame()
+        void Awake()
         {
-            IsOpen = true;
-            pauseOpen = false;
-            passengerOverlayOpen = false;
-            startDuelOnLoad = false;
-            var menu = new GameObject("Game Mode Menu");
-            DontDestroyOnLoad(menu);
-            menu.AddComponent<MenuManager>();
-            InputManager.Instance?.SetView(GameView.Menu);
+            // Scene object in Main — do not spawn a hidden DDOL menu.
+            if (!sessionReady)
+            {
+                IsOpen = true;
+                pauseOpen = false;
+                passengerOverlayOpen = false;
+                startDuelOnLoad = false;
+                sessionReady = true;
+            }
+            InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
         }
 
         void OnEnable() { title = null; }

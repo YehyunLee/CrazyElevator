@@ -56,7 +56,15 @@ namespace CrazyElevator.Managers
 
         void EnsureManagers()
         {
-            passengerManager = GetComponent<PassengerManager>() ?? gameObject.AddComponent<PassengerManager>();
+            // Player elevator should already have PassengerManager in Main.
+            // NPC elevators created for 1v1 may still need one added here.
+            passengerManager = GetComponent<PassengerManager>();
+            if (passengerManager == null)
+            {
+                if (!IsNpc)
+                    Debug.LogWarning("PassengerManager missing on player elevator — add it in Main.");
+                passengerManager = gameObject.AddComponent<PassengerManager>();
+            }
             passengerManager.Bind(this);
             if (GameManager.Instance != null && !IsNpc)
                 GameManager.Instance.BindPlayer(this);

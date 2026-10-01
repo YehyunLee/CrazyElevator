@@ -12,17 +12,9 @@ namespace CrazyElevator.Managers
         AudioSource music;
         bool muted;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Bootstrap()
-        {
-            if (Instance != null) return;
-            var go = new GameObject("MusicManager");
-            DontDestroyOnLoad(go);
-            go.AddComponent<MusicManager>();
-        }
-
         void Awake()
         {
+            // Scene object in Main — do not spawn a hidden runtime singleton.
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             music = gameObject.AddComponent<AudioSource>();

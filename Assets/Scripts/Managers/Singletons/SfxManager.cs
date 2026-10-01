@@ -13,17 +13,9 @@ namespace CrazyElevator.Managers
         readonly Queue<AudioSource> idle = new Queue<AudioSource>();
         readonly List<AudioSource> all = new List<AudioSource>();
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Bootstrap()
-        {
-            if (Instance != null) return;
-            var go = new GameObject("SfxManager");
-            DontDestroyOnLoad(go);
-            go.AddComponent<SfxManager>();
-        }
-
         void Awake()
         {
+            // Scene object in Main — do not spawn a hidden runtime singleton.
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             for (int i = 0; i < poolSize; i++)

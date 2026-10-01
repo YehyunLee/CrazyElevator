@@ -58,7 +58,12 @@ namespace CrazyElevator.Managers
         {
             Player = player;
             if (player == null) return;
-            Passengers = player.GetComponent<PassengerManager>() ?? player.gameObject.AddComponent<PassengerManager>();
+            Passengers = player.GetComponent<PassengerManager>();
+            if (Passengers == null)
+            {
+                Debug.LogWarning("PassengerManager missing on player elevator — add it in Main.");
+                Passengers = player.gameObject.AddComponent<PassengerManager>();
+            }
             Passengers.Bind(player);
             player.BindSession(this);
         }

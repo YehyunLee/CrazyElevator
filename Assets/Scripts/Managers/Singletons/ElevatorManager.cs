@@ -46,8 +46,6 @@ namespace CrazyElevator.Managers
             Application.runInBackground = true;
             Time.timeScale = 1f;
             EnsureManagers();
-            if (!IsNpc && GameManager.Instance == null)
-                new GameObject("GameManager").AddComponent<GameManager>();
             round = CreateExtendedRound();
             if (!BindScene()) { enabled = false; return; }
             InitializeExtendedInterior();
