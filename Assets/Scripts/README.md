@@ -3,13 +3,28 @@
 One Main scene. Liam's singleton managers own the public design.
 `ElevatorManager` + `PassengerManager` sit on each elevator (×2 in 1v1).
 
+## Scene ownership (required)
+
+Put each global manager on its **own named GameObject** in `Main.unity` and attach the script in the Inspector. Do **not** recreate them with runtime `new GameObject` / `AddComponent`.
+
+| Hierarchy object | Script(s) |
+| --- | --- |
+| `GameManager` | `GameManager` |
+| `InputManager` | `InputManager` |
+| `SfxManager` | `SfxManager` |
+| `MusicManager` | `MusicManager` |
+| `MenuManager` | `MenuManager` |
+| `Player Elevator` | `ElevatorManager` + `PassengerManager` (+ `ElevatorMatch`) |
+
+NPC elevator may be spawned for 1v1; keep its managers inspectable.
+
 ## Layout
 
 ```text
-MenuManager / InputManager / SfxManager / MusicManager / GameManager   (boot)
-Main
-  ElevatorManager          ← Liam elevator box (movement, floors, travel, shift)
-  PassengerManager         ← Liam passenger box (board / kick / waiting)
+InputManager / SfxManager / MusicManager / MenuManager / GameManager   (named scene objects)
+Player Elevator
+  ElevatorManager          ← movement, floors, travel, shift
+  PassengerManager         ← board / kick / waiting
   ElevatorMatch            ← 1v1 only (+ NpcElevator)
 Shared
   ElevatorRound + Rider, ElevatorScene, PassengerData, view widgets
