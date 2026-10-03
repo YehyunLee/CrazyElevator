@@ -69,7 +69,7 @@ namespace CrazyElevator.Managers
         // Draw menus or the active-shift HUD.
         void OnGUI()
         {
-            if (round == null || eye == null || Match != null) return;
+            if (round == null || eye == null || Match != null || MenuManager.IsOpen) return;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             GUI.enabled = true;
