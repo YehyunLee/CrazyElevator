@@ -129,6 +129,7 @@ namespace CrazyElevator.Managers
                 if (extendedInterior && compactTopHud) DrawCompactTopHUD();
                 else DrawRoundHUD();
                 DrawInteriorHUD();
+                if (extendedInterior) DrawElevatorSpeech(Screen.height / hudScale, Screen.width / hudScale);
                 GUI.matrix = Matrix4x4.identity;
                 DrawMouseControls();
             }
@@ -137,12 +138,22 @@ namespace CrazyElevator.Managers
         // Match HUD is drawn by ElevatorMatch so the solo UI remains unchanged.
         public void DrawMatchViewGUI()
         {
-            if (round == null || eye == null || IsNpc) return;
+            if (round == null || eye == null) return;
             Styles();
+            if (IsNpc)
+            {
+                Rect npcView = Match.ViewRect(Seat);
+                Matrix4x4 npcMatrix = GUI.matrix;
+                GUI.matrix = Matrix4x4.Translate(new Vector3(npcView.x, npcView.y, 0));
+                if (extendedInterior) DrawElevatorSpeech(npcView.height, npcView.width);
+                GUI.matrix = npcMatrix;
+                return;
+            }
             DrawTravelView();
             Rect view = Match.ViewRect(Seat);
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0));
+            if (extendedInterior) DrawElevatorSpeech(view.height, view.width);
             DrawMouseControls();
             GUI.matrix = previous;
         }
