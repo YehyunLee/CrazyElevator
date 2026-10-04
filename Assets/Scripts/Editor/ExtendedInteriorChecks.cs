@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
@@ -8,6 +9,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using Game = CrazyElevator.Managers.ElevatorManager;
 using Round = CrazyElevator.Shared.ElevatorRound;
+using SharedRider = CrazyElevator.Shared.Rider;
 
 // Explicitly requested checks only. Never opens, saves, or rebuilds another scene.
 [InitializeOnLoad]
@@ -27,7 +29,10 @@ public static class ExtendedInteriorChecks
         if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
         string request = Work + "/request.txt";
         if (!File.Exists(request)) return;
-        string action = File.ReadAllText(request).Trim();
+        string action;
+        try { action = File.ReadAllText(request).Trim(); }
+        catch (IOException) { return; }
+        if (action.Length == 0) return;
         if (!EditorApplication.isPlaying)
         {
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path != Scene) return;
@@ -36,10 +41,12 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        File.Delete(request);
+        try { File.Delete(request); }
+        catch (IOException) { return; }
         try
         {
             if (action == "checks") { Run(game); RunBoost(game); }
+            else if (action == "repair-checks") RunRepair(game);
             else if (action == "rust-inside" || action == "rust-outside")
             {
                 game.enabled = true; Call(game, "Restart");
@@ -89,12 +96,26 @@ public static class ExtendedInteriorChecks
             else throw new Exception("Unknown interior check request: " + action);
         }
         catch (Exception e) { File.WriteAllText(Work + "/result.txt", e.ToString()); Debug.LogException(e); }
+        finally
+        {
+            if (action == "repair-checks")
+            {
+                EditorApplication.isPaused = false;
+                EditorApplication.isPlaying = false;
+            }
+        }
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Extended Interior (Play Mode)")]
     static void RequestChecks()
     {
         Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Handyman Repair (Returns to Edit Mode)")]
+    static void RequestRepairChecks()
+    {
+        Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "repair-checks");
     }
 
     static void Input(Game game, Gamepad pad, GamepadState state, float dt = .02f)
@@ -135,6 +156,7 @@ public static class ExtendedInteriorChecks
 
     static void Run(Game game)
     {
+        CrazyElevator.Managers.MenuManager.Close();
         var pad = InputSystem.AddDevice<Gamepad>();
         var mouse = InputSystem.AddDevice<Mouse>();
         game.enabled = false;
@@ -233,6 +255,157 @@ public static class ExtendedInteriorChecks
             Call(game, "Restart"); game.enabled = true;
         }
     }
+    static SharedRider PrepareRepair(Game game, bool damaged = true)
+    {
+        Call(game, "Restart");
+        var round = (Round)Get(game, "round");
+        round.Floor = damaged ? game.underwaterStartsAtFloor : 0;
+        game.sceneView.floorDisplay.text = round.Floor.ToString();
+        Set(game, "rustExposure", damaged ? game.secondsPerRustLevel * 2 : 0f);
+        Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
+        Call(game, "LateUpdate"); Physics.SyncTransforms();
+        return round.Riders.Find(r => r.Kind == "HANDYMAN" && r.Origin == round.Floor);
+    }
+
+    static void RequireRepairCleared(Game game, string context)
+    {
+        Require(!(bool)Property(game, "HandymanRepairActive")
+            && Get(game, "repairToolPivot") == null && Get(game, "repairShovel") == null
+            && ((ICollection)Get(game, "repairPartPoses")).Count == 0,
+            context + " left active repair state or temporary tools.");
+    }
+
+    sealed class AuthoredRepairPose
+    {
+        public Transform part, parent;
+        public Vector3 position, scale;
+        public Quaternion rotation;
+        public bool active;
+    }
+
+    static void RunRepair(Game game)
+    {
+        CrazyElevator.Managers.MenuManager.Close();
+        game.enabled = false;
+        try
+        {
+            var rider = PrepareRepair(game, false);
+            Require(rider != null, "The scene is missing its handyman passenger.");
+            Call(game, "SelectRider", rider); Call(game, "ConfirmPassenger");
+            Call(game, "SyncFigures", 1.5f);
+            Require(rider.Boarded && !(bool)Property(game, "HandymanRepairActive"),
+                "A handyman must board normally when there are no damaged starfish.");
+
+            rider = PrepareRepair(game);
+            var inside = (StarfishImpairmentView)Get(game, "interiorImpairment");
+            var outside = (StarfishImpairmentView)Get(game, "exteriorImpairment");
+            Require(rider != null && inside && outside
+                && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
+                "The underwater handyman and both damaged starfish gauges must be present.");
+            Require(game.handymanShovelPrefab, "Assign the Handyman Shovel prefab in Main.");
+            var figures = (IDictionary)Get(game, "figures");
+            var figure = (Transform)figures[rider];
+            var poses = new List<AuthoredRepairPose>();
+            foreach (Transform part in figure)
+                if (part.name.StartsWith("Wrench") || part.name == "Arm" && part.localPosition.x < 0)
+                    poses.Add(new AuthoredRepairPose { part = part, parent = part.parent,
+                        position = part.localPosition, rotation = part.localRotation,
+                        scale = part.localScale, active = part.gameObject.activeSelf });
+            Require(poses.Count >= 2, "Handyman art must include the authored wrench and left arm.");
+
+            Call(game, "SelectRider", rider); Call(game, "SyncFigures", .1f);
+            Require(!rider.Boarded && !(bool)Property(game, "HandymanRepairActive")
+                && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
+                "Highlighting the handyman must not start repair.");
+            Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
+            Require(rider.Boarded && (bool)Property(game, "HandymanRepairPending")
+                && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
+                "Confirmed boarding must start repair without immediately clearing starfish.");
+            Call(game, "SyncFigures", .3f);
+            Require((float)Get(game, "handymanRepairTime") == 0f,
+                "The repair animation must wait for boarding to finish.");
+            Call(game, "SyncFigures", 1f);
+            Vector3 home = figure.localPosition, homeScale = figure.localScale;
+            Call(game, "CloseAndTravel");
+            Require(Get(game, "phase").ToString() == "Boarding", "Doors closed during repair.");
+
+            Call(game, "SyncFigures", .8f); Call(game, "UpdateInteriorPersona", 0f);
+            var pivot = (Transform)Get(game, "repairToolPivot");
+            var shovel = (Transform)Get(game, "repairShovel");
+            Require(pivot && shovel && Vector3.Distance(figure.localPosition, home) > .1f,
+                "The handyman did not move to the repair location or create the tools.");
+            foreach (var pose in poses)
+                Require(pose.part.parent == pivot, "The authored arm and wrench did not follow the repair tool pivot.");
+            Require(!shovel.gameObject.activeSelf && inside.DisplayedSeverity == 3,
+                "The wrench stage must precede the shovel sweep.");
+
+            Vector3 starStart = inside.starfish[0].localPosition;
+            Call(game, "SyncFigures", 1.2f); Call(game, "UpdateInteriorPersona", 0f);
+            Require(shovel.gameObject.activeSelf && inside.starfish[0].localScale.x < .5f
+                && inside.starfish[0].localPosition != starStart && inside.DisplayedSeverity == 3
+                && outside.starfish[0].localScale.x < .5f && outside.DisplayedSeverity == 3,
+                "The sweep must visibly remove starfish in both gauges before severity clears.");
+            Call(game, "SyncFigures", 1.3f); Call(game, "UpdateInteriorPersona", 0f);
+            Require(inside.DisplayedSeverity == 0 && outside.DisplayedSeverity == 0
+                && inside.starfish[0].localScale == Vector3.zero && outside.starfish[0].localScale == Vector3.zero
+                && !(bool)Property(game, "HandymanRepairPending")
+                && (bool)Property(game, "HandymanRepairActive"),
+                "Sweep completion must clear both gauges while the handyman returns.");
+            Call(game, "SyncFigures", 1f);
+            RequireRepairCleared(game, "Completing the animation");
+            Require(Vector3.Distance(figure.localPosition, home) < .001f
+                && Vector3.Distance(figure.localScale, homeScale) < .001f
+                && Quaternion.Angle(figure.localRotation, Quaternion.identity) < .01f,
+                "The handyman did not return to the original cabin pose.");
+            foreach (var pose in poses)
+                Require(pose.part.parent == pose.parent && pose.part.gameObject.activeSelf == pose.active
+                    && Vector3.Distance(pose.part.localPosition, pose.position) < .001f
+                    && Vector3.Distance(pose.part.localScale, pose.scale) < .001f
+                    && Quaternion.Angle(pose.part.localRotation, pose.rotation) < .01f,
+                    "Repair changed the authored arm or wrench pose.");
+            Call(game, "CloseAndTravel");
+            Require(Get(game, "phase").ToString() == "Closing", "Travel did not unlock after repair.");
+
+            // Drag release must start the same repair, and an interrupted repair must restore damage.
+            rider = PrepareRepair(game); figure = (Transform)figures[rider];
+            var badges = (IDictionary)Get(game, "destinationTags");
+            Vector2 cursor = game.sceneView.cabinCamera.WorldToScreenPoint(((TextMesh)badges[rider]).transform.position);
+            Call(game, "BeginPassengerDrag", rider, cursor);
+            Require(ReferenceEquals(Get(game, "draggedRider"), rider), "The handyman could not be grabbed.");
+            var stage = (Transform)Get(game, "stage");
+            Vector3 grabTarget = stage.TransformPoint(new Vector3(0, .12f, 2f)) - (Vector3)Get(game, "dragOffset");
+            Vector2 dropCursor = game.sceneView.cabinCamera.WorldToScreenPoint(grabTarget);
+            Call(game, "UpdatePassengerDrag", dropCursor); Call(game, "FinishPassengerDrag", dropCursor);
+            Require(rider.Boarded && (bool)Property(game, "HandymanRepairActive")
+                && ((IDictionary)Get(game, "boardingTransfers")).Count == 0,
+                "Drag boarding must start repair without another boarding transfer.");
+            Call(game, "SyncFigures", 2f);
+            Require(((Transform)Get(game, "repairShovel")).gameObject.activeSelf,
+                "A dragged handyman never reached the shovel sweep.");
+            Call(game, "QueueRiderExit", rider, figure.localPosition);
+            RequireRepairCleared(game, "Unloading during repair");
+            Require(!rider.Boarded && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3
+                && inside.starfish[0].localScale == Vector3.one,
+                "Interrupted repair must restore damage and starfish poses.");
+
+            rider = PrepareRepair(game);
+            Call(game, "SelectRider", rider); Call(game, "ConfirmPassenger");
+            Require((bool)Property(game, "HandymanRepairActive"), "Confirmed boarding did not restart repair.");
+            Call(game, "SyncFigures", 1f); Call(game, "SyncFigures", 2f);
+            Call(game, "Restart");
+            RequireRepairCleared(game, "Restarting during repair");
+            Require((float)Get(game, "elevatorSpeechTime") == 0f
+                && inside.DisplayedSeverity == 0 && outside.DisplayedSeverity == 0,
+                "Restart left repair dialogue or damaged starfish in the new shift.");
+            File.WriteAllText(Work + "/result.txt", "PASS: Main; undamaged boarding and hover do not repair; confirmed and drag boarding start repair; boarding finishes first; doors stay open; authored wrench and shovel move; both starfish gauges sweep before clearing; passenger and tool poses restore; travel unlocks; unloading and restart clean up repair state.");
+        }
+        finally
+        {
+            Call(game, "Restart");
+            game.enabled = true;
+        }
+    }
+
     static void RunBoost(Game game)
     {
         var pad = InputSystem.AddDevice<Gamepad>();
@@ -297,13 +470,19 @@ public static class ExtendedInteriorChecks
                 && (float)Property(game, "CurrentAcceleration") < waterAcceleration, "Severe rust must show three starfish and impair performance further.");
             Require(!(bool)Property(game, "HasHandyman"), "Waiting handyman granted immunity before boarding.");
             Call(game, "SelectRider", handyman); Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
-            Require(handyman.Boarded && (bool)Property(game, "HasHandyman") && inside.DisplayedSeverity == 0 && outside.DisplayedSeverity == 0,
-                "Boarding a handyman did not clear both impairment meters.");
+            Require(handyman.Boarded && (bool)Property(game, "HasHandyman")
+                && (bool)Property(game, "HandymanRepairPending")
+                && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
+                "Boarding a handyman must preserve damage until the repair sweep.");
             Require(Mathf.Abs((float)Property(game, "CruiseSpeed") - cruise) < .001f
                 && Mathf.Abs((float)Property(game, "CurrentAcceleration") - game.boostAcceleration) < .001f
                 && Mathf.Abs((float)Property(game, "SpeedLimit") - game.maximumTravelSpeed) < .001f,
                 "Handyman must restore the exact candy movement settings.");
-            Call(game, "SyncFigures", 1.5f); Phase(game, "Moving");
+            Call(game, "SyncFigures", 1.5f); Call(game, "SyncFigures", 4.3f);
+            Require(inside.DisplayedSeverity == 0 && outside.DisplayedSeverity == 0
+                && !(bool)Property(game, "HandymanRepairActive"),
+                "Completed handyman repair did not clear both impairment meters.");
+            Phase(game, "Moving");
             Set(game, "travelFloor", 8.1f); Set(game, "travelVelocity", cruise); Set(game, "boostHeld", true); Set(game, "boostAxis", 1f);
             float exposure = (float)Get(game, "rustExposure"); Call(game, "AdvanceBuildingTravel", .5f);
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - (cruise + game.boostAcceleration * .5f)) < .003f

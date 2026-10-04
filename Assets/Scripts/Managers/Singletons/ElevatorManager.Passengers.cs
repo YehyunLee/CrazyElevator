@@ -264,6 +264,7 @@ namespace CrazyElevator.Managers
                 if (draggedWasBoarded || round.Board(rider))
                 {
                     cabinPositions[rider] = released;
+                    if (!draggedWasBoarded) BeginHandymanRepair(rider);
                     SelectRider(null);
                     SetControlStatus(draggedWasBoarded ? "REARRANGED" : "ON BOARD");
                     notice = draggedWasBoarded ? "Cabin rearranged." : "Passenger boarded. Choose another rider or close the doors.";
@@ -346,6 +347,7 @@ namespace CrazyElevator.Managers
             int scoreBefore = round.Score;
             OffboardResult result = round.Offboard(rider);
             if (result == OffboardResult.None) return;
+            if (rider == repairingHandyman) ClearHandymanRepair();
             exitStarts[rider] = start; exiting[rider] = 0;
             BeginKick(rider, figure, start, result, round.Score - scoreBefore);
             phaseTime = 0;
@@ -554,6 +556,8 @@ namespace CrazyElevator.Managers
             var completedExits = new List<Rider>();
             foreach (var p in round.Riders)
             {
+                if (p == repairingHandyman && (!p.Boarded || p.Resolved || phase != Phase.Boarding))
+                    ClearHandymanRepair();
                 bool isExiting = exiting.TryGetValue(p, out float exitTime);
                 // TextMesh labels do not use the same occlusion as the solid
                 // doors, so explicitly hide the hall queue unless the doorway
@@ -584,7 +588,8 @@ namespace CrazyElevator.Managers
                 else
                 {
                     // Selected riders stay in place until confirmed.
-                    if (p != draggedRider && !AnimatePersonaBoard(p, figure, dt))
+                    if (p != draggedRider && !AnimatePersonaBoard(p, figure, dt)
+                        && !AnimateHandymanRepair(p, figure, dt))
                     {
                         var target = RiderPosition(p);
                         figure.localPosition = Vector3.MoveTowards(figure.localPosition, target, dt * 5);

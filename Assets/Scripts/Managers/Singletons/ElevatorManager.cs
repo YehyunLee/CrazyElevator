@@ -87,12 +87,14 @@ namespace CrazyElevator.Managers
             float dt = Time.deltaTime;
             // Drain waiting patience only while stopped for boarding.
             round.Tick(dt, phase == Phase.Boarding);
+            elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
             // End before accepting another drop-off, even if an exit animation
             // is still running. The score is locked when the clock reaches zero.
             if (round.Finished)
             {
                 phase = Phase.Results;
                 SelectRider(null);
+                ClearHandymanRepair();
                 ClearInteriorTransfers(); ClearKicks(); exiting.Clear();
                 Play(chime);
                 ResetCameraMotion();
@@ -143,6 +145,7 @@ namespace CrazyElevator.Managers
         {
             CancelPassengerDrag();
             SelectRider(null);
+            ClearHandymanRepair();
             ClearInteriorTransfers();
             ClearKicks();
             ClearPatienceBars();
@@ -539,7 +542,7 @@ namespace CrazyElevator.Managers
         }
 
         bool FriendlyInterior => round != null && round.Floor < underwaterStartsAtFloor;
-        bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0;
+        bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0 || HandymanRepairActive;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
         static readonly Vector3[] ClearDoorwayCabinSpots =
         {
@@ -707,6 +710,7 @@ namespace CrazyElevator.Managers
                 targetScale = figure.localScale * depthScale,
                 rotation = figure.localRotation, gentle = FriendlyInterior };
             figure.localPosition = start;
+            BeginHandymanRepair(rider);
             Play(FriendlyInterior ? chime : buzz);
         }
 
@@ -866,7 +870,8 @@ namespace CrazyElevator.Managers
         }
         void UpdateImpairmentIndicators()
         {
-            int severity = ImpairmentLevel;
+            // Keep the captured damage visible until Casey sweeps it away.
+            int severity = HandymanRepairPending ? repairStarfishLevel : ImpairmentLevel;
             if (interiorImpairment) interiorImpairment.SetSeverity(severity);
             if (exteriorImpairment) exteriorImpairment.SetSeverity(severity);
         }
@@ -1166,6 +1171,7 @@ namespace CrazyElevator.Managers
             target.keepDoorwayClear = keepDoorwayClear;
             target.cameraLift = cameraLift;
             target.impairmentGaugePrefab = impairmentGaugePrefab;
+            target.handymanShovelPrefab = handymanShovelPrefab;
             target.secondsPerRustLevel = secondsPerRustLevel;
             target.underwaterSpeedMultiplier = underwaterSpeedMultiplier;
             target.underwaterAccelerationMultiplier = underwaterAccelerationMultiplier;

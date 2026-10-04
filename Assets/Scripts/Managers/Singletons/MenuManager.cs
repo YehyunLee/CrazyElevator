@@ -24,6 +24,19 @@ namespace CrazyElevator.Managers
         // Survives Main reloads after the player picks a mode (LoadScene).
         static bool sessionReady;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetForPlay()
+        {
+            // Play Mode may keep the script domain and scene alive between runs.
+            // Show mode select once, while preserving its choice through LoadScene.
+            IsOpen = true;
+            sessionReady = true;
+            startDuelOnLoad = false;
+            pauseOpen = false;
+            passengerOverlayOpen = false;
+            overlayGame = null;
+        }
+
         void Awake()
         {
             // Scene object in Main — do not spawn a hidden DDOL menu.
