@@ -37,10 +37,12 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
             candyBackdrop.SetActive(world != WorldBand.Water);
         }
         if (waterBackdrop) waterBackdrop.SetActive(world == WorldBand.Water);
-        if (candyHand) candyHand.gameObject.SetActive(friendly);
-        if (candyArm) candyArm.gameObject.SetActive(friendly);
-        if (rustyHand) rustyHand.gameObject.SetActive(!friendly);
-        if (rustyArm) rustyArm.gameObject.SetActive(!friendly);
+        // Soft glove is candy-only. Office stays friendly without the pink helping hand;
+        // water keeps the rusty pusher.
+        if (candyHand) candyHand.gameObject.SetActive(world == WorldBand.Candy);
+        if (candyArm) candyArm.gameObject.SetActive(world == WorldBand.Candy);
+        if (rustyHand) rustyHand.gameObject.SetActive(world == WorldBand.Water);
+        if (rustyArm) rustyArm.gameObject.SetActive(world == WorldBand.Water);
         if (facePlate) facePlate.sharedMaterial = friendly ? candyFace : rustyFace;
         if (smile) smile.gameObject.SetActive(friendly);
         if (frown) frown.gameObject.SetActive(!friendly);
@@ -59,26 +61,41 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
         if (!busy)
         {
             RestHands();
-            var hand = friendly ? candyHand : rustyHand;
-            hand.localPosition += Vector3.up * (friendly ? Mathf.Sin(clock * 1.6f) * .06f : cough);
-            PoseArm(hand, friendly ? candyArm : rustyArm, friendly);
+            var hand = ActiveHand;
+            if (hand)
+            {
+                hand.localPosition += Vector3.up * (friendly ? Mathf.Sin(clock * 1.6f) * .06f : cough);
+                PoseArm(hand, ActiveArm, friendly);
+            }
         }
     }
 
     public void RestHands()
     {
-        candyHand.localPosition = new Vector3(-1.85f, 1.15f, 1.2f);
-        rustyHand.localPosition = new Vector3(1.85f, 1.15f, 1.2f);
-        candyHand.localRotation = Quaternion.identity;
-        rustyHand.localRotation = Quaternion.identity;
-        PoseArm(candyHand, candyArm, true); PoseArm(rustyHand, rustyArm, false);
+        if (candyHand)
+        {
+            candyHand.localPosition = new Vector3(-1.85f, 1.15f, 1.2f);
+            candyHand.localRotation = Quaternion.identity;
+            PoseArm(candyHand, candyArm, true);
+        }
+        if (rustyHand)
+        {
+            rustyHand.localPosition = new Vector3(1.85f, 1.15f, 1.2f);
+            rustyHand.localRotation = Quaternion.identity;
+            PoseArm(rustyHand, rustyArm, false);
+        }
     }
+
+    Transform ActiveHand => band == WorldBand.Water ? rustyHand
+        : band == WorldBand.Candy ? candyHand : null;
+    Transform ActiveArm => band == WorldBand.Water ? rustyArm
+        : band == WorldBand.Candy ? candyArm : null;
 
     public void GuidePassenger(Vector3 position, float progress, bool gentle, bool boarding)
     {
-        // Use the hand that exists in this world; gentle controls the motion, not the art.
-        var hand = friendly ? candyHand : rustyHand;
-        var arm = friendly ? candyArm : rustyArm;
+        var hand = ActiveHand;
+        var arm = ActiveArm;
+        if (!hand) return;
         // A soft palm supports the passenger; the piston pushes from behind.
         Vector3 contact = position + (gentle ? new Vector3(-.3f, .12f, 0)
             : new Vector3(friendly ? -.2f : 0, .65f, boarding ? -.45f : .45f));
@@ -92,6 +109,7 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
 
     void PoseArm(Transform hand, Transform arm, bool gentle)
     {
+        if (!hand || !arm) return;
         Vector3 anchor = new Vector3(gentle ? -2.23f : 2.23f, 1.3f, .5f);
         Vector3 delta = hand.localPosition - anchor;
         arm.localPosition = (hand.localPosition + anchor) * .5f;
