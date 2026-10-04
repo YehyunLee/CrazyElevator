@@ -48,7 +48,7 @@ Gameplay and art must stay separable.
 - Cabin, shaft, passengers, scenery = editable **GameObjects, prefabs, meshes, materials, or ProBuilder**.
 - Scripts may **move / animate / enable** those objects.
 - **Do not generate detailed 3D geometry in gameplay code.** If you are about to `new` meshes, cubes, or procedural props for look — stop and use a prefab / ProBuilder object instead.
-- Existing editable geometry: `Assets/Static/ElevatorPersonas/Prefabs/` and related Static folders.
+- Existing editable geometry: `Assets/Static/ElevatorPersonas/Prefabs/` and related Static folders (especially `ExteriorWorld` / cabin prefabs). Do not replace those with generated cube kits.
 
 ## Gameplay product rules
 

@@ -27,4 +27,12 @@ namespace CrazyElevator.Shared
 
         public bool Contains(int floor) => floor >= firstFloor && floor <= lastFloor;
     }
+
+    // Office → candy → underwater. Used by cabin décor, hall fronts, and exterior bands.
+    public enum WorldBand
+    {
+        Office = 0,
+        Candy = 1,
+        Water = 2
+    }
 }
