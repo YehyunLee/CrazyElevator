@@ -1,0 +1,518 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
+
+// Importing this file never changes a scene. Build via the menu or a local request file.
+[InitializeOnLoad]
+public static class CottonCandySceneBuilder
+{
+    const string ScenePath = "Assets/Scenes/CottonCandyWorld.unity";
+    const string Art = "Assets/Static/CottonCandy";
+    const string Work = "Temp/CottonCandyTasks";
+    static Material pink, rose, cream, yellow, mint, blue, lavender, plum, peach, hill;
+    static readonly List<CottonCandyStop> Stops = new List<CottonCandyStop>();
+
+    static CottonCandySceneBuilder() { EditorApplication.update += Poll; }
+    static void Poll()
+    {
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return;
+        string request = Work + "/request.txt";
+        if (!File.Exists(request)) return;
+        string action = File.ReadAllText(request).Trim();
+        File.Delete(request);
+        try
+        {
+            if (action == "build") Build();
+            else if (action == "vertical") UpgradeToVertical();
+            else if (action == "25d") UpgradeTo25D();
+            else if (action == "refresh") AssetDatabase.Refresh();
+            else if (action == "open") EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+            else throw new InvalidOperationException("Unknown cotton candy request: " + action);
+        }
+        catch (Exception e) { File.WriteAllText(Work + "/result.txt", e.ToString()); Debug.LogException(e); }
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Build Cotton Candy World")]
+    public static void Build()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        Scene loaded = SceneManager.GetSceneByPath(ScenePath);
+        if (loaded.IsValid() && loaded.isLoaded && loaded.isDirty)
+            throw new InvalidOperationException("Save the edits in CottonCandyWorld before rebuilding it.");
+        Directory.CreateDirectory(Art + "/Materials");
+        Directory.CreateDirectory(Art + "/Meshes");
+        Directory.CreateDirectory(Art + "/Prefabs");
+        Directory.CreateDirectory(Work);
+        AssetDatabase.Refresh();
+        pink = Mat("CandyFlossPink", "FF9CBF"); rose = Mat("Raspberry", "EB648F");
+        cream = Mat("Vanilla", "FFF3CE"); yellow = Mat("Lemon", "FFE595");
+        mint = Mat("Mint", "80DAB3"); blue = Mat("Blueberry", "8DBDF3");
+        lavender = Mat("Lilac", "B9A1E9"); plum = Mat("Blackcurrant", "755686");
+        peach = Mat("Peach", "FFB09C"); hill = Mat("MintRibbonHills", "55C5AF");
+        hill.SetColor("_StripeColor", Hex("94E2B4")); hill.SetFloat("_StripeScale", 24f);
+        Scene previous = SceneManager.GetActiveScene();
+        Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+        SceneManager.SetActiveScene(scene);
+        bool replaceOpenScene = loaded.IsValid() && loaded.isLoaded;
+        if (replaceOpenScene) EditorSceneManager.CloseScene(loaded, true);
+        try
+        {
+            Stops.Clear();
+            var root = Group("Cotton Candy World", null);
+            var scenery = Group("Looping Landscape", root);
+            RenderSettings.skybox = null;
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = Hex("E9D6FF");
+            RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = Hex("D7B5F3");
+            RenderSettings.fogStartDistance = 65; RenderSettings.fogEndDistance = 155;
+
+            var sun = new GameObject("Soft Afternoon Sun").AddComponent<Light>();
+            sun.transform.SetParent(root); sun.type = LightType.Directional;
+            sun.transform.rotation = Quaternion.Euler(42, -35, 0); sun.intensity = 1.2f;
+            sun.color = Hex("FFF0D4"); sun.shadows = LightShadows.Soft;
+
+            var camera = new GameObject("Main Camera").AddComponent<Camera>();
+            camera.tag = "MainCamera"; camera.transform.SetParent(root);
+            camera.transform.position = new Vector3(19, 16, -31);
+            camera.transform.LookAt(new Vector3(0, 7, 14));
+            camera.fieldOfView = 54; camera.nearClipPlane = .1f; camera.farClipPlane = 220;
+            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Hex("C8ACF1");
+            camera.allowHDR = true; camera.gameObject.AddComponent<AudioListener>();
+
+            // Each chunk has a known phase along the 150 m loop. Everything is authored and editable.
+            for (int i = 0; i < 10; i++)
+            {
+                var chunk = Group("Landscape " + (i + 1).ToString("00"), scenery);
+                chunk.localPosition = new Vector3(0, 0, -15 + i * 15);
+                float side = i % 2 == 0 ? -1 : 1;
+                Blob("Mint Ribbon Hill", chunk, new Vector3(side * (21 + i % 3 * 3), -9, 0), new Vector3(30, 26 + i % 3 * 6, 24), hill);
+                Blob("Blue Sugar Rock", chunk, new Vector3(-side * 24, -6, 3), new Vector3(18, 16, 20), blue);
+                Tree(chunk, new Vector3(side * 19, 1 + i % 3, -2), i % 3 == 0 ? yellow : pink, 1.1f + i % 2 * .25f);
+                Tree(chunk, new Vector3(-side * 25, 0, 6), i % 2 == 0 ? blue : yellow, 1.2f);
+                Cloud(chunk, new Vector3(side * 25, 22 + i % 3 * 3, 0), 2f);
+                Cloud(chunk, new Vector3(-side * 31, 17 + i % 2 * 3, 4), 1.2f);
+                Cloud(chunk, new Vector3(side * 12, -4, 3), 1.5f);
+                for (int j = 0; j < 4; j++)
+                    Flower(chunk, new Vector3(side * (14 + j * 2), 2 + j % 2, j * 2 - 3), j % 2 == 0 ? yellow : rose);
+            }
+
+            // A clear central route with four progressively offset docking stations.
+            Stop(scenery, 1, new Vector3(0, 7, 18));
+            Stop(scenery, 2, new Vector3(-7, 10, 52));
+            Stop(scenery, 3, new Vector3(7, 6, 88));
+            Stop(scenery, 4, new Vector3(-3, 12, 124));
+            var landmark = Group("Candy Cottage Island", scenery);
+            landmark.localPosition = new Vector3(-15, 0, 33);
+            Blob("Floating Mint Island", landmark, new Vector3(0, -3, 0), new Vector3(18, 9, 14), hill);
+            House(landmark, new Vector3(0, 1, 0));
+            Tree(landmark, new Vector3(-6, 0, 0), yellow, 1.1f);
+
+            var elevator = BuildElevator(root);
+            elevator.localPosition = new Vector3(0, 7, 0);
+            elevator.localRotation = Quaternion.Euler(0, -12, 0);
+            var flight = root.gameObject.AddComponent<CottonCandyFlight>();
+            flight.elevator = elevator; flight.scenery = scenery; flight.flightCamera = camera;
+            flight.stops = Stops.ToArray();
+            ConfigureVerticalWorld(flight);
+            AssetDatabase.SaveAssets();
+            if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save cotton candy scene.");
+            Capture(camera, Work + "/CottonCandyWorld.png");
+            Verify(flight);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            File.WriteAllText(Work + "/result.txt", "PASS: Vertical scene saved; four ordered stops, fixed depth, stationary scenery, idle hold, steering bounds, boost, camera follow, pause, docking in both directions, departure and reset checked.");
+            Debug.Log("COTTON_CANDY_SCENE_READY: " + ScenePath);
+        }
+        finally
+        {
+            if (!replaceOpenScene) EditorSceneManager.CloseScene(scene, true);
+            if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
+        }
+    }
+
+    // Update only the layout and flight settings in the existing scene, preserving its authored contents.
+    [MenuItem("Tools/Crazy Elevator/Apply Vertical Cotton Candy Layout")]
+    public static void UpgradeToVertical()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        Directory.CreateDirectory(Work);
+        Scene scene = SceneManager.GetSceneByPath(ScenePath);
+        if (!scene.IsValid() || !scene.isLoaded) scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+        Scene previous = SceneManager.GetActiveScene();
+        SceneManager.SetActiveScene(scene);
+        CottonCandyFlight flight = null;
+        foreach (var root in scene.GetRootGameObjects())
+        {
+            flight = root.GetComponentInChildren<CottonCandyFlight>();
+            if (flight) break;
+        }
+        if (!flight) throw new InvalidOperationException("CottonCandyWorld is missing its flight controller.");
+        string backup = Work + "/CottonCandy-before-vertical-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".unity";
+        if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new IOException("Could not back up the current cotton candy scene.");
+        Undo.RegisterFullObjectHierarchyUndo(flight.gameObject, "Make Cotton Candy World vertical");
+        try
+        {
+            ConfigureVerticalWorld(flight);
+            Verify(flight);
+            EditorSceneManager.MarkSceneDirty(scene);
+            if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save vertical scene.");
+            Capture(flight.flightCamera, Work + "/CottonCandyWorld.png");
+            Vector3 originalCamera = flight.flightCamera.transform.position;
+            float originalSize = flight.flightCamera.orthographicSize;
+            bool originalProjection = flight.flightCamera.orthographic;
+            try
+            {
+                flight.flightCamera.transform.position += Vector3.up * 36;
+                Capture(flight.flightCamera, Work + "/CottonCandyUpperStops.png");
+                flight.flightCamera.transform.position = new Vector3(originalCamera.x, 36, originalCamera.z);
+                flight.flightCamera.orthographic = true;
+                flight.flightCamera.orthographicSize = 39;
+                Capture(flight.flightCamera, Work + "/CottonCandyVerticalOverview.png");
+            }
+            finally
+            {
+                flight.flightCamera.transform.position = originalCamera;
+                flight.flightCamera.orthographicSize = originalSize;
+                flight.flightCamera.orthographic = originalProjection;
+            }
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            File.WriteAllText(Work + "/result.txt", "PASS: Vertical scene saved; four ordered stops, fixed depth, stationary scenery, idle hold, steering bounds, boost, camera follow, pause, docking in both directions, departure and reset checked. Backup: " + backup);
+        }
+        finally { if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous); }
+    }
+
+    static void ConfigureVerticalWorld(CottonCandyFlight flight)
+    {
+        flight.steeringSpeed = 5f;
+        flight.boostMultiplier = 2f;
+        flight.cameraFollowSpeed = 5f;
+        flight.horizontalLimits = new Vector2(-12, 12);
+        flight.altitudeLimits = new Vector2(4, 70);
+        flight.dockingRadius = 1.2f;
+        flight.elevator.localPosition = new Vector3(0, 4, 0);
+        flight.elevator.localRotation = Quaternion.identity;
+        flight.scenery.name = "Vertical Candy Landscape";
+        int level = 0;
+        foreach (Transform chunk in flight.scenery)
+        {
+            if (chunk.name.StartsWith("Landscape ", StringComparison.Ordinal))
+            {
+                chunk.localPosition = new Vector3(0, -6 + level * 12, 18 + level % 3 * 4);
+                chunk.localScale = new Vector3(.7f, .65f, .55f);
+                level++;
+            }
+            else if (chunk.name == "Candy Cottage Island")
+            {
+                chunk.localPosition = new Vector3(16, 23, 10);
+                chunk.localScale = Vector3.one * .8f;
+            }
+        }
+        float[] stopX = { 0, -7, 7, -3 };
+        foreach (var stop in flight.stops)
+        {
+            if (!stop) continue;
+            int index = Mathf.Max(1, stop.stopIndex);
+            stop.transform.localPosition = new Vector3(stopX[(index - 1) % stopX.Length], 10 + (index - 1) * 18, 0);
+            if (stop.dockingPoint) stop.dockingPoint.localPosition = Vector3.zero;
+            // Keep the decorative island behind the cabin so it remains visible approaching from below.
+            Transform platform = stop.transform.Find("Landing Platform");
+            Transform island = stop.transform.Find("Sugar Island");
+            if (platform) platform.localPosition = new Vector3(0, -1.3f, 3.8f);
+            if (island) island.localPosition = new Vector3(0, -2.5f, 4.2f);
+        }
+        var camera = flight.flightCamera;
+        camera.transform.position = flight.elevator.position + new Vector3(0, 10, -42);
+        camera.transform.rotation = Quaternion.identity;
+        camera.orthographic = true;
+        camera.orthographicSize = 20;
+        Configure25DPresentation(flight);
+    }
+
+    // Presentation only: stop positions, travel plane, input and docking stay untouched.
+    static void Configure25DPresentation(CottonCandyFlight flight)
+    {
+        Camera camera = flight.flightCamera;
+        Quaternion angle = Quaternion.Euler(9f, -12f, 0f);
+        Vector3 framingTarget = flight.elevator.position + Vector3.up * 7f;
+        camera.transform.SetPositionAndRotation(framingTarget - angle * Vector3.forward * 56f, angle);
+        camera.orthographic = false;
+        camera.fieldOfView = 40f;
+        camera.nearClipPlane = .3f;
+        camera.farClipPlane = 200f;
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Linear;
+        RenderSettings.fogColor = Hex("D7B5F3");
+        RenderSettings.fogStartDistance = 62f;
+        RenderSettings.fogEndDistance = 135f;
+
+        int layer = 0;
+        foreach (Transform chunk in flight.scenery)
+        {
+            if (!chunk.name.StartsWith("Landscape ", StringComparison.Ordinal)) continue;
+            Vector3 position = chunk.localPosition;
+            // Perspective makes these three depth layers scroll at different apparent speeds.
+            position.z = 18f + layer % 3 * 12f;
+            chunk.localPosition = position;
+            layer++;
+        }
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Apply 2.5D Cotton Candy Visuals")]
+    public static void UpgradeTo25D()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        Directory.CreateDirectory(Work);
+        Scene scene = SceneManager.GetSceneByPath(ScenePath);
+        if (!scene.IsValid() || !scene.isLoaded) scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+        Scene previous = SceneManager.GetActiveScene();
+        SceneManager.SetActiveScene(scene);
+        try
+        {
+            CottonCandyFlight flight = null;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                flight = root.GetComponentInChildren<CottonCandyFlight>();
+                if (flight) break;
+            }
+            if (!flight) throw new InvalidOperationException("No cotton candy flight controller in the scene.");
+            string backup = Work + "/CottonCandy-before-25D-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".unity";
+            if (!EditorSceneManager.SaveScene(scene, backup, true)) throw new IOException("Could not back up the scene.");
+            Undo.RegisterFullObjectHierarchyUndo(flight.gameObject, "Apply 2.5D Cotton Candy Visuals");
+            Configure25DPresentation(flight);
+            EditorSceneManager.MarkSceneDirty(scene);
+            if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save the 2.5D scene.");
+            Capture(flight.flightCamera, Work + "/CottonCandy25D.png");
+            Vector3 cameraPosition = flight.flightCamera.transform.position;
+            try
+            {
+                flight.flightCamera.transform.position += Vector3.up * 36f;
+                Capture(flight.flightCamera, Work + "/CottonCandy25D-Upper.png");
+            }
+            finally { flight.flightCamera.transform.position = cameraPosition; }
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            File.WriteAllText(Work + "/result.txt", "PASS: 2.5D perspective camera, three depth layers and atmospheric fog saved; gameplay and stop positions preserved. Preview rendered. Backup: " + backup);
+        }
+        finally { if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous); }
+    }
+
+    static Transform BuildElevator(Transform parent)
+    {
+        var cabin = Group("Flying Elevator", parent);
+        Box("Cabin", cabin, new Vector3(0, 1.8f, 0), new Vector3(3.4f, 4.1f, 2.6f), cream);
+        Box("Door Recess", cabin, new Vector3(0, 1.8f, -1.34f), new Vector3(2.8f, 3.65f, .1f), plum);
+        Box("Left Door", cabin, new Vector3(-.68f, 1.75f, -1.44f), new Vector3(1.3f, 3.45f, .12f), pink);
+        Box("Right Door", cabin, new Vector3(.68f, 1.75f, -1.44f), new Vector3(1.3f, 3.45f, .12f), pink);
+        for (int i = -1; i <= 1; i += 2)
+        {
+            Box("Mint Frame", cabin, new Vector3(i * 1.56f, 1.8f, -1.48f), new Vector3(.23f, 4, .2f), mint);
+            Box("Door Window", cabin, new Vector3(i * .68f, 2.3f, -1.52f), new Vector3(.73f, 1.1f, .05f), blue);
+            Box("Window Glint", cabin, new Vector3(i * .68f - .16f, 2.4f, -1.56f), new Vector3(.08f, .7f, .03f), cream);
+            Blob("Sugar Wing", cabin, new Vector3(i * 2.4f, .2f, .1f), new Vector3(2.7f, .4f, 1.5f), cream);
+            Blob("Wing Tip", cabin, new Vector3(i * 3.3f, .42f, .1f), new Vector3(1.1f, .5f, 1.3f), pink);
+        }
+        Box("Mint Roof", cabin, new Vector3(0, 3.95f, 0), new Vector3(3.8f, .27f, 3), mint);
+        Blob("Rounded Roof", cabin, new Vector3(0, 4.1f, 0), new Vector3(3.7f, .55f, 2.9f), pink);
+        Box("Floor", cabin, new Vector3(0, -.32f, 0), new Vector3(3.8f, .35f, 3), mint);
+        Box("Floor Indicator", cabin, new Vector3(0, 3.59f, -1.54f), new Vector3(1.05f, .36f, .1f), plum);
+        Label("UP", cabin, new Vector3(0, 3.6f, -1.62f), .19f, cream.color);
+        Box("Call Panel", cabin, new Vector3(1.75f, 1.65f, -1.37f), new Vector3(.24f, .6f, .1f), plum);
+        Blob("Call Button", cabin, new Vector3(1.75f, 1.8f, -1.46f), new Vector3(.13f, .13f, .04f), yellow);
+        Cloud(cabin, new Vector3(0, -.75f, 0), .85f);
+        PrefabUtility.SaveAsPrefabAsset(cabin.gameObject, Art + "/Prefabs/FlyingElevator.prefab");
+        return cabin;
+    }
+
+    static void Stop(Transform parent, int index, Vector3 location)
+    {
+        var root = Group("Stop " + index.ToString("00"), parent); root.localPosition = location;
+        var marker = root.gameObject.AddComponent<CottonCandyStop>(); marker.stopIndex = index;
+        marker.dockingPoint = Group("Docking Point", root);
+        var platform = Primitive("Landing Platform", PrimitiveType.Cylinder, root, new Vector3(0, -1.3f, 0), new Vector3(7.5f, .3f, 6), mint);
+        Blob("Sugar Island", root, new Vector3(0, -2.5f, 0), new Vector3(8.6f, 2.5f, 7.5f), pink);
+        var ring = new GameObject("Golden Landing Ring", typeof(MeshFilter), typeof(MeshRenderer)); ring.transform.SetParent(root, false);
+        ring.transform.localPosition = new Vector3(0, 1.8f, .6f);
+        ring.GetComponent<MeshFilter>().sharedMesh = RingMesh(); ring.GetComponent<MeshRenderer>().sharedMaterial = yellow;
+        Box("Sign Post", root, new Vector3(4, 1, 0), new Vector3(.22f, 4.5f, .22f), cream);
+        Box("Stop Sign", root, new Vector3(4, 3, -.1f), new Vector3(3.3f, 1.4f, .3f), cream);
+        Label("STOP " + index, root, new Vector3(4, 3, -.28f), .42f, plum.color);
+        Stops.Add(marker);
+        PrefabUtility.SaveAsPrefabAsset(root.gameObject, Art + "/Prefabs/Stop" + index.ToString("00") + ".prefab");
+    }
+
+    static Mesh RingMesh()
+    {
+        string path = Art + "/Meshes/LandingRing.asset";
+        Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(path); if (existing) return existing;
+        var vertices = new List<Vector3>(); var triangles = new List<int>();
+        const int segments = 64, sides = 8;
+        for (int i = 0; i <= segments; i++)
+        for (int j = 0; j <= sides; j++)
+        {
+            float a = i * Mathf.PI * 2 / segments, b = j * Mathf.PI * 2 / sides;
+            float r = 3.6f + .12f * Mathf.Cos(b);
+            vertices.Add(new Vector3(r * Mathf.Cos(a), r * Mathf.Sin(a), .12f * Mathf.Sin(b)));
+            if (i == segments || j == sides) continue;
+            int k = i * (sides + 1) + j;
+            triangles.AddRange(new[] { k, k + 1, k + sides + 1, k + 1, k + sides + 2, k + sides + 1 });
+        }
+        var mesh = new Mesh { name = "Landing Ring" }; mesh.SetVertices(vertices); mesh.SetTriangles(triangles, 0); mesh.RecalculateNormals();
+        AssetDatabase.CreateAsset(mesh, path); return mesh;
+    }
+
+    static void Tree(Transform parent, Vector3 pos, Material color, float scale)
+    {
+        var tree = Group("Cotton Candy Tree", parent); tree.localPosition = pos; tree.localScale = Vector3.one * scale;
+        Primitive("Wafer Trunk", PrimitiveType.Cylinder, tree, new Vector3(0, 2, 0), new Vector3(.6f, 2.2f, .6f), peach);
+        Blob("Floss Heart", tree, new Vector3(0, 5.8f, 0), new Vector3(4.6f, 6.2f, 4.1f), color);
+        for (int i = 0; i < 7; i++)
+        {
+            float a = i * 2.4f;
+            Blob("Fluffy Lobe", tree, new Vector3(Mathf.Cos(a) * 1.3f, 4.5f + i * .5f, Mathf.Sin(a) * .7f), new Vector3(3.1f, 3.3f, 3), color);
+        }
+        if (!File.Exists(Art + "/Prefabs/CottonCandyTree.prefab")) PrefabUtility.SaveAsPrefabAsset(tree.gameObject, Art + "/Prefabs/CottonCandyTree.prefab");
+    }
+
+    static void Cloud(Transform parent, Vector3 pos, float scale)
+    {
+        var cloud = Group("Vanilla Cloud", parent); cloud.localPosition = pos; cloud.localScale = Vector3.one * scale;
+        for (int i = 0; i < 5; i++)
+            Blob("Cloud Puff", cloud, new Vector3((i - 2) * 1.6f, i % 2 * .55f, i % 2 * .35f), new Vector3(3, 1.8f + i % 2, 2.5f), cream);
+        if (!File.Exists(Art + "/Prefabs/VanillaCloud.prefab")) PrefabUtility.SaveAsPrefabAsset(cloud.gameObject, Art + "/Prefabs/VanillaCloud.prefab");
+    }
+
+    static void Flower(Transform parent, Vector3 pos, Material color)
+    {
+        var flower = Group("Sugar Flower", parent); flower.localPosition = pos;
+        for (int i = 0; i < 5; i++)
+        {
+            float a = i * Mathf.PI * 2 / 5;
+            Blob("Petal", flower, new Vector3(Mathf.Cos(a) * .35f, 0, Mathf.Sin(a) * .35f), new Vector3(.55f, .2f, .55f), color);
+        }
+        Blob("Center", flower, Vector3.up * .1f, Vector3.one * .35f, yellow);
+    }
+
+    static void House(Transform parent, Vector3 pos)
+    {
+        var house = Group("Peach Candy Cottage", parent); house.localPosition = pos;
+        Box("Marshmallow Walls", house, new Vector3(0, 2.5f, 0), new Vector3(6, 5, 4.5f), peach);
+        for (int i = -1; i <= 1; i += 2)
+        {
+            var roof = Box("Pink Icing Roof", house, new Vector3(i * 1.65f, 5.6f, 0), new Vector3(4.7f, .7f, 5.5f), rose);
+            roof.localRotation = Quaternion.Euler(0, 0, i * -33);
+            for (int j = 0; j < 5; j++) Blob("Scalloped Icing", house, new Vector3(i * (j * .76f), 6.65f - j * .5f, -2.75f), new Vector3(1.1f, .9f, .65f), pink);
+        }
+        Blob("Round Door Frame", house, new Vector3(0, 1.4f, -2.3f), new Vector3(2.2f, 3.6f, .3f), rose);
+        Box("Strawberry Door", house, new Vector3(0, 1, -2.5f), new Vector3(1.5f, 2, .15f), pink);
+        Blob("Attic Window", house, new Vector3(0, 4.35f, -2.36f), new Vector3(1.2f, 1.2f, .15f), plum);
+        Box("Window Cross", house, new Vector3(0, 4.35f, -2.47f), new Vector3(.1f, 1.1f, .06f), cream);
+        Box("Window Cross", house, new Vector3(0, 4.35f, -2.47f), new Vector3(1.1f, .1f, .06f), cream);
+        PrefabUtility.SaveAsPrefabAsset(house.gameObject, Art + "/Prefabs/CandyCottage.prefab");
+    }
+
+    static Transform Group(string name, Transform parent)
+    { var t = new GameObject(name).transform; if (parent) t.SetParent(parent, false); return t; }
+    static Transform Box(string n, Transform p, Vector3 pos, Vector3 scale, Material m) => Primitive(n, PrimitiveType.Cube, p, pos, scale, m);
+    static Transform Blob(string n, Transform p, Vector3 pos, Vector3 scale, Material m) => Primitive(n, PrimitiveType.Sphere, p, pos, scale, m);
+    static Transform Primitive(string n, PrimitiveType type, Transform p, Vector3 pos, Vector3 scale, Material m)
+    {
+        var go = GameObject.CreatePrimitive(type); go.name = n; go.transform.SetParent(p, false);
+        go.transform.localPosition = pos; go.transform.localScale = scale;
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.GetComponent<Renderer>().sharedMaterial = m; return go.transform;
+    }
+    static void Label(string value, Transform parent, Vector3 pos, float size, Color color)
+    {
+        var t = Group(value, parent); t.localPosition = pos;
+        var text = t.gameObject.AddComponent<TextMesh>(); text.text = value; text.fontSize = 80;
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        t.GetComponent<MeshRenderer>().sharedMaterial = text.font.material;
+        text.characterSize = size * .25f; text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center; text.color = color;
+    }
+    static Color Hex(string value) { ColorUtility.TryParseHtmlString("#" + value, out Color color); return color; }
+    static Material Mat(string name, string hex)
+    {
+        string path = Art + "/Materials/" + name + ".mat";
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        Shader shader = Shader.Find("Crazy Elevator/Cotton Candy Pastel");
+        if (!shader) throw new InvalidOperationException("Cotton Candy Pastel shader is not imported.");
+        if (!material) { material = new Material(shader); AssetDatabase.CreateAsset(material, path); }
+        material.SetColor("_BaseColor", Hex(hex)); material.SetFloat("_StripeScale", 0); material.enableInstancing = true;
+        EditorUtility.SetDirty(material); return material;
+    }
+
+    static void Verify(CottonCandyFlight flight)
+    {
+        flight.SendMessage("Awake");
+        Vector3 start = flight.elevator.localPosition;
+        Vector3 cameraStart = flight.flightCamera.transform.position;
+        Vector3 offset = cameraStart - flight.elevator.position;
+        var phases = new List<Vector3>(); foreach (Transform chunk in flight.scenery) phases.Add(chunk.localPosition);
+        flight.Advance(5, Vector2.zero, false);
+        Require(flight.elevator.localPosition == start && flight.DistanceTravelled == 0, "No automatic travel or idle drift");
+        flight.Advance(1, Vector2.right, false);
+        float normalDistance = flight.DistanceTravelled;
+        Require(normalDistance > 0 && flight.elevator.localPosition.x > start.x, "Right movement");
+        flight.FollowCamera(.1f);
+        Require(flight.flightCamera.transform.position.x > cameraStart.x && flight.flightCamera.transform.position.x < flight.elevator.position.x + offset.x, "Smooth camera movement");
+        flight.ResetFlight(); flight.Advance(1, Vector2.right, true);
+        Require(flight.DistanceTravelled > normalDistance * 1.9f, "Boost changes manual travel speed");
+        flight.SetPaused(true); Vector3 held = flight.elevator.localPosition;
+        flight.Advance(1, Vector2.up, true); flight.FollowCamera(1);
+        Require(flight.elevator.localPosition == held && flight.flightCamera.transform.position == cameraStart, "Pause holds cabin and camera");
+        flight.SetPaused(false);
+        flight.Advance(100, Vector2.right, true); flight.Advance(100, Vector2.up, true);
+        Require(flight.elevator.localPosition.x == flight.horizontalLimits.y && flight.elevator.localPosition.y == flight.altitudeLimits.y, "Upper and right limits");
+        flight.FollowCamera(5);
+        Require(Vector3.Distance(flight.flightCamera.transform.position, flight.elevator.position + offset) < .01f, "Camera follows full ascent");
+        flight.Advance(100, Vector2.down, true); flight.Advance(100, Vector2.left, true);
+        Require(flight.elevator.localPosition.x == flight.horizontalLimits.x && flight.elevator.localPosition.y == flight.altitudeLimits.x, "Lower and left limits");
+        Require(flight.elevator.localPosition.z == start.z, "Fixed movement plane");
+        flight.ResetFlight();
+        for (int i = 0; i < flight.stops.Length; i++)
+        {
+            Require(flight.stops[i].stopIndex == i + 1, "Consecutive stop indices");
+            Require(Mathf.Abs(flight.stops[i].DockPosition.z - flight.elevator.position.z) < .001f, "Stops share movement plane");
+            if (i > 0) Require(flight.stops[i].DockPosition.y > flight.stops[i - 1].DockPosition.y, "Stops ascend in index order");
+            VisitStop(flight, flight.stops[i]);
+        }
+        for (int i = flight.stops.Length - 2; i >= 0; i--) VisitStop(flight, flight.stops[i]);
+        int k = 0; foreach (Transform chunk in flight.scenery) Require(chunk.localPosition == phases[k++], "Scenery and stops remain stationary");
+        flight.ResetFlight();
+        // Cross stop 1 in a single large movement to verify swept capture.
+        flight.Advance(2, Vector2.up, true);
+        Require(flight.CurrentStopIndex == 1, "Boosted movement cannot skip a station");
+        flight.ResetFlight();
+        Require(flight.elevator.localPosition == start && flight.flightCamera.transform.position == cameraStart && flight.DistanceTravelled == 0, "Restart restores cabin and camera");
+    }
+    static void VisitStop(CottonCandyFlight flight, CottonCandyStop stop)
+    {
+        for (int i = 0; i < 2000 && flight.CurrentStopIndex == 0; i++)
+        {
+            Vector3 delta = stop.DockPosition - flight.elevator.position;
+            flight.Advance(.02f, new Vector2(delta.x, delta.y).normalized, false);
+        }
+        Require(flight.CurrentStopIndex == stop.stopIndex, "Reach stop " + stop.stopIndex);
+        Vector3 held = flight.elevator.position;
+        flight.Advance(1, Vector2.up, true);
+        Require(flight.elevator.position == held, "Dock holds at stop " + stop.stopIndex);
+        flight.DepartStop(); flight.Advance(10, Vector2.zero, false);
+        Require(flight.CurrentStopIndex == 0 && flight.elevator.position == held, "Departure waits for movement without re-docking");
+    }
+    static void Require(bool value, string description) { if (!value) throw new InvalidOperationException("Flight check failed: " + description); }
+    static void Capture(Camera camera, string path)
+    {
+        var target = new RenderTexture(1600, 1000, 24); var image = new Texture2D(1600, 1000, TextureFormat.RGB24, false);
+        var previous = RenderTexture.active; var previousTarget = camera.targetTexture;
+        try
+        {
+            camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
+            image.ReadPixels(new Rect(0, 0, 1600, 1000), 0, 0); image.Apply(); File.WriteAllBytes(path, image.EncodeToPNG());
+        }
+        finally { camera.targetTexture = previousTarget; RenderTexture.active = previous; UnityEngine.Object.DestroyImmediate(image); UnityEngine.Object.DestroyImmediate(target); }
+    }
+}
