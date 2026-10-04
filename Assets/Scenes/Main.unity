@@ -226,9 +226,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.ElevatorManager
   sceneView: {fileID: 4304945}
   extendedInterior: 1
+  candyStartsAtFloor: 4
+  underwaterStartsAtFloor: 8
   passengerPatienceBarPrefab: {fileID: 1002, guid: d0a1fcb439e2481bb22a12e3afdd4c71, type: 3}
   zeroScoreWhenMad: 1
-  patienceDurationMultiplier: 3
+  patienceDurationMultiplier: 2
   compactTopHud: 1
   passengerSpeechBubblePrefab: {fileID: 1002, guid: f71fcf1d153c49c08fa3fc7d6232698a, type: 3}
   speechDuration: 2.2
@@ -242,7 +244,6 @@ MonoBehaviour:
   secondsPerRustLevel: 10
   underwaterSpeedMultiplier: 0.58
   underwaterAccelerationMultiplier: 0.45
-  underwaterStartsAtFloor: 8
   personaPrefab: {fileID: 1004, guid: 12f45dcfd4b05de88943cbfa752d7274, type: 3}
   backgroundMusic: {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
 --- !u!4 &787388486
@@ -334,9 +335,9 @@ MonoBehaviour:
   dimensions:
   - name: office
     firstFloor: 0
-    lastFloor: 5
+    lastFloor: 3
   - name: candyland
-    firstFloor: 6
+    firstFloor: 4
     lastFloor: 7
   - name: underwater
     firstFloor: 8

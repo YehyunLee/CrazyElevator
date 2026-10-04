@@ -14,8 +14,8 @@ namespace CrazyElevator.Managers
 
         public DimensionRange[] dimensions =
         {
-            new DimensionRange("office", 0, 5),
-            new DimensionRange("candyland", 6, 7),
+            new DimensionRange("office", 0, 3),
+            new DimensionRange("candyland", 4, 7),
             new DimensionRange("underwater", 8, 11)
         };
 
@@ -45,7 +45,7 @@ namespace CrazyElevator.Managers
         {
             yield return null;
             ElevatorManager player = null;
-            foreach (var elevator in FindObjectsByType<ElevatorManager>(FindObjectsSortMode.None))
+            foreach (var elevator in FindObjectsByType<ElevatorManager>())
             {
                 if (elevator != null && !elevator.IsNpc) { player = elevator; break; }
             }
