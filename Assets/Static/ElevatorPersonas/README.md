@@ -31,7 +31,7 @@ Casey, the **HANDYMAN / FIX** passenger, wears a yellow hard hat and carries too
 
 The candy glove gently carries passengers along a curved path, with a smile and slow idle movement. Underwater uses a rusted mechanical hand with a brief wind-up and a fast push, plus a scowling face and occasional cough/shudder. Holding R / right shoulder for two seconds reduces rust to one starfish and suppresses rust growth and coughing for 20 seconds. A handyman aboard also suppresses coughing and restores full performance. Neither changes the underwater personality or the original scoring rules.
 
-The building camera follows the car during travel. The supplied image is preserved in `Reference/CottonAndWater.png`; the two interior backdrop materials select its candy and water panels using UV rectangles. The backdrop is flat, while passengers, hands, and cabin remain 3D.
+The building camera follows the car during travel. The supplied image is preserved in `Reference/CottonAndWater.png`; the two interior backdrop materials select its candy and water panels using UV rectangles. The backdrop is flat, while passengers, hands, and cabin remain 3D. Each world wrap (`Office world wrap`, candy, underwater) paints the **outside hall**: front through the doorway plus left/right building flanks in the lobby (not the cabin interior walls). Office uses `Reference/OfficeHall.png`; candy and water crop panels from `Reference/CottonAndWater.png` with a light mood tint.
 
 Edit the hand meshes and face in `Prefabs/ElevatorPersonaRig.prefab`. Runtime scripts live in `Assets/Scripts/Gameplay`, and `Assets/Scripts/ElevatorPersonaRig.cs`. The Main scene uses `Prefabs/ExtendedElevatorScene.prefab` and `Prefabs/ButtonlessCabin.prefab`.
 

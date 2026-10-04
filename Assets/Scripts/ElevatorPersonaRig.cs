@@ -1,30 +1,51 @@
 using UnityEngine;
+using CrazyElevator.Shared;
 
 // Authored child meshes live in Assets/Static/ElevatorPersonas. This component only poses them.
 public sealed class ElevatorPersonaRig : MonoBehaviour
 {
     public Transform candyHand, rustyHand, candyArm, rustyArm;
     public Transform face, leftEye, rightEye, smile, frown, leftBrow, rightBrow;
-    public GameObject candyDecor, rustyDecor, candyBackdrop, waterBackdrop;
+    public GameObject candyDecor, rustyDecor, candyBackdrop, waterBackdrop, officeBackdrop;
     public Renderer facePlate;
     public Material candyFace, rustyFace;
     bool friendly = true, repaired;
+    WorldBand band = WorldBand.Office;
     float clock;
     Vector3 faceHome;
 
     void Awake() { faceHome = face.localPosition; RestHands(); }
 
     public void SetWorld(bool isFriendly, bool isRepaired)
+        => SetWorld(isFriendly ? WorldBand.Candy : WorldBand.Water, isRepaired);
+
+    public void SetWorld(WorldBand world, bool isRepaired)
     {
-        friendly = isFriendly; repaired = isRepaired;
-        candyDecor.SetActive(friendly); rustyDecor.SetActive(!friendly);
-        candyBackdrop.SetActive(friendly); waterBackdrop.SetActive(!friendly);
-        candyHand.gameObject.SetActive(friendly); candyArm.gameObject.SetActive(friendly);
-        rustyHand.gameObject.SetActive(!friendly); rustyArm.gameObject.SetActive(!friendly);
-        facePlate.sharedMaterial = friendly ? candyFace : rustyFace;
-        smile.gameObject.SetActive(friendly); frown.gameObject.SetActive(!friendly);
-        leftBrow.localRotation = Quaternion.Euler(0, 0, friendly ? 8 : -23);
-        rightBrow.localRotation = Quaternion.Euler(0, 0, friendly ? -8 : 23);
+        band = world;
+        friendly = world != WorldBand.Water;
+        repaired = isRepaired;
+        // Cabin décor matches the floor band: clean office, candy trim, rusty water.
+        if (candyDecor) candyDecor.SetActive(world == WorldBand.Candy);
+        if (rustyDecor) rustyDecor.SetActive(world == WorldBand.Water);
+        if (officeBackdrop != null)
+        {
+            officeBackdrop.SetActive(world == WorldBand.Office);
+            if (candyBackdrop) candyBackdrop.SetActive(world == WorldBand.Candy);
+        }
+        else if (candyBackdrop)
+        {
+            candyBackdrop.SetActive(world != WorldBand.Water);
+        }
+        if (waterBackdrop) waterBackdrop.SetActive(world == WorldBand.Water);
+        if (candyHand) candyHand.gameObject.SetActive(friendly);
+        if (candyArm) candyArm.gameObject.SetActive(friendly);
+        if (rustyHand) rustyHand.gameObject.SetActive(!friendly);
+        if (rustyArm) rustyArm.gameObject.SetActive(!friendly);
+        if (facePlate) facePlate.sharedMaterial = friendly ? candyFace : rustyFace;
+        if (smile) smile.gameObject.SetActive(friendly);
+        if (frown) frown.gameObject.SetActive(!friendly);
+        if (leftBrow) leftBrow.localRotation = Quaternion.Euler(0, 0, friendly ? 8 : -23);
+        if (rightBrow) rightBrow.localRotation = Quaternion.Euler(0, 0, friendly ? -8 : 23);
     }
 
     public void Tick(float dt, bool moving, bool busy)

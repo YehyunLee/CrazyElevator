@@ -45,7 +45,7 @@ namespace CrazyElevator.Managers
         {
             yield return null;
             ElevatorManager player = null;
-            foreach (var elevator in FindObjectsByType<ElevatorManager>(FindObjectsSortMode.None))
+            foreach (var elevator in FindObjectsByType<ElevatorManager>())
             {
                 if (elevator != null && !elevator.IsNpc) { player = elevator; break; }
             }

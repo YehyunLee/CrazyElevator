@@ -540,8 +540,6 @@ namespace CrazyElevator.Managers
             public bool gentle;
         }
 
-        enum WorldBand { Office, Candy, Water }
-
         WorldBand BandForFloor(float floor)
         {
             if (floor >= underwaterStartsAtFloor) return WorldBand.Water;
@@ -592,29 +590,49 @@ namespace CrazyElevator.Managers
         {
             if (!extendedInterior || !persona) return;
             repairedFor = Mathf.Max(0, repairedFor - dt);
-            persona.SetWorld(FriendlyInterior, repairedFor > 0 || HasHandyman);
+            WorldBand band = BandForFloor(round.Floor);
+            persona.SetWorld(band, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
-            int world = (int)BandForFloor(round.Floor);
+            int world = (int)band;
             if (appliedWorld != world)
             {
                 appliedWorld = world;
                 var tint = new MaterialPropertyBlock();
-                Color wall = world == (int)WorldBand.Office ? new Color(.78f, .74f, .68f)
-                    : world == (int)WorldBand.Candy ? new Color(.86f, .68f, .82f)
-                    : new Color(.22f, .38f, .36f);
-                Color lamp = world == (int)WorldBand.Office ? new Color(1f, .95f, .88f)
-                    : world == (int)WorldBand.Candy ? new Color(1, .9f, .83f)
-                    : new Color(.65f, .88f, 1);
+                Color wall = band == WorldBand.Office ? new Color(.82f, .79f, .72f)
+                    : band == WorldBand.Candy ? new Color(.90f, .72f, .84f)
+                    : new Color(.18f, .34f, .36f);
+                // Lobby + cabin floors follow the world theme (navy carpet / pastel / deep sand).
+                Color floorTint = band == WorldBand.Office ? new Color(.14f, .20f, .38f)
+                    : band == WorldBand.Candy ? new Color(.93f, .78f, .88f)
+                    : new Color(.10f, .30f, .34f);
+                Color ceilingTint = band == WorldBand.Office ? new Color(.92f, .90f, .84f)
+                    : band == WorldBand.Candy ? new Color(.95f, .88f, .96f)
+                    : new Color(.12f, .40f, .48f);
                 foreach (var surface in stage.GetComponentsInChildren<Renderer>(true))
                 {
                     string part = surface.name;
-                    if (part != "Right wall" && part != "Left wall" && !part.StartsWith("Sliding door")) continue;
+                    Color color = wall;
+                    if (part == "Cabin floor" || part == "Hall floor"
+                        || part.StartsWith("Floor seam") || part.StartsWith("Hall tile")
+                        || part.StartsWith("Threshold")) color = floorTint;
+                    else if (part == "Hall ceiling" || part == "Hall upper band"
+                        || part.StartsWith("Ceiling")) color = ceilingTint;
+                    else if (part != "Right wall" && part != "Left wall" && !part.StartsWith("Sliding door")
+                        && part != "Back wall" && !part.StartsWith("Back metal")) continue;
                     surface.GetPropertyBlock(tint);
-                    tint.SetColor("_BaseColor", wall); tint.SetColor("_Color", wall);
+                    tint.SetColor("_BaseColor", color); tint.SetColor("_Color", color);
                     surface.SetPropertyBlock(tint);
                 }
+                Color lamp = band == WorldBand.Office ? new Color(1f, .96f, .88f)
+                    : band == WorldBand.Candy ? new Color(1f, .88f, .94f)
+                    : new Color(.45f, .82f, .95f);
                 foreach (var lampLight in sceneView.lights ?? System.Array.Empty<Light>())
-                    if (lampLight) lampLight.color = lamp;
+                {
+                    if (!lampLight) continue;
+                    lampLight.color = lamp;
+                    lampLight.intensity = band == WorldBand.Water ? 0.85f
+                        : band == WorldBand.Candy ? 1.15f : 1.05f;
+                }
             }
             persona.Tick(dt, phase == Phase.Moving, PersonaBusy);
         }
@@ -923,20 +941,27 @@ namespace CrazyElevator.Managers
         {
             switch (BandForFloor(floor))
             {
-                case WorldBand.Office: return new Color32(120, 148, 186, 255);
-                case WorldBand.Candy: return new Color32(232, 132, 196, 255);
-                default: return Sky;
+                case WorldBand.Office: return new Color32(98, 132, 178, 255);
+                case WorldBand.Candy: return new Color32(236, 118, 188, 255);
+                default: return new Color32(48, 196, 210, 255);
             }
         }
 
         Color WorldSky(float floor)
         {
-            switch (BandForFloor(floor))
-            {
-                case WorldBand.Office: return new Color32(168, 186, 210, 255);
-                case WorldBand.Candy: return new Color32(200, 172, 241, 255);
-                default: return new Color32(12, 78, 115, 255);
-            }
+            // Soft blend near band edges so travel reads as climbing through layers.
+            float candy = candyStartsAtFloor;
+            float water = underwaterStartsAtFloor;
+            Color office = new Color32(176, 198, 224, 255);
+            Color candySky = new Color32(220, 168, 236, 255);
+            Color waterSky = new Color32(6, 58, 92, 255);
+            if (floor < candy - 0.5f) return office;
+            if (floor < candy + 0.5f)
+                return Color.Lerp(office, candySky, Mathf.InverseLerp(candy - 0.5f, candy + 0.5f, floor));
+            if (floor < water - 0.5f) return candySky;
+            if (floor < water + 0.5f)
+                return Color.Lerp(candySky, waterSky, Mathf.InverseLerp(water - 0.5f, water + 0.5f, floor));
+            return waterSky;
         }
 
         // The cabin closes first. The building stays visible until docking and door opening finish.
