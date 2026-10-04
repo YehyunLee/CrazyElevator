@@ -25,8 +25,9 @@ namespace CrazyElevator.Managers
         static bool sessionReady;
 
         // Enter Play Mode Options can skip Domain Reload; reset statics manually.
+        // Show mode select on each Play; Awake keeps the choice through LoadScene via sessionReady.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetSessionStatics()
+        static void ResetForPlay()
         {
             sessionReady = false;
             IsOpen = false;
