@@ -35,4 +35,10 @@ The building camera follows the car during travel. The supplied image is preserv
 
 Edit the hand meshes and face in `Prefabs/ElevatorPersonaRig.prefab`. Runtime scripts live in `Assets/Scripts/Gameplay`, and `Assets/Scripts/ElevatorPersonaRig.cs`. The Main scene uses `Prefabs/ExtendedElevatorScene.prefab` and `Prefabs/ButtonlessCabin.prefab`.
 
+### Illustrated 3D passenger prefabs
+
+The active passenger art is exported as normal editable prefabs in `Assets/Prefabs/Resources/`, with the Atlantis handyman in `Prefabs/Passenger-HANDYMAN.prefab`. The office workers, candy guests, granny, clown trio, Atlantis variants, dolphin, and clean round/square bases are reproducible from `Assets/Scripts/Editor/PassengerPrefabBuilder.cs`.
+
+Use **Tools > Crazy Elevator > Rebuild Illustrated Passenger Prefabs** after changing the builder. It preserves the gameplay kinds, colliders, destination/speech references, and handyman tool names, then rewires `ExtendedElevatorScene.prefab`. Use **Open Illustrated Passenger Preview** to inspect the exported lineup together; the showcase and extra concept prefabs live in `Prefabs/PassengerConcepts/`.
+
 To rerun integration checks, open `Assets/Scenes/Main.unity` and select **Tools > Crazy Elevator > Check Extended Interior (Play Mode)**. This starts Play Mode and tests hover/highlighting, inert mouse clicks/drags, stick selection, selected-passenger confirmation, safe departure, continuous travel, manual stops, camera transitions, shaft limits, world transitions, repair, scoring, cumulative boost, braking/reversal, frame-rate independence, underwater performance, both starfish meters and handyman boarding/unloading. Results are written to `Temp/ExtendedInterior/result.txt`. It does not save or modify any scene.
