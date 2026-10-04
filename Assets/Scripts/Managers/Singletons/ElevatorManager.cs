@@ -84,6 +84,10 @@ namespace CrazyElevator.Managers
                 paused = !paused;
             if (input != null && input.StartPressed && menu) StartOrContinue();
             if (paused || phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results) return;
+            // A scene/domain reload can run one Update before the fresh round
+            // has been created. Wait for initialization instead of spamming a
+            // NullReferenceException from the gameplay tick.
+            if (round == null) return;
             float dt = Time.deltaTime;
             // Drain waiting patience only while stopped for boarding.
             round.Tick(dt, phase == Phase.Boarding);
@@ -552,8 +556,17 @@ namespace CrazyElevator.Managers
 
         // Cabin persona stays gentle in office + candy; only water goes rusty.
         bool FriendlyInterior => BandForFloor(round != null ? round.Floor : 0) != WorldBand.Water;
+        bool OfficeInterior => BandForFloor(round != null ? round.Floor : 0) == WorldBand.Office;
         bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0 || HandymanRepairActive;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
+        static readonly Vector3[] OfficeCabinSpots =
+        {
+            // The office benches hide the extreme cabin edges from the player
+            // camera, so keep the first three riders across the visible aisle.
+            new Vector3(-1.2f, .12f, 1.34f), new Vector3(0, .12f, 1.34f),
+            new Vector3(1.2f, .12f, 1.34f), new Vector3(-1.2f, .12f, 2.5f),
+            new Vector3(0, .12f, 2.5f), new Vector3(1.2f, .12f, 2.5f)
+        };
         static readonly Vector3[] ClearDoorwayCabinSpots =
         {
             // The camera is at positive Z looking toward the doors, so the
@@ -705,7 +718,8 @@ namespace CrazyElevator.Managers
             }
             if (keepDoorwayClear)
             {
-                foreach (Vector3 spot in ClearDoorwayCabinSpots)
+                Vector3[] spots = OfficeInterior ? OfficeCabinSpots : ClearDoorwayCabinSpots;
+                foreach (Vector3 spot in spots)
                 {
                     if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
                     if (!round.Board(rider)) return;

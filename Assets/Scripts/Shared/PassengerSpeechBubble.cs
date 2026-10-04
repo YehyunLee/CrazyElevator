@@ -96,8 +96,8 @@ namespace CrazyElevator.Shared
             textObject.transform.SetParent(transform, false);
             textObject.transform.localPosition = new Vector3(0, 0, -.045f);
             label = textObject.AddComponent<TextMesh>();
-            label.fontSize = 64;
-            label.characterSize = .0105f;
+            label.fontSize = 72;
+            label.characterSize = .0145f;
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;
             label.fontStyle = FontStyle.Bold;

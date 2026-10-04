@@ -508,6 +508,7 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
         readonly Dictionary<Collider, Rider> riderHits = new Dictionary<Collider, Rider>();
+        static readonly float[] OfficeQueueX = { -1.2f, 0f, 1.2f };
 
         // Spawn authored art and register its clickable labels.
         Transform MakeRider(Rider p)
@@ -546,6 +547,15 @@ namespace CrazyElevator.Managers
                 // boarding keeps the exact continuous position chosen by the player.
                 float[] cabinX = { -1.65f, -.55f, .55f, 1.65f };
                 return new Vector3(cabinX[Mathf.Min(slot, cabinX.Length - 1)], .12f, 1.08f);
+            }
+            if (OfficeInterior)
+            {
+                // Office cubicles hide the old extreme queue positions. Keep
+                // waiting riders across the visible entrance aisle instead.
+                int queueColumn = slot % OfficeQueueX.Length;
+                int queueRow = slot / OfficeQueueX.Length;
+                return new Vector3(OfficeQueueX[queueColumn], .12f,
+                    -1.1f - queueRow * .65f - Mathf.Min(.7f, p.Arrival * .12f));
             }
             return new Vector3(-2f + slot * 2f, .12f, -1.45f - Mathf.Min(1.2f, p.Arrival * .20f));
         }
@@ -617,7 +627,10 @@ namespace CrazyElevator.Managers
                 {
                     destinationTag.gameObject.SetActive(!isExiting);
                     destinationTag.text = p.Badge + "  " + p.Destination.ToString();
-                    destinationTag.color = p.Mood < 2 || p.Boarded && p.Remaining <= 0 ? Coral : p.Boarded || isExiting ? Teal : Gold;
+                    // Cream reads on light cabin walls better than Gold; keep Teal/Coral for state.
+                    destinationTag.color = p.Mood < 2 || p.Boarded && p.Remaining <= 0 ? Coral
+                        : p.Boarded || isExiting ? Teal
+                        : Cream;
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
                 UpdatePatienceBar(p, isExiting);
@@ -806,8 +819,11 @@ namespace CrazyElevator.Managers
             // Waiting characters face the opposite direction, so invert their
             // local offset to keep the bubble on the same screen-side as them.
             float localSide = rider.Boarded ? side : -side;
-            bubble.transform.localPosition = new Vector3(localSide * .62f, rider.Boarded ? 1.63f : 1.76f, 0);
-            bubble.SetSide(side);
+            // Keep the quote tight to the head — a light nudge, not a far float.
+            float lateral = Mathf.Abs(figure.localPosition.x) < .4f ? .16f : .26f;
+            bubble.transform.localPosition = new Vector3(
+                localSide * lateral, rider.Boarded ? 1.78f : 1.9f, 0);
+            bubble.SetSide(localSide);
         }
 
         static string WaitingSpeechText(Rider rider)
