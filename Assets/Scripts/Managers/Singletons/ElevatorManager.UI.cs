@@ -22,17 +22,23 @@ namespace CrazyElevator.Managers
         {
             if (body != null) return;
             body = new GUIStyle(GUI.skin.label) { fontSize = 16, wordWrap = true, richText = false };
+            GameTypography.Apply(body);
             body.normal.textColor = Cream;
             small = new GUIStyle(body) { fontSize = 12 };
             title = new GUIStyle(body) { fontSize = 36, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(title, true);
             large = new GUIStyle(body) { fontSize = 24, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(large, true);
             buttonStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(buttonStyle, true);
             inkBody = new GUIStyle(body); inkBody.normal.textColor = Ink;
             inkSmall = new GUIStyle(small); inkSmall.normal.textColor = Ink;
             inkLarge = new GUIStyle(large); inkLarge.normal.textColor = Ink;
             logo = new GUIStyle(body) { fontSize = 96, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(logo, true);
             logo.normal.textColor = Cream;
             stampWord = new GUIStyle(body) { fontSize = 62, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false, clipping = TextClipping.Overflow };
+            GameTypography.Apply(stampWord, true);
             stampWord.normal.textColor = Coral;
         }
         // Draw a solid panel and restore the GUI tint.
@@ -75,6 +81,7 @@ namespace CrazyElevator.Managers
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             GUI.enabled = true;
+            GameTypography.ApplyToSkin(GUI.skin);
             Styles();
             if (phase == Phase.Intro)
             {

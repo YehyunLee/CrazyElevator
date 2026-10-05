@@ -109,8 +109,8 @@ namespace CrazyElevator.Shared
             madLabel.characterSize = .009f;
             madLabel.anchor = TextAnchor.LowerCenter;
             madLabel.alignment = TextAlignment.Center;
-            madLabel.fontStyle = FontStyle.Bold;
             madLabel.color = impatientColor;
+            GameTypography.Apply(madLabel, true);
         }
 
         Renderer CreatePart(string partName, Vector3 position, Vector3 scale, out Transform part)

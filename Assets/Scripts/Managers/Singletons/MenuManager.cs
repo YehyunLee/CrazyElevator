@@ -82,6 +82,7 @@ namespace CrazyElevator.Managers
 
         void OnGUI()
         {
+            GameTypography.ApplyToSkin(GUI.skin);
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             Styles();
@@ -143,14 +144,20 @@ namespace CrazyElevator.Managers
             if (title != null) return;
             title = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Clamp(Screen.height / 16, 30, 56), fontStyle = FontStyle.Bold };
+            GameTypography.Apply(title, true);
             title.normal.textColor = Cream;
             cardTitle = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 25, 23, 38) };
+            GameTypography.Apply(cardTitle, true);
             cardTitle.normal.textColor = Ink;
             caption = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 48, 14, 19), fontStyle = FontStyle.Normal };
+            GameTypography.Apply(caption);
             caption.normal.textColor = Cream;
-            cardCaption = new GUIStyle(caption);
+            cardCaption = new GUIStyle(caption)
+            { fontSize = Mathf.Clamp(Screen.height / 58, 12, 16) };
+            GameTypography.Apply(cardCaption);
             cardCaption.normal.textColor = Ink;
             body = new GUIStyle(caption) { alignment = TextAnchor.MiddleLeft, fontSize = Mathf.Clamp(Screen.height / 55, 12, 16) };
+            GameTypography.Apply(body);
         }
 
         void DrawMode(Rect rect, Color accent, string heading, string detail, string scene, bool duel)

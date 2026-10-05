@@ -192,7 +192,7 @@ namespace CrazyElevator.EditorTools
 
             TextMesh speech = AddLabel(root.transform, "Speech bubble", new Vector3(0, 2.42f, 0), "", .022f);
             TextMesh destination = AddLabel(root.transform, "Destination badge", new Vector3(0, 2.08f, 0), kind + "  1", .023f);
-            destination.fontStyle = FontStyle.Bold;
+            GameTypography.Apply(destination, true);
 
             var view = root.AddComponent<PassengerView>();
             view.kind = kind;
@@ -529,6 +529,7 @@ namespace CrazyElevator.EditorTools
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;
             label.color = White;
+            GameTypography.Apply(label);
             return label;
         }
 

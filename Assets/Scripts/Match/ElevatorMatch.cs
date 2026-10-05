@@ -191,6 +191,7 @@ namespace CrazyElevator.Match
             GUI.matrix = Matrix4x4.identity;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
+            GameTypography.ApplyToSkin(GUI.skin);
             MatchStyles();
             if (player.IntroPlaying)
             {
@@ -212,10 +213,14 @@ namespace CrazyElevator.Match
         {
             if (text != null) return;
             text = new GUIStyle(GUI.skin.label) { fontSize = 14, wordWrap = true };
+            GameTypography.Apply(text);
             text.normal.textColor = Color.white;
             heading = new GUIStyle(text) { fontSize = 18, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(heading, true);
             score = new GUIStyle(heading) { fontSize = 25 };
+            GameTypography.Apply(score, true);
             centred = new GUIStyle(heading) { alignment = TextAnchor.MiddleCenter };
+            GameTypography.Apply(centred, true);
         }
 
         static void Fill(Rect rect, Color colour)

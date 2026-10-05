@@ -401,7 +401,6 @@ namespace CrazyElevator.Managers
                 : points == 0 ? "MAD - NO POINTS" : "LATE DELIVERY";
             kick.Feedback = Sign(caption + "\n" + (points >= 0 ? "+" : "") + points,
                 start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
-            kick.Feedback.fontStyle = FontStyle.Bold;
             kicks[rider] = kick;
             Play(extendedInterior && kick.Gentle ? chime : kickWhoosh);
         }

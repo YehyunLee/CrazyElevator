@@ -43,4 +43,8 @@ Use **Tools > Crazy Elevator > Rebuild Illustrated Passenger Prefabs** after cha
 
 The passengers and opaque cabin/world surfaces use the shared **Storybook Surface** shader: three broad lighting bands, no specular reflections, and a subtle printed-paper pattern on the set. Bloom is disabled so bright colours stay crisp instead of looking plastic. Use **Tools > Crazy Elevator > Apply Matte Storybook Style** to apply the same treatment to newly added Lit materials; existing authored storybook patterns are preserved.
 
+### Typography
+
+Menus, HUD text, 1v1 overlays, elevator signs, passenger destination badges, speech bubbles, and patience labels use **Lemon Milk**. The Regular and Bold font files live in `Assets/Resources/Fonts/` and are applied through `Assets/Scripts/Shared/GameTypography.cs`, including labels created at runtime or rebuilt by the passenger prefab tool. Keep `LemonMilk-LICENSE.txt` with the font assets when sharing or packaging the project.
+
 To rerun integration checks, open `Assets/Scenes/Main.unity` and select **Tools > Crazy Elevator > Check Extended Interior (Play Mode)**. This starts Play Mode and tests hover/highlighting, inert mouse clicks/drags, stick selection, selected-passenger confirmation, safe departure, continuous travel, manual stops, camera transitions, shaft limits, world transitions, repair, scoring, cumulative boost, braking/reversal, frame-rate independence, underwater performance, both starfish meters and handyman boarding/unloading. Results are written to `Temp/ExtendedInterior/result.txt`. It does not save or modify any scene.

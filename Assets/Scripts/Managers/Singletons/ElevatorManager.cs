@@ -191,6 +191,8 @@ namespace CrazyElevator.Managers
             leftDoor = sceneView.leftDoor; rightDoor = sceneView.rightDoor;
             scenery = sceneView.passingLights;
             floorSign = sceneView.floorDisplay;
+            foreach (TextMesh label in sceneView.GetComponentsInChildren<TextMesh>(true))
+                GameTypography.Apply(label, true);
             floorSignHome = floorSign.transform.localPosition;
             cameraHome = eye.transform.position;
             cameraHomeRotation = eye.transform.rotation;
@@ -1130,6 +1132,7 @@ namespace CrazyElevator.Managers
             var g = new GameObject("Sign • " + text); g.transform.SetParent(stage, false); g.transform.localPosition = position;
             var t = g.AddComponent<TextMesh>(); t.text = text; t.fontSize = 64; t.characterSize = size;
             t.anchor = TextAnchor.MiddleCenter; t.alignment = TextAlignment.Center; t.color = color;
+            GameTypography.Apply(t, true);
             // TextMesh fronts face negative Z, toward the observation camera.
             return t;
         }
