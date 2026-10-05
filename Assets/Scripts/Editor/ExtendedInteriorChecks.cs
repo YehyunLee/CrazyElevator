@@ -150,8 +150,9 @@ public static class ExtendedInteriorChecks
         Call(game, "CloseAndTravel"); Call(game, "LateUpdate");
         Require(Get(game, "phase").ToString() == "Closing" && game.sceneView.cabinCamera.enabled, "The inside view should show the doors closing.");
         Set(game, "phaseTime", 1f); Call(game, "Update"); Call(game, "LateUpdate");
-        Require(Get(game, "phase").ToString() == "Moving" && game.sceneView.exteriorCamera.enabled && !game.sceneView.cabinCamera.enabled,
-            "Closed doors must switch to full-screen building travel.");
+        Require(Get(game, "phase").ToString() == "Moving" && game.sceneView.exteriorCamera.enabled
+            && game.sceneView.cabinCamera.enabled && game.sceneView.cabinCamera.rect.width < game.sceneView.exteriorCamera.rect.width,
+            "Closed doors must switch to shaft travel with a smaller cabin preview.");
     }
 
     static void Run(Game game)
@@ -247,7 +248,7 @@ public static class ExtendedInteriorChecks
             Call(game, "UpdatePassengerSelection");
             Require(rider.Boarded && ((IDictionary)Get(game, "cabinPositions")).Contains(rider),
                 "Dragging a waiting passenger into the cabin should board and place them.");
-            File.WriteAllText(Work + "/result.txt", "PASS: exact hover selection/highlight; click versus drag handling; drag-to-board; moving away clears highlight; joystick selection and confirm remain available; safe doors; interior while closing; full-screen building during travel; no automatic floor stops; stop rejected between floors; confirm docks at nearby floor; doors open before interior return; pause preserves travel view; top/bottom bounds remain closed; up/down reversal; candy below/water above; repair; single scoring.");
+            File.WriteAllText(Work + "/result.txt", "PASS: exact hover selection/highlight; click versus drag handling; drag-to-board; moving away clears highlight; joystick selection and confirm remain available; safe doors; interior while closing; shaft travel with cabin PIP; no automatic floor stops; stop rejected between floors; confirm docks at nearby floor; doors open before interior return; pause preserves travel view; top/bottom bounds remain closed; up/down reversal; candy below/water above; repair; single scoring.");
         }
         finally
         {
