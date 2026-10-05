@@ -19,6 +19,8 @@ World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**.
 
 Inside, hovering highlights one passenger in gold. Moving the stick changes the highlighted passenger by screen direction; release between selections. Confirm moves that exact passenger in or out. Mouse buttons do nothing: there is no dragging, clicking to board, or clicking to dismiss a passenger. Passengers are placed in available cabin spaces automatically.
 
+Correct drop-offs show the points earned in a short screen-space burst. Deliver another passenger correctly within 3.5 seconds to build the visible **QUICK COMBO** streak; the streak is celebratory only and does not multiply the existing score. Wrong-floor and zero-point drop-offs reset it.
+
 Close the doors with C / the top face button. You see them close from inside; once shut, the view switches to the building and the car begins moving. Up/down sets a direction, and releasing the stick keeps the car travelling. Confirm while the nearby floor marker is green to dock there. Between floors, stop input is ignored with a reminder. The car remains outside while docking and opening the doors, then returns to the interior. Shaft limits hold the car with doors closed until you confirm or reverse. Departure waits for any passenger hand animation to finish.
 
 Controller labels use button positions, since Switch and Xbox letter layouts differ. Bottom means B on Switch / A on Xbox; top means X on Switch / Y on Xbox.

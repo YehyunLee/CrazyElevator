@@ -12,7 +12,8 @@ namespace CrazyElevator.Managers
     {
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
-        GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord;
+        GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
+            rewardPoints, rewardCaption;
 
         // Rebuild native GUI styles when returning to Play Mode without domain reload.
         void OnEnable() { body = null; }
@@ -40,6 +41,10 @@ namespace CrazyElevator.Managers
             stampWord = new GUIStyle(body) { fontSize = 62, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false, clipping = TextClipping.Overflow };
             GameTypography.Apply(stampWord, true);
             stampWord.normal.textColor = Coral;
+            rewardPoints = new GUIStyle(title) { fontSize = 48, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            GameTypography.Apply(rewardPoints, true);
+            rewardCaption = new GUIStyle(buttonStyle) { fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            GameTypography.Apply(rewardCaption, true);
         }
         // Draw a solid panel and restore the GUI tint.
         void Panel(Rect r, Color c) { var old = GUI.color; GUI.color = c; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = old; }
@@ -141,6 +146,7 @@ namespace CrazyElevator.Managers
                 if (extendedInterior) DrawElevatorSpeech(Screen.height / hudScale, Screen.width / hudScale);
                 GUI.matrix = Matrix4x4.identity;
                 DrawMouseControls();
+                DrawDeliveryPopups(Screen.width, Screen.height);
             }
         }
 
@@ -155,6 +161,7 @@ namespace CrazyElevator.Managers
                 Matrix4x4 npcMatrix = GUI.matrix;
                 GUI.matrix = Matrix4x4.Translate(new Vector3(npcView.x, npcView.y, 0));
                 if (extendedInterior) DrawElevatorSpeech(npcView.height, npcView.width);
+                DrawDeliveryPopups(npcView.width, npcView.height);
                 GUI.matrix = npcMatrix;
                 return;
             }
@@ -164,7 +171,84 @@ namespace CrazyElevator.Managers
             GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0));
             if (extendedInterior) DrawElevatorSpeech(view.height, view.width);
             DrawMouseControls();
+            DrawDeliveryPopups(view.width, view.height);
             GUI.matrix = previous;
+        }
+
+        // Screen-space points stay readable while the 3D passenger exits.
+        void DrawDeliveryPopups(float viewWidth, float viewHeight)
+        {
+            float now = Time.unscaledTime;
+            for (int i = deliveryPopups.Count - 1; i >= 0; i--)
+                if (now - deliveryPopups[i].StartedAt >= DeliveryPopupDuration)
+                    deliveryPopups.RemoveAt(i);
+            if (deliveryPopups.Count == 0 || Event.current.type != EventType.Repaint) return;
+
+            float uiScale = Mathf.Clamp(viewHeight / 900f, .72f, 1.15f);
+            for (int i = 0; i < deliveryPopups.Count; i++)
+            {
+                DeliveryPopup popup = deliveryPopups[i];
+                float age = now - popup.StartedAt;
+                float progress = Mathf.Clamp01(age / DeliveryPopupDuration);
+                float entrance = Mathf.Clamp01(age / .16f);
+                float settle = Mathf.Clamp01((age - .16f) / .2f);
+                float popScale = entrance < 1f
+                    ? Mathf.Lerp(.62f, 1.16f, EaseOut(entrance))
+                    : Mathf.Lerp(1.16f, 1f, EaseOut(settle));
+                float alpha = 1f - Mathf.Clamp01((progress - .7f) / .3f);
+                float rise = EaseOut(progress) * 76f * uiScale;
+                float jitter = Mathf.Sin(age * 32f + popup.Serial * 1.7f) * 2.5f * (1f - progress);
+
+                float width = Mathf.Min(290f * uiScale * popScale, viewWidth - 24f);
+                float centerX = Mathf.Clamp(popup.Viewport.x * viewWidth + jitter,
+                    width * .5f + 12f, viewWidth - width * .5f - 12f);
+                float centerY = (1f - popup.Viewport.y) * viewHeight - rise;
+                Color accent = popup.Combo > 1 ? Coral : Teal;
+
+                float burst = EaseOut(Mathf.Clamp01(age / .48f));
+                for (int spark = 0; spark < 6; spark++)
+                {
+                    float angle = (spark / 6f) * Mathf.PI * 2f + popup.Serial * .37f;
+                    float radius = Mathf.Lerp(24f, 78f, burst) * uiScale;
+                    float size = Mathf.Lerp(11f, 3f, burst) * uiScale;
+                    Vector2 position = new Vector2(centerX + Mathf.Cos(angle) * radius,
+                        centerY + Mathf.Sin(angle) * radius);
+                    Color sparkColor = spark % 2 == 0 ? Gold : accent;
+                    sparkColor.a = alpha * (1f - burst * .45f);
+                    Panel(new Rect(position.x - size * .5f, position.y - size * .5f, size, size), sparkColor);
+                }
+
+                int previousPointSize = rewardPoints.fontSize;
+                int previousCaptionSize = rewardCaption.fontSize;
+                Color previousPointColor = rewardPoints.normal.textColor;
+                Color previousCaptionColor = rewardCaption.normal.textColor;
+                rewardPoints.fontSize = Mathf.Max(24, Mathf.RoundToInt(48f * uiScale * popScale));
+                rewardCaption.fontSize = Mathf.Max(12, Mathf.RoundToInt(17f * uiScale));
+
+                Rect pointsRect = new Rect(centerX - width * .5f, centerY - 48f * uiScale,
+                    width, 62f * uiScale * popScale);
+                rewardPoints.normal.textColor = new Color(Ink.r, Ink.g, Ink.b, alpha * .65f);
+                GUI.Label(new Rect(pointsRect.x + 3f, pointsRect.y + 4f, pointsRect.width, pointsRect.height),
+                    "+" + popup.Points, rewardPoints);
+                rewardPoints.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, alpha);
+                GUI.Label(pointsRect, "+" + popup.Points, rewardPoints);
+
+                float bannerWidth = Mathf.Min(width * .82f, 230f * uiScale);
+                Rect banner = new Rect(centerX - bannerWidth * .5f, centerY + 14f * uiScale,
+                    bannerWidth, 30f * uiScale);
+                Panel(banner, new Color(Ink.r, Ink.g, Ink.b, alpha * .9f));
+                Panel(new Rect(banner.x, banner.y, 5f * uiScale, banner.height),
+                    new Color(accent.r, accent.g, accent.b, alpha));
+                rewardCaption.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+                string caption = popup.Combo > 1 ? "QUICK COMBO  x" + popup.Combo
+                    : popup.Happy ? "PERFECT DROP!" : "RIGHT FLOOR!";
+                GUI.Label(banner, caption, rewardCaption);
+
+                rewardPoints.fontSize = previousPointSize;
+                rewardCaption.fontSize = previousCaptionSize;
+                rewardPoints.normal.textColor = previousPointColor;
+                rewardCaption.normal.textColor = previousCaptionColor;
+            }
         }
 
         public void DrawMatchIntroGUI()

@@ -47,6 +47,7 @@ public static class ExtendedInteriorChecks
         {
             if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "repair-checks") RunRepair(game);
+            else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
             {
                 game.enabled = true; Call(game, "Restart");
@@ -116,6 +117,35 @@ public static class ExtendedInteriorChecks
     static void RequestRepairChecks()
     {
         Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "repair-checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Preview Delivery Reward Popup")]
+    static void RequestRewardPreview()
+    {
+        Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "reward-preview");
+    }
+
+    static void PreviewDeliveryReward(Game game)
+    {
+        CrazyElevator.Managers.MenuManager.Close();
+        Call(game, "Restart");
+        int scoreBefore = game.Points;
+        Call(game, "RegisterDeliveryPopup", new Vector3(-.75f, .2f, 2.1f),
+            CrazyElevator.Shared.OffboardResult.Happy, 145);
+        Call(game, "RegisterDeliveryPopup", new Vector3(.7f, .05f, 2.2f),
+            CrazyElevator.Shared.OffboardResult.Happy, 110);
+        Require(((ICollection)Get(game, "deliveryPopups")).Count == 2
+            && (int)Get(game, "deliveryCombo") == 2,
+            "The delivery preview did not create a two-drop combo.");
+        Require(game.Points == scoreBefore, "The presentation-only combo changed the score.");
+        Call(game, "RegisterDeliveryPopup", Vector3.zero,
+            CrazyElevator.Shared.OffboardResult.WrongFloor, -60);
+        Require((int)Get(game, "deliveryCombo") == 0
+            && ((ICollection)Get(game, "deliveryPopups")).Count == 2,
+            "A wrong-floor drop must reset the combo without creating a positive popup.");
+        File.WriteAllText(Work + "/result.txt",
+            "PASS: points popups created; quick combo reached x2; wrong-floor reset; score unchanged. Editor paused for visual review.");
+        EditorApplication.isPaused = true;
     }
 
     static void Input(Game game, Gamepad pad, GamepadState state, float dt = .02f)
@@ -214,7 +244,14 @@ public static class ExtendedInteriorChecks
             FinishDock(game); Require(round.Floor == 2, "Docked at the wrong floor.");
             Call(game, "SelectRider", rider); Call(game, "ConfirmPassenger");
             int score = round.Score;
-            Require(round.Delivered == 1 && ((IDictionary)Get(game, "exiting")).Count == 1, "Selected passenger did not unload.");
+            Require(round.Delivered == 1 && ((IDictionary)Get(game, "exiting")).Count == 1
+                && ((ICollection)Get(game, "deliveryPopups")).Count == 1
+                && (int)Get(game, "deliveryCombo") == 1,
+                "A correct unload must create one points popup and start its combo.");
+            Call(game, "RegisterDeliveryPopup", before, CrazyElevator.Shared.OffboardResult.Happy, 100);
+            Require(((ICollection)Get(game, "deliveryPopups")).Count == 2
+                && (int)Get(game, "deliveryCombo") == 2,
+                "A quick second delivery must advance the visible combo.");
             Call(game, "SyncFigures", 1.5f);
             Require(round.Score == score && ((IDictionary)Get(game, "exiting")).Count == 0, "Unload scored twice or failed to finish.");
             Input(game, pad, new GamepadState()); Close(game);
@@ -248,7 +285,7 @@ public static class ExtendedInteriorChecks
             Call(game, "UpdatePassengerSelection");
             Require(rider.Boarded && ((IDictionary)Get(game, "cabinPositions")).Contains(rider),
                 "Dragging a waiting passenger into the cabin should board and place them.");
-            File.WriteAllText(Work + "/result.txt", "PASS: exact hover selection/highlight; click versus drag handling; drag-to-board; moving away clears highlight; joystick selection and confirm remain available; safe doors; interior while closing; shaft travel with cabin PIP; no automatic floor stops; stop rejected between floors; confirm docks at nearby floor; doors open before interior return; pause preserves travel view; top/bottom bounds remain closed; up/down reversal; candy below/water above; repair; single scoring.");
+            File.WriteAllText(Work + "/result.txt", "PASS: exact hover selection/highlight; click versus drag handling; drag-to-board; moving away clears highlight; joystick selection and confirm remain available; safe doors; interior while closing; shaft travel with cabin PIP; no automatic floor stops; stop rejected between floors; confirm docks at nearby floor; doors open before interior return; pause preserves travel view; top/bottom bounds remain closed; up/down reversal; candy below/water above; repair; single scoring; points popup; quick-delivery combo.");
         }
         finally
         {

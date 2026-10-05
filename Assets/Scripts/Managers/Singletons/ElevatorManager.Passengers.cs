@@ -364,7 +364,12 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         const float KickDuration = .78f;
+        const float DeliveryComboWindow = 3.5f;
+        const float DeliveryPopupDuration = 1.35f;
         readonly Dictionary<Rider, KickVisual> kicks = new Dictionary<Rider, KickVisual>();
+        readonly List<DeliveryPopup> deliveryPopups = new List<DeliveryPopup>();
+        float lastRewardedDeliveryAt = -1000f;
+        int deliveryCombo, deliveryPopupSerial;
 
         sealed class KickVisual
         {
@@ -373,6 +378,14 @@ namespace CrazyElevator.Managers
             public bool Gentle, WrongFloor;
             public Transform[] Puffs;
             public TextMesh Feedback;
+        }
+
+        sealed class DeliveryPopup
+        {
+            public Vector2 Viewport;
+            public float StartedAt;
+            public int Points, Combo, Serial;
+            public bool Happy;
         }
 
         // Capture the art's original pose so replacement models keep their scale.
@@ -399,10 +412,51 @@ namespace CrazyElevator.Managers
             string caption = result == OffboardResult.WrongFloor ? "WRONG FLOOR"
                 : result == OffboardResult.Happy ? "DELIVERED!"
                 : points == 0 ? "MAD - NO POINTS" : "LATE DELIVERY";
-            kick.Feedback = Sign(caption + "\n" + (points >= 0 ? "+" : "") + points,
+            // Correct-delivery points now live in the crisp 2D reward popup.
+            // Keep only status on the moving 3D rider; wrong-floor penalties
+            // remain attached to the mistake so the consequence is obvious.
+            string worldFeedback = result == OffboardResult.WrongFloor
+                ? caption + "\n" + points : caption;
+            kick.Feedback = Sign(worldFeedback,
                 start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
+            RegisterDeliveryPopup(start, result, points);
             kicks[rider] = kick;
             Play(extendedInterior && kick.Gentle ? chime : kickWhoosh);
+        }
+
+        // The combo celebrates quick correct drop-offs without changing the score.
+        void RegisterDeliveryPopup(Vector3 localPosition, OffboardResult result, int points)
+        {
+            if (result == OffboardResult.WrongFloor || points <= 0)
+            {
+                deliveryCombo = 0;
+                lastRewardedDeliveryAt = -1000f;
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            deliveryCombo = now - lastRewardedDeliveryAt <= DeliveryComboWindow
+                ? deliveryCombo + 1 : 1;
+            lastRewardedDeliveryAt = now;
+
+            Vector2 viewport = new Vector2(.5f, .48f);
+            if (eye != null && stage != null)
+            {
+                Vector3 point = eye.WorldToViewportPoint(stage.TransformPoint(localPosition + Vector3.up * 1.45f));
+                if (point.z > 0)
+                    viewport = new Vector2(Mathf.Clamp(point.x, .18f, .82f), Mathf.Clamp(point.y, .28f, .76f));
+            }
+
+            if (deliveryPopups.Count >= 4) deliveryPopups.RemoveAt(0);
+            deliveryPopups.Add(new DeliveryPopup
+            {
+                Viewport = viewport,
+                StartedAt = now,
+                Points = points,
+                Combo = deliveryCombo,
+                Serial = deliveryPopupSerial++,
+                Happy = result == OffboardResult.Happy
+            });
         }
 
         // Wind-up, airborne tumble, then a quick landing bounce.
@@ -489,6 +543,9 @@ namespace CrazyElevator.Managers
         void ClearKicks()
         {
             foreach (var rider in new List<Rider>(kicks.Keys)) EndKick(rider);
+            deliveryPopups.Clear();
+            deliveryCombo = 0;
+            lastRewardedDeliveryAt = -1000f;
         }
     }
 }
