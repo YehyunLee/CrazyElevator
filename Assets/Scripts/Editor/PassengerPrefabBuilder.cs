@@ -17,6 +17,7 @@ namespace CrazyElevator.EditorTools
         const string ConceptPrefabFolder = PersonaFolder + "/Prefabs/PassengerConcepts";
         const string MaterialFolder = PersonaFolder + "/Materials/Passengers";
         const string ElevatorScenePath = PersonaFolder + "/Prefabs/ExtendedElevatorScene.prefab";
+        const string StorybookShaderName = "Crazy Elevator/Storybook Surface";
 
         static readonly Dictionary<string, Material> materials = new Dictionary<string, Material>();
 
@@ -79,6 +80,65 @@ namespace CrazyElevator.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("Rebuilt illustrated 3D passenger prefabs and refreshed ElevatorScene references.");
+        }
+
+        [MenuItem("Tools/Crazy Elevator/Apply Matte Storybook Style")]
+        public static void ApplyMatteStorybookStyle()
+        {
+            Shader storybook = Shader.Find(StorybookShaderName);
+            if (storybook == null)
+                throw new InvalidOperationException("Missing shader: " + StorybookShaderName);
+
+            string[] roots =
+            {
+                "Assets/Prefabs/Resources",
+                "Assets/Static/WorldBands/Materials",
+                PersonaFolder + "/Materials"
+            };
+
+            int changed = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", roots))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (mat == null || mat.shader == null || mat.shader.name == "CrazyElevator/Interior World Backdrop")
+                    continue;
+
+                bool isPassenger = path.StartsWith(MaterialFolder + "/", StringComparison.Ordinal);
+                bool supported = mat.shader.name == StorybookShaderName
+                    || mat.shader.name == "Universal Render Pipeline/Lit"
+                    || mat.shader.name == "Universal Render Pipeline/Simple Lit"
+                    || mat.shader.name == "Standard";
+                if (!supported) continue;
+
+                // Keep authored stripes and paper patterns on materials that
+                // were already using the storybook shader. Passenger colours
+                // are the exception because their builder owns these values.
+                bool alreadyStorybook = mat.shader == storybook;
+                if (alreadyStorybook && !isPassenger) continue;
+
+                Color baseColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : mat.color;
+                if (!alreadyStorybook)
+                {
+                    mat.shader = storybook;
+                    changed++;
+                }
+
+                mat.SetColor("_BaseColor", baseColor);
+                mat.SetColor("_StripeColor", baseColor);
+                mat.SetFloat("_StripeScale", 0);
+                mat.SetColor("_PatternColor", Color.Lerp(baseColor, Ink, .72f));
+                mat.SetFloat("_PatternScale", 4.5f);
+                mat.SetFloat("_PatternStrength", isPassenger ? 0f : .018f);
+                mat.SetFloat("_PatternMode", 0);
+                mat.SetFloat("_ToonSteps", 3);
+                mat.enableInstancing = true;
+                EditorUtility.SetDirty(mat);
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"Applied the matte storybook style to {changed} lit materials.");
         }
 
         [MenuItem("Tools/Crazy Elevator/Open Illustrated Passenger Preview")]
@@ -506,18 +566,27 @@ namespace CrazyElevator.EditorTools
             if (materials.TryGetValue(name, out Material cached)) return cached;
             string path = MaterialFolder + "/Passenger-" + name + ".mat";
             Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            Shader storybook = Shader.Find(StorybookShaderName);
+            if (storybook == null)
+                throw new InvalidOperationException("Missing shader: " + StorybookShaderName);
             if (mat == null)
             {
-                Shader shader = Shader.Find("Universal Render Pipeline/Simple Lit")
-                    ?? Shader.Find("Universal Render Pipeline/Lit")
-                    ?? Shader.Find("Standard");
-                mat = new Material(shader) { name = "Passenger " + name };
+                mat = new Material(storybook) { name = "Passenger " + name };
                 AssetDatabase.CreateAsset(mat, path);
             }
-            mat.color = color;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", .12f);
-            if (mat.HasProperty("_SpecularHighlights")) mat.SetFloat("_SpecularHighlights", 0);
+            else if (mat.shader != storybook)
+            {
+                mat.shader = storybook;
+            }
+
+            mat.SetColor("_BaseColor", color);
+            mat.SetColor("_StripeColor", color);
+            mat.SetFloat("_StripeScale", 0);
+            mat.SetColor("_PatternColor", Color.Lerp(color, Ink, .72f));
+            mat.SetFloat("_PatternScale", 4.5f);
+            mat.SetFloat("_PatternStrength", 0);
+            mat.SetFloat("_PatternMode", 0);
+            mat.SetFloat("_ToonSteps", 3);
             mat.enableInstancing = true;
             EditorUtility.SetDirty(mat);
             materials[name] = mat;
