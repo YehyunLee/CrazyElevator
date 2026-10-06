@@ -14,6 +14,11 @@ namespace CrazyElevator.Match
         [Min(3f)] public float shaftSpacing = 4f;
         [FormerlySerializedAs("cabinHorizontalFieldOfView")]
         [Range(45f, 70f)] public float cabinVerticalFieldOfView = 52f;
+        [Header("Two-track collisions")]
+        [Range(.15f, .8f)] public float trackSwitchSeconds = .32f;
+        [Range(.45f, 1.2f)] public float verticalBlockDistance = .72f;
+        [Range(.15f, .75f)] public float collisionSpeedRetained = .28f;
+        [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.15f;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
@@ -21,6 +26,11 @@ namespace CrazyElevator.Match
             && player.ShiftFinished && Rival.ShiftFinished;
         ElevatorScene rivalView;
         Transform rivalShaft;
+        readonly int[] targetTrack = { 0, 1 };
+        readonly float[] trackPosition = { 0f, 1f };
+        float collisionCooldown;
+        float collisionFlash;
+        AudioClip collisionClip;
 
         void Awake()
         {
@@ -40,6 +50,7 @@ namespace CrazyElevator.Match
             }
             player.ConfigureMatch(this, 0);
             CreateRival();
+            collisionClip = CreateCollisionClip();
         }
 
         // Reuse authored prefabs, not a second copy of the whole environment.
@@ -88,7 +99,15 @@ namespace CrazyElevator.Match
 
         void Update()
         {
-            if (!enabled || player == null || player.IntroPlaying || MenuManager.IsOpen) return;
+            if (!enabled || player == null) return;
+            float dt = Time.unscaledDeltaTime;
+            collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
+            collisionFlash = Mathf.Max(0f, collisionFlash - dt);
+            float switchSpeed = 1f / Mathf.Max(.05f, trackSwitchSeconds);
+            trackPosition[0] = Mathf.MoveTowards(trackPosition[0], targetTrack[0], switchSpeed * dt);
+            trackPosition[1] = Mathf.MoveTowards(trackPosition[1], targetTrack[1], switchSpeed * dt);
+
+            if (player.IntroPlaying || MenuManager.IsOpen) return;
             var input = InputManager.Instance;
             if (input == null) return;
 
@@ -103,6 +122,9 @@ namespace CrazyElevator.Match
         public void StartMatch()
         {
             Paused = false;
+            targetTrack[0] = 0; targetTrack[1] = 1;
+            trackPosition[0] = 0; trackPosition[1] = 1;
+            collisionCooldown = collisionFlash = 0;
             player.StartMatchShift();
             Rival.StartMatchShift();
             Rival.GetComponent<NpcElevator>().ResetDecisions();
@@ -140,11 +162,105 @@ namespace CrazyElevator.Match
                 Mathf.Clamp(game.Match.cabinVerticalFieldOfView, 45f, 70f);
         }
 
-        // Future blocking/collision logic can compare these shared shaft positions.
+        // Fixed track centres remain useful for camera framing and authored rails.
         public float ShaftX(int seat) => 9f + seat * shaftSpacing;
+
+        public float ShaftX(Game actor)
+        {
+            int seat = SeatOf(actor);
+            return 9f + Mathf.SmoothStep(0f, 1f, trackPosition[seat]) * shaftSpacing;
+        }
+
+        public int TrackNumber(Game actor) => targetTrack[SeatOf(actor)] + 1;
+
+        public void RequestTrack(Game actor, int direction)
+        {
+            if (!Running || Paused || actor == null || !actor.MovingInShaft || direction == 0) return;
+            int seat = SeatOf(actor);
+            int requested = Mathf.Clamp(targetTrack[seat] + (direction > 0 ? 1 : -1), 0, 1);
+            if (requested == targetTrack[seat]) return;
+
+            Game other = Other(actor);
+            int otherSeat = 1 - seat;
+            bool occupiedNearby = other != null && targetTrack[otherSeat] == requested
+                && Mathf.Abs(actor.CurrentFloor - other.CurrentFloor) < verticalBlockDistance * 1.25f;
+            if (occupiedNearby)
+            {
+                TriggerCollision(actor, other);
+                return;
+            }
+            targetTrack[seat] = requested;
+        }
+
+        // Prevent cars in the same track from passing through each other. A
+        // player can escape the block with A/D; the NPC automatically tries the
+        // free track after it reaches a blocker.
+        public float ConstrainTravel(Game actor, float before, float candidate, ref float velocity)
+        {
+            if (!Running || actor == null) return candidate;
+            Game other = Other(actor);
+            if (other == null || !SharesTrack(actor, other)) return candidate;
+
+            float direction = Mathf.Sign(candidate - before);
+            if (direction == 0) return candidate;
+            float otherFloor = other.CurrentFloor;
+            bool approaching = direction > 0 ? before <= otherFloor : before >= otherFloor;
+            if (!approaching) return candidate;
+
+            float boundary = otherFloor - direction * verticalBlockDistance;
+            bool blocked = direction > 0 ? candidate >= boundary : candidate <= boundary;
+            if (!blocked) return candidate;
+
+            candidate = Mathf.Clamp(boundary, 0f, ElevatorRound.Floors - 1f);
+            velocity = 0f;
+            TriggerCollision(actor, other);
+            if (actor.IsNpc)
+                RequestTrack(actor, targetTrack[SeatOf(actor)] == 0 ? 1 : -1);
+            return candidate;
+        }
+
+        bool SharesTrack(Game first, Game second)
+        {
+            int firstSeat = SeatOf(first), secondSeat = SeatOf(second);
+            return targetTrack[firstSeat] == targetTrack[secondSeat]
+                && Mathf.Abs(trackPosition[firstSeat] - trackPosition[secondSeat]) < .42f;
+        }
+
+        void TriggerCollision(Game first, Game second)
+        {
+            if (collisionCooldown > 0f) return;
+            collisionCooldown = .55f;
+            collisionFlash = .62f;
+            first?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
+            second?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
+            SfxManager.Instance?.PlaySfx(collisionClip, 1f);
+        }
+
+        int SeatOf(Game actor) => actor == Rival ? 1 : 0;
+        Game Other(Game actor) => actor == Rival ? player : Rival;
+
+        static AudioClip CreateCollisionClip()
+        {
+            const int rate = 22050;
+            const float seconds = .34f;
+            var data = new float[Mathf.CeilToInt(rate * seconds)];
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)rate;
+                float envelope = Mathf.Exp(-t * 11f);
+                float thud = Mathf.Sin(2f * Mathf.PI * (115f - 55f * t) * t) * .62f;
+                float metal = Mathf.Sin(2f * Mathf.PI * 760f * t) * Mathf.Exp(-t * 19f) * .19f;
+                float noise = (Mathf.Repeat(Mathf.Sin(i * 78.233f) * 43758.5453f, 1f) * 2f - 1f) * .16f;
+                data[i] = Mathf.Clamp((thud + metal + noise) * envelope, -.9f, .9f);
+            }
+            var clip = AudioClip.Create("Elevator track collision", data.Length, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
 
         void OnDestroy()
         {
+            if (collisionClip != null) Destroy(collisionClip);
             if (Rival != null) Destroy(Rival.gameObject);
             if (rivalView != null && rivalView.exteriorCar != null) Destroy(rivalView.exteriorCar.gameObject);
             if (rivalShaft != null) Destroy(rivalShaft.gameObject);
@@ -181,7 +297,7 @@ namespace CrazyElevator.Match
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Ink = new Color32(25, 31, 46, 255);
-        [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue;
+        [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue, collisionWord;
 
         void OnGUI()
         {
@@ -204,6 +320,7 @@ namespace CrazyElevator.Match
             }
             DrawSeat(player, 0, Teal);
             DrawSeat(Rival, 1, Coral);
+            DrawCollisionFeedback();
             if (!Running || Paused || Finished) DrawMatchOverlay();
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
@@ -228,6 +345,9 @@ namespace CrazyElevator.Match
             tileValue = new GUIStyle(score) { fontSize = 22 };
             GameTypography.Apply(tileValue, true);
             tileValue.normal.textColor = Color.white;
+            collisionWord = new GUIStyle(centred) { fontSize = 24, clipping = TextClipping.Overflow };
+            GameTypography.Apply(collisionWord, true);
+            collisionWord.normal.textColor = Color.white;
         }
 
         static void Fill(Rect rect, Color colour)
@@ -250,7 +370,7 @@ namespace CrazyElevator.Match
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width / 5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                seat == 0 ? "YOU" : "NPC", "F" + Mathf.RoundToInt(actor.CurrentFloor));
+                seat == 0 ? "YOU" : "NPC", "F" + Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
                 new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/10");
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
@@ -269,6 +389,23 @@ namespace CrazyElevator.Match
             GUI.Label(new Rect(area.x + 16f, area.y + 19f, area.width - 18f, 30f), value, tileValue);
         }
 
+        void DrawCollisionFeedback()
+        {
+            if (collisionFlash <= 0f) return;
+            float alpha = Mathf.Clamp01(collisionFlash / .62f);
+            Color flash = new Color(1f, .35f, .18f, alpha * .9f);
+            const float edge = 7f;
+            Fill(new Rect(0, 0, Screen.width, edge), flash);
+            Fill(new Rect(0, Screen.height - edge, Screen.width, edge), flash);
+            Fill(new Rect(0, 0, edge, Screen.height), flash);
+            Fill(new Rect(Screen.width - edge, 0, edge, Screen.height), flash);
+            float width = Mathf.Min(430f, Screen.width - 24f);
+            Rect banner = new Rect((Screen.width - width) * .5f, 78f, width, 44f);
+            Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
+            Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
+            GUI.Label(banner, "COLLISION!  SWITCH TRACKS", collisionWord);
+        }
+
         void DrawMatchOverlay()
         {
             Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, .78f));
@@ -277,7 +414,7 @@ namespace CrazyElevator.Match
             Fill(box, Ink);
             string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : Paused ? "BOTH ELEVATORS PAUSED" : "SHIFT COMPLETE";
             GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
-            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. Close the doors, steer up or down, then stop at a floor to deliver riders and score.\n\nHighest delivery score wins.";
+            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use A / D to switch between the two tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             if (Finished)
             {
