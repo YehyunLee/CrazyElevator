@@ -191,7 +191,7 @@ namespace CrazyElevator.EditorTools
             art(root.transform, accents);
 
             TextMesh speech = AddLabel(root.transform, "Speech bubble", new Vector3(0, 2.42f, 0), "", .022f);
-            TextMesh destination = AddLabel(root.transform, "Destination badge", new Vector3(0, 2.08f, 0), kind + "  1", .023f);
+            TextMesh destination = AddLabel(root.transform, "Destination badge", new Vector3(0, 2.08f, 0), "1", .034f);
             GameTypography.Apply(destination, true);
 
             var view = root.AddComponent<PassengerView>();

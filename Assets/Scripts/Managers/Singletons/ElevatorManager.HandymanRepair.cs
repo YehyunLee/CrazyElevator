@@ -213,8 +213,7 @@ namespace CrazyElevator.Managers
             float width = Mathf.Min(520, screenWidth - 24);
             float x = (screenWidth - width) * .5f;
             float y = screenHeight - 210;
-            Panel(new Rect(x, y, width, 84), new Color(Ink.r, Ink.g, Ink.b, .96f));
-            Panel(new Rect(x, y, 4, 84), HandymanRepairPending ? Gold : Teal);
+            AngularPanel(new Rect(x, y, width, 84), HandymanRepairPending ? Gold : Teal);
             Label(new Rect(x + 14, y + 7, width - 28, 20), "ELEVATOR", small);
             Label(new Rect(x + 14, y + 29, width - 28, 50), elevatorSpeech, body);
         }

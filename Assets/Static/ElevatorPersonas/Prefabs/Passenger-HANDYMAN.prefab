@@ -630,7 +630,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 135317648383864645}
-  m_Text: HANDYMAN  1
+  m_Text: 1
   m_OffsetZ: 0
   m_CharacterSize: 0.023
   m_LineSpacing: 1

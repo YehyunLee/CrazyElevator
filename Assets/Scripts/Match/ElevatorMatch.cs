@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using CrazyElevator.Managers;
 using CrazyElevator.Shared;
 using Game = CrazyElevator.Managers.ElevatorManager;
@@ -11,7 +12,8 @@ namespace CrazyElevator.Match
     {
         public Game player;
         [Min(3f)] public float shaftSpacing = 4f;
-        [Range(65f, 100f)] public float cabinHorizontalFieldOfView = 80f;
+        [FormerlySerializedAs("cabinHorizontalFieldOfView")]
+        [Range(45f, 70f)] public float cabinVerticalFieldOfView = 52f;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
@@ -134,9 +136,8 @@ namespace CrazyElevator.Match
             game.sceneView.exteriorCamera.targetTexture = null;
             float aspect = Mathf.Max(.1f, Screen.width * .5f / Screen.height);
             game.sceneView.cabinCamera.aspect = aspect;
-            float horizontal = Mathf.Clamp(game.Match.cabinHorizontalFieldOfView, 65f, 100f) * Mathf.Deg2Rad;
-            game.sceneView.cabinCamera.fieldOfView = 2f * Mathf.Atan(
-                Mathf.Tan(horizontal * .5f) / aspect) * Mathf.Rad2Deg;
+            game.sceneView.cabinCamera.fieldOfView =
+                Mathf.Clamp(game.Match.cabinVerticalFieldOfView, 45f, 70f);
         }
 
         // Future blocking/collision logic can compare these shared shaft positions.
@@ -180,7 +181,7 @@ namespace CrazyElevator.Match
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Ink = new Color32(25, 31, 46, 255);
-        [System.NonSerialized] GUIStyle heading, text, score, centred;
+        [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue;
 
         void OnGUI()
         {
@@ -221,6 +222,12 @@ namespace CrazyElevator.Match
             GameTypography.Apply(score, true);
             centred = new GUIStyle(heading) { alignment = TextAnchor.MiddleCenter };
             GameTypography.Apply(centred, true);
+            tileCaption = new GUIStyle(text) { fontSize = 11, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(tileCaption, true);
+            tileCaption.normal.textColor = new Color(1f, 1f, 1f, .72f);
+            tileValue = new GUIStyle(score) { fontSize = 22 };
+            GameTypography.Apply(tileValue, true);
+            tileValue.normal.textColor = Color.white;
         }
 
         static void Fill(Rect rect, Color colour)
@@ -235,17 +242,31 @@ namespace CrazyElevator.Match
         {
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
-            // Small in-game score badge, not a separate header or reserved HUD strip.
-            float badgeWidth = Mathf.Min(220, view.width - 16);
-            var badge = new Rect(view.x + 8, view.y + 8, badgeWidth, 66);
-            Fill(badge, new Color(0, 0, 0, .72f));
-            Fill(new Rect(badge.x, badge.y, 3, badge.height), colour);
-            GUI.Label(new Rect(badge.x + 12, badge.y + 4, badge.width - 20, 32),
-                (seat == 0 ? "YOU  " : "NPC  ") + actor.Points + " PTS", score);
             int seconds = Mathf.CeilToInt(player.SecondsLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            GUI.Label(new Rect(badge.x + 12, badge.y + 38, badge.width - 20, 24),
-                clock + " LEFT  •  F" + actor.CurrentFloor.ToString("0.0"), text);
+            float barWidth = Mathf.Max(1f, view.width - 16f);
+            var bar = new Rect(view.x + 8f, view.y + 8f, barWidth, 58f);
+            Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
+            Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
+            float tileWidth = bar.width / 5f;
+            DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
+                seat == 0 ? "YOU" : "NPC", "F" + Mathf.RoundToInt(actor.CurrentFloor));
+            DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
+                new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/10");
+            DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
+                Teal, "SCORE", actor.Points.ToString());
+            DrawSeatTile(new Rect(bar.x + tileWidth * 3f, bar.y, tileWidth, bar.height),
+                Coral, "HAPPY", actor.HappyDeliveries.ToString());
+            DrawSeatTile(new Rect(bar.x + tileWidth * 4f, bar.y, tileWidth, bar.height),
+                new Color32(112, 183, 255, 255), "TIME", clock);
+        }
+
+        void DrawSeatTile(Rect area, Color accent, string caption, string value)
+        {
+            Fill(new Rect(area.x, area.yMax - 5f, area.width, 5f), accent);
+            Fill(new Rect(area.x + 5f, area.y + 7f, 5f, area.height - 19f), accent);
+            GUI.Label(new Rect(area.x + 16f, area.y + 3f, area.width - 18f, 18f), caption, tileCaption);
+            GUI.Label(new Rect(area.x + 16f, area.y + 19f, area.width - 18f, 30f), value, tileValue);
         }
 
         void DrawMatchOverlay()

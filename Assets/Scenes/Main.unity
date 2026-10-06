@@ -235,7 +235,9 @@ MonoBehaviour:
   passengerSpeechBubblePrefab: {fileID: 1002, guid: f71fcf1d153c49c08fa3fc7d6232698a, type: 3}
   speechDuration: 2.2
   keepDoorwayClear: 1
-  cameraLift: 0.35
+  cameraLift: 0.12
+  cabinVerticalFieldOfView: 50
+  cabinAimDown: 9
   impairmentGaugePrefab: {fileID: 1004, guid: a28a526a065e598d9ed0c54a4cb147e8, type: 3}
   handymanShovelPrefab: {fileID: 100001, guid: 4d236756f1db46478733511063799bec, type: 3}
   floorsPerSecond: 0.85
@@ -284,7 +286,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Match.ElevatorMatch
   player: {fileID: 787388485}
   shaftSpacing: 4
-  cabinHorizontalFieldOfView: 80
+  cabinVerticalFieldOfView: 48
 --- !u!114 &787388488
 MonoBehaviour:
   m_ObjectHideFlags: 0

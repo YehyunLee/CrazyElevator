@@ -194,14 +194,18 @@ namespace CrazyElevator.Managers
             foreach (TextMesh label in sceneView.GetComponentsInChildren<TextMesh>(true))
                 GameTypography.Apply(label, true);
             floorSignHome = floorSign.transform.localPosition;
+            cabinCameraDepth = eye.depth;
+            // ElevatorMatch is initialized before either elevator controller,
+            // so both the player and cloned NPC camera need the same framing.
+            if (keepDoorwayClear && cameraLift > 0)
+                eye.transform.position += eye.transform.up * cameraLift;
+            if (extendedInterior)
+            {
+                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
+                eye.transform.rotation *= Quaternion.Euler(Mathf.Clamp(cabinAimDown, 0f, 12f), 0f, 0f);
+            }
             cameraHome = eye.transform.position;
             cameraHomeRotation = eye.transform.rotation;
-            cabinCameraDepth = eye.depth;
-            if (keepDoorwayClear && cameraLift > 0)
-            {
-                eye.transform.position += eye.transform.up * cameraLift;
-                cameraHome = eye.transform.position;
-            }
             exteriorCamera = sceneView.exteriorCamera;
             exteriorCar = sceneView.exteriorCar;
             eye.gameObject.SetActive(true); eye.enabled = true;
@@ -829,7 +833,7 @@ namespace CrazyElevator.Managers
                 Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders to board, move, or eject", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
-            Panel(new Rect(12, screenHeight - 54, width, 42), new Color(Ink.r, Ink.g, Ink.b, .88f));
+            AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
             string prompt = selectedRider == null
                 ? (BuildingView ? "E / STOP near a floor   |   Shift+↑↓ to build speed" : "Drag riders to board or kick   |   C close & travel")
                 : selectedRider.Name + " → F" + selectedRider.Destination + (selectedRider.Boarded ? "  ·  drag out to kick" : "  ·  drag in to board");
@@ -1012,11 +1016,9 @@ namespace CrazyElevator.Managers
             eye.rect = showPreview ? CabinPreviewRect(cameraRect) : cameraRect;
             eye.depth = showPreview ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
-            if (Match != null)
-            {
-                float horizontal = Mathf.Clamp(Match.cabinHorizontalFieldOfView, 65f, 100f) * Mathf.Deg2Rad;
-                eye.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(horizontal * .5f) / eye.aspect) * Mathf.Rad2Deg;
-            }
+            eye.fieldOfView = Match != null
+                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 70f)
+                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
             exteriorCar.localPosition = new Vector3(Match != null ? Match.ShaftX(Seat) : 9,
                 travelFloor * FloorHeight + 1.4f, -.8f);
             float cameraX = Match != null ? Match.ShaftX(0) + Match.shaftSpacing * .5f : 6f;
@@ -1056,6 +1058,7 @@ namespace CrazyElevator.Managers
         {
             if (!BuildingView || !exteriorCamera) return;
             DrawCabinPreviewFrame();
+            DrawCabinPreviewCallouts();
             int floor = NearbyFloor;
             Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(9, floor * FloorHeight + 1.4f, -.8f)));
             if (point.z <= 0) return;
@@ -1376,6 +1379,8 @@ namespace CrazyElevator.Managers
             target.speechDuration = speechDuration;
             target.keepDoorwayClear = keepDoorwayClear;
             target.cameraLift = cameraLift;
+            target.cabinVerticalFieldOfView = cabinVerticalFieldOfView;
+            target.cabinAimDown = cabinAimDown;
             target.impairmentGaugePrefab = impairmentGaugePrefab;
             target.handymanShovelPrefab = handymanShovelPrefab;
             target.secondsPerRustLevel = secondsPerRustLevel;

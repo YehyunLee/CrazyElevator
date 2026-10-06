@@ -580,10 +580,34 @@ namespace CrazyElevator.Managers
             foreach (var jacket in view.jackets) if (jacket != null) jacket.sharedMaterial = Mat(color);
             bubbles[p] = view.speech;
             destinationTags[p] = view.destination;
+            StyleDestinationTag(view.destination);
             foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
             AttachPatienceBar(p, root);
-            AttachSpeechBubble(p, root);
+            // Extended mode uses one screen-space callout system in both solo
+            // and 1v1. Keep the authored world bubble only for legacy layouts.
+            if (Match != null && !extendedInterior) AttachSpeechBubble(p, root);
             return root;
+        }
+
+        // Keep the destination cue short, bold, and readable against every
+        // cabin band. The number is the actionable information; the persona
+        // badge belongs in the passenger art and no longer needs repeating.
+        static void StyleDestinationTag(TextMesh tag)
+        {
+            if (tag == null) return;
+            tag.fontSize = 72;
+            tag.characterSize = .034f;
+            tag.anchor = TextAnchor.MiddleCenter;
+            tag.alignment = TextAlignment.Center;
+            tag.color = Ink;
+            GameTypography.Apply(tag, true);
+            MeshRenderer renderer = tag.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sortingOrder = 20;
+            }
         }
 
         // Use the saved cabin position or waiting-queue slot.
@@ -680,12 +704,15 @@ namespace CrazyElevator.Managers
                 }
                 if (destinationTags.TryGetValue(p, out var destinationTag))
                 {
-                    destinationTag.gameObject.SetActive(!isExiting);
-                    destinationTag.text = p.Badge + "  " + p.Destination.ToString();
-                    // Cream reads on light cabin walls better than Gold; keep Teal/Coral for state.
-                    destinationTag.color = p.Mood < 2 || p.Boarded && p.Remaining <= 0 ? Coral
-                        : p.Boarded || isExiting ? Teal
-                        : Cream;
+                    bool useScreenCallout = extendedInterior;
+                    destinationTag.gameObject.SetActive(!useScreenCallout && !isExiting);
+                    destinationTag.text = p.Destination.ToString();
+                    // Keep the actionable number a single, dark high-contrast
+                    // color. Mood is already communicated by the patience bar
+                    // and speech bubble, so it should not reduce legibility.
+                    destinationTag.color = Ink;
+                    destinationTag.transform.localPosition = new Vector3(
+                        0, 2.16f, p.Boarded ? -.08f : .08f);
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
                 UpdatePatienceBar(p, isExiting);
@@ -758,7 +785,8 @@ namespace CrazyElevator.Managers
         void UpdatePatienceBar(Rider rider, bool isExiting)
         {
             if (!patienceBars.TryGetValue(rider, out PassengerPatienceBar bar) || bar == null) return;
-            bool show = rider.Boarded && !rider.Resolved && !isExiting;
+            bool show = rider.Boarded && !rider.Resolved && !isExiting
+                && !boardingTransfers.ContainsKey(rider);
             bar.gameObject.SetActive(show);
             if (!show) return;
 
@@ -787,6 +815,10 @@ namespace CrazyElevator.Managers
         public bool keepDoorwayClear;
         [Min(0f), Tooltip("Raises the cabin camera so hall passengers remain visible behind boarded riders.")]
         public float cameraLift;
+        [Range(45f, 70f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
+        public float cabinVerticalFieldOfView = 50f;
+        [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
+        public float cabinAimDown = 9f;
 
         readonly Dictionary<Rider, PassengerSpeechBubble> speechBubbleViews =
             new Dictionary<Rider, PassengerSpeechBubble>();
@@ -834,7 +866,7 @@ namespace CrazyElevator.Managers
                 }
 
                 bool temporaryAlert = speechUntil.TryGetValue(rider, out float end) && speechClock < end;
-                bool waitingPersistent = !rider.Boarded && CanSpeakWhileWaiting(rider);
+                bool waitingPersistent = false;
                 if (rider.Boarded && !string.IsNullOrEmpty(rider.Status)
                     && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     missedDestination.Add(rider);
