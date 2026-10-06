@@ -91,8 +91,17 @@ namespace CrazyElevator.Managers
             float dt = Time.deltaTime;
             collisionSlowTimer = Mathf.Max(0f, collisionSlowTimer - dt);
             collisionImpact = Mathf.Max(0f, collisionImpact - dt * 1.8f);
-            // Drain waiting patience only while stopped for boarding.
-            round.Tick(dt, phase == Phase.Boarding);
+            // Both cars may stop at one floor, but its shared waiting queue
+            // should lose patience only once per frame.
+            bool tickWaiting = !IsNpc || Match == null || Match.player == null
+                || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
+            int waitingMisses = round.Tick(dt, phase == Phase.Boarding, tickWaiting);
+            if (waitingMisses > 0 && Match != null)
+            {
+                ElevatorManager other = IsNpc ? Match.player : Match.Rival;
+                if (other != null && other.AtStop && other.DiscreteFloor == round.Floor)
+                    other.round.AddWaitingMisses(waitingMisses);
+            }
             elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
             // End before accepting another drop-off, even if an exit animation
             // is still running. The score is locked when the clock reaches zero.
@@ -147,7 +156,9 @@ namespace CrazyElevator.Managers
         }
 
         // Clear old rider state and reset the shift.
-        void Restart()
+        void Restart() => RestartWithPool(null);
+
+        void RestartWithPool(ElevatorRound sharedPool)
         {
             CancelPassengerDrag();
             SelectRider(null);
@@ -159,7 +170,9 @@ namespace CrazyElevator.Managers
             foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear();
             bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); exiting.Clear(); exitStarts.Clear(); riderHits.Clear();
             selectedRider = null;
-            round = CreateExtendedRound(); phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
+            round = CreateExtendedRound();
+            if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
+            phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
             floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
@@ -473,7 +486,7 @@ namespace CrazyElevator.Managers
             var riderStops = new List<int>();
             foreach (var rider in round.Riders)
             {
-                if (!rider.Boarded || rider.Resolved || rider.Destination == round.Floor) continue;
+                if (!round.Owns(rider) || rider.Destination == round.Floor) continue;
                 if (!riderStops.Contains(rider.Destination)) riderStops.Add(rider.Destination);
             }
             if (riderStops.Count > 0)
@@ -883,7 +896,7 @@ namespace CrazyElevator.Managers
             {
                 if (round == null) return false;
                 foreach (var rider in round.Riders)
-                    if (rider.HasFeature(PassengerFeature.ClearsRust) && rider.Boarded && !rider.Resolved) return true;
+                    if (rider.HasFeature(PassengerFeature.ClearsRust) && round.Owns(rider)) return true;
                 return false;
             }
         }
@@ -904,20 +917,20 @@ namespace CrazyElevator.Managers
                 ? ElevatorRound.FromCatalog(passengerCatalog)
                 : new ElevatorRound();
             result.LateDeliveriesScore = !zeroScoreWhenMad;
-            for (int floor = 0; floor < ElevatorRound.Floors; floor++)
+            for (int floor = underwaterStartsAtFloor; floor < ElevatorRound.Floors; floor++)
             {
                 int first = result.Riders.FindIndex(rider => rider.Origin == floor);
-                if (first < 0) continue;
                 PassengerData handyman = passengerCatalog != null ? passengerCatalog.FindKind("HANDYMAN") : null;
+                int destination = ElevatorRound.RandomDestination(floor);
                 Rider fixer = handyman != null
-                    ? handyman.CreateRider(floor, (floor + 3) % ElevatorRound.Floors)
+                    ? handyman.CreateRider(floor, destination)
                     : new Rider
                     {
                         Name = "Casey", Kind = "HANDYMAN", Badge = "FIX", Color = 4,
-                        Request = "Rust-free while I'm aboard!", Origin = floor, Destination = (floor + 3) % ElevatorRound.Floors,
+                        Request = "Rust-free while I'm aboard!", Origin = floor, Destination = destination,
                         Space = 1, Patience = 80, Remaining = 80, Bonus = 110
                     };
-                result.Riders.Insert(first + 2, fixer);
+                result.Riders.Insert(first < 0 ? result.Riders.Count : Mathf.Min(first + 2, result.Riders.Count), fixer);
             }
             float patienceScale = Mathf.Max(1f, patienceDurationMultiplier);
             foreach (var rider in result.Riders)
@@ -1043,13 +1056,12 @@ namespace CrazyElevator.Managers
                 : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
             float collisionKick = collisionImpact > 0f
                 ? Mathf.Sin(Time.unscaledTime * 52f) * collisionImpact : 0f;
-            float carX = Match != null ? Match.ShaftX(this) : 9f;
+            float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
             exteriorCar.localPosition = new Vector3(carX + collisionKick * .12f,
                 travelFloor * FloorHeight + 1.4f + Mathf.Abs(collisionKick) * .045f, -.8f);
             exteriorCar.localRotation = exteriorCarHomeRotation * Quaternion.Euler(0f, 0f,
                 collisionKick * (Seat == 0 ? -4.5f : 4.5f));
-            float cameraX = Match != null ? Match.ShaftX(0) + Match.shaftSpacing * .5f : 6f;
-            Vector3 shaftCameraPosition = new Vector3(cameraX, travelFloor * FloorHeight + 4, -44);
+            Vector3 shaftCameraPosition = new Vector3(carX, travelFloor * FloorHeight + 4, -44);
             Quaternion shaftCameraRotation = Quaternion.Euler(5, 0, 0);
             if (phase == Phase.Moving)
             {
@@ -1087,7 +1099,7 @@ namespace CrazyElevator.Managers
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
             int floor = NearbyFloor;
-            float markerX = Match != null ? Match.ShaftX(this) : 9f;
+            float markerX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
             Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(markerX, floor * FloorHeight + 1.4f, -.8f)));
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
@@ -1426,10 +1438,10 @@ namespace CrazyElevator.Managers
             target.backgroundMusic = null;
         }
 
-        public void StartMatchShift()
+        public void StartMatchShift(ElevatorManager poolSource = null)
         {
             npcTargetFloor = -1;
-            Restart();
+            RestartWithPool(poolSource != null ? poolSource.round : null);
         }
 
         public void SetMatchPaused(bool value) => paused = value;
@@ -1450,7 +1462,7 @@ namespace CrazyElevator.Managers
             if (!IsBoarding) return false;
             foreach (Rider rider in round.Riders)
             {
-                if (!rider.Boarded || rider.Resolved || rider.Destination != round.Floor) continue;
+                if (!round.Owns(rider) || rider.Destination != round.Floor) continue;
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
                 cabinPositions.Remove(rider);
                 QueueRiderExit(rider, figure.localPosition);
@@ -1506,6 +1518,7 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in round.Riders)
             {
                 if (rider.Resolved) continue;
+                if (rider.Boarded && !round.Owns(rider)) continue;
                 int floor = rider.Boarded ? rider.Destination : rider.Origin;
                 if (!rider.Boarded && !round.IsOffered(rider) && rider.Arrival > 0) continue;
                 int distance = Mathf.Abs(floor - round.Floor);

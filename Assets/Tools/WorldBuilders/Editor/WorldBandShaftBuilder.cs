@@ -83,6 +83,10 @@ namespace CrazyElevator.Tools.WorldBuilders
                 PlaceBand(candyBand, bands, Vector3.zero, "Candy Band");
                 // WaterBand floors are local 0–3 → shift to world floors 8–11.
                 PlaceBand(waterBand, bands, new Vector3(0f, FloorHeight * 8f, 0f), "Water Band");
+                // Mirror the authored world scenery across the central shaft.
+                PlaceBand(officeBand, bands, new Vector3(18f, 0f, 0f), "Office Band Right", true);
+                PlaceBand(candyBand, bands, new Vector3(18f, 0f, 0f), "Candy Band Right", true);
+                PlaceBand(waterBand, bands, new Vector3(18f, FloorHeight * 8f, 0f), "Water Band Right", true);
 
                 PaintLandings(root.transform);
                 PrefabUtility.SaveAsPrefabAsset(root, ExteriorPath);
@@ -103,13 +107,13 @@ namespace CrazyElevator.Tools.WorldBuilders
             return prefab;
         }
 
-        static void PlaceBand(GameObject prefab, Transform parent, Vector3 localPos, string name)
+        static void PlaceBand(GameObject prefab, Transform parent, Vector3 localPos, string name, bool mirrored = false)
         {
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             instance.name = name;
             instance.transform.localPosition = localPos;
             instance.transform.localRotation = Quaternion.identity;
-            instance.transform.localScale = Vector3.one;
+            instance.transform.localScale = mirrored ? new Vector3(-1f, 1f, 1f) : Vector3.one;
         }
 
         static void ClearWeakDecor(Transform root)
@@ -150,7 +154,9 @@ namespace CrazyElevator.Tools.WorldBuilders
                 if (name == "Ground") mat = officeWall;
                 else if (name.StartsWith("World landing "))
                 {
-                    int floor = int.Parse(name.Substring("World landing ".Length));
+                    // Right wing landings keep the source floor number in their name.
+                    string floorName = name.Substring("World landing ".Length).Split(' ')[0];
+                    int floor = int.Parse(floorName);
                     mat = floor <= 3 ? officeTrim : floor <= 7 ? vanilla : sand;
                 }
                 else if (name.StartsWith("Shaft landing "))

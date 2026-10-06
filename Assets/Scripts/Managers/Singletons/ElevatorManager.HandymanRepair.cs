@@ -43,7 +43,7 @@ namespace CrazyElevator.Managers
         void BeginHandymanRepair(Rider rider)
         {
             if (!extendedInterior || rider == null || !rider.HasFeature(PassengerFeature.ClearsRust)
-                || !rider.Boarded || HandymanRepairActive || !figures.ContainsKey(rider)
+                || !round.Owns(rider) || HandymanRepairActive || !figures.ContainsKey(rider)
                 || VisibleStarfishLevel == 0) return;
 
             repairingHandyman = rider;
@@ -60,7 +60,7 @@ namespace CrazyElevator.Managers
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)
         {
             if (rider != repairingHandyman) return false;
-            if (!rider.Boarded || rider.Resolved)
+            if (!round.Owns(rider))
             {
                 ClearHandymanRepair();
                 return false;

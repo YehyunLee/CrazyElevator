@@ -395,7 +395,7 @@ namespace CrazyElevator.Managers
             var occupiedBadges = new List<Rect>();
             foreach (Rider rider in round.Riders)
             {
-                if (!rider.Boarded || rider.Resolved || exiting.ContainsKey(rider)
+                if (!round.Owns(rider) || exiting.ContainsKey(rider)
                     || boardingTransfers.ContainsKey(rider)) continue;
                 if (!figures.TryGetValue(rider, out Transform figure) || !figure.gameObject.activeInHierarchy) continue;
 

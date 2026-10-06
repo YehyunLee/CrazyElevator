@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -41,12 +42,25 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
+        if (action == "match-prepare")
+        {
+            File.WriteAllText(request, "match-run");
+            typeof(CrazyElevator.Managers.MenuManager)
+                .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
+                .SetValue(null, true);
+            CrazyElevator.Managers.MenuManager.Close();
+            UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
+            return;
+        }
         try { File.Delete(request); }
         catch (IOException) { return; }
+        int exitCode = 0;
         try
         {
             if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "repair-checks") RunRepair(game);
+            else if (action == "match-run") RunMatch();
+            else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
             {
@@ -96,7 +110,7 @@ public static class ExtendedInteriorChecks
             }
             else throw new Exception("Unknown interior check request: " + action);
         }
-        catch (Exception e) { File.WriteAllText(Work + "/result.txt", e.ToString()); Debug.LogException(e); }
+        catch (Exception e) { exitCode = 1; File.WriteAllText(Work + "/result.txt", e.ToString()); Debug.LogException(e); }
         finally
         {
             if (action == "repair-checks")
@@ -104,6 +118,8 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
+            if ((action == "match-run" || action == "solo-basic") && Application.isBatchMode)
+                EditorApplication.Exit(exitCode);
         }
     }
 
@@ -117,6 +133,192 @@ public static class ExtendedInteriorChecks
     static void RequestRepairChecks()
     {
         Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "repair-checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Shared Passenger Rules")]
+    public static void CheckSharedPassengerRules()
+    {
+        var player = new Round();
+        var rival = new Round();
+        rival.SharePassengerPoolWith(player, 1);
+        Require(player.Riders.Count == rival.Riders.Count
+            && ReferenceEquals(player.Riders[0], rival.Riders[0]),
+            "Both elevators must use the same rider objects.");
+        Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
+            && player.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
+            "Business passengers must wait only on office floors.");
+        foreach (var rider in player.Riders)
+            Require(rider.Destination >= 0 && rider.Destination < Round.Floors
+                && rider.Destination != rider.Origin,
+                "Every passenger needs a valid destination on another floor.");
+
+        var courier = player.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
+        var pregnant = player.Riders.Find(r => r.Kind == "PREGNANT" && r.Origin == 0);
+        Require(player.Board(courier) && !rival.Board(courier)
+            && player.Owns(courier) && !rival.Owns(courier)
+            && player.Load == courier.Space && rival.Load == 0,
+            "The same rider boarded two cars or counted toward the rival's load.");
+        float patience = pregnant.Remaining;
+        player.Tick(1f, true);
+        rival.Tick(1f, true, false);
+        Require(Math.Abs(pregnant.Remaining - (patience - 1f)) < .001f,
+            "A jointly stopped floor drained waiting patience twice.");
+        var timeoutPlayer = new Round();
+        var timeoutRival = new Round();
+        timeoutRival.SharePassengerPoolWith(timeoutPlayer, 1);
+        var impatient = timeoutPlayer.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
+        impatient.Remaining = .25f;
+        int misses = timeoutPlayer.Tick(.5f, true);
+        timeoutRival.Tick(.5f, true, false);
+        timeoutRival.AddWaitingMisses(misses);
+        Require(misses == 1 && impatient.Resolved && timeoutPlayer.Score == -20 && timeoutRival.Score == -20,
+            "A shared waiting timeout must penalize both cars stopped at that floor once.");
+        Require(rival.Board(pregnant) && !player.Board(pregnant)
+            && rival.Load == pregnant.Space && player.Load == courier.Space,
+            "The rival could not claim a distinct rider from the shared queue.");
+        Require(rival.Offboard(courier) == CrazyElevator.Shared.OffboardResult.None
+            && !rival.Remove(courier)
+            && player.Offboard(pregnant) == CrazyElevator.Shared.OffboardResult.None,
+            "One car changed the other car's passenger state.");
+        player.Arrive(courier.Destination);
+        Require(player.Offboard(courier) == CrazyElevator.Shared.OffboardResult.Happy
+            && player.Load == 0, "The player could not deliver its rider.");
+        int playerScore = player.Score;
+        rival.Arrive(pregnant.Destination);
+        Require(rival.Offboard(pregnant) == CrazyElevator.Shared.OffboardResult.Happy
+            && rival.Load == 0 && player.Score == playerScore,
+            "The rival delivery changed the player's score or load.");
+
+        var catalog = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerCatalog>();
+        var boss = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
+        var regular = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
+        try
+        {
+            boss.kind = "BOSS";
+            regular.kind = "COURIER";
+            catalog.types = new[] { boss, regular };
+            var fromCatalog = Round.FromCatalog(catalog);
+            Require(fromCatalog.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
+                && fromCatalog.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
+                "The passenger catalog placed business passengers outside office floors.");
+            for (int origin = 0; origin < Round.Floors; origin++)
+                for (int sample = 0; sample < 20; sample++)
+                {
+                    int destination = Round.RandomDestination(origin);
+                    Require(destination >= 0 && destination < Round.Floors && destination != origin,
+                        "A special passenger received an invalid destination.");
+                }
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(catalog);
+            UnityEngine.Object.DestroyImmediate(boss);
+            UnityEngine.Object.DestroyImmediate(regular);
+        }
+        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, office business origins, and valid special destinations.");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check 1v1 Shared Passengers")]
+    public static void RequestMatchChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "match-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Solo Layout and Passengers")]
+    public static void RequestSoloBasic()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "solo-basic");
+    }
+
+    static void RunSoloBasic(Game game)
+    {
+        Require(game.Match == null, "Solo mode unexpectedly created a rival elevator.");
+        CrazyElevator.Managers.MenuManager.Close();
+        Call(game, "Restart");
+        Call(game, "LateUpdate");
+        var round = (Round)Get(game, "round");
+        float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
+        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - centre) < .001f
+            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) < .001f,
+            "The solo elevator or travel camera is off the building centre.");
+        Require(round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
+            && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8)
+            && round.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
+            && round.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
+            "Special passengers are waiting outside their assigned worlds.");
+        var band = typeof(Game).GetMethod("BandForFloor", Flags);
+        Require(band.Invoke(game, new object[] { 0f }).ToString() == "Office"
+            && band.Invoke(game, new object[] { 4f }).ToString() == "Candy"
+            && band.Invoke(game, new object[] { 8f }).ToString() == "Water",
+            "Office, candy, and underwater floors are out of order.");
+
+        var rider = round.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
+        Require(round.Board(rider) && game.PassengerLoad == rider.Space
+            && game.CurrentPassengers.Count == 1, "Solo boarding changed.");
+        float before = round.TimeLeft;
+        round.Tick(1f, true);
+        Require(Math.Abs(round.TimeLeft - (before - 1f)) < .001f,
+            "Solo shift timer did not advance.");
+        Call(game, "CloseAndTravel");
+        Call(game, "BeginBuildingTravel");
+        Set(game, "travelFloor", 1f);
+        Call(game, "RequestFloorStop");
+        Call(game, "AdvanceBuildingTravel", .5f);
+        Require(round.Floor == 1 && Get(game, "phase").ToString() == "Opening"
+            && round.Offboard(rider) == CrazyElevator.Shared.OffboardResult.Happy
+            && game.PassengerLoad == 0 && round.Delivered == 1,
+            "Solo travel or delivery changed.");
+        File.WriteAllText(Work + "/result.txt",
+            "PASS: solo shaft and camera centred; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
+        Debug.Log(File.ReadAllText(Work + "/result.txt"));
+    }
+
+    static void RunMatch()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        Require(match != null && match.player != null && match.Rival != null,
+            "1v1 did not create the NPC elevator.");
+        var player = match.player;
+        match.StartMatch();
+        var rival = match.Rival;
+        var playerRound = (Round)Get(player, "round");
+        var rivalRound = (Round)Get(rival, "round");
+        Require(ReferenceEquals(playerRound.Riders[0], rivalRound.Riders[0]),
+            "1v1 elevators did not start with one shared passenger pool.");
+        Require(Mathf.Abs(match.ShaftX(0) + match.ShaftX(1) - 2f * CrazyElevator.Match.ElevatorMatch.ShaftCenterX) < .001f,
+            "1v1 tracks do not straddle the building centre.");
+
+        var rider = playerRound.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
+        Require(playerRound.Board(rider) && !rivalRound.Board(rider),
+            "Both elevators boarded the same floor-zero passenger.");
+        Require(player.PassengerLoad == rider.Space && rival.PassengerLoad == 0
+            && player.CurrentPassengers.Count == 1 && rival.CurrentPassengers.Count == 0,
+            "A boarded passenger appeared inside both elevators.");
+        rival.RefreshWaitingPublic();
+        var rivalFigures = (IDictionary)Get(rival, "figures");
+        Require(rivalFigures.Contains(rider)
+            && !((Transform)rivalFigures[rider]).gameObject.activeInHierarchy,
+            "The NPC still shows a passenger boarded by the player.");
+        foreach (var waiting in rival.WaitingPassengers)
+            Require(!ReferenceEquals(waiting, rider), "A boarded passenger remained in the rival's queue.");
+        Require(rival.NpcBoard() && rival.PassengerLoad > 0 && player.PassengerLoad == rider.Space
+            && rival.CurrentPassengers.Count == 1 && !ReferenceEquals(rival.CurrentPassengers[0], rider),
+            "The NPC could not board a different passenger from the shared queue.");
+
+        player.ResetRoundPublic();
+        playerRound = (Round)Get(player, "round");
+        rivalRound = (Round)Get(rival, "round");
+        Require(ReferenceEquals(playerRound.Riders[0], rivalRound.Riders[0])
+            && !ReferenceEquals(playerRound.Riders[0], rider)
+            && player.PassengerLoad == 0 && rival.PassengerLoad == 0,
+            "Resetting the match must restore a fresh shared pool for both elevators.");
+        File.WriteAllText(Work + "/result.txt",
+            "PASS: Main creates two centred 1v1 tracks; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+        Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
     [MenuItem("Tools/Crazy Elevator/Preview Delivery Reward Popup")]
@@ -454,7 +656,9 @@ public static class ExtendedInteriorChecks
             Call(game, "Restart");
             var round = (Round)Get(game, "round");
             var handyman = round.Riders.Find(r => r.Kind == "HANDYMAN" && r.Origin == 8);
-            Require(handyman != null && round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 12, "Missing handyman passengers.");
+            Require(handyman != null && round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
+                && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8),
+                "Handymen must wait only on underwater floors.");
             Call(game, "CloseAndTravel"); Call(game, "BeginBuildingTravel"); Set(game, "travelFloor", 2f);
             float cruise = (float)Property(game, "CruiseSpeed");
             Input(game, pad, new GamepadState { leftStick = Vector2.up }.WithButton(GamepadButton.LeftShoulder));
