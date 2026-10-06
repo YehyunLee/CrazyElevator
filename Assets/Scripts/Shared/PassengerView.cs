@@ -11,5 +11,11 @@ namespace CrazyElevator.Shared
         public Renderer[] jackets;
 
         public string ResolvedKind => data != null && !string.IsNullOrEmpty(data.kind) ? data.kind : kind;
+
+        void Awake()
+        {
+            GameTypography.Apply(speech);
+            GameTypography.Apply(destination, true);
+        }
     }
 }

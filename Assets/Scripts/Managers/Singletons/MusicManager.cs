@@ -9,6 +9,7 @@ namespace CrazyElevator.Managers
         public static MusicManager Instance { get; private set; }
 
         public AudioClip[] themes = System.Array.Empty<AudioClip>();
+        [SerializeField, Range(0f, 1f)] float musicVolume = .32f;
         AudioSource music;
         bool muted;
 
@@ -20,7 +21,9 @@ namespace CrazyElevator.Managers
             music = gameObject.AddComponent<AudioSource>();
             music.loop = true;
             music.playOnAwake = false;
-            music.volume = .16f;
+            music.spatialBlend = 0f;
+            music.ignoreListenerPause = true;
+            music.volume = musicVolume;
         }
 
         void OnDestroy()

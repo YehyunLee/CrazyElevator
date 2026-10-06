@@ -351,7 +351,7 @@ namespace CrazyElevator.Managers
             exitStarts[rider] = start; exiting[rider] = 0;
             BeginKick(rider, figure, start, result, round.Score - scoreBefore);
             phaseTime = 0;
-            if (result == OffboardResult.WrongFloor) Play(buzz); else Play(click);
+            PlayDeliveryReaction(rider, result, round.Score - scoreBefore);
         }
     }
 }
@@ -364,7 +364,12 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         const float KickDuration = .78f;
+        const float DeliveryComboWindow = 3.5f;
+        const float DeliveryPopupDuration = 1.35f;
         readonly Dictionary<Rider, KickVisual> kicks = new Dictionary<Rider, KickVisual>();
+        readonly List<DeliveryPopup> deliveryPopups = new List<DeliveryPopup>();
+        float lastRewardedDeliveryAt = -1000f;
+        int deliveryCombo, deliveryPopupSerial;
 
         sealed class KickVisual
         {
@@ -373,6 +378,14 @@ namespace CrazyElevator.Managers
             public bool Gentle, WrongFloor;
             public Transform[] Puffs;
             public TextMesh Feedback;
+        }
+
+        sealed class DeliveryPopup
+        {
+            public Vector2 Viewport;
+            public float StartedAt;
+            public int Points, Combo, Serial;
+            public bool Happy;
         }
 
         // Capture the art's original pose so replacement models keep their scale.
@@ -399,11 +412,50 @@ namespace CrazyElevator.Managers
             string caption = result == OffboardResult.WrongFloor ? "WRONG FLOOR"
                 : result == OffboardResult.Happy ? "DELIVERED!"
                 : points == 0 ? "MAD - NO POINTS" : "LATE DELIVERY";
-            kick.Feedback = Sign(caption + "\n" + (points >= 0 ? "+" : "") + points,
+            // Correct-delivery points now live in the crisp 2D reward popup.
+            // Keep only status on the moving 3D rider; wrong-floor penalties
+            // remain attached to the mistake so the consequence is obvious.
+            string worldFeedback = result == OffboardResult.WrongFloor
+                ? caption + "\n" + points : caption;
+            kick.Feedback = Sign(worldFeedback,
                 start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
-            kick.Feedback.fontStyle = FontStyle.Bold;
+            RegisterDeliveryPopup(start, result, points);
             kicks[rider] = kick;
-            Play(extendedInterior && kick.Gentle ? chime : kickWhoosh);
+        }
+
+        // The combo celebrates quick correct drop-offs without changing the score.
+        void RegisterDeliveryPopup(Vector3 localPosition, OffboardResult result, int points)
+        {
+            if (result == OffboardResult.WrongFloor || points <= 0)
+            {
+                deliveryCombo = 0;
+                lastRewardedDeliveryAt = -1000f;
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            deliveryCombo = now - lastRewardedDeliveryAt <= DeliveryComboWindow
+                ? deliveryCombo + 1 : 1;
+            lastRewardedDeliveryAt = now;
+
+            Vector2 viewport = new Vector2(.5f, .48f);
+            if (eye != null && stage != null)
+            {
+                Vector3 point = eye.WorldToViewportPoint(stage.TransformPoint(localPosition + Vector3.up * 1.45f));
+                if (point.z > 0)
+                    viewport = new Vector2(Mathf.Clamp(point.x, .18f, .82f), Mathf.Clamp(point.y, .28f, .76f));
+            }
+
+            if (deliveryPopups.Count >= 4) deliveryPopups.RemoveAt(0);
+            deliveryPopups.Add(new DeliveryPopup
+            {
+                Viewport = viewport,
+                StartedAt = now,
+                Points = points,
+                Combo = deliveryCombo,
+                Serial = deliveryPopupSerial++,
+                Happy = result == OffboardResult.Happy
+            });
         }
 
         // Wind-up, airborne tumble, then a quick landing bounce.
@@ -490,6 +542,9 @@ namespace CrazyElevator.Managers
         void ClearKicks()
         {
             foreach (var rider in new List<Rider>(kicks.Keys)) EndKick(rider);
+            deliveryPopups.Clear();
+            deliveryCombo = 0;
+            lastRewardedDeliveryAt = -1000f;
         }
     }
 }
@@ -525,10 +580,34 @@ namespace CrazyElevator.Managers
             foreach (var jacket in view.jackets) if (jacket != null) jacket.sharedMaterial = Mat(color);
             bubbles[p] = view.speech;
             destinationTags[p] = view.destination;
+            StyleDestinationTag(view.destination);
             foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
             AttachPatienceBar(p, root);
-            AttachSpeechBubble(p, root);
+            // Extended mode uses one screen-space callout system in both solo
+            // and 1v1. Keep the authored world bubble only for legacy layouts.
+            if (Match != null && !extendedInterior) AttachSpeechBubble(p, root);
             return root;
+        }
+
+        // Keep the destination cue short, bold, and readable against every
+        // cabin band. The number is the actionable information; the persona
+        // badge belongs in the passenger art and no longer needs repeating.
+        static void StyleDestinationTag(TextMesh tag)
+        {
+            if (tag == null) return;
+            tag.fontSize = 72;
+            tag.characterSize = .034f;
+            tag.anchor = TextAnchor.MiddleCenter;
+            tag.alignment = TextAlignment.Center;
+            tag.color = Ink;
+            GameTypography.Apply(tag, true);
+            MeshRenderer renderer = tag.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sortingOrder = 20;
+            }
         }
 
         // Use the saved cabin position or waiting-queue slot.
@@ -625,12 +704,15 @@ namespace CrazyElevator.Managers
                 }
                 if (destinationTags.TryGetValue(p, out var destinationTag))
                 {
-                    destinationTag.gameObject.SetActive(!isExiting);
-                    destinationTag.text = p.Badge + "  " + p.Destination.ToString();
-                    // Cream reads on light cabin walls better than Gold; keep Teal/Coral for state.
-                    destinationTag.color = p.Mood < 2 || p.Boarded && p.Remaining <= 0 ? Coral
-                        : p.Boarded || isExiting ? Teal
-                        : Cream;
+                    bool useScreenCallout = extendedInterior;
+                    destinationTag.gameObject.SetActive(!useScreenCallout && !isExiting);
+                    destinationTag.text = p.Destination.ToString();
+                    // Keep the actionable number a single, dark high-contrast
+                    // color. Mood is already communicated by the patience bar
+                    // and speech bubble, so it should not reduce legibility.
+                    destinationTag.color = Ink;
+                    destinationTag.transform.localPosition = new Vector3(
+                        0, 2.16f, p.Boarded ? -.08f : .08f);
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
                 UpdatePatienceBar(p, isExiting);
@@ -703,7 +785,8 @@ namespace CrazyElevator.Managers
         void UpdatePatienceBar(Rider rider, bool isExiting)
         {
             if (!patienceBars.TryGetValue(rider, out PassengerPatienceBar bar) || bar == null) return;
-            bool show = rider.Boarded && !rider.Resolved && !isExiting;
+            bool show = rider.Boarded && !rider.Resolved && !isExiting
+                && !boardingTransfers.ContainsKey(rider);
             bar.gameObject.SetActive(show);
             if (!show) return;
 
@@ -732,6 +815,10 @@ namespace CrazyElevator.Managers
         public bool keepDoorwayClear;
         [Min(0f), Tooltip("Raises the cabin camera so hall passengers remain visible behind boarded riders.")]
         public float cameraLift;
+        [Range(45f, 70f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
+        public float cabinVerticalFieldOfView = 50f;
+        [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
+        public float cabinAimDown = 9f;
 
         readonly Dictionary<Rider, PassengerSpeechBubble> speechBubbleViews =
             new Dictionary<Rider, PassengerSpeechBubble>();
@@ -779,7 +866,7 @@ namespace CrazyElevator.Managers
                 }
 
                 bool temporaryAlert = speechUntil.TryGetValue(rider, out float end) && speechClock < end;
-                bool waitingPersistent = !rider.Boarded && CanSpeakWhileWaiting(rider);
+                bool waitingPersistent = false;
                 if (rider.Boarded && !string.IsNullOrEmpty(rider.Status)
                     && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     missedDestination.Add(rider);

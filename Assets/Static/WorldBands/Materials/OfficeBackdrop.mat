@@ -25,7 +25,12 @@ Material:
     m_Ints: []
     m_Floats:
     - _Grade: 1
+    - _PatternMode: 0
+    - _PatternScale: 30
+    - _PatternStrength: 0.055
+    - _Posterize: 10
     m_Colors:
+    - _PatternColor: {r: 0.08, g: 0.16, b: 0.32, a: 1}
     - _Region: {r: 1, g: 1, b: 0, a: 0}
     - _Tint: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

@@ -463,7 +463,7 @@ GameObject:
   - component: {fileID: 4151499724020321993}
   - component: {fileID: 1165839993512389393}
   m_Layer: 0
-  m_Name: ElevatorScene
+  m_Name: ExtendedElevatorScene
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -501,7 +501,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a241b0c77914a4f4c9becda9276ff8eb, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Shared.ElevatorScene
   cabin: {fileID: 7307430517034683531}
   leftDoor: {fileID: 6073588209357253364}
@@ -522,13 +522,13 @@ MonoBehaviour:
   - {fileID: 1561175541442449649}
   exteriorCar: {fileID: 1719516372962892814}
   passengers:
-  - {fileID: 7900720677242047709, guid: 149bf99f68fb59959c2b13df3b21c37b, type: 3}
   - {fileID: 7900720677242047709, guid: a650c398fd8374700ade741e7ec16a3d, type: 3}
   - {fileID: 7351003181584227211, guid: d5da013ce61a44a4f8c489d75d64f896, type: 3}
   - {fileID: 3803972662079654724, guid: 9320b318d2eed4defb38ad1c63ca5f0e, type: 3}
   - {fileID: 6851122490747818158, guid: cd49af0b78b064c628cccff556deb642, type: 3}
   - {fileID: 5982294781572636572, guid: 730494cd0f6644681b531e5aac54dd39, type: 3}
   - {fileID: 7360044963061388723, guid: e18e6497dfcde46cfa7a2a8d7b0e19c5, type: 3}
+  - {fileID: 7900720677242047709, guid: 149bf99f68fb59959c2b13df3b21c37b, type: 3}
 --- !u!1001 &3672296175483465992
 PrefabInstance:
   m_ObjectHideFlags: 0

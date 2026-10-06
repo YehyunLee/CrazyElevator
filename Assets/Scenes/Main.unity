@@ -235,7 +235,9 @@ MonoBehaviour:
   passengerSpeechBubblePrefab: {fileID: 1002, guid: f71fcf1d153c49c08fa3fc7d6232698a, type: 3}
   speechDuration: 2.2
   keepDoorwayClear: 1
-  cameraLift: 0.35
+  cameraLift: 0.12
+  cabinVerticalFieldOfView: 50
+  cabinAimDown: 9
   impairmentGaugePrefab: {fileID: 1004, guid: a28a526a065e598d9ed0c54a4cb147e8, type: 3}
   handymanShovelPrefab: {fileID: 100001, guid: 4d236756f1db46478733511063799bec, type: 3}
   floorsPerSecond: 0.85
@@ -246,6 +248,15 @@ MonoBehaviour:
   underwaterAccelerationMultiplier: 0.45
   personaPrefab: {fileID: 1004, guid: 12f45dcfd4b05de88943cbfa752d7274, type: 3}
   backgroundMusic: {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
+  happyDeliverySfx01: {fileID: 8300000, guid: 48edc122732bc478b8d5e178340c1827, type: 3}
+  happyDeliverySfx02: {fileID: 8300000, guid: e159ebea8950242c7b06914c49405831, type: 3}
+  angryDeliverySfx01: {fileID: 8300000, guid: 669c8828220614ef69841631f7784acc, type: 3}
+  angryDeliverySfx02: {fileID: 8300000, guid: 98cac693629a74c3fbf1674d6c544735, type: 3}
+  candyWorldDingSfx: {fileID: 8300000, guid: 842cf5dd7c1464a269d18a6e962d3172, type: 3}
+  grandmaSfx: {fileID: 8300000, guid: ede1449d675e746da8c039544ff5393c, type: 3}
+  kickOutSfx01: {fileID: 8300000, guid: 93012c111b2234d8988baa5ef993cb82, type: 3}
+  kickOutSfx02: {fileID: 8300000, guid: e2ed2312ce7bc48b08ae7c50446488cb, type: 3}
+  someoneBeingKickedOutSfx: {fileID: 8300000, guid: 27b8d4b53758048ffad016c71e7d7b01, type: 3}
 --- !u!4 &787388486
 Transform:
   m_ObjectHideFlags: 0
@@ -275,7 +286,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Match.ElevatorMatch
   player: {fileID: 787388485}
   shaftSpacing: 4
-  cabinHorizontalFieldOfView: 80
+  cabinVerticalFieldOfView: 48
 --- !u!114 &787388488
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -431,6 +442,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.SfxManager
   poolSize: 8
+  sfxVolume: 0.65
 --- !u!1 &910000031
 GameObject:
   m_ObjectHideFlags: 0
@@ -476,6 +488,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.MusicManager
   themes: []
+  musicVolume: 0.32
 --- !u!1 &910000041
 GameObject:
   m_ObjectHideFlags: 0
@@ -549,7 +562,7 @@ MonoBehaviour:
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
   m_RenderPostProcessing: 1
-  m_Antialiasing: 0
+  m_Antialiasing: 2
   m_AntialiasingQuality: 2
   m_StopNaN: 0
   m_Dithering: 1
@@ -598,7 +611,7 @@ MonoBehaviour:
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
   m_RenderPostProcessing: 1
-  m_Antialiasing: 0
+  m_Antialiasing: 2
   m_AntialiasingQuality: 2
   m_StopNaN: 0
   m_Dithering: 1

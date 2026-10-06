@@ -23,7 +23,14 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
-    m_Floats: []
+    m_Floats:
+    - _Grade: 1.1
+    - _PatternMode: 1
+    - _PatternScale: 34
+    - _PatternStrength: 0.055
+    - _Posterize: 8
     m_Colors:
+    - _PatternColor: {r: 0.33, g: 0.08, b: 0.38, a: 1}
     - _Region: {r: 0.9070422535211268, g: 0.2657592767373702, b: 0.04507042253521127, a: 0.5546420942824499}
+    - _Tint: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

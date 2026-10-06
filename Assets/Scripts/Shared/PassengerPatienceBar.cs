@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace CrazyElevator.Shared
 {
-    // A small world-space patience meter. The red segment grows from left to
-    // right while the green segment shrinks, matching the passenger's clock.
+    // A small world-space patience meter. Green is the remaining patience on
+    // the left; the red danger segment grows from the right as it runs out.
     [DisallowMultipleComponent]
     public sealed class PassengerPatienceBar : MonoBehaviour
     {
@@ -41,8 +41,8 @@ namespace CrazyElevator.Shared
             mad = isMad;
 
             float redFraction = 1f - DisplayedPatience;
-            SetSegment(redFill, redFraction, -width * .5f, true);
-            SetSegment(greenFill, DisplayedPatience, width * .5f, false);
+            SetSegment(greenFill, DisplayedPatience, -width * .5f, true);
+            SetSegment(redFill, redFraction, width * .5f, false);
             madLabel.gameObject.SetActive(isMad);
         }
 
@@ -109,8 +109,8 @@ namespace CrazyElevator.Shared
             madLabel.characterSize = .009f;
             madLabel.anchor = TextAnchor.LowerCenter;
             madLabel.alignment = TextAlignment.Center;
-            madLabel.fontStyle = FontStyle.Bold;
             madLabel.color = impatientColor;
+            GameTypography.Apply(madLabel, true);
         }
 
         Renderer CreatePart(string partName, Vector3 position, Vector3 scale, out Transform part)

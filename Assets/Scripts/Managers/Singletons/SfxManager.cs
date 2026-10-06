@@ -10,6 +10,7 @@ namespace CrazyElevator.Managers
         public static SfxManager Instance { get; private set; }
 
         [SerializeField, Range(1, 16)] int poolSize = 8;
+        [SerializeField, Range(0f, 1f)] float sfxVolume = .65f;
         readonly Queue<AudioSource> idle = new Queue<AudioSource>();
         readonly List<AudioSource> all = new List<AudioSource>();
 
@@ -23,7 +24,8 @@ namespace CrazyElevator.Managers
                 var source = gameObject.AddComponent<AudioSource>();
                 source.playOnAwake = false;
                 source.spatialBlend = 0f;
-                source.volume = .24f;
+                source.ignoreListenerPause = true;
+                source.volume = sfxVolume;
                 idle.Enqueue(source);
                 all.Add(source);
             }

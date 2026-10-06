@@ -10,7 +10,7 @@ namespace CrazyElevator.Managers
     {
         const string SinglePlayerScene = "Assets/Scenes/Main.unity";
         const string DuelScene = SinglePlayerScene;
-        static readonly Color Ink = new Color32(25, 31, 46, 255);
+        static readonly Color Ink = new Color32(9, 11, 16, 255);
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
@@ -82,6 +82,7 @@ namespace CrazyElevator.Managers
 
         void OnGUI()
         {
+            GameTypography.ApplyToSkin(GUI.skin);
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             Styles();
@@ -143,21 +144,29 @@ namespace CrazyElevator.Managers
             if (title != null) return;
             title = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Clamp(Screen.height / 16, 30, 56), fontStyle = FontStyle.Bold };
+            GameTypography.Apply(title, true);
             title.normal.textColor = Cream;
             cardTitle = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 25, 23, 38) };
+            GameTypography.Apply(cardTitle, true);
             cardTitle.normal.textColor = Ink;
             caption = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 48, 14, 19), fontStyle = FontStyle.Normal };
+            GameTypography.Apply(caption);
             caption.normal.textColor = Cream;
-            cardCaption = new GUIStyle(caption);
+            cardCaption = new GUIStyle(caption)
+            { fontSize = Mathf.Clamp(Screen.height / 58, 12, 16) };
+            GameTypography.Apply(cardCaption);
             cardCaption.normal.textColor = Ink;
             body = new GUIStyle(caption) { alignment = TextAnchor.MiddleLeft, fontSize = Mathf.Clamp(Screen.height / 55, 12, 16) };
+            GameTypography.Apply(body);
         }
 
         void DrawMode(Rect rect, Color accent, string heading, string detail, string scene, bool duel)
         {
+            Panel(new Rect(rect.x + 6, rect.y + 7, rect.width, rect.height), Color.black);
             Panel(rect, Cream);
-            Panel(new Rect(rect.x, rect.y, rect.width, 10), accent);
-            GUI.Label(new Rect(rect.x + 16, rect.y + 47, rect.width - 32, 60), heading, cardTitle);
+            Panel(new Rect(rect.x, rect.y, rect.width, 12), accent);
+            AccentBar(new Rect(rect.x, rect.y + 12, 8, rect.height - 12), accent);
+            GUI.Label(new Rect(rect.x + 20, rect.y + 47, rect.width - 36, 60), heading, cardTitle);
             GUI.Label(new Rect(rect.x + 24, rect.y + 116, rect.width - 48, 46), detail, cardCaption);
             var button = new Rect(rect.x + 24, rect.yMax - 66, rect.width - 48, 46);
             Panel(button, accent);
@@ -175,6 +184,12 @@ namespace CrazyElevator.Managers
             GUI.color = colour;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        static void AccentBar(Rect rect, Color colour)
+        {
+            Panel(new Rect(Mathf.Round(rect.x), Mathf.Round(rect.y),
+                Mathf.Round(rect.width), Mathf.Round(rect.height)), colour);
         }
     }
 }
