@@ -58,6 +58,7 @@ public static class ExtendedInteriorChecks
         try
         {
             if (action == "checks") { Run(game); RunBoost(game); }
+            else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
@@ -118,15 +119,21 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "solo-basic") && Application.isBatchMode)
+            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Extended Interior (Play Mode)")]
-    static void RequestChecks()
+    public static void RequestChecks()
     {
         Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Travel Speeds and Boost (Play Mode)")]
+    public static void RequestBoostChecks()
+    {
+        Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "boost-checks");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Handyman Repair (Returns to Edit Mode)")]
@@ -245,6 +252,19 @@ public static class ExtendedInteriorChecks
         Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - centre) < .001f
             && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) < .001f,
             "The solo elevator or travel camera is off the building centre.");
+        var shaft = game.sceneView.exteriorCar.parent;
+        foreach (int floor in new[] { 1, 11 })
+        {
+            float landingHeight = floor * 6.6f;
+            var shaftLanding = shaft.Find("Shaft landing " + floor);
+            var worldLanding = shaft.Find("World landing " + floor);
+            var rightLanding = shaft.Find("World landing " + floor + " right");
+            Require(shaftLanding && worldLanding && rightLanding
+                && Mathf.Abs(shaftLanding.localPosition.y - landingHeight) < .02f
+                && Mathf.Abs(worldLanding.localPosition.y - landingHeight) < .02f
+                && Mathf.Abs(rightLanding.localPosition.y - landingHeight) < .02f,
+                "The taller shaft landings do not line up with the floors.");
+        }
         Require(round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
             && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8)
             && round.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
@@ -266,6 +286,9 @@ public static class ExtendedInteriorChecks
         Call(game, "CloseAndTravel");
         Call(game, "BeginBuildingTravel");
         Set(game, "travelFloor", 1f);
+        Call(game, "LateUpdate");
+        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.y - 8f) < .02f,
+            "The traveling elevator does not line up with the taller first floor.");
         Call(game, "RequestFloorStop");
         Call(game, "AdvanceBuildingTravel", .5f);
         Require(round.Floor == 1 && Get(game, "phase").ToString() == "Opening"
@@ -354,8 +377,16 @@ public static class ExtendedInteriorChecks
     {
         InputSystem.QueueStateEvent(pad, state);
         InputSystem.Update();
+        RefreshInputManager();
         Call(game, "UpdatePassengerSelection");
         Call(game, "HandleInteriorController", dt);
+    }
+
+    static void RefreshInputManager()
+    {
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        if (input != null)
+            typeof(CrazyElevator.Managers.InputManager).GetMethod("Update", Flags).Invoke(input, null);
     }
 
     static void TravelTo(Game game, float target)
@@ -659,6 +690,14 @@ public static class ExtendedInteriorChecks
             Require(handyman != null && round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
                 && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8),
                 "Handymen must wait only on underwater floors.");
+            float officeInitialSpeed = (float)Property(game, "CruiseSpeed");
+            round.Floor = game.candyStartsAtFloor;
+            float candyInitialSpeed = (float)Property(game, "CruiseSpeed");
+            round.Floor = game.underwaterStartsAtFloor;
+            float underwaterInitialSpeed = (float)Property(game, "CruiseSpeed");
+            Require(underwaterInitialSpeed < officeInitialSpeed && officeInitialSpeed < candyInitialSpeed,
+                "Initial speed must be slow underwater, medium in the office, and fast in candy.");
+            round.Floor = 0;
             Call(game, "CloseAndTravel"); Call(game, "BeginBuildingTravel"); Set(game, "travelFloor", 2f);
             float cruise = (float)Property(game, "CruiseSpeed");
             Input(game, pad, new GamepadState { leftStick = Vector2.up }.WithButton(GamepadButton.LeftShoulder));
@@ -681,10 +720,10 @@ public static class ExtendedInteriorChecks
             Call(game, "AdvanceBuildingTravel", .2f);
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - cruise) < .001f, "Horizontal stick input must not add vertical boost.");
             Input(game, pad, new GamepadState());
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftShift, Key.W)); InputSystem.Update();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftShift, Key.W)); InputSystem.Update(); RefreshInputManager();
             Call(game, "HandleInteriorController", .02f); Call(game, "AdvanceBuildingTravel", .3f);
             Require((float)Get(game, "travelVelocity") > cruise + .25f, "Shift + keyboard direction did not accelerate.");
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); InputSystem.Update();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); InputSystem.Update(); RefreshInputManager();
 
             // Same acceleration interval in one call and across 36 frames.
             Set(game, "travelFloor", 2f); Set(game, "travelVelocity", cruise); Set(game, "boostAxis", 1f); Set(game, "boostHeld", true);
@@ -716,18 +755,19 @@ public static class ExtendedInteriorChecks
                 && (bool)Property(game, "HandymanRepairPending")
                 && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
                 "Boarding a handyman must preserve damage until the repair sweep.");
-            Require(Mathf.Abs((float)Property(game, "CruiseSpeed") - cruise) < .001f
+            float protectedWaterCruise = game.underwaterFloorsPerSecond;
+            Require(Mathf.Abs((float)Property(game, "CruiseSpeed") - protectedWaterCruise) < .001f
                 && Mathf.Abs((float)Property(game, "CurrentAcceleration") - game.boostAcceleration) < .001f
                 && Mathf.Abs((float)Property(game, "SpeedLimit") - game.maximumTravelSpeed) < .001f,
-                "Handyman must restore the exact candy movement settings.");
+                "Handyman must remove rust while keeping the underwater starting speed.");
             Call(game, "SyncFigures", 1.5f); Call(game, "SyncFigures", 4.3f);
             Require(inside.DisplayedSeverity == 0 && outside.DisplayedSeverity == 0
                 && !(bool)Property(game, "HandymanRepairActive"),
                 "Completed handyman repair did not clear both impairment meters.");
             Phase(game, "Moving");
-            Set(game, "travelFloor", 8.1f); Set(game, "travelVelocity", cruise); Set(game, "boostHeld", true); Set(game, "boostAxis", 1f);
+            Set(game, "travelFloor", 8.1f); Set(game, "travelVelocity", protectedWaterCruise); Set(game, "boostHeld", true); Set(game, "boostAxis", 1f);
             float exposure = (float)Get(game, "rustExposure"); Call(game, "AdvanceBuildingTravel", .5f);
-            Require(Mathf.Abs((float)Get(game, "travelVelocity") - (cruise + game.boostAcceleration * .5f)) < .003f
+            Require(Mathf.Abs((float)Get(game, "travelVelocity") - (protectedWaterCruise + game.boostAcceleration * .5f)) < .003f
                 && (float)Get(game, "rustExposure") == exposure, "Handyman protection did not restore acceleration or prevent rust growth.");
             Set(game, "travelFloor", 8.1f); Call(game, "RequestFloorStop");
             Require((float)Get(game, "travelVelocity") == 0 && !(bool)Get(game, "boostHeld"), "Docking did not clear boost momentum.");
@@ -735,7 +775,7 @@ public static class ExtendedInteriorChecks
             Call(game, "SelectRider", handyman); Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
             Require(!handyman.Boarded && !(bool)Property(game, "HasHandyman") && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
                 "Handyman protection remained after unloading.");
-            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; exact candy speed/acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum.");
+            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum.");
         }
         finally
         {

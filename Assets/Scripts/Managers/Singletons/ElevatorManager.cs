@@ -257,7 +257,12 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         [Header("Building travel")]
+        [Tooltip("Initial travel speed in the office world, in floors per second.")]
         [Range(.2f, 2f)] public float floorsPerSecond = .85f;
+        [Tooltip("Initial travel speed in the cotton candy world, in floors per second.")]
+        [Range(.2f, 2f)] public float candyFloorsPerSecond = 1.25f;
+        [Tooltip("Initial travel speed in the underwater world before rust slows the elevator.")]
+        [Range(.2f, 2f)] public float underwaterFloorsPerSecond = .7f;
         [Min(.1f)] public float boostAcceleration = 1.1f;
         [Min(.2f)] public float maximumTravelSpeed = 2.4f;
         [Range(.1f, .4f)] public float stopWindow = .24f;
@@ -904,7 +909,9 @@ namespace CrazyElevator.Managers
         float CollisionMultiplier => collisionSlowTimer > 0 ? .42f : 1f;
         float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f)) * CollisionMultiplier;
         float AccelerationMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterAccelerationMultiplier * Mathf.Lerp(1, .5f, (ImpairmentLevel - 1) * .5f)) * CollisionMultiplier;
-        float CruiseSpeed => floorsPerSecond * SpeedMultiplier;
+        float WorldCruiseSpeed => BandForFloor(MovementFloor) == WorldBand.Candy ? candyFloorsPerSecond
+            : BandForFloor(MovementFloor) == WorldBand.Water ? underwaterFloorsPerSecond : floorsPerSecond;
+        float CruiseSpeed => WorldCruiseSpeed * SpeedMultiplier;
         float CurrentAcceleration => boostAcceleration * AccelerationMultiplier;
         float SpeedLimit => maximumTravelSpeed * SpeedMultiplier;
 
@@ -979,7 +986,8 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         const int ExteriorLayer = 31;
-        const float FloorHeight = 3.3f;
+        // Keep in sync with the authored landings in ExteriorWorld.prefab.
+        const float FloorHeight = 6.6f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
@@ -1428,6 +1436,8 @@ namespace CrazyElevator.Managers
             target.underwaterSpeedMultiplier = underwaterSpeedMultiplier;
             target.underwaterAccelerationMultiplier = underwaterAccelerationMultiplier;
             target.floorsPerSecond = floorsPerSecond;
+            target.candyFloorsPerSecond = candyFloorsPerSecond;
+            target.underwaterFloorsPerSecond = underwaterFloorsPerSecond;
             target.boostAcceleration = boostAcceleration;
             target.maximumTravelSpeed = maximumTravelSpeed;
             target.stopWindow = stopWindow;

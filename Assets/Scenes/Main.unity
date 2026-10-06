@@ -241,6 +241,8 @@ MonoBehaviour:
   impairmentGaugePrefab: {fileID: 1004, guid: a28a526a065e598d9ed0c54a4cb147e8, type: 3}
   handymanShovelPrefab: {fileID: 100001, guid: 4d236756f1db46478733511063799bec, type: 3}
   floorsPerSecond: 0.85
+  candyFloorsPerSecond: 1.25
+  underwaterFloorsPerSecond: 0.7
   boostAcceleration: 1.1
   maximumTravelSpeed: 2.4
   secondsPerRustLevel: 10

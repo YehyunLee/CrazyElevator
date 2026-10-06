@@ -18,7 +18,8 @@ namespace CrazyElevator.Tools.WorldBuilders
         const string MatFolder = "Assets/Static/WorldBands/Materials";
         const string Work = "Temp/WorldBandTasks";
         const string ShaftRootName = "Shaft World Bands";
-        const float FloorHeight = 3.3f;
+        // ExteriorWorld and the three band prefabs are authored at this spacing.
+        const float FloorHeight = 6.6f;
 
         static readonly string[] RemoveNames =
         {
