@@ -351,7 +351,7 @@ namespace CrazyElevator.Managers
             exitStarts[rider] = start; exiting[rider] = 0;
             BeginKick(rider, figure, start, result, round.Score - scoreBefore);
             phaseTime = 0;
-            if (result == OffboardResult.WrongFloor) Play(buzz); else Play(click);
+            PlayDeliveryReaction(rider, result, round.Score - scoreBefore);
         }
     }
 }
@@ -421,7 +421,6 @@ namespace CrazyElevator.Managers
                 start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
             RegisterDeliveryPopup(start, result, points);
             kicks[rider] = kick;
-            Play(extendedInterior && kick.Gentle ? chime : kickWhoosh);
         }
 
         // The combo celebrates quick correct drop-offs without changing the score.

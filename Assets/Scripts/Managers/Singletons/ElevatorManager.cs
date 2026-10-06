@@ -291,7 +291,9 @@ namespace CrazyElevator.Managers
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
                     floorSign.text = destination.ToString();
-                    phase = Phase.Opening; phaseTime = 0; Play(ding);
+                    phase = Phase.Opening; phaseTime = 0;
+                    Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
+                        ? candyWorldDingSfx : ding);
                     notice = waiting > 0 ? "Highlight a passenger and confirm to help them out." : "Highlight a waiting passenger and confirm to welcome them.";
                     UpdateInteriorPersona(0);
                 }
@@ -1147,8 +1149,19 @@ namespace CrazyElevator.Managers
     // Local clip generation + routing through SfxManager / MusicManager.
     public sealed partial class ElevatorManager
     {
+        [Header("Authored audio")]
         public AudioClip backgroundMusic;
+        public AudioClip happyDeliverySfx01;
+        public AudioClip happyDeliverySfx02;
+        public AudioClip angryDeliverySfx01;
+        public AudioClip angryDeliverySfx02;
+        public AudioClip candyWorldDingSfx;
+        public AudioClip grandmaSfx;
+        public AudioClip kickOutSfx01;
+        public AudioClip kickOutSfx02;
+        public AudioClip someoneBeingKickedOutSfx;
         AudioClip chime, ding, click, buzz, groove, stamp, kickWhoosh;
+        int happyDeliverySfxIndex, angryDeliverySfxIndex, kickOutSfxIndex;
         bool generatedGroove;
 
         void InitializeAudio()
@@ -1255,10 +1268,49 @@ namespace CrazyElevator.Managers
             return clip;
         }
 
-        void Play(AudioClip sound)
+        AudioClip NextAuthoredClip(AudioClip first, AudioClip second, ref int index, AudioClip fallback = null)
+        {
+            if (first == null && second == null) return fallback;
+            AudioClip selected = index++ % 2 == 0 ? first : second;
+            return selected != null ? selected : (first != null ? first : second);
+        }
+
+        void PlayDeliveryReaction(Rider rider, OffboardResult result, int points)
+        {
+            if (result == OffboardResult.WrongFloor)
+            {
+                Play(NextAuthoredClip(kickOutSfx01, kickOutSfx02, ref kickOutSfxIndex, kickWhoosh), .9f);
+                return;
+            }
+
+            if (result == OffboardResult.Happy && points > 0)
+            {
+                Play(NextAuthoredClip(happyDeliverySfx01, happyDeliverySfx02,
+                    ref happyDeliverySfxIndex, chime), deliveryCombo > 1 ? 1.05f : .9f);
+                if (rider != null && rider.Kind == "ELDERLY") Play(grandmaSfx, .72f);
+                return;
+            }
+
+            if (points <= 0)
+            {
+                Play(someoneBeingKickedOutSfx != null ? someoneBeingKickedOutSfx : buzz, .9f);
+                return;
+            }
+
+            if (result == OffboardResult.Late)
+            {
+                Play(NextAuthoredClip(angryDeliverySfx01, angryDeliverySfx02,
+                    ref angryDeliverySfxIndex, buzz), .9f);
+                return;
+            }
+
+            Play(click);
+        }
+
+        void Play(AudioClip sound, float volumeScale = 1f)
         {
             if (IsNpc || sound == null) return;
-            if (SfxManager.Instance != null) SfxManager.Instance.PlaySfx(sound);
+            if (SfxManager.Instance != null) SfxManager.Instance.PlaySfx(sound, volumeScale);
         }
 
         void OnDestroy()
