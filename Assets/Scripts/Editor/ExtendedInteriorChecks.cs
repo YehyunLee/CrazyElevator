@@ -255,7 +255,7 @@ public static class ExtendedInteriorChecks
         var shaft = game.sceneView.exteriorCar.parent;
         foreach (int floor in new[] { 1, 11 })
         {
-            float landingHeight = floor * 6.6f;
+            float landingHeight = floor * 13.2f;
             var shaftLanding = shaft.Find("Shaft landing " + floor);
             var worldLanding = shaft.Find("World landing " + floor);
             var rightLanding = shaft.Find("World landing " + floor + " right");

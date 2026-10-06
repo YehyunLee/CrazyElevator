@@ -262,7 +262,7 @@ namespace CrazyElevator.Managers
         [Tooltip("Initial travel speed in the cotton candy world, in floors per second.")]
         [Range(.2f, 2f)] public float candyFloorsPerSecond = 1.25f;
         [Tooltip("Initial travel speed in the underwater world before rust slows the elevator.")]
-        [Range(.2f, 2f)] public float underwaterFloorsPerSecond = .7f;
+        [Range(.2f, 2f)] public float underwaterFloorsPerSecond = .6f;
         [Min(.1f)] public float boostAcceleration = 1.1f;
         [Min(.2f)] public float maximumTravelSpeed = 2.4f;
         [Range(.1f, .4f)] public float stopWindow = .24f;
@@ -987,7 +987,7 @@ namespace CrazyElevator.Managers
     {
         const int ExteriorLayer = 31;
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
-        const float FloorHeight = 6.6f;
+        const float FloorHeight = 13.2f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
