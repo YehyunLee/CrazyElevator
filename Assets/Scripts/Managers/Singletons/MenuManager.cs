@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using CrazyElevator.Shared;
@@ -128,11 +129,13 @@ namespace CrazyElevator.Managers
             Panel(card, new Color(Ink.r, Ink.g, Ink.b, .92f));
             GUI.Label(new Rect(card.x + 12, card.y + 10, card.width - 24, 28), "PASSENGERS", caption);
             float y = card.y + 44;
+            var onboard = new HashSet<CrazyElevator.Shared.Rider>(overlayGame.CurrentPassengers);
             foreach (var rider in overlayGame.AllRiders)
             {
                 if (rider == null || rider.Resolved) continue;
-                if (!rider.Boarded && rider.Origin != overlayGame.DiscreteFloor) continue;
-                string line = rider.Name + "  →  F" + rider.Destination + (rider.Boarded ? "  [IN]" : "  [WAIT]");
+                bool inCar = onboard.Contains(rider);
+                if (!inCar && (rider.Boarded || rider.Origin != overlayGame.DiscreteFloor)) continue;
+                string line = rider.Name + "  →  F" + rider.Destination + (inCar ? "  [IN]" : "  [WAIT]");
                 GUI.Label(new Rect(card.x + 14, y, card.width - 28, 22), line, body);
                 y += 22;
                 if (y > card.yMax - 28) break;

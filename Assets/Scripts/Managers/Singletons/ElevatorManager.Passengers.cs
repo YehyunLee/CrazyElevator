@@ -39,7 +39,7 @@ namespace CrazyElevator.Managers
                     return false;
                 foreach (var other in round.Riders)
                 {
-                    if (other == rider || !other.Boarded || other.Resolved) continue;
+                    if (other == rider || !round.Owns(other)) continue;
                     Vector3 placed = cabinPositions.TryGetValue(other, out var spot) ? spot : RiderPosition(other);
                     if (!TryGetCabinSeatSpan(other, placed, out int otherRow, out int otherFirst, out int otherLast))
                         continue;
@@ -50,7 +50,7 @@ namespace CrazyElevator.Managers
 
             foreach (var other in round.Riders)
             {
-                if (other == rider || !other.Boarded || other.Resolved) continue;
+                if (other == rider || !round.Owns(other)) continue;
                 Vector3 placed = cabinPositions.TryGetValue(other, out var spot) ? spot : RiderPosition(other);
                 if (new Vector2(position.x - placed.x, position.z - placed.z).magnitude < PartyRadius(rider) + PartyRadius(other)) return false;
             }
@@ -92,7 +92,8 @@ namespace CrazyElevator.Managers
         }
         bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !PersonaBusy && !rider.Resolved
             && figures.TryGetValue(rider, out var figure) && figure.gameObject.activeInHierarchy
-            && (rider.Boarded || rider.Origin == round.Floor && rider.Arrival <= 0 && round.IsOffered(rider));
+            && (round.Owns(rider) || !rider.Boarded && rider.Origin == round.Floor
+                && rider.Arrival <= 0 && round.IsOffered(rider));
 
         void SelectRider(Rider rider)
         {
@@ -343,7 +344,7 @@ namespace CrazyElevator.Managers
         }
         void QueueRiderExit(Rider rider, Vector3 start)
         {
-            if (rider == null || !rider.Boarded || !figures.TryGetValue(rider, out var figure)) return;
+            if (rider == null || !round.Owns(rider) || !figures.TryGetValue(rider, out var figure)) return;
             int scoreBefore = round.Score;
             OffboardResult result = round.Offboard(rider);
             if (result == OffboardResult.None) return;
@@ -617,7 +618,7 @@ namespace CrazyElevator.Managers
             foreach (var other in round.Riders)
             {
                 if (other == p) break;
-                if (p.Boarded ? other.Boarded && !other.Resolved : !other.Boarded && !other.Resolved && other.Origin == round.Floor) slot++;
+                if (p.Boarded ? round.Owns(other) : !other.Boarded && !other.Resolved && other.Origin == round.Floor) slot++;
             }
             if (p.Boarded)
             {
@@ -645,14 +646,15 @@ namespace CrazyElevator.Managers
             var completedExits = new List<Rider>();
             foreach (var p in round.Riders)
             {
-                if (p == repairingHandyman && (!p.Boarded || p.Resolved || phase != Phase.Boarding))
+                if (p == repairingHandyman && (!round.Owns(p) || phase != Phase.Boarding))
                     ClearHandymanRepair();
                 bool isExiting = exiting.TryGetValue(p, out float exitTime);
                 // TextMesh labels do not use the same occlusion as the solid
                 // doors, so explicitly hide the hall queue unless the doorway
                 // is open enough to interact with it.
                 bool hallVisible = phase == Phase.Boarding || phase == Phase.Opening && doors > .72f;
-                bool visible = isExiting || !p.Resolved && (p.Boarded || p.Origin == round.Floor && hallVisible && round.IsOffered(p));
+                bool visible = isExiting || !p.Resolved && (round.Owns(p)
+                    || !p.Boarded && p.Origin == round.Floor && hallVisible && round.IsOffered(p));
                 if (!figures.TryGetValue(p, out var figure))
                 {
                     if (!visible) continue;
@@ -785,7 +787,7 @@ namespace CrazyElevator.Managers
         void UpdatePatienceBar(Rider rider, bool isExiting)
         {
             if (!patienceBars.TryGetValue(rider, out PassengerPatienceBar bar) || bar == null) return;
-            bool show = rider.Boarded && !rider.Resolved && !isExiting
+            bool show = round.Owns(rider) && !isExiting
                 && !boardingTransfers.ContainsKey(rider);
             bar.gameObject.SetActive(show);
             if (!show) return;
@@ -889,7 +891,7 @@ namespace CrazyElevator.Managers
         {
             return rider != null && !rider.Resolved && !exiting.ContainsKey(rider)
                 && figures.TryGetValue(rider, out Transform figure) && figure.gameObject.activeInHierarchy
-                && (rider.Boarded || rider.Origin == round.Floor && round.IsOffered(rider));
+                && (round.Owns(rider) || !rider.Boarded && rider.Origin == round.Floor && round.IsOffered(rider));
         }
 
         static bool CanSpeakWhileWaiting(Rider rider)

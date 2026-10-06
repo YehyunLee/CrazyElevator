@@ -51,6 +51,8 @@ namespace CrazyElevator.Shared
         public float HoldProgress;
 
         public bool Boarded;
+        // A shared passenger pool still needs to know which car holds a rider.
+        public int BoardedBySeat = -1;
         // Resolved riders cannot board or score again.
         public bool Resolved;
         public bool HoldSatisfied => HoldRequired <= 0 || HoldProgress >= HoldRequired;
@@ -69,7 +71,9 @@ namespace CrazyElevator.Shared
         public const int Floors = 12;
         public const int Capacity = 10;
         public const float Duration = 180f;
+        static readonly Random DestinationRandom = new Random();
         public readonly List<Rider> Riders = new List<Rider>();
+        public int Seat { get; private set; }
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
         public float PeakTime;
         public float TimeLeft = Duration;
@@ -83,7 +87,7 @@ namespace CrazyElevator.Shared
                 int occupiedSpaces = 0;
                 foreach (var rider in Riders)
                 {
-                    if (rider.Boarded && !rider.Resolved)
+                    if (Owns(rider))
                         occupiedSpaces += rider.Space;
                 }
                 return occupiedSpaces;
@@ -110,9 +114,10 @@ namespace CrazyElevator.Shared
             {
                 foreach (var type in catalog.types)
                 {
-                    if (type == null || type.kind == "HANDYMAN") continue;
+                    if (type == null || type.kind == "HANDYMAN"
+                        || (type.kind == "BOSS" && f > 3)) continue;
                     int destination = (f + 1) % Floors;
-                    if (type.kind == "BOSS") destination = (f + 4) % Floors;
+                    if (type.kind == "BOSS") destination = RandomDestination(f);
                     else if (type.kind == "ELDERLY" || type.kind == "PREGNANT") destination = (f + 2) % Floors;
                     else if (type.kind == "INTERVIEW") destination = (f + 3) % Floors;
                     round.Riders.Add(type.CreateRider(f, destination));
@@ -133,7 +138,8 @@ namespace CrazyElevator.Shared
                 Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, (f + 1) % Floors, 2, 34, 0, 0, 30);
                 Add("Mina", "PREGNANT", "Two spaces, please.", "2X", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
                 Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
-                Add("Morgan", "BOSS", "Hold OPEN for my bonus.", "B", f, (f + 4) % Floors, 1, 30, 0, 3, 140, 1.25f);
+                if (f <= 3)
+                    Add("Morgan", "BOSS", "Hold OPEN for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140, 1.25f);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, 6.2f, 4, 175);
                 Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
             }
@@ -148,6 +154,32 @@ namespace CrazyElevator.Shared
                 Color = color, Badge = badge, Bonus = bonus, HoldRequired = holdRequired });
         }
 
+        // Special passengers may request any other floor, including a floor in
+        // their own world. Skipping the origin prevents a zero-distance trip.
+        public static int RandomDestination(int origin)
+        {
+            if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
+            int choice = DestinationRandom.Next(Floors - 1);
+            return choice >= origin ? choice + 1 : choice;
+        }
+
+        // The match creates one set of riders, then gives its rival round those
+        // same Rider objects. Each round still owns its own floor, clock and score.
+        public void SharePassengerPoolWith(ElevatorRound source, int seat)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (seat < 0) throw new ArgumentOutOfRangeException(nameof(seat));
+            if (source != this)
+            {
+                Riders.Clear();
+                Riders.AddRange(source.Riders);
+            }
+            Seat = seat;
+        }
+
+        public bool Owns(Rider rider) => rider != null && rider.Boarded
+            && !rider.Resolved && rider.BoardedBySeat == Seat;
+
         public bool HasCapacityFor(Rider p)
         {
             return p != null && p.Space > 0 && Load + p.Space <= Capacity;
@@ -159,6 +191,7 @@ namespace CrazyElevator.Shared
             if (p == null || Finished || p.Resolved || p.Boarded || p.Origin != Floor
                 || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
+            p.BoardedBySeat = Seat;
             return true;
         }
 
@@ -186,8 +219,9 @@ namespace CrazyElevator.Shared
         // Resolve an onboard passenger with the eject penalty.
         public bool Remove(Rider p)
         {
-            if (Finished || !p.Boarded || p.Resolved) return false;
-            p.Boarded = false; p.Resolved = true; TurnedAway++; Score -= 40; return true;
+            if (Finished || !Owns(p)) return false;
+            p.Boarded = false; p.BoardedBySeat = -1; p.Resolved = true;
+            TurnedAway++; Score -= 40; return true;
         }
 
         // Accumulate the boss bonus while OPEN is held.
@@ -196,7 +230,7 @@ namespace CrazyElevator.Shared
             if (dt <= 0) return;
             foreach (var p in Riders)
             {
-                if (!p.Boarded || p.Resolved || p.HoldRequired <= 0 || p.HoldSatisfied) continue;
+                if (!Owns(p) || p.HoldRequired <= 0 || p.HoldSatisfied) continue;
                 p.HoldProgress = Math.Min(p.HoldRequired, p.HoldProgress + dt);
                 if (p.HoldSatisfied) p.Status = "Boss bonus ready!";
             }
@@ -210,7 +244,7 @@ namespace CrazyElevator.Shared
             int missedHere = 0;
             foreach (var p in Riders)
             {
-                if (!p.Boarded || p.Resolved || p.Destination != Floor) continue;
+                if (!Owns(p) || p.Destination != Floor) continue;
                 p.Mood = Math.Max(0, p.Mood - 1);
                 p.Status = "You passed my floor!";
                 Score -= 35; missedHere++;
@@ -219,24 +253,36 @@ namespace CrazyElevator.Shared
         }
 
         // Advance the shift and passenger patience clocks.
-        public void Tick(float dt, bool stopped)
+        public int Tick(float dt, bool stopped, bool tickWaiting = true)
         {
-            if (Finished || dt <= 0) return;
+            if (Finished || dt <= 0) return 0;
             // A large frame must not simulate past the deadline.
             dt = Math.Min(dt, TimeLeft);
             TimeLeft = Math.Max(0, TimeLeft - dt);
+            int waitingMisses = 0;
             foreach (var p in Riders)
             {
                 if (p.Resolved) continue;
-                if (p.Boarded) p.Remaining = Math.Max(0, p.Remaining - dt);
-                else if (stopped && p.Origin == Floor && IsOffered(p))
+                if (Owns(p)) p.Remaining = Math.Max(0, p.Remaining - dt);
+                else if (!p.Boarded && tickWaiting && stopped && p.Origin == Floor && IsOffered(p))
                 {
                     float waiting = dt;
                     if (p.Arrival > 0) { waiting = Math.Max(0, dt - p.Arrival); p.Arrival = Math.Max(0, p.Arrival - dt); }
                     p.Remaining = Math.Max(0, p.Remaining - waiting);
-                    if (p.Remaining <= 0) { p.Resolved = true; Missed++; Score -= 20; }
+                    if (p.Remaining <= 0) { p.Resolved = true; waitingMisses++; }
                 }
             }
+            AddWaitingMisses(waitingMisses);
+            return waitingMisses;
+        }
+
+        // When two cars wait at the same floor, each shares responsibility for
+        // a timed-out passenger even though the queue's patience ticks once.
+        public void AddWaitingMisses(int count)
+        {
+            if (count <= 0) return;
+            Missed += count;
+            Score -= 20 * count;
         }
 
         // Arrival only opens the doors. Delivery is deliberately manual: the
@@ -254,7 +300,7 @@ namespace CrazyElevator.Shared
             int waitingToExit = 0;
             foreach (var p in Riders)
             {
-                if (p.Boarded && !p.Resolved && p.Destination == floor) waitingToExit++;
+                if (Owns(p) && p.Destination == floor) waitingToExit++;
             }
             return waitingToExit;
         }
@@ -262,8 +308,8 @@ namespace CrazyElevator.Shared
         // Resolve a delivery and calculate its reward or penalty.
         public OffboardResult Offboard(Rider p)
         {
-            if (Finished || p == null || !p.Boarded || p.Resolved) return OffboardResult.None;
-            p.Boarded = false; p.Resolved = true; Delivered++;
+            if (Finished || !Owns(p)) return OffboardResult.None;
+            p.Boarded = false; p.BoardedBySeat = -1; p.Resolved = true; Delivered++;
             if (p.Destination != Floor)
             {
                 p.Mood = 0; p.Status = "Wrong floor!"; Score -= 60;

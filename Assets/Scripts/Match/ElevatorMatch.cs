@@ -6,10 +6,12 @@ using Game = CrazyElevator.Managers.ElevatorManager;
 
 namespace CrazyElevator.Match
 {
-    // One shared match; each elevator keeps its own controller and rules.
+    // One shared match; each elevator keeps its own controller and score.
     [DefaultExecutionOrder(-100)]
     public sealed partial class ElevatorMatch : MonoBehaviour
     {
+        // The authored solo shaft sits at the centre of the exterior building.
+        public const float ShaftCenterX = 9f;
         public Game player;
         [Min(3f)] public float shaftSpacing = 4f;
         [FormerlySerializedAs("cabinHorizontalFieldOfView")]
@@ -26,6 +28,7 @@ namespace CrazyElevator.Match
             && player.ShiftFinished && Rival.ShiftFinished;
         ElevatorScene rivalView;
         Transform rivalShaft;
+        readonly Transform[] soloRails = new Transform[2];
         readonly int[] targetTrack = { 0, 1 };
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
@@ -73,16 +76,22 @@ namespace CrazyElevator.Match
             { listener.enabled = false; Destroy(listener); }
             if (rivalView.clearCamera != null) rivalView.clearCamera.gameObject.SetActive(false);
 
-            // Clone the existing rails as editable scenery for the adjacent shaft.
-            rivalShaft = new GameObject("NPC guide rails").transform;
+            // Keep the solo shaft centred, with two equally spaced tracks in 1v1.
+            rivalShaft = new GameObject("Duel guide rails").transform;
             rivalShaft.SetParent(source.exteriorCar.parent, false);
-            foreach (string railName in new[] { "Left guide rail", "Right guide rail" })
+            string[] railNames = { "Left guide rail", "Right guide rail" };
+            for (int i = 0; i < railNames.Length; i++)
             {
-                var rail = source.exteriorCar.parent.Find(railName);
+                var rail = source.exteriorCar.parent.Find(railNames[i]);
                 if (rail == null) continue;
-                var copy = Instantiate(rail, rivalShaft, false);
-                copy.name = "NPC " + railName;
-                copy.localPosition += Vector3.right * shaftSpacing;
+                soloRails[i] = rail;
+                for (int track = 0; track < 2; track++)
+                {
+                    var copy = Instantiate(rail, rivalShaft, false);
+                    copy.name = "Track " + (track + 1) + " " + railNames[i];
+                    copy.localPosition += Vector3.right * ((track - .5f) * shaftSpacing);
+                }
+                rail.gameObject.SetActive(false);
             }
 
             // Assign references before Awake runs on the rival controller.
@@ -126,7 +135,7 @@ namespace CrazyElevator.Match
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
             player.StartMatchShift();
-            Rival.StartMatchShift();
+            Rival.StartMatchShift(player);
             Rival.GetComponent<NpcElevator>().ResetDecisions();
             Running = true;
             Paused = false;
@@ -162,13 +171,13 @@ namespace CrazyElevator.Match
                 Mathf.Clamp(game.Match.cabinVerticalFieldOfView, 45f, 70f);
         }
 
-        // Fixed track centres remain useful for camera framing and authored rails.
-        public float ShaftX(int seat) => 9f + seat * shaftSpacing;
+        // Both duel tracks straddle the authored solo shaft at equal distances.
+        public float ShaftX(int seat) => ShaftCenterX + (seat - .5f) * shaftSpacing;
 
         public float ShaftX(Game actor)
         {
             int seat = SeatOf(actor);
-            return 9f + Mathf.SmoothStep(0f, 1f, trackPosition[seat]) * shaftSpacing;
+            return ShaftX(0) + Mathf.SmoothStep(0f, 1f, trackPosition[seat]) * shaftSpacing;
         }
 
         public int TrackNumber(Game actor) => targetTrack[SeatOf(actor)] + 1;
@@ -260,6 +269,8 @@ namespace CrazyElevator.Match
 
         void OnDestroy()
         {
+            foreach (var rail in soloRails)
+                if (rail != null) rail.gameObject.SetActive(true);
             if (collisionClip != null) Destroy(collisionClip);
             if (Rival != null) Destroy(Rival.gameObject);
             if (rivalView != null && rivalView.exteriorCar != null) Destroy(rivalView.exteriorCar.gameObject);

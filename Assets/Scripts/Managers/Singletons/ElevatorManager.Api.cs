@@ -31,7 +31,7 @@ namespace CrazyElevator.Managers
                 if (round == null) return System.Array.Empty<Rider>();
                 var boarded = new List<Rider>();
                 foreach (var rider in round.Riders)
-                    if (rider.Boarded && !rider.Resolved) boarded.Add(rider);
+                    if (round.Owns(rider)) boarded.Add(rider);
                 return boarded;
             }
         }
@@ -73,7 +73,11 @@ namespace CrazyElevator.Managers
         public void StopAtFloor() => RequestFloorStop();
         public void RequestFloorStopPublic() => RequestFloorStop();
         public void CloseAndTravelPublic() => CloseAndTravel();
-        public void ResetRoundPublic() => Restart();
+        public void ResetRoundPublic()
+        {
+            if (Match != null) Match.StartMatch();
+            else Restart();
+        }
         public void SetPausedPublic(bool value) => paused = value;
 
         public void SetTravelInput(float axis, bool boost)
