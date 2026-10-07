@@ -902,6 +902,9 @@ namespace CrazyElevator.Managers
         [Min(1)] public float secondsPerRustLevel = 10f;
         [Range(.1f, .9f)] public float underwaterSpeedMultiplier = .58f;
         [Range(.1f, .9f)] public float underwaterAccelerationMultiplier = .45f;
+        [Header("Passenger speed effects")]
+        [Range(1f, 2f)] public float clownSpeedMultiplier = 2f;
+        [Range(.25f, 1f)] public float grandmaSpeedMultiplier = .5f;
         float rustExposure;
         StarfishImpairmentView interiorImpairment, exteriorImpairment;
         float MovementFloor => BuildingView ? travelFloor : round.Floor;
@@ -918,8 +921,41 @@ namespace CrazyElevator.Managers
         }
         int ImpairmentLevel => !InWater || HasHandyman ? 0 : 1 + Mathf.Clamp(Mathf.FloorToInt(rustExposure / secondsPerRustLevel), 0, 2);
         float CollisionMultiplier => collisionSlowTimer > 0 ? .42f : 1f;
-        float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f)) * CollisionMultiplier;
-        float AccelerationMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterAccelerationMultiplier * Mathf.Lerp(1, .5f, (ImpairmentLevel - 1) * .5f)) * CollisionMultiplier;
+        float PassengerSpeedMultiplier
+        {
+            get
+            {
+                GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow);
+                return (clownBoost ? clownSpeedMultiplier : 1f)
+                    * (grandmaSlow ? grandmaSpeedMultiplier : 1f);
+            }
+        }
+        void GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow)
+        {
+            clownBoost = grandmaSlow = false;
+            if (round == null) return;
+            foreach (var rider in round.Riders)
+            {
+                if (!round.Owns(rider)) continue;
+                clownBoost |= rider.HasFeature(PassengerFeature.SpeedBoost);
+                grandmaSlow |= rider.HasFeature(PassengerFeature.SpeedSlow);
+            }
+        }
+        string PassengerSpeedStatus
+        {
+            get
+            {
+                GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow);
+                if (!clownBoost && !grandmaSlow) return string.Empty;
+                string passenger = clownBoost && grandmaSlow ? "CLOWN + GRANDMA"
+                    : clownBoost ? "CLOWN BOOST" : "GRANDMA SLOW";
+                return passenger + " · SPEED x" + PassengerSpeedMultiplier.ToString("0.0");
+            }
+        }
+        float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f))
+            * CollisionMultiplier * PassengerSpeedMultiplier;
+        float AccelerationMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterAccelerationMultiplier * Mathf.Lerp(1, .5f, (ImpairmentLevel - 1) * .5f))
+            * CollisionMultiplier * PassengerSpeedMultiplier;
         float WorldCruiseSpeed => BandForFloor(MovementFloor) == WorldBand.Candy ? candyFloorsPerSecond
             : BandForFloor(MovementFloor) == WorldBand.Water ? underwaterFloorsPerSecond : floorsPerSecond;
         float CruiseSpeed => WorldCruiseSpeed * SpeedMultiplier;
@@ -986,8 +1022,17 @@ namespace CrazyElevator.Managers
             if (interiorImpairment) interiorImpairment.SetSeverity(severity);
             if (exteriorImpairment) exteriorImpairment.SetSeverity(severity);
         }
-        string ImpairmentDescription => HasHandyman ? "HANDYMAN ABOARD - full speed / no impairment"
-            : ImpairmentLevel == 0 ? "NO IMPAIRMENT" : "RUST " + ImpairmentLevel + "/3 - " + (ImpairmentLevel == 1 ? "sluggish" : ImpairmentLevel == 2 ? "worn gears" : "severely impaired");
+        string ImpairmentDescription
+        {
+            get
+            {
+                string impairment = HasHandyman ? "HANDYMAN ABOARD - no rust slowdown"
+                    : ImpairmentLevel == 0 ? "NO IMPAIRMENT"
+                    : "RUST " + ImpairmentLevel + "/3 - " + (ImpairmentLevel == 1 ? "sluggish" : ImpairmentLevel == 2 ? "worn gears" : "severely impaired");
+                string passengerSpeed = PassengerSpeedStatus;
+                return string.IsNullOrEmpty(passengerSpeed) ? impairment : passengerSpeed + "  |  " + impairment;
+            }
+        }
     }
 }
 
@@ -1481,6 +1526,8 @@ namespace CrazyElevator.Managers
             target.secondsPerRustLevel = secondsPerRustLevel;
             target.underwaterSpeedMultiplier = underwaterSpeedMultiplier;
             target.underwaterAccelerationMultiplier = underwaterAccelerationMultiplier;
+            target.clownSpeedMultiplier = clownSpeedMultiplier;
+            target.grandmaSpeedMultiplier = grandmaSpeedMultiplier;
             target.floorsPerSecond = floorsPerSecond;
             target.candyFloorsPerSecond = candyFloorsPerSecond;
             target.underwaterFloorsPerSecond = underwaterFloorsPerSecond;

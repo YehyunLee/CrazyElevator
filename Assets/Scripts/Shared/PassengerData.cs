@@ -16,7 +16,9 @@ namespace CrazyElevator.Shared
         MultiSpace = 1 << 2,
         UrgencySpeech = 1 << 3,
         ClearsRust = 1 << 4,
-        GroupParty = 1 << 5
+        GroupParty = 1 << 5,
+        SpeedBoost = 1 << 6,
+        SpeedSlow = 1 << 7
     }
 }
 

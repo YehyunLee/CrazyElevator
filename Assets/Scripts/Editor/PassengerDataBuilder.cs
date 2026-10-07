@@ -25,9 +25,9 @@ namespace CrazyElevator.EditorTools
                 Make(folder, "Boss", "Morgan", "BOSS", "B", "Hold OPEN for my bonus.", 3, 1, 30, 0, 140, 1.25f,
                     PassengerFeature.HoldDoorBonus, PassengerTheme.Candy),
                 Make(folder, "Elderly", "Eli", "ELDERLY", "SLOW", "Please wait for me...", 4, 1, 58, 6.2f, 175, 0,
-                    PassengerFeature.SlowArrival),
+                    PassengerFeature.SlowArrival | PassengerFeature.SpeedSlow),
                 Make(folder, "Group", "The Trio", "GROUP", "3X", "All three or none!", 5, 3, 32, 0, 130, 0,
-                    PassengerFeature.MultiSpace | PassengerFeature.GroupParty, PassengerTheme.Candy),
+                    PassengerFeature.MultiSpace | PassengerFeature.GroupParty | PassengerFeature.SpeedBoost, PassengerTheme.Candy),
                 Make(folder, "Handyman", "Casey", "HANDYMAN", "FIX", "Rust-free while I'm aboard!", 4, 1, 80, 0, 110, 0,
                     PassengerFeature.ClearsRust, PassengerTheme.Underwater)
             };

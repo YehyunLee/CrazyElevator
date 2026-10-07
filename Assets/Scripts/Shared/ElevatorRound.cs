@@ -29,6 +29,8 @@ namespace CrazyElevator.Shared
                 case PassengerFeature.UrgencySpeech: return Kind == "INTERVIEW";
                 case PassengerFeature.ClearsRust: return Kind == "HANDYMAN";
                 case PassengerFeature.GroupParty: return Kind == "GROUP" || Space >= 3;
+                case PassengerFeature.SpeedBoost: return Kind == "GROUP";
+                case PassengerFeature.SpeedSlow: return Kind == "ELDERLY";
                 default: return false;
             }
         }
