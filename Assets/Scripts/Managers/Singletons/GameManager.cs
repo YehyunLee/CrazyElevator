@@ -133,7 +133,7 @@ namespace CrazyElevator.Managers
             if (!IsPaused) SyncViewFromPlayer();
 
             var currentDimension = DimensionForFloor(Player.DiscreteFloor);
-            MusicManager.Instance?.SetDimension(currentDimension.name);
+            // MusicManager.Instance?.SetDimension(currentDimension.name);
 
             var input = InputManager.Instance;
             if (input == null) return;
