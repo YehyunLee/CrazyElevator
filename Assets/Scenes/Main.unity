@@ -1131,8 +1131,8 @@ MonoBehaviour:
   shaftSpacing: 4
   cabinVerticalFieldOfView: 90
   trackSwitchSeconds: 0.32
-  verticalBlockDistance: 0.72
-  collisionSpeedRetained: 0.28
+  collisionPadding: 0.72
+  collisionBounceStrength: 0.28
   collisionSlowSeconds: 1.15
 --- !u!114 &787388488
 MonoBehaviour:
@@ -1536,8 +1536,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5fe4931de8f794af6b5dc9c3baed3bb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.MusicManager
-  themes: []
+  themes:
+  - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
+  - {fileID: 8300000, guid: b8eb1ee04d1cfe14aa06e1079fe53ec7, type: 3}
+  - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
   musicVolume: 0.32
+  fadeDuration: 1.2
 --- !u!1 &910000041
 GameObject:
   m_ObjectHideFlags: 0
