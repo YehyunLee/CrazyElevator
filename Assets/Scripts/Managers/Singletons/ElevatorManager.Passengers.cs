@@ -36,64 +36,15 @@ namespace CrazyElevator.Managers
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
-            // The compact interior uses a real three-seat grid per row. A 2X
-            // party reserves its own seat plus one neighbour; a 3X party must
-            // stand in a centre seat and reserves the seat on both sides.
-            if (keepDoorwayClear)
-            {
-                if (!TryGetCabinSeatSpan(rider, position, out int row, out int firstSeat, out int lastSeat))
-                    return false;
-                foreach (var other in round.Riders)
-                {
-                    if (other == rider || !round.Owns(other)) continue;
-                    Vector3 placed = cabinPositions.TryGetValue(other, out var spot) ? spot : RiderPosition(other);
-                    if (!TryGetCabinSeatSpan(other, placed, out int otherRow, out int otherFirst, out int otherLast))
-                        continue;
-                    if (row == otherRow && firstSeat <= otherLast && lastSeat >= otherFirst) return false;
-                }
-                return true;
-            }
-
+            // Use continuous floor distance instead of a fixed row/seat grid.
+            // The grid rejected open middle-back floor when a nearby rider was
+            // visually in another part of the cabin.
             foreach (var other in round.Riders)
             {
                 if (other == rider || !round.Owns(other)) continue;
                 Vector3 placed = cabinPositions.TryGetValue(other, out var spot) ? spot : RiderPosition(other);
                 if (new Vector2(position.x - placed.x, position.z - placed.z).magnitude < PartyRadius(rider) + PartyRadius(other)) return false;
             }
-            return true;
-        }
-
-        bool TryGetCabinSeatSpan(Rider rider, Vector3 position, out int row, out int firstSeat, out int lastSeat)
-        {
-            row = Mathf.RoundToInt((position.z - .32f) / 1.16f);
-            int seat = Mathf.RoundToInt((position.x + 1.12f) / 1.12f);
-            if (row < 0 || row >= CabinRows || seat < 0 || seat > 2)
-            {
-                firstSeat = lastSeat = -1;
-                return false;
-            }
-
-            int spaces = Mathf.Clamp(rider.Space, 1, 3);
-            if (spaces == 1)
-            {
-                firstSeat = lastSeat = seat;
-                return true;
-            }
-            if (spaces == 2)
-            {
-                firstSeat = seat < 3 ? seat : seat - 1;
-                lastSeat = firstSeat + 1;
-                return true;
-            }
-
-            // A three-space party needs an actual seat on its left and right.
-            if (seat == 0 || seat == 2)
-            {
-                firstSeat = lastSeat = -1;
-                return false;
-            }
-            firstSeat = seat - 1;
-            lastSeat = seat + 1;
             return true;
         }
         bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !rider.Resolved
