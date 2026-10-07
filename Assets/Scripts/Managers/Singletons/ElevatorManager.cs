@@ -597,6 +597,8 @@ namespace CrazyElevator.Managers
         [Range(1, 11)] public int candyStartsAtFloor = 4;
         [Range(1, 11)] public int underwaterStartsAtFloor = 8;
         ElevatorPersonaRig persona;
+        GameObject passengerGridObject;
+        Material passengerGridMaterial;
         float repairProgress;
         float repairedFor;
         int appliedWorld = -1;
@@ -624,26 +626,19 @@ namespace CrazyElevator.Managers
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
         static readonly Vector3[] OfficeCabinSpots =
         {
-            // The office benches hide the extreme cabin edges from the player
-            // camera, so keep the first three riders across the visible aisle.
-            new Vector3(-1.2f, .12f, 1.34f), new Vector3(0, .12f, 1.34f),
-            new Vector3(1.2f, .12f, 1.34f), new Vector3(-1.2f, .12f, 2.5f),
-            new Vector3(0, .12f, 2.5f), new Vector3(1.2f, .12f, 2.5f)
+            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
+            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
+            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
+            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
+            new Vector3(1.12f, .12f, 2.8f)
         };
         static readonly Vector3[] ClearDoorwayCabinSpots =
         {
-            // The camera is at positive Z looking toward the doors, so the
-            // smallest Z row is visually the back row. Complete each row before
-            // trying a position closer to the camera. The 1.12-unit spacing
-            // also prevents larger parties from prematurely forcing a new row.
-            new Vector3(-1.68f, .12f, .32f), new Vector3(-.56f, .12f, .32f),
-            new Vector3(.56f, .12f, .32f), new Vector3(1.68f, .12f, .32f),
-
-            new Vector3(-1.68f, .12f, 1.48f), new Vector3(-.56f, .12f, 1.48f),
-            new Vector3(.56f, .12f, 1.48f), new Vector3(1.68f, .12f, 1.48f),
-
-            new Vector3(-1.68f, .12f, 2.64f), new Vector3(-.56f, .12f, 2.64f),
-            new Vector3(.56f, .12f, 2.64f), new Vector3(1.68f, .12f, 2.64f)
+            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
+            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
+            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
+            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
+            new Vector3(1.12f, .12f, 2.8f)
         };
 
         void InitializeExtendedInterior()
@@ -660,9 +655,59 @@ namespace CrazyElevator.Managers
             InitializeImpairmentIndicators();
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
+            CreatePassengerGrid();
             floorSign.transform.localPosition = new Vector3(1.75f, 2.72f, .2f);
             floorSignHome = floorSign.transform.localPosition;
             UpdateInteriorPersona(0);
+        }
+
+        void CreatePassengerGrid()
+        {
+            if (passengerGridObject != null) return;
+
+            passengerGridObject = new GameObject("Passenger 3x3 floor grid");
+            passengerGridObject.transform.SetParent(stage, false);
+            passengerGridObject.transform.localPosition = Vector3.zero;
+            passengerGridObject.transform.localRotation = Quaternion.identity;
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            if (shader == null) return;
+            passengerGridMaterial = new Material(shader) { name = "Passenger grid material" };
+
+            Color[] colors =
+            {
+                new Color(0.15f, 0.95f, 0.92f, 1f),
+                new Color(1f, 0.56f, 0.28f, 1f),
+                new Color(1f, 0.88f, 0.25f, 1f)
+            };
+            float[] xBoundaries = { -1.68f, -.56f, .56f, 1.68f };
+            float[] zBoundaries = { -.10f, 1.06f, 2.22f, 3.38f };
+
+            for (int i = 1; i < 3; i++)
+                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .035f, zBoundaries[0]),
+                    new Vector3(xBoundaries[i], .035f, zBoundaries[3]), colors[(i - 1) % colors.Length]);
+            for (int i = 1; i < 3; i++)
+                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .035f, zBoundaries[i]),
+                    new Vector3(xBoundaries[3], .035f, zBoundaries[i]), colors[i % colors.Length]);
+        }
+
+        void CreatePassengerGridLine(string lineName, Vector3 start, Vector3 end, Color color)
+        {
+            var lineObject = new GameObject(lineName);
+            lineObject.transform.SetParent(passengerGridObject.transform, false);
+            var line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = false;
+            line.positionCount = 2;
+            line.SetPosition(0, start);
+            line.SetPosition(1, end);
+            line.startWidth = .055f;
+            line.endWidth = .055f;
+            line.startColor = color;
+            line.endColor = color;
+            line.material = passengerGridMaterial;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.alignment = LineAlignment.View;
         }
 
         void UpdateInteriorPersona(float dt)
@@ -1433,6 +1478,7 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             ReleaseCabinPreview();
+            if (passengerGridMaterial) Destroy(passengerGridMaterial);
             foreach (var m in materials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
             if (generatedGroove && groove) Destroy(groove);

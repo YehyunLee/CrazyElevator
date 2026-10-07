@@ -34,7 +34,7 @@ namespace CrazyElevator.Managers
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
-            // The compact interior uses a real four-seat grid per row. A 2X
+            // The compact interior uses a real three-seat grid per row. A 2X
             // party reserves its own seat plus one neighbour; a 3X party must
             // stand in a centre seat and reserves the seat on both sides.
             if (keepDoorwayClear)
@@ -64,8 +64,8 @@ namespace CrazyElevator.Managers
         bool TryGetCabinSeatSpan(Rider rider, Vector3 position, out int row, out int firstSeat, out int lastSeat)
         {
             row = Mathf.RoundToInt((position.z - .32f) / 1.16f);
-            int seat = Mathf.RoundToInt((position.x + 1.68f) / 1.12f);
-            if (row < 0 || row > 2 || seat < 0 || seat > 3)
+            int seat = Mathf.RoundToInt((position.x + 1.12f) / 1.12f);
+            if (row < 0 || row > 2 || seat < 0 || seat > 2)
             {
                 firstSeat = lastSeat = -1;
                 return false;
@@ -85,7 +85,7 @@ namespace CrazyElevator.Managers
             }
 
             // A three-space party needs an actual seat on its left and right.
-            if (seat == 0 || seat == 3)
+            if (seat == 0 || seat == 2)
             {
                 firstSeat = lastSeat = -1;
                 return false;
@@ -110,9 +110,9 @@ namespace CrazyElevator.Managers
                 // Check every seat the player can actually drop into, including
                 // seats outside the automatic boarding animation's preferred spots.
                 for (int row = 0; row < 3; row++)
-                for (int seat = 0; seat < 4; seat++)
+                for (int seat = 0; seat < 3; seat++)
                 {
-                    Vector3 spot = new Vector3(-1.68f + seat * 1.12f, .12f, .32f + row * 1.16f);
+                    Vector3 spot = new Vector3(-1.12f + seat * 1.12f, .12f, .48f + row * 1.16f);
                     if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
                 }
                 return false;
