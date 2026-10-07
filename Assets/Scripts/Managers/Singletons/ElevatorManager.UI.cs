@@ -589,7 +589,7 @@ namespace CrazyElevator.Managers
                 + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                 + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
                 + "\n\nYour 3-minute shift is over. Try again for a better mix!";
-            Label(new Rect(356, 262, 690, 240), copy, body);
+            Label(new Rect(356, 292, 690, 240), copy, body);
             if (phase == Phase.Tutorial)
             {
                 Panel(new Rect(350, 468, 210, 162), UiWhite); Panel(new Rect(350, 468, 210, 7), Teal);
