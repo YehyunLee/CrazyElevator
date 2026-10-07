@@ -217,7 +217,7 @@ namespace CrazyElevator.Managers
                 eye.transform.position += eye.transform.up * cameraLift;
             if (extendedInterior)
             {
-                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
+                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
                 eye.transform.rotation *= Quaternion.Euler(Mathf.Clamp(cabinAimDown, 0f, 12f), 0f, 0f);
             }
             cameraHome = eye.transform.position;
@@ -274,6 +274,7 @@ namespace CrazyElevator.Managers
         float lastTrackInput;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
         bool boostHeld;
+        bool initialVelocityPending;
         readonly HashSet<int> passedFloors = new HashSet<int>();
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), 0, ElevatorRound.Floors - 1);
@@ -295,10 +296,11 @@ namespace CrazyElevator.Managers
             passedFloors.Clear(); passedFloors.Add(round.Floor);
             round.LeaveFloor();
             travelFloor = round.Floor;
-            travelVelocity = travelDirection * CruiseSpeed;
+            travelVelocity = 0;
             boostAxis = 0; boostHeld = false;
+            initialVelocityPending = true;
             phase = Phase.Moving; phaseTime = 0; destination = -1;
-            notice = "Hold Shift / left shoulder with up/down to build speed. Confirm near a floor to stop.";
+            notice = "Hold Shift / shoulder / trigger with up/down to build speed. Confirm near a floor to stop.";
         }
         void RequestFloorStop()
         {
@@ -348,6 +350,23 @@ namespace CrazyElevator.Managers
             else if (oldVelocity * travelDirection < CruiseSpeed)
                 travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
             else travelVelocity = oldVelocity; // Releasing boost preserves the accumulated momentum.
+            if (Mathf.Abs(boostAxis) > .25f)
+            {
+                // A fresh direction input starts the elevator at cruise speed;
+                // the existing acceleration path then builds speed from there.
+                if (initialVelocityPending)
+                {
+                    travelVelocity = travelDirection * CruiseSpeed;
+                    initialVelocityPending = false;
+                }
+                oldVelocity = Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
+                if (boostHeld)
+                    travelVelocity = Mathf.Clamp(oldVelocity + boostAxis * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
+                else if (oldVelocity * travelDirection < CruiseSpeed)
+                    travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
+                else travelVelocity = oldVelocity;
+            }
+            else travelVelocity = oldVelocity;
             float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, 0, ElevatorRound.Floors - 1);
             travelFloor = Match != null
                 ? Match.ConstrainTravel(this, before, candidate, ref travelVelocity)
@@ -578,6 +597,8 @@ namespace CrazyElevator.Managers
         [Range(1, 11)] public int candyStartsAtFloor = 4;
         [Range(1, 11)] public int underwaterStartsAtFloor = 8;
         ElevatorPersonaRig persona;
+        GameObject passengerGridObject;
+        Material passengerGridMaterial;
         float repairProgress;
         float repairedFor;
         int appliedWorld = -1;
@@ -605,26 +626,19 @@ namespace CrazyElevator.Managers
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
         static readonly Vector3[] OfficeCabinSpots =
         {
-            // The office benches hide the extreme cabin edges from the player
-            // camera, so keep the first three riders across the visible aisle.
-            new Vector3(-1.2f, .12f, 1.34f), new Vector3(0, .12f, 1.34f),
-            new Vector3(1.2f, .12f, 1.34f), new Vector3(-1.2f, .12f, 2.5f),
-            new Vector3(0, .12f, 2.5f), new Vector3(1.2f, .12f, 2.5f)
+            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
+            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
+            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
+            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
+            new Vector3(1.12f, .12f, 2.8f)
         };
         static readonly Vector3[] ClearDoorwayCabinSpots =
         {
-            // The camera is at positive Z looking toward the doors, so the
-            // smallest Z row is visually the back row. Complete each row before
-            // trying a position closer to the camera. The 1.12-unit spacing
-            // also prevents larger parties from prematurely forcing a new row.
-            new Vector3(-1.68f, .12f, .32f), new Vector3(-.56f, .12f, .32f),
-            new Vector3(.56f, .12f, .32f), new Vector3(1.68f, .12f, .32f),
-
-            new Vector3(-1.68f, .12f, 1.48f), new Vector3(-.56f, .12f, 1.48f),
-            new Vector3(.56f, .12f, 1.48f), new Vector3(1.68f, .12f, 1.48f),
-
-            new Vector3(-1.68f, .12f, 2.64f), new Vector3(-.56f, .12f, 2.64f),
-            new Vector3(.56f, .12f, 2.64f), new Vector3(1.68f, .12f, 2.64f)
+            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
+            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
+            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
+            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
+            new Vector3(1.12f, .12f, 2.8f)
         };
 
         void InitializeExtendedInterior()
@@ -641,9 +655,59 @@ namespace CrazyElevator.Managers
             InitializeImpairmentIndicators();
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
+            CreatePassengerGrid();
             floorSign.transform.localPosition = new Vector3(1.75f, 2.72f, .2f);
             floorSignHome = floorSign.transform.localPosition;
             UpdateInteriorPersona(0);
+        }
+
+        void CreatePassengerGrid()
+        {
+            if (passengerGridObject != null) return;
+
+            passengerGridObject = new GameObject("Passenger 3x3 floor grid");
+            passengerGridObject.transform.SetParent(stage, false);
+            passengerGridObject.transform.localPosition = Vector3.zero;
+            passengerGridObject.transform.localRotation = Quaternion.identity;
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            if (shader == null) return;
+            passengerGridMaterial = new Material(shader) { name = "Passenger grid material" };
+
+            Color[] colors =
+            {
+                new Color(0.15f, 0.95f, 0.92f, 1f),
+                new Color(1f, 0.56f, 0.28f, 1f),
+                new Color(1f, 0.88f, 0.25f, 1f)
+            };
+            float[] xBoundaries = { -1.68f, -.56f, .56f, 1.68f };
+            float[] zBoundaries = { -.10f, 1.06f, 2.22f, 3.38f };
+
+            for (int i = 1; i < 3; i++)
+                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .035f, zBoundaries[0]),
+                    new Vector3(xBoundaries[i], .035f, zBoundaries[3]), colors[(i - 1) % colors.Length]);
+            for (int i = 1; i < 3; i++)
+                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .035f, zBoundaries[i]),
+                    new Vector3(xBoundaries[3], .035f, zBoundaries[i]), colors[i % colors.Length]);
+        }
+
+        void CreatePassengerGridLine(string lineName, Vector3 start, Vector3 end, Color color)
+        {
+            var lineObject = new GameObject(lineName);
+            lineObject.transform.SetParent(passengerGridObject.transform, false);
+            var line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = false;
+            line.positionCount = 2;
+            line.SetPosition(0, start);
+            line.SetPosition(1, end);
+            line.startWidth = .055f;
+            line.endWidth = .055f;
+            line.startColor = color;
+            line.endColor = color;
+            line.material = passengerGridMaterial;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.alignment = LineAlignment.View;
         }
 
         void UpdateInteriorPersona(float dt)
@@ -866,7 +930,7 @@ namespace CrazyElevator.Managers
                 string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + destination
                     : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + travelFloor.ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or use keys   |   Click STOP near a floor", body);
+                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or W / S or left joystick   |   Click STOP near a floor", body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 Label(new Rect(24, 137, 525, 24), Mathf.Abs(travelVelocity).ToString("0.00") + " floors/s  |  " + (boostHeld && boostAxis != 0 ? "ACCELERATING" : "COASTING"), body);
                 Label(new Rect(24, 164, 525, 24), ImpairmentDescription, small);
@@ -881,8 +945,8 @@ namespace CrazyElevator.Managers
             AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
             string prompt = selectedRider == null
                 ? (BuildingView ? (Match != null
-                    ? "A / D switch track   |   C stop   |   Shift+↑↓ speed"
-                    : "C / STOP near a floor   |   Shift+↑↓ to build speed")
+                    ? "Left/Right or A/D switch track   |   C stop   |   Shift+↑↓ or LT+RT+Up/Down for speed"
+                    : "C/'A' / STOP near a floor   |   Shift+↑↓ to build speed")
                     : "Drag riders to board or kick   |   C close & travel")
                 : selectedRider.Name + " → F" + selectedRider.Destination
                     + (selectedRider.Boarded ? "  ·  C to unload / drag out to kick" : "  ·  C to board / drag in");
@@ -1008,7 +1072,7 @@ namespace CrazyElevator.Managers
             if (!impairmentGaugePrefab) { Debug.LogError("Assign the starfish impairment gauge.", this); return; }
             interiorImpairment = Instantiate(impairmentGaugePrefab, stage, false);
             interiorImpairment.name = "Interior starfish rust meter";
-            interiorImpairment.transform.localPosition = new Vector3(0, 2.31f, .48f);
+            interiorImpairment.transform.localPosition = new Vector3(0, 3.31f, .48f);
             interiorImpairment.transform.localScale = Vector3.one * .85f;
             exteriorImpairment = Instantiate(impairmentGaugePrefab, exteriorCar, false);
             exteriorImpairment.name = "Exterior starfish rust meter";
@@ -1052,6 +1116,7 @@ namespace CrazyElevator.Managers
         const int ExteriorLayer = 31;
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
         public const float ShaftFloorHeight = 13.2f;
+        const float SecurityCameraFieldOfView = 90f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
@@ -1157,9 +1222,8 @@ namespace CrazyElevator.Managers
             eye.depth = showPreview ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
             eye.fieldOfView = Match != null
-                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 70f)
-                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
-            // Push the visible cars in opposite directions, then settle back onto their rails.
+                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 90f)
+                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
             float collisionKick = collisionImpact > 0f
                 ? Mathf.Sin((1f - collisionImpact) * Mathf.PI * 3f) * collisionImpact : 0f;
             float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
@@ -1179,6 +1243,7 @@ namespace CrazyElevator.Managers
             }
             exteriorCamera.transform.position = shaftCameraPosition;
             exteriorCamera.transform.rotation = shaftCameraRotation;
+            exteriorCamera.fieldOfView = SecurityCameraFieldOfView;
             if (Match != null)
                 exteriorCamera.orthographicSize = Mathf.Max(9.5f, (Match.shaftSpacing + 3f) / exteriorCamera.aspect);
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
@@ -1466,12 +1531,12 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             ReleaseCabinPreview();
+            if (passengerGridMaterial) Destroy(passengerGridMaterial);
             foreach (var m in materials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
             if (generatedGroove && groove) Destroy(groove);
             if (stamp) Destroy(stamp);
             if (kickWhoosh) Destroy(kickWhoosh);
-            if (!IsNpc) MusicManager.Instance?.StopMusic();
         }
     }
 }
@@ -1566,7 +1631,7 @@ namespace CrazyElevator.Managers
             travelVelocity *= Mathf.Clamp01(retainedSpeed);
             boostAxis = 0f;
             boostHeld = false;
-            notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE A / D TO SWITCH TRACKS";
+            notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE LEFT / RIGHT OR A / D TO SWITCH TRACKS";
         }
 
         public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)

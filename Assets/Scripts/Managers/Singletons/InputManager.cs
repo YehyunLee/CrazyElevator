@@ -81,16 +81,17 @@ namespace CrazyElevator.Managers
             bool pause = (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
                 || (pad != null && pad.startButton.wasPressedThisFrame
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger));
-            bool overlay = (keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame))
-                || (pad != null && pad.buttonNorth.wasPressedThisFrame && ActiveView == GameView.Passenger);
-            bool closeDoors = pad != null && pad.buttonNorth.wasPressedThisFrame
-                && ActiveView != GameView.Passenger;
+            bool overlay = keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
+            bool closeDoors = (keyboard != null && keyboard.cKey.wasPressedThisFrame)
+                || (pad != null && pad.buttonNorth.wasPressedThisFrame
+                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger));
             bool hold = (keyboard != null && keyboard.hKey.isPressed)
                 || (pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger);
             bool repair = (keyboard != null && keyboard.rKey.isPressed)
                 || (pad != null && pad.rightShoulder.isPressed);
             bool boost = (keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed))
-                || (pad != null && pad.leftShoulder.isPressed);
+                || (pad != null && (pad.leftShoulder.isPressed
+                    || pad.leftTrigger.isPressed || pad.rightTrigger.isPressed));
             bool mute = keyboard != null && keyboard.mKey.wasPressedThisFrame;
             bool start = (keyboard != null && keyboard.enterKey.wasPressedThisFrame)
                 || (pad != null && (pad.buttonSouth.wasPressedThisFrame

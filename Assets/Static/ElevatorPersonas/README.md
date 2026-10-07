@@ -4,18 +4,18 @@ Open `Assets/Scenes/Main.unity` and press Play. This scene supports both single-
 
 World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**. Tune `Candy Starts At Floor` / `Underwater Starts At Floor` on the player elevator. The cabin host stays friendly in office + candy (soft glove only in candy), and goes rusty underwater.
 
-| Action | Controller (button position) | Keyboard |
-| --- | --- | --- |
-| Start / continue menus | Bottom face button or Start | Enter |
-| Highlight a passenger inside | Left stick or D-pad | Hover the mouse, or WASD / arrow keys |
-| Board / unload the highlighted passenger | Bottom face button | C when a passenger is selected |
-| Close doors and begin travel | Top face button | C when no passenger is selected |
-| Set travel direction outside | Stick / D-pad up or down | W / S or up/down arrows |
-| Build speed in that direction | Hold left shoulder (L / LB) + up/down | Hold Shift + W / S or up/down arrows |
-| Stop at a nearby floor | Bottom face button | C |
-| Hold door for rider bonus | Hold right face button | Hold H |
-| Repair underwater mechanism | Hold RB for 2 seconds | Hold R for 2 seconds |
-| Pause / resume | Start | Escape |
+| Action | Controller / keyboard |
+| --- | --- |
+| Start / continue menus | Bottom face button or Start / Enter |
+| Highlight a passenger inside | Left stick or D-pad / hover mouse, or WASD / arrow keys |
+| Board / unload the highlighted passenger | Bottom face button / E or Space |
+| Close doors and begin travel | Top face button / C |
+| Set travel direction outside | Stick / D-pad up or down / W / S or up/down arrows |
+| Build speed in that direction | Hold left shoulder (L / LB) + up/down / hold Shift + W / S or up/down arrows |
+| Stop at a nearby floor | Bottom face button / E or Space |
+| Hold door for rider bonus | Hold right face button / hold H |
+| Repair underwater mechanism | Hold RB for 2 seconds / hold R for 2 seconds |
+| Pause / resume | Start / Escape |
 
 Inside, hovering highlights one passenger in green if there is room or red if there is not. Moving the stick changes the highlighted passenger by screen direction; release between selections. Press C to board or unload the selected passenger, or C with nobody selected to close the doors. You can also drag passengers into free cabin spaces, rearrange them, or drag them clearly through the doorway to kick them out.
 

@@ -73,7 +73,7 @@ namespace CrazyElevator.Shared
     public sealed class ElevatorRound
     {
         public const int Floors = 12;
-        public const int Capacity = 10;
+        public const int Capacity = 9;
         public const float Duration = 180f;
         public const float ElderlyArrivalSeconds = 1.5f;
         static readonly Random DestinationRandom = new Random();
