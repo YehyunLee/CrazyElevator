@@ -90,6 +90,7 @@ namespace CrazyElevator.Managers
             if (round == null) return;
             float dt = Time.deltaTime;
             collisionSlowTimer = Mathf.Max(0f, collisionSlowTimer - dt);
+            collisionRecoilTimer = Mathf.Max(0f, collisionRecoilTimer - dt);
             collisionImpact = Mathf.Max(0f, collisionImpact - dt * 1.8f);
             // Both cars may stop at one floor, but its shared waiting queue
             // should lose patience only once per frame.
@@ -271,7 +272,7 @@ namespace CrazyElevator.Managers
         int travelDirection = 1;
         float travelVelocity, boostAxis;
         float lastTrackInput;
-        float collisionSlowTimer, collisionImpact;
+        float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
         bool boostHeld;
         readonly HashSet<int> passedFloors = new HashSet<int>();
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
@@ -340,7 +341,9 @@ namespace CrazyElevator.Managers
             AccumulateRust(dt);
             float before = travelFloor;
             float oldVelocity = Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
-            if (boostHeld && Mathf.Abs(boostAxis) > .25f)
+            if (collisionRecoilTimer > 0f)
+                travelVelocity = oldVelocity; // Let the cars visibly separate before player/NPC thrust resumes.
+            else if (boostHeld && Mathf.Abs(boostAxis) > .25f)
                 travelVelocity = Mathf.Clamp(oldVelocity + boostAxis * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
             else if (oldVelocity * travelDirection < CruiseSpeed)
                 travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
@@ -367,7 +370,7 @@ namespace CrazyElevator.Managers
         {
             travelFloor = round.Floor; travelDirection = 1; destination = -1; passedFloors.Clear();
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
-            lastTrackInput = collisionSlowTimer = collisionImpact = 0;
+            lastTrackInput = collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
             SelectRider(null); controllerSelection = false; lastSelectionDirection = Vector2.zero;
         }
     }
@@ -735,6 +738,7 @@ namespace CrazyElevator.Managers
             if (input != null && input.CloseDoorsPressed) { CloseAndTravel(); return; }
             if (confirm)
             {
+                if (draggedRider != null) return;
                 if (selectedRider != null) ConfirmPassenger();
                 else CloseAndTravel();
                 return;
@@ -1102,11 +1106,13 @@ namespace CrazyElevator.Managers
             eye.fieldOfView = Match != null
                 ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 70f)
                 : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
+            // Push the visible cars in opposite directions, then settle back onto their rails.
             float collisionKick = collisionImpact > 0f
-                ? Mathf.Sin(Time.unscaledTime * 52f) * collisionImpact : 0f;
+                ? Mathf.Sin((1f - collisionImpact) * Mathf.PI * 3f) * collisionImpact : 0f;
             float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
-            exteriorCar.localPosition = new Vector3(carX + collisionKick * .12f,
-                travelFloor * ShaftFloorHeight + 1.4f + Mathf.Abs(collisionKick) * .045f, -.8f);
+            float outward = Seat == 0 ? -1f : 1f;
+            exteriorCar.localPosition = new Vector3(carX + outward * collisionKick * .28f,
+                travelFloor * ShaftFloorHeight + 1.4f + Mathf.Abs(collisionKick) * .11f, -.8f);
             exteriorCar.localRotation = exteriorCarHomeRotation * Quaternion.Euler(0f, 0f,
                 collisionKick * (Seat == 0 ? -4.5f : 4.5f));
             Vector3 shaftCameraPosition = new Vector3(carX, travelFloor * ShaftFloorHeight + 4, -44);
@@ -1504,6 +1510,15 @@ namespace CrazyElevator.Managers
             boostAxis = 0f;
             boostHeld = false;
             notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE A / D TO SWITCH TRACKS";
+        }
+
+        public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)
+        {
+            ApplyMatchCollision(slowSeconds, 1f);
+            if (phase != Phase.Moving) return;
+            travelVelocity = reboundVelocity;
+            collisionRecoilTimer = .3f;
+            notice = IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS";
         }
 
         // NPC uses the same passenger placement, scoring, and kick animation.

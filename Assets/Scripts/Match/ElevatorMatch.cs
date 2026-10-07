@@ -21,7 +21,9 @@ namespace CrazyElevator.Match
         [FormerlySerializedAs("verticalBlockDistance")]
         [Tooltip("Extra world-space breathing room around the visible elevator cars.")]
         [Range(0f, .75f)] public float collisionPadding = .15f;
-        [Range(.15f, .75f)] public float collisionSpeedRetained = .28f;
+        [FormerlySerializedAs("collisionSpeedRetained")]
+        [Tooltip("How much of the closing speed becomes a short rebound after a vertical hit.")]
+        [Range(.15f, .75f)] public float collisionBounceStrength = .28f;
         [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.15f;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
@@ -229,9 +231,10 @@ namespace CrazyElevator.Match
             bool blocked = direction > 0 ? candidate >= boundary : candidate <= boundary;
             if (!blocked) return candidate;
 
+            float closingSpeed = Mathf.Abs(velocity - other.TravelVelocity);
             candidate = Mathf.Clamp(boundary, 0f, ElevatorRound.Floors - 1f);
             velocity = 0f;
-            TriggerCollision(actor, other);
+            TriggerVerticalCollision(actor, other, direction, closingSpeed);
             if (actor.IsNpc)
                 RequestTrack(actor, targetTrack[SeatOf(actor)] == 0 ? 1 : -1);
             return candidate;
@@ -259,13 +262,29 @@ namespace CrazyElevator.Match
             return verticalDistance <= combinedHalfHeights;
         }
 
-        void TriggerCollision(Game first, Game second)
+        // Keep the two-argument entry point used by our match Play Mode check.
+        void TriggerCollision(Game first, Game second) => PlayCollision(first, second, 0f, 0f);
+
+        void TriggerVerticalCollision(Game first, Game second, float direction, float closingSpeed)
+            => PlayCollision(first, second, direction, closingSpeed);
+
+        void PlayCollision(Game first, Game second, float verticalDirection, float closingSpeed)
         {
             if (collisionCooldown > 0f) return;
             collisionCooldown = .55f;
             collisionFlash = .62f;
-            first?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
-            second?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
+            if (verticalDirection != 0f)
+            {
+                float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, .65f, 1.6f);
+                first?.ApplyMatchBounce(collisionSlowSeconds, -verticalDirection * rebound);
+                second?.ApplyMatchBounce(collisionSlowSeconds, verticalDirection * rebound);
+            }
+            else
+            {
+                // A lane-change bump still jolts both cars, but does not reverse their vertical travel.
+                first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+            }
             if (first != null && second != null)
                 EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
@@ -500,7 +519,7 @@ namespace CrazyElevator.Match
             Rect banner = new Rect((Screen.width - width) * .5f, 78f, width, 44f);
             Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
             Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
-            GUI.Label(banner, "COLLISION!  SWITCH TRACKS", collisionWord);
+            GUI.Label(banner, "BOUNCE!  SWITCH TRACKS", collisionWord);
         }
 
         void DrawMatchOverlay()
@@ -511,7 +530,7 @@ namespace CrazyElevator.Match
             Fill(box, Ink);
             string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : Paused ? "BOTH ELEVATORS PAUSED" : "SHIFT COMPLETE";
             GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
-            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use A / D to switch between the two tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
+            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use A / D to switch between the two tracks. Elevators bounce when they meet; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             if (Finished)
             {

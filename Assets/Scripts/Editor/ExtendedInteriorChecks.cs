@@ -354,8 +354,21 @@ public static class ExtendedInteriorChecks
             && !ReferenceEquals(playerRound.Riders[0], rider)
             && player.PassengerLoad == 0 && rival.PassengerLoad == 0,
             "Resetting the match must restore a fresh shared pool for both elevators.");
+        // A real vertical contact should reverse both moving cars, not just stop them.
+        trackPositions[1] = trackPositions[0];
+        var phaseField = typeof(Game).GetField("phase", Flags);
+        object moving = Enum.Parse(phaseField.FieldType, "Moving");
+        phaseField.SetValue(player, moving); phaseField.SetValue(rival, moving);
+        Set(player, "travelFloor", 4f); Set(rival, "travelFloor", 4.5f);
+        Set(player, "travelVelocity", 1f); Set(rival, "travelVelocity", -1f);
+        float incoming = 1f;
+        float contact = match.ConstrainTravel(player, 4f, 4.4f, ref incoming);
+        Require(contact < 4.4f && player.TravelVelocity < 0f && rival.TravelVelocity > 0f
+            && (float)Get(player, "collisionRecoilTimer") > 0f,
+            "Vertical contact must separate both moving cars with a short rebound.");
+        match.StartMatch();
         File.WriteAllText(Work + "/result.txt",
-            "PASS: Main creates two centred 1v1 tracks; visible-car collision and exterior sparks work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+            "PASS: Main creates two centred 1v1 tracks; visible-car collision, sparks and vertical bounce work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
