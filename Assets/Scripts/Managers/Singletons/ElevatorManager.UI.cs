@@ -153,7 +153,7 @@ namespace CrazyElevator.Managers
             if (phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results || paused)
             {
                 scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
-                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 900 * scale) / 2;
+                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 1000 * scale) / 2;
                 GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, Vector3.one * scale);
                 Overlay();
             }
@@ -310,8 +310,8 @@ namespace CrazyElevator.Managers
             const float y = 16f;
             const float x = 16f;
 
-            Panel(new Rect(x - 5, y - 5, totalWidth + 10, 58), UiWhite);
-            Panel(new Rect(x - 2, y - 2, totalWidth + 4, 52), UiBlack);
+            Panel(new Rect(x - 5, y - 5, totalWidth + 10, 68), UiWhite);
+            Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
                 WorldName(round.Floor), "F" + round.Floor); cursor += 152;
@@ -498,7 +498,7 @@ namespace CrazyElevator.Managers
         void DrawHudTile(Rect area, Color color, string caption, string value)
         {
             Panel(area, UiBlack);
-            Panel(new Rect(area.x, area.yMax - 5f, area.width, 5f), color);
+            Panel(new Rect(area.x, area.yMax + 5f, area.width, 5f), color);
             AccentBar(new Rect(area.x + 4f, area.y + 7f, 7f, area.height - 18f), color);
 
             Color oldSmall = inkSmall.normal.textColor;
@@ -575,12 +575,12 @@ namespace CrazyElevator.Managers
         void Overlay()
         {
             Panel(new Rect(0, 104, 1440, 796), new Color(0, 0, 0, .82f));
-            Panel(new Rect(338, 230, 780, 456), Color.black);
-            Panel(new Rect(330, 222, 780, 456), UiBlack);
-            Panel(new Rect(330, 222, 780, 7), Teal);
-            AccentBar(new Rect(326, 246, 9, 382), Teal);
+            Panel(new Rect(338, 200, 780, 520), Color.black);
+            Panel(new Rect(330, 192, 780, 520), UiBlack);
+            Panel(new Rect(330, 192, 780, 7), Teal);
+            AccentBar(new Rect(326, 216, 9, 460), Teal);
             string heading = paused ? "TAKE A BREATHER" : phase == Phase.Welcome ? "YOUR SHIFT. THEIR CHAOS." : phase == Phase.Tutorial ? "HOW TO PLAY" : "SHIFT COMPLETE";
-            Label(new Rect(372, 256, 700, 52), heading, title);
+            Label(new Rect(372, 226, 700, 52), heading, title);
             string copy;
             if (paused) copy = "The clock is paused.\n\nPress Start / Escape or resume when you are ready.";
             else if (phase == Phase.Welcome) copy = "3 minutes. Drop riders at their floors for points.\n\nOffice (0–3) → Candy (4–7) → Underwater (8–11).\n\nDrag to board or kick. CLOSE & TRAVEL, then hold UP/DOWN and STOP near a floor.";
@@ -589,7 +589,7 @@ namespace CrazyElevator.Managers
                 + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                 + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
                 + "\n\nYour 3-minute shift is over. Try again for a better mix!";
-            Label(new Rect(374, 322, 690, 240), copy, body);
+            Label(new Rect(374, 292, 690, 240), copy, body);
             if (phase == Phase.Tutorial)
             {
                 Panel(new Rect(374, 418, 210, 112), UiWhite); Panel(new Rect(374, 418, 210, 7), Teal);
@@ -603,7 +603,7 @@ namespace CrazyElevator.Managers
             string action = paused ? "RESUME SHIFT  /  CLICK, START or ESC"
                 : phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
                 : phase == Phase.Tutorial ? "START SHIFT  /  CLICK or ENTER" : "TRY AGAIN  /  CLICK or ENTER";
-            if (Button(new Rect(374, 600, 692, 48), action, Teal))
+            if (Button(new Rect(374, 670, 692, 48), action, Teal))
             {
                 if (paused)
                 {

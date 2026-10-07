@@ -885,7 +885,7 @@ namespace CrazyElevator.Managers
                 string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + destination
                     : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + travelFloor.ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or use keys   |   Click STOP near a floor", body);
+                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or W / S or left joystick   |   Click STOP near a floor", body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 Label(new Rect(24, 137, 525, 24), Mathf.Abs(travelVelocity).ToString("0.00") + " floors/s  |  " + (boostHeld && boostAxis != 0 ? "ACCELERATING" : "COASTING"), body);
                 Label(new Rect(24, 164, 525, 24), ImpairmentDescription, small);
@@ -900,8 +900,8 @@ namespace CrazyElevator.Managers
             AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
             string prompt = selectedRider == null
                 ? (BuildingView ? (Match != null
-                    ? "A / D switch track   |   C stop   |   Shift+↑↓ speed"
-                    : "C / STOP near a floor   |   Shift+↑↓ to build speed")
+                    ? "Left/Right or A/D switch track   |   C stop   |   Shift+↑↓ or LT+RT+Up/Down for speed"
+                    : "C/'A' / STOP near a floor   |   Shift+↑↓ to build speed")
                     : "Drag riders to board or kick   |   C close & travel")
                 : selectedRider.Name + " → F" + selectedRider.Destination
                     + (selectedRider.Boarded ? "  ·  C to unload / drag out to kick" : "  ·  C to board / drag in");
@@ -1529,7 +1529,7 @@ namespace CrazyElevator.Managers
             travelVelocity *= Mathf.Clamp01(retainedSpeed);
             boostAxis = 0f;
             boostHeld = false;
-            notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE A / D TO SWITCH TRACKS";
+            notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE LEFT / RIGHT OR A / D TO SWITCH TRACKS";
         }
 
         public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)

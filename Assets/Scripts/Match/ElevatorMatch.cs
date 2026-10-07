@@ -530,7 +530,7 @@ namespace CrazyElevator.Match
             Fill(box, Ink);
             string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : Paused ? "BOTH ELEVATORS PAUSED" : "SHIFT COMPLETE";
             GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
-            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use A / D to switch between the two tracks. Elevators bounce when they meet; switch tracks to pass.\n\nHighest delivery score wins.";
+            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use left/right or A / D to switch between the two tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             if (Finished)
             {
