@@ -2,6 +2,9 @@ using UnityEngine;
 
 namespace CrazyElevator.Shared
 {
+    // Restricts a themed passenger to floors in one world; Any keeps a type universal.
+    public enum PassengerTheme { Any, Office, Candy, Underwater }
+
     // Optional unique passenger traits. Custom logic lives where it fits cleanly
     // (boarding, scoring, impairment, speech) and checks these flags.
     [System.Flags]
@@ -30,6 +33,8 @@ namespace CrazyElevator.Shared
         public string badge = "?";
         [TextArea] public string request = "Take me somewhere.";
         [Range(0, 7)] public int colorIndex;
+        [Tooltip("Any passengers can wait in every world. Choose a world for themed passengers.")]
+        public PassengerTheme theme = PassengerTheme.Any;
 
         [Header("Rules")]
         [Range(1, 3)] public int space = 1;
@@ -43,6 +48,15 @@ namespace CrazyElevator.Shared
         public PassengerView prefab;
 
         public bool Has(PassengerFeature feature) => (features & feature) != 0;
+
+        public bool CanWaitAt(int floor)
+        {
+            if (floor < 0 || floor >= ElevatorRound.Floors) return false;
+            return theme == PassengerTheme.Any || theme == ThemeAtFloor(floor);
+        }
+
+        public static PassengerTheme ThemeAtFloor(int floor) => floor < 4 ? PassengerTheme.Office
+            : floor < 8 ? PassengerTheme.Candy : PassengerTheme.Underwater;
 
         public Rider CreateRider(int origin, int destination)
         {

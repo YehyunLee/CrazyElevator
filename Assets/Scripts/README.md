@@ -52,4 +52,4 @@ Shared
 | PassengerManager | `PassengerManager.cs` (per elevator) |
 | ControlElevatorView / PassengerView | `GameView` via `GameManager.GoToView` |
 
-Create passenger assets: **Crazy Elevator → Create Default Passenger Data**.
+Create passenger assets: **Crazy Elevator → Create Default Passenger Data**. In a `PassengerData` asset, set **Theme** to Office, Candy, or Underwater to limit where that type waits; **Any** keeps generic types available everywhere. Destinations may still cross between worlds. In 1v1, boarding a rider adds a same-type replacement to the shared origin-floor queue after a one-second arrival delay.
