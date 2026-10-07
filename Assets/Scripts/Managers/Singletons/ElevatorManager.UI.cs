@@ -595,9 +595,9 @@ namespace CrazyElevator.Managers
                 Panel(new Rect(374, 418, 210, 112), UiWhite); Panel(new Rect(374, 418, 210, 7), Teal);
                 Panel(new Rect(602, 418, 210, 112), UiWhite); Panel(new Rect(602, 418, 210, 7), Gold);
                 Panel(new Rect(830, 418, 210, 112), UiWhite); Panel(new Rect(830, 418, 210, 7), Coral);
-                Label(new Rect(392, 432, 174, 78), "1  BOARD\nDrag a rider inside.\nDrag onboard riders to move.", inkBody);
-                Label(new Rect(620, 432, 174, 78), "2  TRAVEL\nClick CLOSE & TRAVEL.\nHold UP / DOWN to move.", inkBody);
-                Label(new Rect(848, 432, 174, 78), "3  STOP / EJECT\nClick STOP near a floor.\nDrag rider out to eject.", inkBody);
+                Label(new Rect(392, 432, 174, 78), "1  BOARD\nDrag a rider inside,\nor select + press C.", inkBody);
+                Label(new Rect(620, 432, 174, 78), "2  TRAVEL\nPress C with no rider\nselected, then move.", inkBody);
+                Label(new Rect(848, 432, 174, 78), "3  STOP / EJECT\nPress C near a floor.\nDrag rider out to eject.", inkBody);
                 Label(new Rect(374, 542, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
             }
             string action = paused ? "RESUME SHIFT  /  CLICK, START or ESC"
