@@ -288,7 +288,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Match.ElevatorMatch
   player: {fileID: 787388485}
   shaftSpacing: 4
-  cabinVerticalFieldOfView: 48
+  cabinVerticalFieldOfView: 63
 --- !u!114 &787388488
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -8,16 +8,16 @@ World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**.
 | --- | --- | --- |
 | Start / continue menus | Bottom face button or Start | Enter |
 | Highlight a passenger inside | Left stick or D-pad | Hover the mouse, or WASD / arrow keys |
-| Board / unload the highlighted passenger | Bottom face button | E or Space |
-| Close doors and begin travel | Top face button | C |
+| Board / unload the highlighted passenger | Bottom face button | C when a passenger is selected |
+| Close doors and begin travel | Top face button | C when no passenger is selected |
 | Set travel direction outside | Stick / D-pad up or down | W / S or up/down arrows |
 | Build speed in that direction | Hold left shoulder (L / LB) + up/down | Hold Shift + W / S or up/down arrows |
-| Stop at a nearby floor | Bottom face button | E or Space |
+| Stop at a nearby floor | Bottom face button | C |
 | Hold door for rider bonus | Hold right face button | Hold H |
 | Repair underwater mechanism | Hold RB for 2 seconds | Hold R for 2 seconds |
 | Pause / resume | Start | Escape |
 
-Inside, hovering highlights one passenger in gold. Moving the stick changes the highlighted passenger by screen direction; release between selections. Confirm moves that exact passenger in or out. Mouse buttons do nothing: there is no dragging, clicking to board, or clicking to dismiss a passenger. Passengers are placed in available cabin spaces automatically.
+Inside, hovering highlights one passenger in green if there is room or red if there is not. Moving the stick changes the highlighted passenger by screen direction; release between selections. Press C to board or unload the selected passenger, or C with nobody selected to close the doors. You can also drag passengers into free cabin spaces, rearrange them, or drag them clearly through the doorway to kick them out.
 
 Correct drop-offs show the points earned in a short screen-space burst. Deliver another passenger correctly within 3.5 seconds to build the visible **QUICK COMBO** streak; the streak is celebratory only and does not multiply the existing score. Wrong-floor and zero-point drop-offs reset it.
 

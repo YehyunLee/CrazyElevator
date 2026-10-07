@@ -177,7 +177,7 @@ namespace CrazyElevator.Managers
             floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
-            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Highlight a passenger, then confirm. C / top button closes the doors.";
+            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
 
@@ -280,13 +280,13 @@ namespace CrazyElevator.Managers
 
         void CloseAndTravel()
         {
-            if (phase != Phase.Boarding || PersonaBusy) return;
+            if (phase != Phase.Boarding) return;
             SelectRider(null);
             travelFloor = round.Floor;
             if (round.Floor == 0) travelDirection = 1;
             if (round.Floor == ElevatorRound.Floors - 1) travelDirection = -1;
             destination = -1; phase = Phase.Closing; phaseTime = 0;
-            notice = "Doors closing. Choose up/down outside, then confirm near a floor to stop.";
+            notice = "Doors closing. Choose up/down outside, then press C near a floor to stop.";
             Play(click);
         }
         void BeginBuildingTravel()
@@ -322,7 +322,7 @@ namespace CrazyElevator.Managers
                     phase = Phase.Opening; phaseTime = 0;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Highlight a passenger and confirm to help them out." : "Highlight a waiting passenger and confirm to welcome them.";
+                    notice = waiting > 0 ? "Select a passenger and press C to help them out." : "Select a waiting passenger and press C to welcome them.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -729,11 +729,16 @@ namespace CrazyElevator.Managers
                 if (confirm || mouseStopPressed) RequestFloorStop();
                 return;
             }
-            if (phase != Phase.Boarding || PersonaBusy) return;
+            if (phase != Phase.Boarding) return;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
-            if (confirm) { ConfirmPassenger(); return; }
             if (input != null && input.CloseDoorsPressed) { CloseAndTravel(); return; }
+            if (confirm)
+            {
+                if (selectedRider != null) ConfirmPassenger();
+                else CloseAndTravel();
+                return;
+            }
             if (input != null && input.KickoutPressed) { KickoutSelectedPublic(); return; }
             bool hold = (input != null && input.HoldDoorHeld)
                 || mouse != null && mouse.leftButton.isPressed && mouseHold.Contains(mouseGui);
@@ -857,7 +862,7 @@ namespace CrazyElevator.Managers
                 string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + destination
                     : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + travelFloor.ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press E" : "Hold UP / DOWN or use keys   |   Click STOP near a floor", body);
+                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or use keys   |   Click STOP near a floor", body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 Label(new Rect(24, 137, 525, 24), Mathf.Abs(travelVelocity).ToString("0.00") + " floors/s  |  " + (boostHeld && boostAxis != 0 ? "ACCELERATING" : "COASTING"), body);
                 Label(new Rect(24, 164, 525, 24), ImpairmentDescription, small);
@@ -872,10 +877,11 @@ namespace CrazyElevator.Managers
             AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
             string prompt = selectedRider == null
                 ? (BuildingView ? (Match != null
-                    ? "A / D switch track   |   E stop   |   Shift+↑↓ speed"
-                    : "E / STOP near a floor   |   Shift+↑↓ to build speed")
+                    ? "A / D switch track   |   C stop   |   Shift+↑↓ speed"
+                    : "C / STOP near a floor   |   Shift+↑↓ to build speed")
                     : "Drag riders to board or kick   |   C close & travel")
-                : selectedRider.Name + " → F" + selectedRider.Destination + (selectedRider.Boarded ? "  ·  drag out to kick" : "  ·  drag in to board");
+                : selectedRider.Name + " → F" + selectedRider.Destination
+                    + (selectedRider.Boarded ? "  ·  C to unload / drag out to kick" : "  ·  C to board / drag in");
             Label(new Rect(24, screenHeight - 48, width - 24, 30), BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
     }

@@ -11,8 +11,12 @@ namespace CrazyElevator.Managers
     {
         readonly Dictionary<Rider, Vector3> cabinPositions = new Dictionary<Rider, Vector3>();
         readonly Dictionary<Renderer, MaterialPropertyBlock> selectionMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
+        static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
+        static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
         Rider selectedRider;
+        Color selectionTint;
         Rider draggedRider;
+        const float KickOutBoundaryZ = -.4f;
         Vector3 dragStart, dragOffset, dragOriginalScale;
         Quaternion dragOriginalRotation;
         Vector2 dragScreenStart;
@@ -90,15 +94,47 @@ namespace CrazyElevator.Managers
             lastSeat = seat + 1;
             return true;
         }
-        bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !PersonaBusy && !rider.Resolved
+        bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !rider.Resolved
+            && !boardingTransfers.ContainsKey(rider) && !exiting.ContainsKey(rider)
+            && rider != repairingHandyman
             && figures.TryGetValue(rider, out var figure) && figure.gameObject.activeInHierarchy
             && (round.Owns(rider) || !rider.Boarded && rider.Origin == round.Floor
                 && rider.Arrival <= 0 && round.IsOffered(rider));
 
+        bool HasBoardingSpace(Rider rider)
+        {
+            if (rider.Boarded) return true;
+            if (!round.HasCapacityFor(rider)) return false;
+            if (keepDoorwayClear)
+            {
+                // Check every seat the player can actually drop into, including
+                // seats outside the automatic boarding animation's preferred spots.
+                for (int row = 0; row < 3; row++)
+                for (int seat = 0; seat < 4; seat++)
+                {
+                    Vector3 spot = new Vector3(-1.68f + seat * 1.12f, .12f, .32f + row * 1.16f);
+                    if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
+                }
+                return false;
+            }
+            for (float z = 1f; z <= 3f; z += .7f)
+            for (float x = -1.4f; x <= 1.41f; x += .7f)
+            {
+                Vector3 spot = new Vector3(x, .12f, z);
+                if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
+            }
+            return false;
+        }
+
         void SelectRider(Rider rider)
         {
             if (rider != null && !CanSelect(rider)) rider = null;
-            if (selectedRider == rider) return;
+            if (selectedRider == rider)
+            {
+                if (rider != null && draggedRider == null)
+                    SetSelectionTint(HasBoardingSpace(rider) ? BoardingValid : BoardingInvalid);
+                return;
+            }
             foreach (var pair in selectionMaterials) if (pair.Key) pair.Key.SetPropertyBlock(pair.Value);
             selectionMaterials.Clear(); selectedRider = rider;
             if (rider == null) return;
@@ -107,10 +143,23 @@ namespace CrazyElevator.Managers
                 if (renderer.GetComponent<TextMesh>() != null) continue;
                 var saved = new MaterialPropertyBlock(); renderer.GetPropertyBlock(saved);
                 selectionMaterials[renderer] = saved;
+            }
+            selectionTint = Color.clear;
+            SetSelectionTint(HasBoardingSpace(rider) ? BoardingValid : BoardingInvalid);
+        }
+
+        void SetSelectionTint(Color tint)
+        {
+            if (selectedRider == null || selectionTint == tint) return;
+            selectionTint = tint;
+            foreach (var pair in selectionMaterials)
+            {
+                var renderer = pair.Key;
+                if (!renderer) continue;
                 var highlight = new MaterialPropertyBlock(); renderer.GetPropertyBlock(highlight);
                 Color original = renderer.sharedMaterial && renderer.sharedMaterial.HasProperty("_BaseColor")
                     ? renderer.sharedMaterial.GetColor("_BaseColor") : Color.white;
-                Color color = Color.Lerp(original, Gold, .72f);
+                Color color = Color.Lerp(original, tint, .82f);
                 highlight.SetColor("_BaseColor", color); highlight.SetColor("_Color", color);
                 renderer.SetPropertyBlock(highlight);
             }
@@ -119,7 +168,7 @@ namespace CrazyElevator.Managers
         // Mouse hover highlights; click-drag boards, rearranges, or ejects.
         void UpdatePassengerSelection()
         {
-            if (draggedRider != null && (phase != Phase.Boarding || PersonaBusy)) CancelPassengerDrag();
+            if (draggedRider != null && phase != Phase.Boarding) CancelPassengerDrag();
             var mouse = Mouse.current;
             if (draggedRider != null)
             {
@@ -128,7 +177,7 @@ namespace CrazyElevator.Managers
                 if (mouse != null && mouse.leftButton.wasReleasedThisFrame) FinishPassengerDrag(cursor);
                 return;
             }
-            if (phase != Phase.Boarding || PersonaBusy) { SelectRider(null); return; }
+            if (phase != Phase.Boarding) { SelectRider(null); return; }
             if (!CanSelect(selectedRider)) SelectRider(null);
             if (mouse != null)
             {
@@ -215,20 +264,20 @@ namespace CrazyElevator.Managers
             local.x = Mathf.Clamp(local.x, -2.55f, 2.55f);
             local.z = Mathf.Clamp(local.z, -2.65f, 3.45f);
             local.y = .12f;
-            dragKickReady = draggedWasBoarded && (local.z <= .75f || CursorBeyondDoor(cursor));
+            // The door is near z = .15. Leave a margin so a rider must be
+            // clearly outside before release counts as a kick.
+            dragKickReady = draggedWasBoarded && local.z < KickOutBoundaryZ;
+            bool inside = IsInsideCabin(draggedRider, local);
+            bool hasSpace = (draggedWasBoarded || round.HasCapacityFor(draggedRider))
+                && CabinPlacementClear(draggedRider, local);
+            SetSelectionTint(dragKickReady || !inside ? Gold : hasSpace ? BoardingValid : BoardingInvalid);
             figure.localPosition = local;
             figure.localScale = dragKickReady
                 ? Vector3.Scale(dragOriginalScale, new Vector3(1.12f, .85f, 1.12f)) : dragOriginalScale;
             figure.localRotation = dragKickReady
                 ? dragOriginalRotation * Quaternion.Euler(-12f, 0, 0) : dragOriginalRotation;
             SetControlStatus(dragKickReady ? "RELEASE TO KICK!"
-                : IsInsideCabin(draggedRider, local) ? "RELEASE TO PLACE" : "DRAG INSIDE");
-        }
-
-        bool CursorBeyondDoor(Vector2 cursor)
-        {
-            Vector3 door = eye.WorldToScreenPoint(stage.TransformPoint(new Vector3(0, .12f, .15f)));
-            return cursor.y > door.y + 18f;
+                : !inside ? "DRAG INSIDE" : hasSpace ? "RELEASE TO PLACE" : "NO SPACE HERE");
         }
 
         void FinishPassengerDrag(Vector2 cursor)
@@ -246,7 +295,7 @@ namespace CrazyElevator.Managers
             }
 
             Vector3 released = figure.localPosition;
-            if (draggedWasBoarded && dragKickReady)
+            if (draggedWasBoarded && dragKickReady && released.z < KickOutBoundaryZ)
             {
                 cabinPositions.Remove(rider);
                 SelectRider(null);
@@ -255,11 +304,12 @@ namespace CrazyElevator.Managers
             }
             if (IsInsideCabin(rider, released))
             {
-                if (!CabinPlacementClear(rider, released))
+                if (!CabinPlacementClear(rider, released)
+                    || (!draggedWasBoarded && !round.HasCapacityFor(rider)))
                 {
                     figure.localPosition = dragStart;
-                    SetControlStatus("SPACE OCCUPIED"); Play(buzz);
-                    notice = "That cabin space is occupied. Try a clear spot.";
+                    SetControlStatus("NO SPACE HERE"); Play(buzz);
+                    notice = "This passenger needs an open cabin space and enough capacity.";
                     return;
                 }
                 if (draggedWasBoarded || round.Board(rider))

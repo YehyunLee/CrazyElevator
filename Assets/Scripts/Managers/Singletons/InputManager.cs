@@ -74,7 +74,7 @@ namespace CrazyElevator.Managers
             MovePressed = navigation.magnitude >= .55f;
             SelectPressed = MovePressed;
 
-            bool confirm = (keyboard != null && (keyboard.jKey.wasPressedThisFrame || keyboard.eKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame))
+            bool confirm = (keyboard != null && keyboard.cKey.wasPressedThisFrame)
                 || (pad != null && pad.buttonSouth.wasPressedThisFrame);
             bool kickout = (keyboard != null && keyboard.iKey.wasPressedThisFrame)
                 || (pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger);
@@ -83,8 +83,8 @@ namespace CrazyElevator.Managers
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger));
             bool overlay = (keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame))
                 || (pad != null && pad.buttonNorth.wasPressedThisFrame && ActiveView == GameView.Passenger);
-            bool closeDoors = (keyboard != null && keyboard.cKey.wasPressedThisFrame)
-                || (pad != null && pad.buttonNorth.wasPressedThisFrame && ActiveView != GameView.Passenger);
+            bool closeDoors = pad != null && pad.buttonNorth.wasPressedThisFrame
+                && ActiveView != GameView.Passenger;
             bool hold = (keyboard != null && keyboard.hKey.isPressed)
                 || (pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger);
             bool repair = (keyboard != null && keyboard.rKey.isPressed)
