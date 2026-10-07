@@ -40,6 +40,28 @@ namespace CrazyElevator.Managers
             music.mute = muted;
         }
 
+        // Change themes without resetting the song's position. This keeps
+        // equal-length world tracks feeling like one continuous soundtrack.
+        public void SetTheme(AudioClip clip)
+        {
+            if (clip == null || music == null) return;
+            if (music.clip == clip) { PlayMusic(); return; }
+
+            bool wasPlaying = music.isPlaying;
+            float normalizedPosition = music.clip != null && music.clip.length > 0f
+                ? music.time / music.clip.length : 0f;
+            music.clip = clip;
+            if (wasPlaying)
+            {
+                music.Play();
+                music.time = Mathf.Clamp01(normalizedPosition) * clip.length;
+            }
+            music.mute = muted;
+        }
+
+        public AudioClip ThemeAt(int index)
+            => themes != null && index >= 0 && index < themes.Length ? themes[index] : null;
+
         public void StopMusic()
         {
             if (music != null) music.Stop();

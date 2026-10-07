@@ -97,6 +97,7 @@ namespace CrazyElevator.Managers
             bool tickWaiting = !IsNpc || Match == null || Match.player == null
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
             int waitingMisses = round.Tick(dt, phase == Phase.Boarding, tickWaiting);
+            UpdateThemeMusic();
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
@@ -1389,6 +1390,8 @@ namespace CrazyElevator.Managers
         bool generatedGroove;
         float babyCryTimer;
         bool babyComboKnown, babyComboWasCalm;
+        WorldBand musicBand;
+        bool musicBandKnown;
 
         void InitializeAudio()
         {
@@ -1409,7 +1412,29 @@ namespace CrazyElevator.Managers
                 generatedGroove = true;
                 Debug.LogWarning("Background music is not assigned; using the built-in placeholder groove.");
             }
+            musicBand = BandForFloor(round.Floor);
+            musicBandKnown = true;
             MusicManager.Instance?.PlayMusic(groove);
+        }
+
+        void UpdateThemeMusic()
+        {
+            if (IsNpc || round == null || MusicManager.Instance == null) return;
+            WorldBand currentBand = BandForFloor(round.Floor);
+            if (!musicBandKnown)
+            {
+                musicBand = currentBand;
+                musicBandKnown = true;
+                return;
+            }
+            if (currentBand == musicBand) return;
+
+            // MusicManager keeps the current playback position when swapping
+            // to the candy track, so crossing worlds does not restart the song.
+            AudioClip next = currentBand == WorldBand.Candy
+                ? MusicManager.Instance.ThemeAt(1) : groove;
+            MusicManager.Instance.SetTheme(next);
+            musicBand = currentBand;
         }
 
         AudioClip Tone(float frequency, float seconds)
