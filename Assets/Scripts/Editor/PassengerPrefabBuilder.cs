@@ -82,6 +82,17 @@ namespace CrazyElevator.EditorTools
             Debug.Log("Rebuilt illustrated 3D passenger prefabs and refreshed ElevatorScene references.");
         }
 
+        [MenuItem("Tools/Crazy Elevator/Rebuild Mom and Baby Prefab")]
+        public static void RebuildMomAndBaby()
+        {
+            EnsureFolder(MaterialFolder);
+            materials.Clear();
+            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("Rebuilt the separate Mom and Baby passenger prefab.");
+        }
+
         [MenuItem("Tools/Crazy Elevator/Apply Matte Storybook Style")]
         public static void ApplyMatteStorybookStyle()
         {
@@ -280,29 +291,46 @@ namespace CrazyElevator.EditorTools
 
         static void BuildCandyParty(Transform root, List<Renderer> accents)
         {
-            RolyBody(root, CandyBlue, CandyLilac);
-            Sphere(root, "Round head", V(0, 1.43f, 0), V(.72f, .72f, .66f), SkinPink);
-            SimpleFace(root, 1.45f, .34f, Ink);
-            Sphere(root, "Left rosy cheek", V(-.29f, 1.35f, -.34f), V(.20f, .20f, .08f), CandyPink);
-            Sphere(root, "Right rosy cheek", V(.29f, 1.35f, -.34f), V(.20f, .20f, .08f), CandyPink);
+            // Mom and Baby are separate children so either model can be replaced
+            // independently by artist-authored meshes later.
+            var mom = new GameObject("Mom").transform;
+            mom.SetParent(root, false);
+            var baby = new GameObject("Baby").transform;
+            baby.SetParent(root, false);
 
-            // Layered party hat and pom-pom.
-            for (int i = 0; i < 5; i++)
+            // Mom: a simple candy-world dress, long hair and arms wrapped around
+            // the baby. Keep her face above the baby so the pair reads instantly.
+            RolyBody(mom, C(247, 151, 178), CandyLilac);
+            Sphere(mom, "Mom head", V(0, 1.58f, 0), V(.72f, .70f, .64f), SkinPink);
+            SimpleFace(mom, 1.59f, .34f, Ink);
+            for (int i = 0; i < 9; i++)
             {
-                float y = 1.78f + i * .095f;
-                float width = .42f - i * .065f;
-                Cylinder(root, i % 2 == 0 ? "Pink party-hat band" : "Blue party-hat band",
-                    V(0, y, 0), V(width, .065f, width), i % 2 == 0 ? CandyPink : CandyBlue);
+                float angle = Mathf.Lerp(195f, -15f, i / 8f) * Mathf.Deg2Rad;
+                Sphere(mom, "Mom hair", V(Mathf.Cos(angle) * .39f,
+                    1.72f + Mathf.Sin(angle) * .31f, .04f), V(.25f, .27f, .23f), Maroon);
             }
-            Sphere(root, "Party-hat pom", V(0, 2.28f, 0), V(.15f, .15f, .15f), CandyLilac);
+            Sphere(mom, "Mom left hair length", V(-.42f, 1.28f, .04f), V(.24f, .64f, .24f), Maroon);
+            Sphere(mom, "Mom right hair length", V(.42f, 1.28f, .04f), V(.24f, .64f, .24f), Maroon);
+            Cube(mom, "Dress collar", V(0, 1.10f, -.38f), V(.48f, .14f, .05f), White);
+            Capsule(mom, "Mom left arm", V(-.38f, .93f, -.48f), V(.11f, .38f, .11f), SkinPink, V(0, 0, -48));
+            Capsule(mom, "Mom right arm", V(.38f, .93f, -.48f), V(.11f, .38f, .11f), SkinPink, V(0, 0, 48));
+            Sphere(mom, "Mom left hand", V(-.19f, .76f, -.56f), V(.16f, .14f, .10f), SkinPink);
+            Sphere(mom, "Mom right hand", V(.19f, .76f, -.56f), V(.16f, .14f, .10f), SkinPink);
+            accents.Add(Sphere(mom, "Mom heart brooch", V(-.27f, 1.10f, -.43f), V(.10f, .10f, .05f), CandyPink));
 
-            Bow(root, V(0, 1.04f, -.42f), CandyPink, CandyPink, .22f);
-            Cube(root, "Overall bib", V(0, .78f, -.43f), V(.56f, .43f, .05f), CandyBlue);
-            Sphere(root, "Left overall button", V(-.25f, .98f, -.46f), V(.08f, .08f, .045f), Gold);
-            Sphere(root, "Right overall button", V(.25f, .98f, -.46f), V(.08f, .08f, .045f), Gold);
-            Cube(root, "Belly pocket", V(0, .66f, -.48f), V(.31f, .16f, .04f), CandyBlue);
-            CandyStripeSkirt(root);
-            accents.Add(Cube(root, "Pocket accent", V(0, .71f, -.51f), V(.18f, .025f, .015f), CandyLilac));
+            // Baby: a distinct round head and blue swaddle held in front of Mom.
+            // The face is intentionally large because it must stay readable in 1v1.
+            Sphere(baby, "Baby swaddle", V(0, .78f, -.50f), V(.42f, .56f, .24f), CandyBlue);
+            Cube(baby, "Baby blanket stripe", V(0, .78f, -.68f), V(.34f, .10f, .035f), CandyLilac, V(0, 0, -10));
+            Cube(baby, "Baby blanket fold", V(0, .61f, -.68f), V(.25f, .08f, .035f), White, V(0, 0, 12));
+            Sphere(baby, "Baby head", V(0, 1.17f, -.55f), V(.38f, .35f, .24f), SkinPink);
+            Sphere(baby, "Baby cap", V(0, 1.39f, -.54f), V(.35f, .18f, .22f), CandyLilac);
+            Sphere(baby, "Baby cap pom", V(.16f, 1.47f, -.56f), V(.10f, .10f, .07f), CandyPink);
+            Capsule(baby, "Baby left eye", V(-.10f, 1.19f, -.76f), V(.032f, .075f, .025f), Ink);
+            Capsule(baby, "Baby right eye", V(.10f, 1.19f, -.76f), V(.032f, .075f, .025f), Ink);
+            Sphere(baby, "Baby open mouth", V(0, 1.07f, -.77f), V(.085f, .10f, .035f), Maroon);
+            Sphere(baby, "Baby left cheek", V(-.18f, 1.10f, -.74f), V(.09f, .07f, .03f), CandyPink);
+            Sphere(baby, "Baby right cheek", V(.18f, 1.10f, -.74f), V(.09f, .07f, .03f), CandyPink);
         }
 
         static void BuildGranny(Transform root, List<Renderer> accents)

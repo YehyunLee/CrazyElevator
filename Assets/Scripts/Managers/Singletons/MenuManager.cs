@@ -17,6 +17,7 @@ namespace CrazyElevator.Managers
         static readonly Color Cream = new Color32(255, 250, 234, 255);
         GUIStyle title, cardTitle, caption, cardCaption, body;
         static bool startDuelOnLoad;
+        static bool selectedDuel;
         static bool pauseOpen;
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
@@ -35,6 +36,7 @@ namespace CrazyElevator.Managers
             pauseOpen = false;
             passengerOverlayOpen = false;
             startDuelOnLoad = false;
+            selectedDuel = false;
             overlayGame = null;
         }
 
@@ -47,12 +49,26 @@ namespace CrazyElevator.Managers
                 pauseOpen = false;
                 passengerOverlayOpen = false;
                 startDuelOnLoad = false;
+                selectedDuel = false;
                 sessionReady = true;
             }
             InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
         }
 
         void OnEnable() { title = null; }
+
+        void Update()
+        {
+            if (!IsOpen) return;
+            var input = InputManager.Instance;
+            if (input == null) return;
+
+            if (Mathf.Abs(input.Move.x) >= .55f)
+                selectedDuel = input.Move.x > 0;
+
+            if (input.ConfirmPressed)
+                StartSelectedMode();
+        }
 
         public static bool ConsumeDuelRequest()
         {
@@ -113,9 +129,9 @@ namespace CrazyElevator.Managers
                 "CHOOSE YOUR MODE", caption);
 
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", SinglePlayerScene, false);
+                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", false, !selectedDuel);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "Local duel  ·  NPC rival for now", DuelScene, true);
+                "1V1", "Local duel  ·  NPC rival for now", true, selectedDuel);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
                 "PICK A MODE", caption);
         }
@@ -163,22 +179,34 @@ namespace CrazyElevator.Managers
             GameTypography.Apply(body);
         }
 
-        void DrawMode(Rect rect, Color accent, string heading, string detail, string scene, bool duel)
+        void DrawMode(Rect rect, Color accent, string heading, string detail, bool duel, bool selected)
         {
             Panel(new Rect(rect.x + 6, rect.y + 7, rect.width, rect.height), Color.black);
             Panel(rect, Cream);
             Panel(new Rect(rect.x, rect.y, rect.width, 12), accent);
+            if (selected)
+            {
+                Panel(new Rect(rect.x - 5, rect.y - 5, rect.width + 10, 5), accent);
+                Panel(new Rect(rect.x - 5, rect.yMax, rect.width + 10, 5), accent);
+                Panel(new Rect(rect.x - 5, rect.y, 5, rect.height), accent);
+                Panel(new Rect(rect.xMax, rect.y, 5, rect.height), accent);
+            }
             AccentBar(new Rect(rect.x, rect.y + 12, 8, rect.height - 12), accent);
             GUI.Label(new Rect(rect.x + 20, rect.y + 47, rect.width - 36, 60), heading, cardTitle);
             GUI.Label(new Rect(rect.x + 24, rect.y + 116, rect.width - 48, 46), detail, cardCaption);
             var button = new Rect(rect.x + 24, rect.yMax - 66, rect.width - 48, 46);
             Panel(button, accent);
             if (GUI.Button(button, "PLAY", cardTitle))
-            {
-                Close();
-                startDuelOnLoad = duel;
-                SceneManager.LoadScene(scene);
-            }
+                SelectAndStart(duel);
+        }
+
+        void StartSelectedMode() => SelectAndStart(selectedDuel);
+
+        void SelectAndStart(bool duel)
+        {
+            Close();
+            startDuelOnLoad = duel;
+            SceneManager.LoadScene(duel ? DuelScene : SinglePlayerScene);
         }
 
         static void Panel(Rect rect, Color colour)
