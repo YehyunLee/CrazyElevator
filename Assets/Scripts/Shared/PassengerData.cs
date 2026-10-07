@@ -18,7 +18,9 @@ namespace CrazyElevator.Shared
         ClearsRust = 1 << 4,
         GroupParty = 1 << 5,
         SpeedBoost = 1 << 6,
-        SpeedSlow = 1 << 7
+        SpeedSlow = 1 << 7,
+        CryingBaby = 1 << 8,
+        CalmsBaby = 1 << 9
     }
 }
 

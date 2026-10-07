@@ -97,6 +97,7 @@ namespace CrazyElevator.Managers
             bool tickWaiting = !IsNpc || Match == null || Match.player == null
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
             int waitingMisses = round.Tick(dt, phase == Phase.Boarding, tickWaiting);
+            UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
                 ElevatorManager other = IsNpc ? Match.player : Match.Rival;
@@ -168,7 +169,9 @@ namespace CrazyElevator.Managers
             ClearKicks();
             ClearPatienceBars();
             ClearSpeechBubbles();
+            ResetBabyComboFeedback();
             foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear();
+            passengerEffects.Clear();
             bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); exiting.Clear(); exitStarts.Clear(); riderHits.Clear();
             selectedRider = null;
             round = CreateExtendedRound();
@@ -892,7 +895,10 @@ namespace CrazyElevator.Managers
             ElevatorPersonaRig.PassengerPose(transfer.start, transfer.target, transfer.time, transfer.gentle,
                 out Vector3 position, out float lean, out float squash);
             figure.localPosition = position;
-            figure.localRotation = Quaternion.Euler(lean, 0, 0);
+            // Mina must keep facing the camera while being carried inside so
+            // the baby never turns into an unreadable swaddle silhouette.
+            float facing = rider.HasFeature(PassengerFeature.CryingBaby) ? 180f : 0f;
+            figure.localRotation = Quaternion.Euler(lean, facing, 0);
             Vector3 baseScale = Vector3.Lerp(transfer.scale, transfer.targetScale,
                 Mathf.SmoothStep(0, 1, Mathf.Clamp01(transfer.time)));
             figure.localScale = Vector3.Scale(baseScale,
@@ -901,7 +907,7 @@ namespace CrazyElevator.Managers
             if (transfer.time >= 1)
             {
                 figure.localPosition = transfer.target; figure.localScale = transfer.targetScale;
-                figure.localRotation = Quaternion.identity;
+                figure.localRotation = Quaternion.Euler(0, facing, 0);
                 boardingTransfers.Remove(rider);
                 if (persona) persona.RestHands();
             }
@@ -1372,12 +1378,15 @@ namespace CrazyElevator.Managers
         public AudioClip angryDeliverySfx02;
         public AudioClip candyWorldDingSfx;
         public AudioClip grandmaSfx;
+        public AudioClip babyCrySfx;
         public AudioClip kickOutSfx01;
         public AudioClip kickOutSfx02;
         public AudioClip someoneBeingKickedOutSfx;
-        AudioClip chime, ding, click, buzz, groove, stamp, kickWhoosh;
+        AudioClip chime, ding, click, buzz, groove, stamp, kickWhoosh, generatedBabyCry;
         int happyDeliverySfxIndex, angryDeliverySfxIndex, kickOutSfxIndex;
         bool generatedGroove;
+        float babyCryTimer;
+        bool babyComboKnown, babyComboWasCalm;
 
         void InitializeAudio()
         {
@@ -1387,6 +1396,7 @@ namespace CrazyElevator.Managers
             buzz = Tone(130, .18f);
             stamp = StampTone();
             kickWhoosh = KickWhoosh();
+            generatedBabyCry = BabyCryTone();
 
             if (IsNpc) return;
 
@@ -1483,6 +1493,72 @@ namespace CrazyElevator.Managers
             return clip;
         }
 
+        AudioClip BabyCryTone()
+        {
+            const int rate = 22050;
+            const float duration = .72f;
+            var data = new float[Mathf.CeilToInt(rate * duration)];
+            float phase = 0;
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)rate;
+                float progress = t / duration;
+                float pitch = Mathf.Lerp(760f, 520f, progress)
+                    + Mathf.Sin(progress * Mathf.PI * 7f) * 95f;
+                phase += 2f * Mathf.PI * pitch / rate;
+                float envelope = Mathf.Sin(progress * Mathf.PI) * (1f - progress * .25f);
+                data[i] = Mathf.Clamp((Mathf.Sin(phase) * .40f
+                    + Mathf.Sin(phase * 2.03f) * .10f) * envelope, -.55f, .55f);
+            }
+            var clip = AudioClip.Create("Baby crying", data.Length, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        void UpdateBabyComboFeedback(float dt)
+        {
+            if (round == null) return;
+            bool babyAboard = round.CryingBabyAboard;
+            bool calm = round.BabyCalmedByGrandma;
+            if (!babyAboard)
+            {
+                ResetBabyComboFeedback();
+                return;
+            }
+
+            if (!babyComboKnown || calm != babyComboWasCalm)
+            {
+                if (calm)
+                {
+                    Play(chime, .72f);
+                    ElevatorSays("GRANDMA CALMED THE BABY!\nPassenger patience drains at half speed.", 2.8f);
+                    babyCryTimer = 4.5f;
+                }
+                else babyCryTimer = 0f;
+            }
+
+            if (!calm)
+            {
+                babyCryTimer -= Mathf.Max(0f, dt);
+                if (babyCryTimer <= 0f)
+                {
+                    Play(babyCrySfx != null ? babyCrySfx : generatedBabyCry, .62f);
+                    ElevatorSays("THE BABY IS CRYING!\nPassenger patience drains 1.6x faster.", 2.4f);
+                    babyCryTimer = 4.5f;
+                }
+            }
+
+            babyComboKnown = true;
+            babyComboWasCalm = calm;
+        }
+
+        void ResetBabyComboFeedback()
+        {
+            babyCryTimer = 0f;
+            babyComboKnown = false;
+            babyComboWasCalm = false;
+        }
+
         AudioClip NextAuthoredClip(AudioClip first, AudioClip second, ref int index, AudioClip fallback = null)
         {
             if (first == null && second == null) return fallback;
@@ -1537,6 +1613,7 @@ namespace CrazyElevator.Managers
             if (generatedGroove && groove) Destroy(groove);
             if (stamp) Destroy(stamp);
             if (kickWhoosh) Destroy(kickWhoosh);
+            if (generatedBabyCry) Destroy(generatedBabyCry);
         }
     }
 }
@@ -1603,6 +1680,7 @@ namespace CrazyElevator.Managers
             target.grandmaSpeedMultiplier = grandmaSpeedMultiplier;
             target.extraGrandmaSpeedMultiplier = extraGrandmaSpeedMultiplier;
             target.minimumGrandmaSpeedMultiplier = minimumGrandmaSpeedMultiplier;
+            target.babyCrySfx = babyCrySfx;
             target.floorsPerSecond = floorsPerSecond;
             target.candyFloorsPerSecond = candyFloorsPerSecond;
             target.underwaterFloorsPerSecond = underwaterFloorsPerSecond;

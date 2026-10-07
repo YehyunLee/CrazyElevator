@@ -17,7 +17,7 @@ namespace CrazyElevator.Shared
         public int Color;
 
         public bool HasFeature(PassengerFeature feature) =>
-            Data != null ? Data.Has(feature) : FeatureFallback(feature);
+            (Data != null && Data.Has(feature)) || FeatureFallback(feature);
 
         bool FeatureFallback(PassengerFeature feature)
         {
@@ -31,6 +31,8 @@ namespace CrazyElevator.Shared
                 case PassengerFeature.GroupParty: return Kind == "GROUP" || Space >= 3;
                 case PassengerFeature.SpeedBoost: return Kind == "GROUP";
                 case PassengerFeature.SpeedSlow: return Kind == "ELDERLY";
+                case PassengerFeature.CryingBaby: return Kind == "PREGNANT";
+                case PassengerFeature.CalmsBaby: return Kind == "ELDERLY";
                 default: return false;
             }
         }
@@ -76,6 +78,8 @@ namespace CrazyElevator.Shared
         public const int Capacity = 9;
         public const float Duration = 180f;
         public const float ElderlyArrivalSeconds = 1.5f;
+        public const float CryingPatienceMultiplier = 1.6f;
+        public const float CalmPatienceMultiplier = .5f;
         static readonly Random DestinationRandom = new Random();
         public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
@@ -141,7 +145,7 @@ namespace CrazyElevator.Shared
                 if (world == PassengerTheme.Office)
                     Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, (f + 1) % Floors, 2, 34, 0, 0, 30);
                 if (world == PassengerTheme.Candy)
-                    Add("Mina", "PREGNANT", "Two spaces, please.", "2X", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
+                    Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
                 if (world == PassengerTheme.Office)
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
                 if (world == PassengerTheme.Candy)
@@ -188,6 +192,18 @@ namespace CrazyElevator.Shared
 
         public bool Owns(Rider rider) => rider != null && rider.Boarded
             && !rider.Resolved && rider.BoardedBySeat == Seat;
+
+        public bool HasOnboardFeature(PassengerFeature feature)
+        {
+            foreach (var rider in Riders)
+                if (Owns(rider) && rider.HasFeature(feature)) return true;
+            return false;
+        }
+
+        public bool CryingBabyAboard => HasOnboardFeature(PassengerFeature.CryingBaby);
+        public bool BabyCalmedByGrandma => CryingBabyAboard && HasOnboardFeature(PassengerFeature.CalmsBaby);
+        public float CabinPatienceMultiplier => !CryingBabyAboard ? 1f
+            : BabyCalmedByGrandma ? CalmPatienceMultiplier : CryingPatienceMultiplier;
 
         public bool HasCapacityFor(Rider p)
         {
@@ -307,11 +323,12 @@ namespace CrazyElevator.Shared
                 foreach (var rider in Riders)
                     if (!rider.Resolved && rider.SpawnDelay > 0)
                         rider.SpawnDelay = Math.Max(0, rider.SpawnDelay - dt);
+            float cabinPatienceMultiplier = CabinPatienceMultiplier;
             int waitingMisses = 0;
             foreach (var p in Riders)
             {
                 if (p.Resolved) continue;
-                if (Owns(p)) p.Remaining = Math.Max(0, p.Remaining - dt);
+                if (Owns(p)) p.Remaining = Math.Max(0, p.Remaining - dt * cabinPatienceMultiplier);
                 else if (!p.Boarded && tickWaiting && stopped && p.Origin == Floor && IsOffered(p))
                 {
                     float waiting = dt;

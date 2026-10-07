@@ -106,7 +106,7 @@ namespace CrazyElevator.Managers
         {
             if (p.Kind == "HANDYMAN") return "Full power while aboard";
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
-            if (p.Kind == "PREGNANT") return "2 spaces";
+            if (p.Kind == "PREGNANT") return "Baby cries • 2 spaces";
             if (p.Kind == "INTERVIEW") return "Very urgent";
             if (p.Kind == "BOSS") return "Hold OPEN bonus";
             if (p.Kind == "ELDERLY") return "Slow • big bonus";
@@ -336,7 +336,8 @@ namespace CrazyElevator.Managers
 
             Rider speaker = null;
             foreach (Rider rider in visible)
-                if (rider.Boarded && (rider.Remaining <= rider.Patience * .25f
+                if (rider.Boarded && (rider.HasFeature(PassengerFeature.CryingBaby)
+                    || rider.Remaining <= rider.Patience * .25f
                     || rider.Destination == round.Floor || !string.IsNullOrEmpty(rider.Status)))
                 { speaker = rider; break; }
             if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
@@ -426,6 +427,8 @@ namespace CrazyElevator.Managers
                 && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return "MISSED MY FLOOR!";
             if (rider.Boarded && rider.Destination == round.Floor) return "MY STOP!";
+            if (rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby))
+                return round.BabyCalmedByGrandma ? "CALM! PATIENCE x0.5" : "WAAAH! PATIENCE x1.6";
             if (rider.Boarded && rider.Remaining <= rider.Patience * .25f) return "PLEASE HURRY!";
             return null;
         }

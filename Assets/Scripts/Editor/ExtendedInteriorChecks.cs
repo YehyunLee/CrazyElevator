@@ -107,7 +107,15 @@ public static class ExtendedInteriorChecks
                 {
                     Call(game, "SelectRider", ((Round)Get(game, "round")).Riders.Find(r => r.Origin == previewFloor && r.Kind == previewKind));
                     Call(game, "ConfirmPassenger");
-                    Call(game, "SyncFigures", water ? .3f : .6f);
+                    if (water) Call(game, "SyncFigures", .3f);
+                    else
+                    {
+                        // Finish the candy boarding pose, then apply its final
+                        // facing and crying state for a stable visual check.
+                        Call(game, "SyncFigures", 2f);
+                        Call(game, "SyncFigures", 0f);
+                        Call(game, "UpdatePassengerEffects", .5f);
+                    }
                     game.enabled = false;
                 }
             }
@@ -200,6 +208,27 @@ public static class ExtendedInteriorChecks
             && rival.Load == 0 && player.Score == playerScore,
             "The rival delivery changed the player's score or load.");
 
+        var babyRound = new Round { Floor = 4 };
+        var baby = babyRound.Riders.Find(r => r.Kind == "PREGNANT" && r.Origin == 4);
+        var companion = babyRound.Riders.Find(r => r.Kind == "BOSS" && r.Origin == 4);
+        var grandma = babyRound.Riders.Find(r => r.Kind == "ELDERLY" && r.Origin == 4);
+        grandma.Arrival = 0;
+        Require(babyRound.Board(baby) && babyRound.Board(companion)
+            && Math.Abs(babyRound.CabinPatienceMultiplier - Round.CryingPatienceMultiplier) < .001f,
+            "A boarded baby did not activate the cabin patience penalty.");
+        float cryingPatience = companion.Remaining;
+        babyRound.Tick(1f, true);
+        Require(Math.Abs(companion.Remaining - (cryingPatience - Round.CryingPatienceMultiplier)) < .001f,
+            "The crying baby did not accelerate onboard patience drain.");
+        Require(babyRound.Board(grandma)
+            && babyRound.BabyCalmedByGrandma
+            && Math.Abs(babyRound.CabinPatienceMultiplier - Round.CalmPatienceMultiplier) < .001f,
+            "A boarded Grandma did not calm the baby.");
+        float calmPatience = companion.Remaining;
+        babyRound.Tick(1f, true);
+        Require(Math.Abs(companion.Remaining - (calmPatience - Round.CalmPatienceMultiplier)) < .001f,
+            "Grandma did not slow onboard patience drain while calming the baby.");
+
         var catalog = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerCatalog>();
         var boss = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
         var regular = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
@@ -230,7 +259,7 @@ public static class ExtendedInteriorChecks
             UnityEngine.Object.DestroyImmediate(boss);
             UnityEngine.Object.DestroyImmediate(regular);
         }
-        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, world-specific passenger origins, and valid special destinations.");
+        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, baby and Grandma patience combo, world-specific passenger origins, and valid special destinations.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check 1v1 Shared Passengers")]

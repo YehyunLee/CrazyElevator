@@ -179,25 +179,32 @@ namespace CrazyElevator.Managers
             }
             if (phase != Phase.Boarding) { SelectRider(null); return; }
             if (!CanSelect(selectedRider)) SelectRider(null);
+            Vector2 navigation = InputManager.Instance != null ? InputManager.Instance.Select : Vector2.zero;
+            bool navigationActive = navigation.magnitude >= .55f;
+            // Keyboard/controller selection wins immediately, even if the
+            // mouse happens to be parked outside this player's split-screen.
+            if (navigationActive) controllerSelection = true;
             if (mouse != null)
             {
                 Vector2 cursor = mouse.position.ReadValue();
                 if (Match != null && !Match.ViewRect(Seat).Contains(cursor))
                 {
-                    SelectRider(null);
-                    return;
+                    if (!controllerSelection) { SelectRider(null); return; }
                 }
-                if ((cursor - lastMousePosition).sqrMagnitude > 4) controllerSelection = false;
-                lastMousePosition = cursor;
-                bool overControl = IsOverMouseControl(cursor);
-                if (mouse.leftButton.wasPressedThisFrame && !overControl)
+                else
                 {
-                    Rider clicked = PickHoveredRider(cursor);
-                    if (clicked != null) { BeginPassengerDrag(clicked, cursor); return; }
+                    if ((cursor - lastMousePosition).sqrMagnitude > 4 && !navigationActive)
+                        controllerSelection = false;
+                    bool overControl = IsOverMouseControl(cursor);
+                    if (mouse.leftButton.wasPressedThisFrame && !overControl)
+                    {
+                        Rider clicked = PickHoveredRider(cursor);
+                        if (clicked != null) { BeginPassengerDrag(clicked, cursor); return; }
+                    }
+                    if (!overControl && !controllerSelection) SelectRider(PickHoveredRider(cursor));
                 }
-                if (!overControl && !controllerSelection) SelectRider(PickHoveredRider(cursor));
+                lastMousePosition = cursor;
             }
-            Vector2 navigation = InputManager.Instance != null ? InputManager.Instance.Select : Vector2.zero;
             // Mouse raycast/drag still reads the device directly; stick/WASD come from InputManager.
             Vector2 direction = navigation.magnitude < .55f ? Vector2.zero
                 : Mathf.Abs(navigation.x) > Mathf.Abs(navigation.y) ? new Vector2(Mathf.Sign(navigation.x), 0) : new Vector2(0, Mathf.Sign(navigation.y));
@@ -343,28 +350,38 @@ namespace CrazyElevator.Managers
         Rider PickHoveredRider(Vector2 cursor)
         {
             if (!eye.pixelRect.Contains(cursor)) return null;
-            Rider closest = null; float distance = float.MaxValue; int bestPriority = int.MaxValue;
+            Rider closest = null; float distance = float.MaxValue;
             foreach (var hit in Physics.RaycastAll(eye.ScreenPointToRay(cursor), 100))
                 if (riderHits.TryGetValue(hit.collider, out var rider) && CanSelect(rider))
                 {
-                    int priority = keepDoorwayClear && !rider.Boarded ? 0 : 1;
-                    if (priority < bestPriority || priority == bestPriority && hit.distance < distance)
-                    { closest = rider; distance = hit.distance; bestPriority = priority; }
+                    // Use depth for a direct hit. Waiting riders used to be
+                    // preferred here, which made a front collider steal clicks
+                    // from a visible boarded rider behind it.
+                    if (hit.distance < distance)
+                    { closest = rider; distance = hit.distance; }
                 }
-            if (closest != null) return closest;
-            float radius = Mathf.Clamp(Screen.height * .025f, 22, 48), best = radius * radius;
-            bestPriority = int.MaxValue;
+
+            // The enlarged cabin view can show a rear passenger through the
+            // gap above or beside a front passenger. Pick by the projected
+            // figure position as well, so that visible space remains usable
+            // even when the physics colliders overlap in depth.
+            Rider screenClosest = null;
+            float screenDistance = float.MaxValue;
+            float radius = Mathf.Clamp(Screen.height * .06f, 48f, 96f);
             foreach (var pair in destinationTags)
             {
                 if (!CanSelect(pair.Key) || !pair.Value.gameObject.activeInHierarchy) continue;
-                Vector3 point = eye.WorldToScreenPoint(pair.Value.transform.position);
+                if (!figures.TryGetValue(pair.Key, out var figure) || figure == null) continue;
+                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .95f);
                 float delta = ((Vector2)point - cursor).sqrMagnitude;
-                int priority = keepDoorwayClear && !pair.Key.Boarded ? 0 : 1;
-                if (point.z > 0 && delta < radius * radius
-                    && (priority < bestPriority || priority == bestPriority && delta < best))
-                { best = delta; bestPriority = priority; closest = pair.Key; }
+                if (point.z > 0 && delta < radius * radius && delta < screenDistance)
+                { screenDistance = delta; screenClosest = pair.Key; }
             }
-            return closest;
+
+            // Prefer the screen-space candidate when it is clearly the one the
+            // cursor is over; otherwise keep the precise collider hit.
+            return screenClosest != null && (closest == null || screenDistance < distance * distance)
+                ? screenClosest : closest;
         }
         void SelectInDirection(Vector2 direction)
         {
@@ -614,7 +631,17 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
         readonly Dictionary<Collider, Rider> riderHits = new Dictionary<Collider, Rider>();
+        sealed class PassengerEffectView
+        {
+            public readonly Transform[] Tears = new Transform[2];
+            public readonly Transform[] ComfortHearts = new Transform[3];
+            public float Clock;
+        }
+        readonly Dictionary<Rider, PassengerEffectView> passengerEffects =
+            new Dictionary<Rider, PassengerEffectView>();
         static readonly float[] OfficeQueueX = { -1.2f, 0f, 1.2f };
+        static readonly Color BabyTearColor = new Color32(75, 220, 255, 255);
+        static readonly Color GrandmaComfortColor = new Color32(255, 211, 61, 255);
 
         // Spawn authored art and register its clickable labels.
         Transform MakeRider(Rider p)
@@ -634,10 +661,104 @@ namespace CrazyElevator.Managers
             StyleDestinationTag(view.destination);
             foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
             AttachPatienceBar(p, root);
+            EnsurePassengerEffect(p, root);
             // Extended mode uses one screen-space callout system in both solo
             // and 1v1. Keep the authored world bubble only for legacy layouts.
             if (Match != null && !extendedInterior) AttachSpeechBubble(p, root);
             return root;
+        }
+
+        // Make the baby state readable without relying on audio or text alone.
+        void EnsurePassengerEffect(Rider rider, Transform figure)
+        {
+            if (rider == null || figure == null || passengerEffects.ContainsKey(rider)) return;
+            var effect = new PassengerEffectView();
+            if (rider.HasFeature(PassengerFeature.CryingBaby))
+            {
+                Transform baby = figure.Find("Baby");
+                Transform tearParent = baby != null ? baby : figure;
+                effect.Tears[0] = EffectPart(tearParent, "Baby left tear", PrimitiveType.Sphere,
+                    new Vector3(-.10f, 1.16f, -.79f), new Vector3(.065f, .12f, .05f), BabyTearColor);
+                effect.Tears[1] = EffectPart(tearParent, "Baby right tear", PrimitiveType.Sphere,
+                    new Vector3(.10f, 1.16f, -.79f), new Vector3(.065f, .12f, .05f), BabyTearColor);
+            }
+            if (rider.HasFeature(PassengerFeature.CalmsBaby))
+            {
+                effect.ComfortHearts[0] = ComfortHeart(figure, "Grandma comfort heart left", new Vector3(-.52f, 1.72f, -.43f));
+                effect.ComfortHearts[1] = ComfortHeart(figure, "Grandma comfort heart center", new Vector3(0f, 2.02f, -.43f));
+                effect.ComfortHearts[2] = ComfortHeart(figure, "Grandma comfort heart right", new Vector3(.52f, 1.72f, -.43f));
+            }
+            passengerEffects.Add(rider, effect);
+        }
+
+        Transform EffectPart(Transform parent, string name, PrimitiveType kind, Vector3 position,
+            Vector3 scale, Color color)
+        {
+            Transform part = Shape(name, kind, position, scale, color, parent);
+            Collider collider = part.GetComponent<Collider>();
+            if (collider != null) collider.enabled = false;
+            return part;
+        }
+
+        Transform ComfortHeart(Transform parent, string name, Vector3 position)
+        {
+            var heart = new GameObject(name).transform;
+            heart.SetParent(parent, false);
+            heart.localPosition = position;
+            EffectPart(heart, "Heart left", PrimitiveType.Sphere,
+                new Vector3(-.065f, .035f, 0f), new Vector3(.10f, .10f, .06f), GrandmaComfortColor);
+            EffectPart(heart, "Heart right", PrimitiveType.Sphere,
+                new Vector3(.065f, .035f, 0f), new Vector3(.10f, .10f, .06f), GrandmaComfortColor);
+            EffectPart(heart, "Heart point", PrimitiveType.Cube,
+                new Vector3(0f, -.035f, 0f), new Vector3(.105f, .105f, .06f), GrandmaComfortColor);
+            return heart;
+        }
+
+        void UpdatePassengerEffects(float dt)
+        {
+            foreach (var pair in passengerEffects)
+            {
+                Rider rider = pair.Key;
+                PassengerEffectView effect = pair.Value;
+                if (!figures.TryGetValue(rider, out Transform figure) || figure == null)
+                    continue;
+
+                effect.Clock += Mathf.Max(0f, dt);
+                bool owned = round != null && round.Owns(rider) && figure.gameObject.activeInHierarchy;
+                bool babyCrying = owned && rider.HasFeature(PassengerFeature.CryingBaby)
+                    && !round.BabyCalmedByGrandma;
+                for (int i = 0; i < effect.Tears.Length; i++)
+                {
+                    Transform tear = effect.Tears[i];
+                    if (tear == null) continue;
+                    tear.gameObject.SetActive(babyCrying);
+                    if (!babyCrying) continue;
+                    float cycle = Mathf.Repeat(effect.Clock * 1.65f + i * .47f, 1f);
+                    float side = i == 0 ? -.10f : .10f;
+                    tear.localPosition = new Vector3(side + Mathf.Sin(effect.Clock * 5f + i) * .025f,
+                        1.16f - cycle * .36f, -.79f);
+                    float size = Mathf.Lerp(1.05f, .72f, cycle);
+                    tear.localScale = new Vector3(.065f, .12f, .05f) * size;
+                }
+
+                bool grandmaHelping = owned && rider.HasFeature(PassengerFeature.CalmsBaby)
+                    && round.BabyCalmedByGrandma;
+                for (int i = 0; i < effect.ComfortHearts.Length; i++)
+                {
+                    Transform heart = effect.ComfortHearts[i];
+                    if (heart == null) continue;
+                    heart.gameObject.SetActive(grandmaHelping);
+                    if (!grandmaHelping) continue;
+                    float phase = effect.Clock * 2.2f + i * 2.1f;
+                    Vector3 basePosition = i == 0 ? new Vector3(-.52f, 1.72f, -.43f)
+                        : i == 1 ? new Vector3(0f, 2.02f, -.43f)
+                        : new Vector3(.52f, 1.72f, -.43f);
+                    heart.localPosition = basePosition + new Vector3(Mathf.Sin(phase) * .08f,
+                        Mathf.Sin(phase * 1.3f) * .10f, 0f);
+                    float pulse = 1f + Mathf.Sin(phase * 1.5f) * .16f;
+                    heart.localScale = Vector3.one * pulse;
+                }
+            }
         }
 
         // Keep the destination cue short, bold, and readable against every
@@ -740,7 +861,11 @@ namespace CrazyElevator.Managers
                     {
                         var target = RiderPosition(p);
                         figure.localPosition = Vector3.MoveTowards(figure.localPosition, target, dt * 5);
-                        figure.localRotation = Quaternion.Euler(0, p.Boarded ? 0 : 180, 0);
+                        // Mom keeps facing the player so the carried baby and
+                        // crying/calming effects remain readable after boarding.
+                        float facing = p.HasFeature(PassengerFeature.CryingBaby) ? 180f
+                            : p.Boarded ? 0f : 180f;
+                        figure.localRotation = Quaternion.Euler(0, facing, 0);
                     }
                 }
                 if (bubbles.TryGetValue(p, out var bubble))
@@ -782,6 +907,7 @@ namespace CrazyElevator.Managers
                 exiting.Remove(p); exitStarts.Remove(p);
                 if (figures.TryGetValue(p, out var figure)) figure.gameObject.SetActive(false);
             }
+            UpdatePassengerEffects(dt);
         }
 
         // Choose dialogue from the rider's request and mood.
@@ -931,10 +1057,12 @@ namespace CrazyElevator.Managers
                 bool missedPersistent = rider.Boarded && missedDestination.Contains(rider);
                 bool destinationPersistent = rider.Boarded && rider.Destination == round.Floor
                     && (phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing);
+                bool babyPersistent = rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby);
 
                 string message = temporaryAlert ? rider.Remaining <= 0 ? "I'M MAD!" : "PLEASE HURRY!"
                     : missedPersistent ? "MISSED MY FLOOR!"
                     : destinationPersistent ? "MY STOP!"
+                    : babyPersistent ? round.BabyCalmedByGrandma ? "GRANDMA CALMED ME!" : "WAAAH! WAAAH!"
                     : waitingPersistent ? WaitingSpeechText(rider)
                     : null;
                 if (string.IsNullOrEmpty(message)) { bubble.Hide(); continue; }
@@ -977,8 +1105,8 @@ namespace CrazyElevator.Managers
             if (rider.Kind == "HANDYMAN") return "NEED A FIX?";
             if (rider.Kind == "BOSS") return "HOLD THE DOOR!";
             if (rider.Kind == "GROUP") return "ALL TOGETHER!";
-            if (rider.Kind == "PREGNANT") return "TWO SPACES!";
-            if (rider.Kind == "ELDERLY") return "PLEASE WAIT!";
+            if (rider.Kind == "PREGNANT") return "BABY ON BOARD!";
+            if (rider.Kind == "ELDERLY") return "I CAN CALM BABIES!";
             return "FLOOR " + rider.Destination;
         }
 
