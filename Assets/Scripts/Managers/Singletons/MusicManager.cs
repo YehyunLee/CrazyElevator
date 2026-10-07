@@ -18,6 +18,7 @@ namespace CrazyElevator.Managers
             // Scene object in Main — do not spawn a hidden runtime singleton.
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            DontDestroyOnLoad(gameObject);
             music = gameObject.AddComponent<AudioSource>();
             music.loop = true;
             music.playOnAwake = false;

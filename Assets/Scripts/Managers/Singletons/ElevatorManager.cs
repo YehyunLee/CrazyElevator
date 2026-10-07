@@ -1484,7 +1484,6 @@ namespace CrazyElevator.Managers
             if (generatedGroove && groove) Destroy(groove);
             if (stamp) Destroy(stamp);
             if (kickWhoosh) Destroy(kickWhoosh);
-            if (!IsNpc) MusicManager.Instance?.StopMusic();
         }
     }
 }
