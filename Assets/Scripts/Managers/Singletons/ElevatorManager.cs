@@ -983,7 +983,7 @@ namespace CrazyElevator.Managers
             if (!impairmentGaugePrefab) { Debug.LogError("Assign the starfish impairment gauge.", this); return; }
             interiorImpairment = Instantiate(impairmentGaugePrefab, stage, false);
             interiorImpairment.name = "Interior starfish rust meter";
-            interiorImpairment.transform.localPosition = new Vector3(0, 2.31f, .48f);
+            interiorImpairment.transform.localPosition = new Vector3(0, 3.31f, .48f);
             interiorImpairment.transform.localScale = Vector3.one * .85f;
             exteriorImpairment = Instantiate(impairmentGaugePrefab, exteriorCar, false);
             exteriorImpairment.name = "Exterior starfish rust meter";
