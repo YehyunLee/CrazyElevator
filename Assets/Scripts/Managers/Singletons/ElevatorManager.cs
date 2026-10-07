@@ -224,6 +224,7 @@ namespace CrazyElevator.Managers
             exteriorCamera = sceneView.exteriorCamera;
             exteriorCar = sceneView.exteriorCar;
             exteriorCarHomeRotation = exteriorCar.localRotation;
+            CacheExteriorCollisionSize();
             eye.gameObject.SetActive(true); eye.enabled = true;
             eye.targetTexture = null;
             exteriorCamera.enabled = false;
@@ -987,7 +988,7 @@ namespace CrazyElevator.Managers
     {
         const int ExteriorLayer = 31;
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
-        const float FloorHeight = 13.2f;
+        public const float ShaftFloorHeight = 13.2f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
@@ -996,7 +997,40 @@ namespace CrazyElevator.Managers
         Camera exteriorCamera;
         Transform exteriorCar;
         Quaternion exteriorCarHomeRotation;
+        Vector2 exteriorCollisionHalfSize = new Vector2(1.325f, 1.325f);
         bool showingTravelView;
+
+        // Cache the authored car's visible size once. Collision logic can then
+        // follow replacement art without relying on an arbitrary floor gap.
+        void CacheExteriorCollisionSize()
+        {
+            if (exteriorCar == null) return;
+            Renderer[] renderers = exteriorCar.GetComponentsInChildren<Renderer>(true);
+            bool found = false;
+            Bounds bounds = default;
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null) continue;
+                if (!found) { bounds = renderer.bounds; found = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            if (found)
+                exteriorCollisionHalfSize = new Vector2(
+                    Mathf.Max(.1f, bounds.extents.x), Mathf.Max(.1f, bounds.extents.y));
+        }
+
+        public Vector2 ExteriorCollisionHalfSize => exteriorCollisionHalfSize;
+
+        public Vector3 ShaftWorldPosition
+        {
+            get
+            {
+                float x = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
+                Vector3 local = new Vector3(x, CurrentFloor * ShaftFloorHeight + 1.4f, -.8f);
+                return exteriorCar != null && exteriorCar.parent != null
+                    ? exteriorCar.parent.TransformPoint(local) : local;
+            }
+        }
         string WorldName(float floor)
         {
             switch (BandForFloor(floor))
@@ -1066,10 +1100,10 @@ namespace CrazyElevator.Managers
                 ? Mathf.Sin(Time.unscaledTime * 52f) * collisionImpact : 0f;
             float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
             exteriorCar.localPosition = new Vector3(carX + collisionKick * .12f,
-                travelFloor * FloorHeight + 1.4f + Mathf.Abs(collisionKick) * .045f, -.8f);
+                travelFloor * ShaftFloorHeight + 1.4f + Mathf.Abs(collisionKick) * .045f, -.8f);
             exteriorCar.localRotation = exteriorCarHomeRotation * Quaternion.Euler(0f, 0f,
                 collisionKick * (Seat == 0 ? -4.5f : 4.5f));
-            Vector3 shaftCameraPosition = new Vector3(carX, travelFloor * FloorHeight + 4, -44);
+            Vector3 shaftCameraPosition = new Vector3(carX, travelFloor * ShaftFloorHeight + 4, -44);
             Quaternion shaftCameraRotation = Quaternion.Euler(5, 0, 0);
             if (phase == Phase.Moving)
             {
@@ -1108,7 +1142,7 @@ namespace CrazyElevator.Managers
             DrawCabinPreviewCallouts();
             int floor = NearbyFloor;
             float markerX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
-            Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(markerX, floor * FloorHeight + 1.4f, -.8f)));
+            Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(markerX, floor * ShaftFloorHeight + 1.4f, -.8f)));
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
             float x = point.x, y = Screen.height - point.y;

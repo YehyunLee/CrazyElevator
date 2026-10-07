@@ -18,7 +18,9 @@ namespace CrazyElevator.Match
         [Range(45f, 70f)] public float cabinVerticalFieldOfView = 52f;
         [Header("Two-track collisions")]
         [Range(.15f, .8f)] public float trackSwitchSeconds = .32f;
-        [Range(.45f, 1.2f)] public float verticalBlockDistance = .72f;
+        [FormerlySerializedAs("verticalBlockDistance")]
+        [Tooltip("Extra world-space breathing room around the visible elevator cars.")]
+        [Range(0f, .75f)] public float collisionPadding = .15f;
         [Range(.15f, .75f)] public float collisionSpeedRetained = .28f;
         [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.15f;
         public Game Rival { get; private set; }
@@ -34,6 +36,8 @@ namespace CrazyElevator.Match
         float collisionCooldown;
         float collisionFlash;
         AudioClip collisionClip;
+        ParticleSystem collisionParticles;
+        Material collisionParticleMaterial;
 
         void Awake()
         {
@@ -54,6 +58,7 @@ namespace CrazyElevator.Match
             player.ConfigureMatch(this, 0);
             CreateRival();
             collisionClip = CreateCollisionClip();
+            collisionParticles = CreateCollisionParticles(player.sceneView.exteriorCar.parent);
         }
 
         // Reuse authored prefabs, not a second copy of the whole environment.
@@ -113,8 +118,20 @@ namespace CrazyElevator.Match
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
             float switchSpeed = 1f / Mathf.Max(.05f, trackSwitchSeconds);
+            float playerTrackBefore = trackPosition[0];
+            float rivalTrackBefore = trackPosition[1];
             trackPosition[0] = Mathf.MoveTowards(trackPosition[0], targetTrack[0], switchSpeed * dt);
             trackPosition[1] = Mathf.MoveTowards(trackPosition[1], targetTrack[1], switchSpeed * dt);
+            if (Running && !Paused && CarsOverlap(player, Rival))
+            {
+                bool playerWasSwitching = !Mathf.Approximately(playerTrackBefore, targetTrack[0]);
+                bool rivalWasSwitching = !Mathf.Approximately(rivalTrackBefore, targetTrack[1]);
+                trackPosition[0] = playerTrackBefore;
+                trackPosition[1] = rivalTrackBefore;
+                if (playerWasSwitching) targetTrack[0] = playerTrackBefore < .5f ? 0 : 1;
+                if (rivalWasSwitching) targetTrack[1] = rivalTrackBefore < .5f ? 0 : 1;
+                TriggerCollision(player, Rival);
+            }
 
             if (player.IntroPlaying || MenuManager.IsOpen) return;
             var input = InputManager.Instance;
@@ -189,15 +206,6 @@ namespace CrazyElevator.Match
             int requested = Mathf.Clamp(targetTrack[seat] + (direction > 0 ? 1 : -1), 0, 1);
             if (requested == targetTrack[seat]) return;
 
-            Game other = Other(actor);
-            int otherSeat = 1 - seat;
-            bool occupiedNearby = other != null && targetTrack[otherSeat] == requested
-                && Mathf.Abs(actor.CurrentFloor - other.CurrentFloor) < verticalBlockDistance * 1.25f;
-            if (occupiedNearby)
-            {
-                TriggerCollision(actor, other);
-                return;
-            }
             targetTrack[seat] = requested;
         }
 
@@ -208,7 +216,7 @@ namespace CrazyElevator.Match
         {
             if (!Running || actor == null) return candidate;
             Game other = Other(actor);
-            if (other == null || !SharesTrack(actor, other)) return candidate;
+            if (other == null || !HorizontallyOverlaps(actor, other)) return candidate;
 
             float direction = Mathf.Sign(candidate - before);
             if (direction == 0) return candidate;
@@ -216,7 +224,8 @@ namespace CrazyElevator.Match
             bool approaching = direction > 0 ? before <= otherFloor : before >= otherFloor;
             if (!approaching) return candidate;
 
-            float boundary = otherFloor - direction * verticalBlockDistance;
+            float contactDistance = VerticalContactDistance(first: actor, second: other);
+            float boundary = otherFloor - direction * contactDistance;
             bool blocked = direction > 0 ? candidate >= boundary : candidate <= boundary;
             if (!blocked) return candidate;
 
@@ -228,11 +237,26 @@ namespace CrazyElevator.Match
             return candidate;
         }
 
-        bool SharesTrack(Game first, Game second)
+        bool HorizontallyOverlaps(Game first, Game second)
         {
-            int firstSeat = SeatOf(first), secondSeat = SeatOf(second);
-            return targetTrack[firstSeat] == targetTrack[secondSeat]
-                && Mathf.Abs(trackPosition[firstSeat] - trackPosition[secondSeat]) < .42f;
+            float halfWidths = first.ExteriorCollisionHalfSize.x + second.ExteriorCollisionHalfSize.x;
+            return Mathf.Abs(ShaftX(first) - ShaftX(second)) <= halfWidths + collisionPadding;
+        }
+
+        float VerticalContactDistance(Game first, Game second)
+        {
+            float worldDistance = first.ExteriorCollisionHalfSize.y
+                + second.ExteriorCollisionHalfSize.y + collisionPadding;
+            return worldDistance / Game.ShaftFloorHeight;
+        }
+
+        bool CarsOverlap(Game first, Game second)
+        {
+            if (first == null || second == null || !HorizontallyOverlaps(first, second)) return false;
+            float verticalDistance = Mathf.Abs(first.CurrentFloor - second.CurrentFloor) * Game.ShaftFloorHeight;
+            float combinedHalfHeights = first.ExteriorCollisionHalfSize.y
+                + second.ExteriorCollisionHalfSize.y + collisionPadding;
+            return verticalDistance <= combinedHalfHeights;
         }
 
         void TriggerCollision(Game first, Game second)
@@ -242,7 +266,67 @@ namespace CrazyElevator.Match
             collisionFlash = .62f;
             first?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
             second?.ApplyMatchCollision(collisionSlowSeconds, collisionSpeedRetained);
+            if (first != null && second != null)
+                EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
+        }
+
+        ParticleSystem CreateCollisionParticles(Transform parent)
+        {
+            var visual = new GameObject("Collision sparks");
+            visual.SetActive(false);
+            visual.layer = 31;
+            visual.transform.SetParent(parent, false);
+            var particles = visual.AddComponent<ParticleSystem>();
+            var main = particles.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.duration = .45f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(.22f, .48f);
+            main.startSpeed = 0f;
+            main.startSize = new ParticleSystem.MinMaxCurve(.08f, .18f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color32(255, 226, 72, 255), new Color32(255, 104, 28, 255));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 80;
+            var emission = particles.emission;
+            emission.enabled = false;
+            var shape = particles.shape;
+            shape.enabled = false;
+            var particleRenderer = particles.GetComponent<ParticleSystemRenderer>();
+            particleRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+            particleRenderer.velocityScale = .2f;
+            particleRenderer.lengthScale = 2.8f;
+            Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            if (shader != null)
+            {
+                collisionParticleMaterial = new Material(shader) { name = "Runtime collision sparks" };
+                particleRenderer.sharedMaterial = collisionParticleMaterial;
+            }
+            visual.SetActive(true);
+            return particles;
+        }
+
+        void EmitCollisionSparks(Vector3 position)
+        {
+            if (collisionParticles == null) return;
+            for (int i = 0; i < 28; i++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                float speed = Random.Range(3.5f, 8.5f);
+                var spark = new ParticleSystem.EmitParams
+                {
+                    position = position,
+                    velocity = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * speed,
+                    startLifetime = Random.Range(.22f, .48f),
+                    startSize = Random.Range(.07f, .17f),
+                    startColor = Color.Lerp(
+                        new Color32(255, 226, 72, 255),
+                        new Color32(255, 104, 28, 255), Random.value)
+                };
+                collisionParticles.Emit(spark, 1);
+            }
         }
 
         int SeatOf(Game actor) => actor == Rival ? 1 : 0;
@@ -272,6 +356,8 @@ namespace CrazyElevator.Match
             foreach (var rail in soloRails)
                 if (rail != null) rail.gameObject.SetActive(true);
             if (collisionClip != null) Destroy(collisionClip);
+            if (collisionParticles != null) Destroy(collisionParticles.gameObject);
+            if (collisionParticleMaterial != null) Destroy(collisionParticleMaterial);
             if (Rival != null) Destroy(Rival.gameObject);
             if (rivalView != null && rivalView.exteriorCar != null) Destroy(rivalView.exteriorCar.gameObject);
             if (rivalShaft != null) Destroy(rivalShaft.gameObject);

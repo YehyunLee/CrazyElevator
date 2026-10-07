@@ -315,6 +315,21 @@ public static class ExtendedInteriorChecks
         Require(Mathf.Abs(match.ShaftX(0) + match.ShaftX(1) - 2f * CrazyElevator.Match.ElevatorMatch.ShaftCenterX) < .001f,
             "1v1 tracks do not straddle the building centre.");
 
+        var matchType = typeof(CrazyElevator.Match.ElevatorMatch);
+        var trackPositions = (float[])matchType.GetField("trackPosition", Flags).GetValue(match);
+        var carsOverlap = matchType.GetMethod("CarsOverlap", Flags);
+        Require(!(bool)carsOverlap.Invoke(match, new object[] { player, rival }),
+            "Elevators on separate tracks collide before their visible cars touch.");
+        trackPositions[1] = trackPositions[0];
+        Require((bool)carsOverlap.Invoke(match, new object[] { player, rival }),
+            "Elevators at the same position do not register a visible-car collision.");
+        matchType.GetField("collisionCooldown", Flags).SetValue(match, 0f);
+        matchType.GetMethod("TriggerCollision", Flags).Invoke(match, new object[] { player, rival });
+        var sparks = (ParticleSystem)matchType.GetField("collisionParticles", Flags).GetValue(match);
+        Require(sparks != null && sparks.gameObject.layer == 31 && sparks.particleCount > 0,
+            "A 1v1 collision did not emit sparks in the exterior camera layer.");
+        trackPositions[1] = 1f;
+
         var rider = playerRound.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
         Require(playerRound.Board(rider) && !rivalRound.Board(rider),
             "Both elevators boarded the same floor-zero passenger.");
@@ -340,7 +355,7 @@ public static class ExtendedInteriorChecks
             && player.PassengerLoad == 0 && rival.PassengerLoad == 0,
             "Resetting the match must restore a fresh shared pool for both elevators.");
         File.WriteAllText(Work + "/result.txt",
-            "PASS: Main creates two centred 1v1 tracks; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+            "PASS: Main creates two centred 1v1 tracks; visible-car collision and exterior sparks work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
