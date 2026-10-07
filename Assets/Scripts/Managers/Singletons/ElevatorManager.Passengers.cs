@@ -13,6 +13,8 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Renderer, MaterialPropertyBlock> selectionMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
         static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
         static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
+        const float CabinBackEdge = 4.72f;
+        const int CabinRows = 4;
         Rider selectedRider;
         Color selectionTint;
         Rider draggedRider;
@@ -30,7 +32,7 @@ namespace CrazyElevator.Managers
             float radius = PartyRadius(rider);
             float rearEdge = keepDoorwayClear ? .28f : .42f + radius * .20f;
             return Mathf.Abs(position.x) <= 2.18f - radius * .45f
-                && position.z >= rearEdge && position.z <= 3.48f - radius * .25f;
+                && position.z >= rearEdge && position.z <= CabinBackEdge - radius * .25f;
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
@@ -65,7 +67,7 @@ namespace CrazyElevator.Managers
         {
             row = Mathf.RoundToInt((position.z - .32f) / 1.16f);
             int seat = Mathf.RoundToInt((position.x + 1.12f) / 1.12f);
-            if (row < 0 || row > 2 || seat < 0 || seat > 2)
+            if (row < 0 || row >= CabinRows || seat < 0 || seat > 2)
             {
                 firstSeat = lastSeat = -1;
                 return false;
@@ -109,7 +111,7 @@ namespace CrazyElevator.Managers
             {
                 // Check every seat the player can actually drop into, including
                 // seats outside the automatic boarding animation's preferred spots.
-                for (int row = 0; row < 3; row++)
+                for (int row = 0; row < CabinRows; row++)
                 for (int seat = 0; seat < 3; seat++)
                 {
                     Vector3 spot = new Vector3(-1.12f + seat * 1.12f, .12f, .48f + row * 1.16f);
@@ -269,7 +271,9 @@ namespace CrazyElevator.Managers
             if (!plane.Raycast(ray, out float distance)) return;
             Vector3 local = stage.InverseTransformPoint(ray.GetPoint(distance) + dragOffset);
             local.x = Mathf.Clamp(local.x, -2.55f, 2.55f);
-            local.z = Mathf.Clamp(local.z, -2.65f, 3.45f);
+            // Match the full cabin placement depth. The old 3.45 limit made
+            // the new rear row visually available but unreachable by dragging.
+            local.z = Mathf.Clamp(local.z, -2.65f, CabinBackEdge);
             local.y = .12f;
             // The door is near z = .15. Leave a margin so a rider must be
             // clearly outside before release counts as a kick.
@@ -368,10 +372,10 @@ namespace CrazyElevator.Managers
             Rider screenClosest = null;
             float screenDistance = float.MaxValue;
             float radius = Mathf.Clamp(Screen.height * .06f, 48f, 96f);
-            foreach (var pair in destinationTags)
+            foreach (var pair in figures)
             {
-                if (!CanSelect(pair.Key) || !pair.Value.gameObject.activeInHierarchy) continue;
-                if (!figures.TryGetValue(pair.Key, out var figure) || figure == null) continue;
+                if (!CanSelect(pair.Key) || pair.Value == null || !pair.Value.gameObject.activeInHierarchy) continue;
+                Transform figure = pair.Value;
                 Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .95f);
                 float delta = ((Vector2)point - cursor).sqrMagnitude;
                 if (point.z > 0 && delta < radius * radius && delta < screenDistance)
@@ -380,7 +384,14 @@ namespace CrazyElevator.Managers
 
             // Prefer the screen-space candidate when it is clearly the one the
             // cursor is over; otherwise keep the precise collider hit.
-            return screenClosest != null && (closest == null || screenDistance < distance * distance)
+            float colliderScreenDistance = float.MaxValue;
+            if (closest != null && figures.TryGetValue(closest, out var colliderFigure)
+                && colliderFigure != null)
+            {
+                Vector3 point = eye.WorldToScreenPoint(colliderFigure.position + Vector3.up * .95f);
+                colliderScreenDistance = ((Vector2)point - cursor).sqrMagnitude;
+            }
+            return screenClosest != null && (closest == null || screenDistance < colliderScreenDistance)
                 ? screenClosest : closest;
         }
         void SelectInDirection(Vector2 direction)

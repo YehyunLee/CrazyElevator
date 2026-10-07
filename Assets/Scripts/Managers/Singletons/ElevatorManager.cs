@@ -633,7 +633,8 @@ namespace CrazyElevator.Managers
             new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
             new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
             new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f)
+            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
+            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
         };
         static readonly Vector3[] ClearDoorwayCabinSpots =
         {
@@ -641,7 +642,8 @@ namespace CrazyElevator.Managers
             new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
             new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
             new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f)
+            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
+            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
         };
 
         void InitializeExtendedInterior()
@@ -878,7 +880,7 @@ namespace CrazyElevator.Managers
         {
             if (!extendedInterior || !figures.TryGetValue(rider, out var figure)) return;
             float depthScale = keepDoorwayClear
-                ? Mathf.Lerp(.72f, .92f, Mathf.InverseLerp(.32f, 2.64f, target.z))
+                ? Mathf.Lerp(.72f, .92f, Mathf.InverseLerp(.32f, 3.96f, target.z))
                 : 1f;
             boardingTransfers[rider] = new InteriorTransfer { start = start, target = target, scale = figure.localScale,
                 targetScale = figure.localScale * depthScale,
