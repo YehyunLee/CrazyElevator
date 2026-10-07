@@ -713,6 +713,43 @@ public static class ExtendedInteriorChecks
         }
     }
 
+    static void CheckGrandmaSpeedStack(Game game, Round round)
+    {
+        var grandmas = round.Riders.FindAll(r => r.Kind == "ELDERLY");
+        Require(grandmas.Count >= 4, "The round needs four Grandmas to check speed stacking.");
+        float previousSpeed = (float)Property(game, "PassengerSpeedMultiplier");
+        float firstSpeed = 0f;
+        float thirdSpeed = 0f;
+        for (int i = 0; i < 4; i++)
+        {
+            grandmas[i].Boarded = true;
+            grandmas[i].BoardedBySeat = round.Seat;
+            float speed = (float)Property(game, "PassengerSpeedMultiplier");
+            Require(speed <= previousSpeed && speed >= game.minimumGrandmaSpeedMultiplier - .001f,
+                "Grandma stacking must never speed up the elevator or exceed the slowdown limit.");
+            if (i == 0) firstSpeed = speed;
+            if (i == 2) thirdSpeed = speed;
+            previousSpeed = speed;
+        }
+        Require(previousSpeed < firstSpeed
+            && Mathf.Abs(firstSpeed - Mathf.Max(game.minimumGrandmaSpeedMultiplier, game.grandmaSpeedMultiplier)) < .001f
+            && ((string)Property(game, "PassengerSpeedStatus")).Contains("GRANDMA x4"),
+            "The first Grandma or four-Grandma status changed unexpectedly.");
+
+        grandmas[3].BoardedBySeat = round.Seat + 1;
+        float ownedSpeed = (float)Property(game, "PassengerSpeedMultiplier");
+        Require(Mathf.Abs(ownedSpeed - thirdSpeed) < .001f,
+            "The rival's Grandma must not slow this elevator.");
+        grandmas[3].BoardedBySeat = round.Seat;
+        var clown = round.Riders.Find(r => r.Kind == "GROUP");
+        Require(clown != null, "The round needs a clown group to check combined speed.");
+        clown.Boarded = true;
+        clown.BoardedBySeat = round.Seat;
+        Require(Mathf.Abs((float)Property(game, "PassengerSpeedMultiplier")
+            - previousSpeed * game.clownSpeedMultiplier) < .001f,
+            "The clown boost must still combine with the Grandma stack.");
+    }
+
     static void RunBoost(Game game)
     {
         var pad = InputSystem.AddDevice<Gamepad>();
@@ -811,7 +848,9 @@ public static class ExtendedInteriorChecks
             Call(game, "SelectRider", handyman); Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
             Require(!handyman.Boarded && !(bool)Property(game, "HasHandyman") && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
                 "Handyman protection remained after unloading.");
-            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum.");
+            Call(game, "Restart");
+            CheckGrandmaSpeedStack(game, (Round)Get(game, "round"));
+            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
         }
         finally
         {

@@ -905,6 +905,8 @@ namespace CrazyElevator.Managers
         [Header("Passenger speed effects")]
         [Range(1f, 2f)] public float clownSpeedMultiplier = 2f;
         [Range(.25f, 1f)] public float grandmaSpeedMultiplier = .5f;
+        [Range(.7f, 1f)] public float extraGrandmaSpeedMultiplier = .85f;
+        [Range(.2f, .5f)] public float minimumGrandmaSpeedMultiplier = .3f;
         float rustExposure;
         StarfishImpairmentView interiorImpairment, exteriorImpairment;
         float MovementFloor => BuildingView ? travelFloor : round.Floor;
@@ -925,31 +927,37 @@ namespace CrazyElevator.Managers
         {
             get
             {
-                GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow);
+                GetPassengerSpeedEffects(out bool clownBoost, out int grandmaCount);
+                // Keep the first slowdown, then stack smaller penalties without stopping the car.
+                float grandmaMultiplier = grandmaCount == 0 ? 1f
+                    : Mathf.Max(minimumGrandmaSpeedMultiplier,
+                        grandmaSpeedMultiplier * Mathf.Pow(extraGrandmaSpeedMultiplier, grandmaCount - 1));
                 return (clownBoost ? clownSpeedMultiplier : 1f)
-                    * (grandmaSlow ? grandmaSpeedMultiplier : 1f);
+                    * grandmaMultiplier;
             }
         }
-        void GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow)
+        void GetPassengerSpeedEffects(out bool clownBoost, out int grandmaCount)
         {
-            clownBoost = grandmaSlow = false;
+            clownBoost = false;
+            grandmaCount = 0;
             if (round == null) return;
             foreach (var rider in round.Riders)
             {
                 if (!round.Owns(rider)) continue;
                 clownBoost |= rider.HasFeature(PassengerFeature.SpeedBoost);
-                grandmaSlow |= rider.HasFeature(PassengerFeature.SpeedSlow);
+                if (rider.HasFeature(PassengerFeature.SpeedSlow)) grandmaCount++;
             }
         }
         string PassengerSpeedStatus
         {
             get
             {
-                GetPassengerSpeedEffects(out bool clownBoost, out bool grandmaSlow);
-                if (!clownBoost && !grandmaSlow) return string.Empty;
-                string passenger = clownBoost && grandmaSlow ? "CLOWN + GRANDMA"
-                    : clownBoost ? "CLOWN BOOST" : "GRANDMA SLOW";
-                return passenger + " · SPEED x" + PassengerSpeedMultiplier.ToString("0.0");
+                GetPassengerSpeedEffects(out bool clownBoost, out int grandmaCount);
+                if (!clownBoost && grandmaCount == 0) return string.Empty;
+                string grandmaLabel = grandmaCount > 1 ? "GRANDMA x" + grandmaCount : "GRANDMA";
+                string passenger = clownBoost && grandmaCount > 0 ? "CLOWN + " + grandmaLabel
+                    : clownBoost ? "CLOWN BOOST" : grandmaLabel + " SLOW";
+                return passenger + " · SPEED x" + PassengerSpeedMultiplier.ToString("0.00");
             }
         }
         float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f))
@@ -1528,6 +1536,8 @@ namespace CrazyElevator.Managers
             target.underwaterAccelerationMultiplier = underwaterAccelerationMultiplier;
             target.clownSpeedMultiplier = clownSpeedMultiplier;
             target.grandmaSpeedMultiplier = grandmaSpeedMultiplier;
+            target.extraGrandmaSpeedMultiplier = extraGrandmaSpeedMultiplier;
+            target.minimumGrandmaSpeedMultiplier = minimumGrandmaSpeedMultiplier;
             target.floorsPerSecond = floorsPerSecond;
             target.candyFloorsPerSecond = candyFloorsPerSecond;
             target.underwaterFloorsPerSecond = underwaterFloorsPerSecond;

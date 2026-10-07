@@ -75,6 +75,7 @@ namespace CrazyElevator.Shared
         public const int Floors = 12;
         public const int Capacity = 10;
         public const float Duration = 180f;
+        public const float ElderlyArrivalSeconds = 1.5f;
         static readonly Random DestinationRandom = new Random();
         public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
@@ -145,7 +146,7 @@ namespace CrazyElevator.Shared
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
                 if (world == PassengerTheme.Candy)
                     Add("Morgan", "BOSS", "Hold OPEN for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140, 1.25f);
-                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, 6.2f, 4, 175);
+                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
             }
@@ -221,7 +222,7 @@ namespace CrazyElevator.Shared
                     Space = previous.Space,
                     Patience = previous.Patience,
                     Remaining = previous.Patience,
-                    Arrival = previous.Kind == "ELDERLY" ? 6.2f : 0,
+                    Arrival = previous.Kind == "ELDERLY" ? ElderlyArrivalSeconds : 0,
                     Bonus = previous.Bonus,
                     HoldRequired = previous.HoldRequired
                 };

@@ -684,10 +684,16 @@ namespace CrazyElevator.Managers
                 // waiting riders across the visible entrance aisle instead.
                 int queueColumn = slot % OfficeQueueX.Length;
                 int queueRow = slot / OfficeQueueX.Length;
+                float arrivalOffset = p.Kind == "ELDERLY"
+                    ? .7f * Mathf.Clamp01(p.Arrival / ElevatorRound.ElderlyArrivalSeconds)
+                    : Mathf.Min(.7f, p.Arrival * .12f);
                 return new Vector3(OfficeQueueX[queueColumn], .12f,
-                    -1.1f - queueRow * .65f - Mathf.Min(.7f, p.Arrival * .12f));
+                    -1.1f - queueRow * .65f - arrivalOffset);
             }
-            return new Vector3(-2f + slot * 2f, .12f, -1.45f - Mathf.Min(1.2f, p.Arrival * .20f));
+            float hallwayArrivalOffset = p.Kind == "ELDERLY"
+                ? 1.2f * Mathf.Clamp01(p.Arrival / ElevatorRound.ElderlyArrivalSeconds)
+                : Mathf.Min(1.2f, p.Arrival * .20f);
+            return new Vector3(-2f + slot * 2f, .12f, -1.45f - hallwayArrivalOffset);
         }
 
         // Match visible models to passenger state.
