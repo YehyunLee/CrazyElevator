@@ -217,7 +217,7 @@ namespace CrazyElevator.Managers
                 eye.transform.position += eye.transform.up * cameraLift;
             if (extendedInterior)
             {
-                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
+                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
                 eye.transform.rotation *= Quaternion.Euler(Mathf.Clamp(cabinAimDown, 0f, 12f), 0f, 0f);
             }
             cameraHome = eye.transform.position;
@@ -274,6 +274,7 @@ namespace CrazyElevator.Managers
         float lastTrackInput;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
         bool boostHeld;
+        bool initialVelocityPending;
         readonly HashSet<int> passedFloors = new HashSet<int>();
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), 0, ElevatorRound.Floors - 1);
@@ -295,10 +296,11 @@ namespace CrazyElevator.Managers
             passedFloors.Clear(); passedFloors.Add(round.Floor);
             round.LeaveFloor();
             travelFloor = round.Floor;
-            travelVelocity = travelDirection * CruiseSpeed;
+            travelVelocity = 0;
             boostAxis = 0; boostHeld = false;
+            initialVelocityPending = true;
             phase = Phase.Moving; phaseTime = 0; destination = -1;
-            notice = "Hold Shift / left shoulder with up/down to build speed. Confirm near a floor to stop.";
+            notice = "Hold Shift / shoulder / trigger with up/down to build speed. Confirm near a floor to stop.";
         }
         void RequestFloorStop()
         {
@@ -348,6 +350,23 @@ namespace CrazyElevator.Managers
             else if (oldVelocity * travelDirection < CruiseSpeed)
                 travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
             else travelVelocity = oldVelocity; // Releasing boost preserves the accumulated momentum.
+            if (Mathf.Abs(boostAxis) > .25f)
+            {
+                // A fresh direction input starts the elevator at cruise speed;
+                // the existing acceleration path then builds speed from there.
+                if (initialVelocityPending)
+                {
+                    travelVelocity = travelDirection * CruiseSpeed;
+                    initialVelocityPending = false;
+                }
+                oldVelocity = Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
+                if (boostHeld)
+                    travelVelocity = Mathf.Clamp(oldVelocity + boostAxis * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
+                else if (oldVelocity * travelDirection < CruiseSpeed)
+                    travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
+                else travelVelocity = oldVelocity;
+            }
+            else travelVelocity = oldVelocity;
             float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, 0, ElevatorRound.Floors - 1);
             travelFloor = Match != null
                 ? Match.ConstrainTravel(this, before, candidate, ref travelVelocity)
@@ -999,6 +1018,7 @@ namespace CrazyElevator.Managers
         const int ExteriorLayer = 31;
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
         public const float ShaftFloorHeight = 13.2f;
+        const float SecurityCameraFieldOfView = 90f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
@@ -1104,9 +1124,8 @@ namespace CrazyElevator.Managers
             eye.depth = showPreview ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
             eye.fieldOfView = Match != null
-                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 70f)
-                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 70f);
-            // Push the visible cars in opposite directions, then settle back onto their rails.
+                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 90f)
+                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
             float collisionKick = collisionImpact > 0f
                 ? Mathf.Sin((1f - collisionImpact) * Mathf.PI * 3f) * collisionImpact : 0f;
             float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
@@ -1126,6 +1145,7 @@ namespace CrazyElevator.Managers
             }
             exteriorCamera.transform.position = shaftCameraPosition;
             exteriorCamera.transform.rotation = shaftCameraRotation;
+            exteriorCamera.fieldOfView = SecurityCameraFieldOfView;
             if (Match != null)
                 exteriorCamera.orthographicSize = Mathf.Max(9.5f, (Match.shaftSpacing + 3f) / exteriorCamera.aspect);
             exteriorCamera.backgroundColor = WorldSky(travelFloor);

@@ -867,8 +867,8 @@ namespace CrazyElevator.Managers
         public bool keepDoorwayClear;
         [Min(0f), Tooltip("Raises the cabin camera so hall passengers remain visible behind boarded riders.")]
         public float cameraLift;
-        [Range(45f, 70f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
-        public float cabinVerticalFieldOfView = 50f;
+        [Range(45f, 90f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
+        public float cabinVerticalFieldOfView = 90f;
         [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
         public float cabinAimDown = 9f;
 
