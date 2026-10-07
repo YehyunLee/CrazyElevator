@@ -436,6 +436,7 @@ namespace CrazyElevator.Match
             }
             DrawSeat(player, 0, Teal);
             DrawSeat(Rival, 1, Coral);
+            DrawSplitDivider();
             DrawCollisionFeedback();
             if (!Running || Paused || Finished) DrawMatchOverlay();
             GUI.matrix = previousMatrix;
@@ -472,6 +473,19 @@ namespace CrazyElevator.Match
             GUI.color = colour;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        void DrawSplitDivider()
+        {
+            // Keep the split obvious while either cabin is on screen; hide it
+            // when both players are looking at their full shaft-travel views.
+            if (player.Traveling && Rival.Traveling) return;
+
+            const float width = 12f;
+            float x = Screen.width * .5f;
+            Fill(new Rect(x - width * .5f, 0, width, Screen.height), Ink);
+            Fill(new Rect(x - width * .5f, 0, 2f, Screen.height), Teal);
+            Fill(new Rect(x + width * .5f - 2f, 0, 2f, Screen.height), Coral);
         }
 
         void DrawSeat(Game actor, int seat, Color colour)

@@ -98,12 +98,14 @@ public static class ExtendedInteriorChecks
                 game.enabled = true;
                 Call(game, "Restart");
                 bool water = action.StartsWith("water");
-                ((Round)Get(game, "round")).Floor = water ? 8 : 0;
-                game.sceneView.floorDisplay.text = water ? "8" : "0";
+                int previewFloor = water ? 8 : action.StartsWith("candy") ? 4 : 0;
+                string previewKind = water ? "HANDYMAN" : action.StartsWith("candy") ? "PREGNANT" : "COURIER";
+                ((Round)Get(game, "round")).Floor = previewFloor;
+                game.sceneView.floorDisplay.text = previewFloor.ToString();
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action.EndsWith("-transfer"))
                 {
-                    Call(game, "SelectRider", ((Round)Get(game, "round")).Riders.Find(r => r.Origin == (water ? 8 : 0) && r.Kind == "COURIER"));
+                    Call(game, "SelectRider", ((Round)Get(game, "round")).Riders.Find(r => r.Origin == previewFloor && r.Kind == previewKind));
                     Call(game, "ConfirmPassenger");
                     Call(game, "SyncFigures", water ? .3f : .6f);
                     game.enabled = false;
@@ -152,19 +154,21 @@ public static class ExtendedInteriorChecks
             && ReferenceEquals(player.Riders[0], rival.Riders[0]),
             "Both elevators must use the same rider objects.");
         Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
-            && player.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
-            "Business passengers must wait only on office floors.");
+            && player.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
+            "Candy-world passengers must wait only on candy floors.");
         foreach (var rider in player.Riders)
             Require(rider.Destination >= 0 && rider.Destination < Round.Floors
                 && rider.Destination != rider.Origin,
                 "Every passenger needs a valid destination on another floor.");
 
         var courier = player.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
-        var pregnant = player.Riders.Find(r => r.Kind == "PREGNANT" && r.Origin == 0);
+        var pregnant = player.Riders.Find(r => r.Kind == "PREGNANT" && r.Origin == 4);
         Require(player.Board(courier) && !rival.Board(courier)
             && player.Owns(courier) && !rival.Owns(courier)
             && player.Load == courier.Space && rival.Load == 0,
             "The same rider boarded two cars or counted toward the rival's load.");
+        player.Floor = 4;
+        rival.Floor = 4;
         float patience = pregnant.Remaining;
         player.Tick(1f, true);
         rival.Tick(1f, true, false);
@@ -202,12 +206,16 @@ public static class ExtendedInteriorChecks
         try
         {
             boss.kind = "BOSS";
+            boss.theme = CrazyElevator.Shared.PassengerTheme.Candy;
             regular.kind = "COURIER";
+            regular.theme = CrazyElevator.Shared.PassengerTheme.Office;
             catalog.types = new[] { boss, regular };
             var fromCatalog = Round.FromCatalog(catalog);
             Require(fromCatalog.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
-                && fromCatalog.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
-                "The passenger catalog placed business passengers outside office floors.");
+                && fromCatalog.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7))
+                && fromCatalog.Riders.FindAll(r => r.Kind == "COURIER").Count == 4
+                && fromCatalog.Riders.TrueForAll(r => r.Kind != "COURIER" || r.Origin <= 3),
+                "The passenger catalog placed themed passengers outside their worlds.");
             for (int origin = 0; origin < Round.Floors; origin++)
                 for (int sample = 0; sample < 20; sample++)
                 {
@@ -222,7 +230,7 @@ public static class ExtendedInteriorChecks
             UnityEngine.Object.DestroyImmediate(boss);
             UnityEngine.Object.DestroyImmediate(regular);
         }
-        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, office business origins, and valid special destinations.");
+        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, world-specific passenger origins, and valid special destinations.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check 1v1 Shared Passengers")]
@@ -268,7 +276,7 @@ public static class ExtendedInteriorChecks
         Require(round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
             && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8)
             && round.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
-            && round.Riders.TrueForAll(r => r.Kind != "BOSS" || r.Origin <= 3),
+            && round.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
             "Special passengers are waiting outside their assigned worlds.");
         var band = typeof(Game).GetMethod("BandForFloor", Flags);
         Require(band.Invoke(game, new object[] { 0f }).ToString() == "Office"

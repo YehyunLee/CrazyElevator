@@ -53,6 +53,8 @@ namespace CrazyElevator.Shared
         public bool Boarded;
         // A shared passenger pool still needs to know which car holds a rider.
         public int BoardedBySeat = -1;
+        // Brief entry delay before a replacement rider joins the shared queue.
+        public float SpawnDelay;
         // Resolved riders cannot board or score again.
         public bool Resolved;
         public bool HoldSatisfied => HoldRequired <= 0 || HoldProgress >= HoldRequired;
@@ -72,11 +74,13 @@ namespace CrazyElevator.Shared
         public const int Capacity = 10;
         public const float Duration = 180f;
         static readonly Random DestinationRandom = new Random();
-        public readonly List<Rider> Riders = new List<Rider>();
+        public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
         public float PeakTime;
         public float TimeLeft = Duration;
+        bool RefillPassengerQueue;
+        bool OwnsPassengerPoolClock = true;
         // Scene variants can opt out of the prototype's consolation points for
         // passengers whose patience has completely expired.
         public bool LateDeliveriesScore = true;
@@ -97,7 +101,7 @@ namespace CrazyElevator.Shared
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
 
-        // Create six passenger types on every floor.
+        // Seed the built-in roster only in the worlds that match each character.
         public ElevatorRound()
         {
             SeedDefaults();
@@ -114,13 +118,8 @@ namespace CrazyElevator.Shared
             {
                 foreach (var type in catalog.types)
                 {
-                    if (type == null || type.kind == "HANDYMAN"
-                        || (type.kind == "BOSS" && f > 3)) continue;
-                    int destination = (f + 1) % Floors;
-                    if (type.kind == "BOSS") destination = RandomDestination(f);
-                    else if (type.kind == "ELDERLY" || type.kind == "PREGNANT") destination = (f + 2) % Floors;
-                    else if (type.kind == "INTERVIEW") destination = (f + 3) % Floors;
-                    round.Riders.Add(type.CreateRider(f, destination));
+                    if (type == null || type.kind == "HANDYMAN" || !type.CanWaitAt(f)) continue;
+                    round.Riders.Add(type.CreateRider(f, DestinationFor(type.kind, f)));
                 }
             }
             return round;
@@ -135,13 +134,18 @@ namespace CrazyElevator.Shared
         {
             for (int f = 0; f < Floors; f++)
             {
-                Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, (f + 1) % Floors, 2, 34, 0, 0, 30);
-                Add("Mina", "PREGNANT", "Two spaces, please.", "2X", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
-                Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
-                if (f <= 3)
+                PassengerTheme world = PassengerData.ThemeAtFloor(f);
+                if (world == PassengerTheme.Office)
+                    Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, (f + 1) % Floors, 2, 34, 0, 0, 30);
+                if (world == PassengerTheme.Candy)
+                    Add("Mina", "PREGNANT", "Two spaces, please.", "2X", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
+                if (world == PassengerTheme.Office)
+                    Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
+                if (world == PassengerTheme.Candy)
                     Add("Morgan", "BOSS", "Hold OPEN for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140, 1.25f);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, 6.2f, 4, 175);
-                Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
+                if (world == PassengerTheme.Candy)
+                    Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
             }
         }
 
@@ -171,8 +175,10 @@ namespace CrazyElevator.Shared
             if (seat < 0) throw new ArgumentOutOfRangeException(nameof(seat));
             if (source != this)
             {
-                Riders.Clear();
-                Riders.AddRange(source.Riders);
+                Riders = source.Riders;
+                source.RefillPassengerQueue = true;
+                RefillPassengerQueue = true;
+                OwnsPassengerPoolClock = false;
             }
             Seat = seat;
         }
@@ -192,7 +198,41 @@ namespace CrazyElevator.Shared
                 || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
             p.BoardedBySeat = Seat;
+            if (RefillPassengerQueue) Riders.Add(CreateReplacement(p));
             return true;
+        }
+
+        static Rider CreateReplacement(Rider previous)
+        {
+            int destination = DestinationFor(previous.Kind, previous.Origin);
+            Rider replacement = previous.Data != null
+                ? previous.Data.CreateRider(previous.Origin, destination)
+                : new Rider
+                {
+                    Name = previous.Name,
+                    Request = previous.Request,
+                    Kind = previous.Kind,
+                    Badge = previous.Badge,
+                    Color = previous.Color,
+                    Origin = previous.Origin,
+                    Destination = destination,
+                    Space = previous.Space,
+                    Patience = previous.Patience,
+                    Remaining = previous.Patience,
+                    Arrival = previous.Kind == "ELDERLY" ? 6.2f : 0,
+                    Bonus = previous.Bonus,
+                    HoldRequired = previous.HoldRequired
+                };
+            replacement.SpawnDelay = 1f;
+            return replacement;
+        }
+
+        static int DestinationFor(string kind, int origin)
+        {
+            if (kind == "BOSS" || kind == "HANDYMAN") return RandomDestination(origin);
+            if (kind == "ELDERLY" || kind == "PREGNANT") return (origin + 2) % Floors;
+            if (kind == "INTERVIEW") return (origin + 3) % Floors;
+            return (origin + 1) % Floors;
         }
 
         // Skip a waiting passenger with the existing penalty.
@@ -205,11 +245,12 @@ namespace CrazyElevator.Shared
         // Offer only the first three eligible waiting parties.
         public bool IsOffered(Rider candidate)
         {
-            if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.Origin != Floor) return false;
+            if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
+                || candidate.Origin != Floor) return false;
             int offered = 0;
             foreach (var p in Riders)
             {
-                if (p.Resolved || p.Boarded || p.Origin != Floor) continue;
+                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != Floor) continue;
                 if (p == candidate) return offered < 3;
                 offered++;
             }
@@ -259,6 +300,10 @@ namespace CrazyElevator.Shared
             // A large frame must not simulate past the deadline.
             dt = Math.Min(dt, TimeLeft);
             TimeLeft = Math.Max(0, TimeLeft - dt);
+            if (RefillPassengerQueue && OwnsPassengerPoolClock)
+                foreach (var rider in Riders)
+                    if (!rider.Resolved && rider.SpawnDelay > 0)
+                        rider.SpawnDelay = Math.Max(0, rider.SpawnDelay - dt);
             int waitingMisses = 0;
             foreach (var p in Riders)
             {

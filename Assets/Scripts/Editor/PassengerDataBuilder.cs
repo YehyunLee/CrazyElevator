@@ -17,19 +17,19 @@ namespace CrazyElevator.EditorTools
             catalog.types = new[]
             {
                 Make(folder, "Courier", "Remy", "COURIER", "BOX", "Two spaces. Quick stop!", 0, 2, 34, 0, 30, 0,
-                    PassengerFeature.MultiSpace),
+                    PassengerFeature.MultiSpace, PassengerTheme.Office),
                 Make(folder, "Pregnant", "Mina", "PREGNANT", "2X", "Two spaces, please.", 1, 2, 42, 0, 70, 0,
-                    PassengerFeature.MultiSpace),
+                    PassengerFeature.MultiSpace, PassengerTheme.Candy),
                 Make(folder, "Interview", "Jules", "INTERVIEW", "!", "My interview starts soon!", 2, 1, 13, 0, 120, 0,
-                    PassengerFeature.UrgencySpeech),
+                    PassengerFeature.UrgencySpeech, PassengerTheme.Office),
                 Make(folder, "Boss", "Morgan", "BOSS", "B", "Hold OPEN for my bonus.", 3, 1, 30, 0, 140, 1.25f,
-                    PassengerFeature.HoldDoorBonus),
+                    PassengerFeature.HoldDoorBonus, PassengerTheme.Candy),
                 Make(folder, "Elderly", "Eli", "ELDERLY", "SLOW", "Please wait for me...", 4, 1, 58, 6.2f, 175, 0,
                     PassengerFeature.SlowArrival),
                 Make(folder, "Group", "The Trio", "GROUP", "3X", "All three or none!", 5, 3, 32, 0, 130, 0,
-                    PassengerFeature.MultiSpace | PassengerFeature.GroupParty),
+                    PassengerFeature.MultiSpace | PassengerFeature.GroupParty, PassengerTheme.Candy),
                 Make(folder, "Handyman", "Casey", "HANDYMAN", "FIX", "Rust-free while I'm aboard!", 4, 1, 80, 0, 110, 0,
-                    PassengerFeature.ClearsRust)
+                    PassengerFeature.ClearsRust, PassengerTheme.Underwater)
             };
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();
@@ -39,7 +39,8 @@ namespace CrazyElevator.EditorTools
         }
 
         static PassengerData Make(string folder, string file, string name, string kind, string badge, string request,
-            int color, int space, float patience, float arrival, int bonus, float hold, PassengerFeature features)
+            int color, int space, float patience, float arrival, int bonus, float hold,
+            PassengerFeature features, PassengerTheme theme = PassengerTheme.Any)
         {
             string path = folder + "/PassengerData_" + file + ".asset";
             var asset = AssetDatabase.LoadAssetAtPath<PassengerData>(path);
@@ -59,6 +60,7 @@ namespace CrazyElevator.EditorTools
             asset.bonus = bonus;
             asset.holdRequired = hold;
             asset.features = features;
+            asset.theme = theme;
             EditorUtility.SetDirty(asset);
             return asset;
         }
