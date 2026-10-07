@@ -107,7 +107,15 @@ public static class ExtendedInteriorChecks
                 {
                     Call(game, "SelectRider", ((Round)Get(game, "round")).Riders.Find(r => r.Origin == previewFloor && r.Kind == previewKind));
                     Call(game, "ConfirmPassenger");
-                    Call(game, "SyncFigures", water ? .3f : .6f);
+                    if (water) Call(game, "SyncFigures", .3f);
+                    else
+                    {
+                        // Finish the candy boarding pose, then apply its final
+                        // facing and crying state for a stable visual check.
+                        Call(game, "SyncFigures", 2f);
+                        Call(game, "SyncFigures", 0f);
+                        Call(game, "UpdatePassengerEffects", .5f);
+                    }
                     game.enabled = false;
                 }
             }
@@ -200,6 +208,27 @@ public static class ExtendedInteriorChecks
             && rival.Load == 0 && player.Score == playerScore,
             "The rival delivery changed the player's score or load.");
 
+        var babyRound = new Round { Floor = 4 };
+        var baby = babyRound.Riders.Find(r => r.Kind == "PREGNANT" && r.Origin == 4);
+        var companion = babyRound.Riders.Find(r => r.Kind == "BOSS" && r.Origin == 4);
+        var grandma = babyRound.Riders.Find(r => r.Kind == "ELDERLY" && r.Origin == 4);
+        grandma.Arrival = 0;
+        Require(babyRound.Board(baby) && babyRound.Board(companion)
+            && Math.Abs(babyRound.CabinPatienceMultiplier - Round.CryingPatienceMultiplier) < .001f,
+            "A boarded baby did not activate the cabin patience penalty.");
+        float cryingPatience = companion.Remaining;
+        babyRound.Tick(1f, true);
+        Require(Math.Abs(companion.Remaining - (cryingPatience - Round.CryingPatienceMultiplier)) < .001f,
+            "The crying baby did not accelerate onboard patience drain.");
+        Require(babyRound.Board(grandma)
+            && babyRound.BabyCalmedByGrandma
+            && Math.Abs(babyRound.CabinPatienceMultiplier - Round.CalmPatienceMultiplier) < .001f,
+            "A boarded Grandma did not calm the baby.");
+        float calmPatience = companion.Remaining;
+        babyRound.Tick(1f, true);
+        Require(Math.Abs(companion.Remaining - (calmPatience - Round.CalmPatienceMultiplier)) < .001f,
+            "Grandma did not slow onboard patience drain while calming the baby.");
+
         var catalog = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerCatalog>();
         var boss = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
         var regular = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
@@ -230,7 +259,7 @@ public static class ExtendedInteriorChecks
             UnityEngine.Object.DestroyImmediate(boss);
             UnityEngine.Object.DestroyImmediate(regular);
         }
-        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, world-specific passenger origins, and valid special destinations.");
+        Debug.Log("PASS: shared passenger identities, exclusive boarding, separate loads and scores, single waiting tick, baby and Grandma patience combo, world-specific passenger origins, and valid special destinations.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check 1v1 Shared Passengers")]
@@ -713,6 +742,43 @@ public static class ExtendedInteriorChecks
         }
     }
 
+    static void CheckGrandmaSpeedStack(Game game, Round round)
+    {
+        var grandmas = round.Riders.FindAll(r => r.Kind == "ELDERLY");
+        Require(grandmas.Count >= 4, "The round needs four Grandmas to check speed stacking.");
+        float previousSpeed = (float)Property(game, "PassengerSpeedMultiplier");
+        float firstSpeed = 0f;
+        float thirdSpeed = 0f;
+        for (int i = 0; i < 4; i++)
+        {
+            grandmas[i].Boarded = true;
+            grandmas[i].BoardedBySeat = round.Seat;
+            float speed = (float)Property(game, "PassengerSpeedMultiplier");
+            Require(speed <= previousSpeed && speed >= game.minimumGrandmaSpeedMultiplier - .001f,
+                "Grandma stacking must never speed up the elevator or exceed the slowdown limit.");
+            if (i == 0) firstSpeed = speed;
+            if (i == 2) thirdSpeed = speed;
+            previousSpeed = speed;
+        }
+        Require(previousSpeed < firstSpeed
+            && Mathf.Abs(firstSpeed - Mathf.Max(game.minimumGrandmaSpeedMultiplier, game.grandmaSpeedMultiplier)) < .001f
+            && ((string)Property(game, "PassengerSpeedStatus")).Contains("GRANDMA x4"),
+            "The first Grandma or four-Grandma status changed unexpectedly.");
+
+        grandmas[3].BoardedBySeat = round.Seat + 1;
+        float ownedSpeed = (float)Property(game, "PassengerSpeedMultiplier");
+        Require(Mathf.Abs(ownedSpeed - thirdSpeed) < .001f,
+            "The rival's Grandma must not slow this elevator.");
+        grandmas[3].BoardedBySeat = round.Seat;
+        var clown = round.Riders.Find(r => r.Kind == "GROUP");
+        Require(clown != null, "The round needs a clown group to check combined speed.");
+        clown.Boarded = true;
+        clown.BoardedBySeat = round.Seat;
+        Require(Mathf.Abs((float)Property(game, "PassengerSpeedMultiplier")
+            - previousSpeed * game.clownSpeedMultiplier) < .001f,
+            "The clown boost must still combine with the Grandma stack.");
+    }
+
     static void RunBoost(Game game)
     {
         var pad = InputSystem.AddDevice<Gamepad>();
@@ -811,7 +877,9 @@ public static class ExtendedInteriorChecks
             Call(game, "SelectRider", handyman); Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
             Require(!handyman.Boarded && !(bool)Property(game, "HasHandyman") && inside.DisplayedSeverity == 3 && outside.DisplayedSeverity == 3,
                 "Handyman protection remained after unloading.");
-            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum.");
+            Call(game, "Restart");
+            CheckGrandmaSpeedStack(game, (Round)Get(game, "round"));
+            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
         }
         finally
         {

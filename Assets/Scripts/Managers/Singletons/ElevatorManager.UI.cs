@@ -106,7 +106,7 @@ namespace CrazyElevator.Managers
         {
             if (p.Kind == "HANDYMAN") return "Full power while aboard";
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
-            if (p.Kind == "PREGNANT") return "2 spaces";
+            if (p.Kind == "PREGNANT") return "Baby cries • 2 spaces";
             if (p.Kind == "INTERVIEW") return "Very urgent";
             if (p.Kind == "BOSS") return "Hold OPEN bonus";
             if (p.Kind == "ELDERLY") return "Slow • big bonus";
@@ -153,7 +153,7 @@ namespace CrazyElevator.Managers
             if (phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results || paused)
             {
                 scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
-                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 900 * scale) / 2;
+                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 1000 * scale) / 2;
                 GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, Vector3.one * scale);
                 Overlay();
             }
@@ -310,8 +310,8 @@ namespace CrazyElevator.Managers
             const float y = 16f;
             const float x = 16f;
 
-            Panel(new Rect(x - 5, y - 5, totalWidth + 10, 58), UiWhite);
-            Panel(new Rect(x - 2, y - 2, totalWidth + 4, 52), UiBlack);
+            Panel(new Rect(x - 5, y - 5, totalWidth + 10, 68), UiWhite);
+            Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
                 WorldName(round.Floor), "F" + round.Floor); cursor += 152;
@@ -336,7 +336,8 @@ namespace CrazyElevator.Managers
 
             Rider speaker = null;
             foreach (Rider rider in visible)
-                if (rider.Boarded && (rider.Remaining <= rider.Patience * .25f
+                if (rider.Boarded && (rider.HasFeature(PassengerFeature.CryingBaby)
+                    || rider.Remaining <= rider.Patience * .25f
                     || rider.Destination == round.Floor || !string.IsNullOrEmpty(rider.Status)))
                 { speaker = rider; break; }
             if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
@@ -426,6 +427,8 @@ namespace CrazyElevator.Managers
                 && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return "MISSED MY FLOOR!";
             if (rider.Boarded && rider.Destination == round.Floor) return "MY STOP!";
+            if (rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby))
+                return round.BabyCalmedByGrandma ? "CALM! PATIENCE x0.5" : "WAAAH! PATIENCE x1.6";
             if (rider.Boarded && rider.Remaining <= rider.Patience * .25f) return "PLEASE HURRY!";
             return null;
         }
@@ -498,7 +501,7 @@ namespace CrazyElevator.Managers
         void DrawHudTile(Rect area, Color color, string caption, string value)
         {
             Panel(area, UiBlack);
-            Panel(new Rect(area.x, area.yMax - 5f, area.width, 5f), color);
+            Panel(new Rect(area.x, area.yMax + 5f, area.width, 5f), color);
             AccentBar(new Rect(area.x + 4f, area.y + 7f, 7f, area.height - 18f), color);
 
             Color oldSmall = inkSmall.normal.textColor;
@@ -575,12 +578,12 @@ namespace CrazyElevator.Managers
         void Overlay()
         {
             Panel(new Rect(0, 104, 1440, 796), new Color(0, 0, 0, .82f));
-            Panel(new Rect(338, 230, 780, 456), Color.black);
-            Panel(new Rect(330, 222, 780, 456), UiBlack);
-            Panel(new Rect(330, 222, 780, 7), Teal);
-            AccentBar(new Rect(326, 246, 9, 382), Teal);
+            Panel(new Rect(316, 170, 824, 590), Color.black);
+            Panel(new Rect(308, 162, 824, 590), UiBlack);
+            Panel(new Rect(308, 162, 824, 7), Teal);
+            AccentBar(new Rect(304, 186, 9, 522), Teal);
             string heading = paused ? "TAKE A BREATHER" : phase == Phase.Welcome ? "YOUR SHIFT. THEIR CHAOS." : phase == Phase.Tutorial ? "HOW TO PLAY" : "SHIFT COMPLETE";
-            Label(new Rect(372, 256, 700, 52), heading, title);
+            Label(new Rect(354, 196, 700, 52), heading, title);
             string copy;
             if (paused) copy = "The clock is paused.\n\nPress Start / Escape or resume when you are ready.";
             else if (phase == Phase.Welcome) copy = "3 minutes. Drop riders at their floors for points.\n\nOffice (0–3) → Candy (4–7) → Underwater (8–11).\n\nDrag to board or kick. CLOSE & TRAVEL, then hold UP/DOWN and STOP near a floor.";
@@ -589,21 +592,21 @@ namespace CrazyElevator.Managers
                 + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                 + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
                 + "\n\nYour 3-minute shift is over. Try again for a better mix!";
-            Label(new Rect(374, 322, 690, 240), copy, body);
+            Label(new Rect(356, 292, 690, 240), copy, body);
             if (phase == Phase.Tutorial)
             {
-                Panel(new Rect(374, 418, 210, 112), UiWhite); Panel(new Rect(374, 418, 210, 7), Teal);
-                Panel(new Rect(602, 418, 210, 112), UiWhite); Panel(new Rect(602, 418, 210, 7), Gold);
-                Panel(new Rect(830, 418, 210, 112), UiWhite); Panel(new Rect(830, 418, 210, 7), Coral);
-                Label(new Rect(392, 432, 174, 78), "1  BOARD\nDrag a rider inside,\nor select + press C.", inkBody);
-                Label(new Rect(620, 432, 174, 78), "2  TRAVEL\nPress C with no rider\nselected, then move.", inkBody);
-                Label(new Rect(848, 432, 174, 78), "3  STOP / EJECT\nPress C near a floor.\nDrag rider out to eject.", inkBody);
-                Label(new Rect(374, 542, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
+                Panel(new Rect(350, 468, 210, 162), UiWhite); Panel(new Rect(350, 468, 210, 7), Teal);
+                Panel(new Rect(578, 468, 210, 162), UiWhite); Panel(new Rect(578, 468, 210, 7), Gold);
+                Panel(new Rect(806, 468, 210, 162), UiWhite); Panel(new Rect(806, 468, 210, 7), Coral);
+                Label(new Rect(368, 482, 174, 128), "1  BOARD\nDrag a rider inside,\nor select + press C.", inkBody);
+                Label(new Rect(596, 482, 174, 128), "2  TRAVEL\nPress C with no rider\nselected, then move.", inkBody);
+                Label(new Rect(824, 482, 174, 128), "3  STOP / EJECT\nPress C near a floor.\nDrag rider out to eject.", inkBody);
+                Label(new Rect(350, 646, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
             }
             string action = paused ? "RESUME SHIFT  /  CLICK, START or ESC"
                 : phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
                 : phase == Phase.Tutorial ? "START SHIFT  /  CLICK or ENTER" : "TRY AGAIN  /  CLICK or ENTER";
-            if (Button(new Rect(374, 600, 692, 48), action, Teal))
+            if (Button(new Rect(350, 700, 724, 48), action, Teal))
             {
                 if (paused)
                 {

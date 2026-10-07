@@ -52,4 +52,6 @@ Shared
 | PassengerManager | `PassengerManager.cs` (per elevator) |
 | ControlElevatorView / PassengerView | `GameView` via `GameManager.GoToView` |
 
-Create passenger assets: **Crazy Elevator → Create Default Passenger Data**. In a `PassengerData` asset, set **Theme** to Office, Candy, or Underwater to limit where that type waits; **Any** keeps generic types available everywhere. Destinations may still cross between worlds. In 1v1, boarding a rider adds a same-type replacement to the shared origin-floor queue after a one-second arrival delay.
+Create passenger assets: **Crazy Elevator → Create Default Passenger Data**. In a `PassengerData` asset, set **Theme** to Office, Candy, or Underwater to limit where that type waits; **Any** keeps generic types available everywhere. Destinations may still cross between worlds. Clown groups double elevator speed. By default, the first elderly passenger halves it; each additional elderly passenger applies x0.85, down to a minimum x0.30. One clown and one elderly cancel the passenger-speed modifier. Mina & Baby makes every onboard passenger's patience drain x1.6; boarding a grandma with them calms the baby and reduces that drain to x0.5 while both remain onboard. In 1v1, boarding a rider adds a same-type replacement to the shared origin-floor queue after a one-second arrival delay.
+
+Keyboard passenger selection uses WASD or arrow keys. `C` confirms the highlighted passenger and closes the doors only when no passenger is selected; controller Y remains the dedicated close-door button.

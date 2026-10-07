@@ -6,13 +6,13 @@ The scene translates `Reference/CottonCandyWorld.png` (the supplied artwork) int
 
 ## Flight controls
 
-| Action | Gamepad | Keyboard |
-| --- | --- | --- |
-| Left / right / up / down | Left stick or D-pad | WASD or arrows |
-| Faster movement | Right shoulder | Shift |
-| Leave a stop | South button (A / Cross) | E |
-| Pause / resume | Start | Space |
-| Restart | Select | R |
+| Action | Controller / keyboard |
+| --- | --- |
+| Left / right / up / down | Left stick or D-pad / WASD or arrows |
+| Faster movement | Right shoulder / Shift |
+| Leave a stop | South button (A / Cross) / E |
+| Pause / resume | Start / Space |
+| Restart | Select / R |
 
 The elevator moves manually in the XY plane at a fixed depth (Z = 0). Up/down changes its height; left/right changes its horizontal position. Release the controls to hold still. The scenery and stops remain stationary. Stops 1–4 sit at heights 10, 28, 46 and 64, so higher stop indices are always above lower ones. You can visit the stops in either direction.
 
