@@ -373,16 +373,40 @@ public static class ExtendedInteriorChecks
         Require(player.PassengerLoad == rider.Space && rival.PassengerLoad == 0
             && player.CurrentPassengers.Count == 1 && rival.CurrentPassengers.Count == 0,
             "A boarded passenger appeared inside both elevators.");
-        rival.RefreshWaitingPublic();
         var rivalFigures = (IDictionary)Get(rival, "figures");
-        Require(rivalFigures.Contains(rider)
-            && !((Transform)rivalFigures[rider]).gameObject.activeInHierarchy,
-            "The NPC still shows a passenger boarded by the player.");
+        Require(rivalFigures.Contains(rider), "The NPC was not showing the shared floor passenger.");
+        var departingFigure = (Transform)rivalFigures[rider];
+        Vector3 departureStart = departingFigure.localPosition;
+        rival.RefreshWaitingPublic();
+        Require(departingFigure.gameObject.activeInHierarchy,
+            "A passenger claimed by the player vanished from the NPC view without departing.");
+        Call(rival, "SyncFigures", .3f);
+        Require(departingFigure.gameObject.activeInHierarchy
+            && Vector3.Distance(departingFigure.localPosition, departureStart) > .05f,
+            "A shared passenger did not visibly walk away from the NPC view.");
+        Call(rival, "SyncFigures", 1f);
+        Require(!departingFigure.gameObject.activeInHierarchy,
+            "The NPC kept showing a passenger after their departure animation finished.");
         foreach (var waiting in rival.WaitingPassengers)
             Require(!ReferenceEquals(waiting, rider), "A boarded passenger remained in the rival's queue.");
         Require(rival.NpcBoard() && rival.PassengerLoad > 0 && player.PassengerLoad == rider.Space
             && rival.CurrentPassengers.Count == 1 && !ReferenceEquals(rival.CurrentPassengers[0], rider),
             "The NPC could not board a different passenger from the shared queue.");
+        var npcClaim = rival.CurrentPassengers[0];
+        var playerFigures = (IDictionary)Get(player, "figures");
+        Require(playerFigures.Contains(npcClaim), "The player was not showing the NPC's floor passenger.");
+        var playerDeparture = (Transform)playerFigures[npcClaim];
+        Vector3 playerDepartureStart = playerDeparture.localPosition;
+        player.RefreshWaitingPublic();
+        Require(playerDeparture.gameObject.activeInHierarchy,
+            "A passenger claimed by the NPC vanished from the player view without departing.");
+        Call(player, "SyncFigures", .3f);
+        Require(playerDeparture.gameObject.activeInHierarchy
+            && Vector3.Distance(playerDeparture.localPosition, playerDepartureStart) > .05f,
+            "The NPC's passenger did not visibly leave the player view.");
+        Call(player, "SyncFigures", 1f);
+        Require(!playerDeparture.gameObject.activeInHierarchy,
+            "The player kept showing the NPC's passenger after departure finished.");
 
         player.ResetRoundPublic();
         playerRound = (Round)Get(player, "round");

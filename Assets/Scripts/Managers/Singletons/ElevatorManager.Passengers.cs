@@ -121,7 +121,7 @@ namespace CrazyElevator.Managers
         // Mouse hover highlights; click-drag boards, rearranges, or ejects.
         void UpdatePassengerSelection()
         {
-            if (draggedRider != null && phase != Phase.Boarding) CancelPassengerDrag();
+            if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
             var mouse = Mouse.current;
             if (draggedRider != null)
             {
@@ -592,6 +592,15 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Rider, TextMesh> destinationTags = new Dictionary<Rider, TextMesh>();
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
+        const float SharedPickupDepartureSeconds = .85f;
+        sealed class SharedPickupDeparture
+        {
+            public Vector3 Start, Scale;
+            public Quaternion Rotation;
+            public float Time;
+        }
+        readonly Dictionary<Rider, SharedPickupDeparture> sharedPickupDepartures =
+            new Dictionary<Rider, SharedPickupDeparture>();
         readonly Dictionary<Collider, Rider> riderHits = new Dictionary<Collider, Rider>();
         sealed class PassengerEffectView
         {
@@ -779,6 +788,42 @@ namespace CrazyElevator.Managers
             return new Vector3(-2f + slot * 2f, .12f, -1.45f - hallwayArrivalOffset);
         }
 
+        // A shared rider claimed by the other car walks out of this hallway
+        // before its local visual is hidden. The Rider itself is already boarded.
+        void BeginSharedPickupDeparture(Rider rider, Transform figure)
+        {
+            if (draggedRider == rider) CancelPassengerDrag();
+            if (selectedRider == rider) SelectRider(null);
+            sharedPickupDepartures.Add(rider, new SharedPickupDeparture
+            {
+                Start = figure.localPosition,
+                Scale = figure.localScale,
+                Rotation = figure.localRotation
+            });
+            foreach (var collider in figure.GetComponentsInChildren<Collider>()) collider.enabled = false;
+        }
+
+        void AnimateSharedPickupDeparture(Rider rider, Transform figure, float dt)
+        {
+            SharedPickupDeparture departure = sharedPickupDepartures[rider];
+            departure.Time += Mathf.Max(0f, dt);
+            float progress = Mathf.Clamp01(departure.Time / SharedPickupDepartureSeconds);
+            float stride = Mathf.Sin(progress * Mathf.PI * 6f);
+            float side = Seat == 0 ? 1f : -1f;
+            Vector3 destination = new Vector3(side * 3.35f, departure.Start.y, departure.Start.z - .35f);
+            figure.localPosition = Vector3.Lerp(departure.Start, destination,
+                Mathf.SmoothStep(0f, 1f, progress))
+                + Vector3.up * (Mathf.Abs(stride) * .10f * (1f - progress));
+            Quaternion walking = Quaternion.Euler(0f, side * 90f, stride * 5f);
+            figure.localRotation = Quaternion.Slerp(departure.Rotation, walking,
+                Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / .2f)));
+            float shrink = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.55f, 1f, progress));
+            figure.localScale = departure.Scale * Mathf.Lerp(1f, .12f, shrink);
+            if (progress < 1f) return;
+            sharedPickupDepartures.Remove(rider);
+            figure.gameObject.SetActive(false);
+        }
+
         // Match visible models to passenger state.
         void SyncFigures(float dt)
         {
@@ -792,9 +837,15 @@ namespace CrazyElevator.Managers
                 // doors, so explicitly hide the hall queue unless the doorway
                 // is open enough to interact with it.
                 bool hallVisible = phase == Phase.Boarding || phase == Phase.Opening && doors > .72f;
-                bool visible = isExiting || !p.Resolved && (round.Owns(p)
+                bool hasFigure = figures.TryGetValue(p, out var figure);
+                if (Match != null && hasFigure && figure.gameObject.activeInHierarchy
+                    && hallVisible && p.Boarded && !p.Resolved && p.BoardedBySeat != Seat
+                    && p.Origin == round.Floor && !sharedPickupDepartures.ContainsKey(p))
+                    BeginSharedPickupDeparture(p, figure);
+                bool departing = sharedPickupDepartures.ContainsKey(p);
+                bool visible = departing || isExiting || !p.Resolved && (round.Owns(p)
                     || !p.Boarded && p.Origin == round.Floor && hallVisible && round.IsOffered(p));
-                if (!figures.TryGetValue(p, out var figure))
+                if (!hasFigure)
                 {
                     if (!visible) continue;
                     figure = MakeRider(p); figure.localPosition = RiderPosition(p); figures.Add(p, figure);
@@ -802,7 +853,11 @@ namespace CrazyElevator.Managers
                 figure.gameObject.SetActive(visible);
                 if (!visible) continue;
 
-                if (isExiting)
+                if (departing)
+                {
+                    AnimateSharedPickupDeparture(p, figure, dt);
+                }
+                else if (isExiting)
                 {
                     // An already-launched rider finishes even if the doors close.
                     bool gentleExit = kicks.TryGetValue(p, out var kick) && kick.Gentle;
@@ -841,7 +896,7 @@ namespace CrazyElevator.Managers
                     else
                     {
                         // Preserve the original extended scene's presentation.
-                        bubble.gameObject.SetActive(!isExiting);
+                        bubble.gameObject.SetActive(!isExiting && !departing);
                         bubble.text = BubbleText(p);
                         bubble.color = IsComplaining(p) ? Coral : Cream;
                         bubble.transform.rotation = Quaternion.LookRotation(bubble.transform.position - eye.transform.position);
@@ -850,7 +905,7 @@ namespace CrazyElevator.Managers
                 if (destinationTags.TryGetValue(p, out var destinationTag))
                 {
                     bool useScreenCallout = extendedInterior;
-                    destinationTag.gameObject.SetActive(!useScreenCallout && !isExiting);
+                    destinationTag.gameObject.SetActive(!useScreenCallout && !isExiting && !departing);
                     destinationTag.text = p.Destination.ToString();
                     // Keep the actionable number a single, dark high-contrast
                     // color. Mood is already communicated by the patience bar

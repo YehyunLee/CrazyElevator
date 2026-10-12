@@ -173,7 +173,8 @@ namespace CrazyElevator.Managers
             ResetBabyComboFeedback();
             foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear();
             passengerEffects.Clear();
-            bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); exiting.Clear(); exitStarts.Clear(); riderHits.Clear();
+            bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); exiting.Clear(); exitStarts.Clear();
+            sharedPickupDepartures.Clear(); riderHits.Clear();
             selectedRider = null;
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);

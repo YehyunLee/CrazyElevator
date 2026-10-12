@@ -15,9 +15,59 @@ namespace CrazyElevator.Managers
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
-        GUIStyle title, cardTitle, caption, cardCaption, body;
+        [SerializeField] Texture2D menuArtwork;
+        const float ArtWidth = 1700f;
+        const float ArtHeight = 1082f;
+        const float TransitionSeconds = 1.1f;
+        const float LaunchSeconds = .95f;
+        [Header("First menu buttons")]
+        [SerializeField] CanvasGroup titleButtons;
+        [System.Serializable]
+        sealed class MenuLabelShape
+        {
+            // Coordinates run from 0 to 1 within the label: top-left, top-right,
+            // bottom-right, bottom-left. Edit these on Main > MenuManager.
+            public Vector2 topLeft = new Vector2(.04f, .04f);
+            public Vector2 topRight = new Vector2(.98f, 0);
+            public Vector2 bottomRight = new Vector2(1, .92f);
+            public Vector2 bottomLeft = new Vector2(0, 1);
+        }
+        [Header("Menu label corners (0 to 1)")]
+        [SerializeField] MenuLabelShape playerOneLabel = new MenuLabelShape
+        {
+            topLeft = new Vector2(.02f, .02f), topRight = new Vector2(.98f, .18f),
+            bottomRight = new Vector2(.98f, .94f), bottomLeft = new Vector2(.02f, 1)
+        };
+        [SerializeField] MenuLabelShape rivalLabel = new MenuLabelShape
+        {
+            topLeft = new Vector2(.02f, .18f), topRight = new Vector2(.98f, .02f),
+            bottomRight = new Vector2(.98f, 1), bottomLeft = new Vector2(.02f, .94f)
+        };
+        [SerializeField] MenuLabelShape startLabel = new MenuLabelShape
+        {
+            topLeft = new Vector2(.02f, 0), topRight = new Vector2(.98f, 0),
+            bottomRight = new Vector2(.98f, 1), bottomLeft = new Vector2(.02f, 1)
+        };
+        [Header("Mode screen button rectangles (1700 x 1082)")]
+        [SerializeField] Rect playerOneButton = new Rect(535, 795, 260, 72);
+        [SerializeField] Rect rivalButton = new Rect(905, 795, 260, 72);
+        [SerializeField] Rect startButton = new Rect(715, 930, 270, 80);
+        Texture2D playerOneLabelTexture, rivalLabelTexture, startLabelTexture;
+        Texture2D triangleCursorTexture;
+        Texture2D leftChoiceArrowTexture, rightChoiceArrowTexture;
+        int playerOneShapeHash, rivalShapeHash, startShapeHash;
+        float transition;
+        float launchTimer;
+        bool choosingMode;
+        bool launching;
+        bool playerTwoUnavailable;
+        int titleSelection;
+        int modeSelection;
+        bool horizontalHeld;
+        bool verticalHeld;
+        GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, startCircle;
         static bool startDuelOnLoad;
-        static bool selectedDuel;
+        static bool playerTwoSelected;
         static bool pauseOpen;
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
@@ -36,7 +86,7 @@ namespace CrazyElevator.Managers
             pauseOpen = false;
             passengerOverlayOpen = false;
             startDuelOnLoad = false;
-            selectedDuel = false;
+            playerTwoSelected = false;
             overlayGame = null;
         }
 
@@ -49,26 +99,79 @@ namespace CrazyElevator.Managers
                 pauseOpen = false;
                 passengerOverlayOpen = false;
                 startDuelOnLoad = false;
-                selectedDuel = false;
+                playerTwoSelected = false;
                 sessionReady = true;
             }
+            SyncTitleButtons();
             InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
         }
 
         void OnEnable() { title = null; }
 
+        void OnDestroy()
+        {
+            if (playerOneLabelTexture != null) Destroy(playerOneLabelTexture);
+            if (rivalLabelTexture != null) Destroy(rivalLabelTexture);
+            if (startLabelTexture != null) Destroy(startLabelTexture);
+            if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
+            if (leftChoiceArrowTexture != null) Destroy(leftChoiceArrowTexture);
+            if (rightChoiceArrowTexture != null) Destroy(rightChoiceArrowTexture);
+        }
+
         void Update()
         {
             if (!IsOpen) return;
+            if (launching)
+            {
+                launchTimer += Time.unscaledDeltaTime;
+                if (launchTimer >= LaunchSeconds) SelectAndStart(true);
+                return;
+            }
             var input = InputManager.Instance;
             if (input == null) return;
 
-            if (Mathf.Abs(input.Move.x) >= .55f)
-                selectedDuel = input.Move.x > 0;
+            bool horizontal = Mathf.Abs(input.Move.x) >= .55f;
+            bool vertical = Mathf.Abs(input.Move.y) >= .55f;
+            if (choosingMode && modeSelection == 0 && horizontal && !horizontalHeld)
+                playerTwoSelected = input.Move.x > 0;
+            if (choosingMode && vertical && !verticalHeld && transition >= TransitionSeconds)
+                modeSelection = input.Move.y < 0 ? 1 : 0;
+            if (!choosingMode && vertical && !verticalHeld)
+                titleSelection = (titleSelection + (input.Move.y < 0 ? 1 : 2)) % 3;
+            horizontalHeld = horizontal;
+            verticalHeld = vertical;
 
             if (input.ConfirmPressed)
-                StartSelectedMode();
+            {
+                if (choosingMode && transition >= TransitionSeconds)
+                {
+                    if (modeSelection == 0) playerTwoSelected = !playerTwoSelected;
+                    else StartSelectedMode();
+                }
+                else if (!choosingMode)
+                {
+                    if (titleSelection == 0) choosingMode = true;
+                    else if (titleSelection == 2) ExitGame();
+                }
+            }
+            if (!playerTwoSelected) playerTwoUnavailable = false;
+            if (choosingMode) transition = Mathf.Min(TransitionSeconds, transition + Time.unscaledDeltaTime);
+            SyncTitleButtons();
         }
+
+        void SyncTitleButtons()
+        {
+            if (titleButtons == null) return;
+            // The IMGUI transition veil fades the entire Canvas together. Keep the
+            // artwork and scene Buttons visible underneath it until the mode screen takes over.
+            titleButtons.alpha = IsOpen && (!choosingMode || transition < TransitionSeconds) ? 1f : 0f;
+            titleButtons.interactable = IsOpen && !choosingMode;
+            titleButtons.blocksRaycasts = IsOpen && !choosingMode;
+        }
+
+        public void OnTitleStart() { titleSelection = 0; choosingMode = true; SyncTitleButtons(); }
+        public void OnTitleOptions() { titleSelection = 1; }
+        public void OnTitleExit() { titleSelection = 2; ExitGame(); }
 
         public static bool ConsumeDuelRequest()
         {
@@ -113,6 +216,11 @@ namespace CrazyElevator.Managers
 
         void DrawModeSelect()
         {
+            if (menuArtwork != null)
+            {
+                DrawArtworkMenu();
+                return;
+            }
             Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
 
             float scale = Mathf.Min(Screen.width / 1200f, Screen.height / 720f);
@@ -129,11 +237,244 @@ namespace CrazyElevator.Managers
                 "CHOOSE YOUR MODE", caption);
 
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", false, !selectedDuel);
+                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", false, !playerTwoSelected);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "Local duel  ·  NPC rival for now", true, selectedDuel);
+                "1V1", "Local duel  ·  NPC rival for now", true, playerTwoSelected);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
                 "PICK A MODE", caption);
+        }
+
+        void DrawArtworkMenu()
+        {
+            bool hasCanvasTitle = titleButtons != null;
+            float fade = Mathf.Clamp01(transition / TransitionSeconds);
+            // Scene UI renders behind OnGUI. Only draw a veil during the transition;
+            // an opaque panel here would hide the editable title Buttons in Game view.
+            if (!hasCanvasTitle)
+                Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
+            else if (choosingMode)
+                Panel(new Rect(0, 0, Screen.width, Screen.height),
+                    new Color(Ink.r, Ink.g, Ink.b, fade));
+            float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
+            var oldMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
+                (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
+                new Vector3(scale, scale, 1));
+
+            if (!hasCanvasTitle && fade < 1f)
+            {
+                DrawArt(new Rect(0, 0, ArtWidth, ArtHeight), new Rect(0, 0, 1, 1), 1f - fade);
+                // Fallback if this script is opened in a scene without the title Canvas.
+                Color cleanBackground = Color.Lerp(new Color32(16, 16, 17, 255), Ink, fade);
+                Panel(new Rect(380, 690, 315, 370), cleanBackground);
+                Panel(new Rect(278, 733, 112, 66), cleanBackground);
+            }
+            if (fade < 1f)
+            {
+                if (triangleCursorTexture == null) triangleCursorTexture = CreateTriangleCursor();
+                Color cursorColor = GUI.color;
+                GUI.color = new Color(1, 1, 1, 1f - fade);
+                GUI.DrawTexture(new Rect(290, 741 + titleSelection * 118, 96, 50), triangleCursorTexture);
+                GUI.color = cursorColor;
+                if (!choosingMode)
+                    DrawMovingTracks(new Rect(1060, 0, 495, ArtHeight), 1);
+            }
+
+            if (choosingMode)
+            {
+                // The first car slides left as its companion appears beside it.
+                float eased = fade * fade * (3f - 2f * fade);
+                float descent = launching ? Mathf.Pow(Mathf.Clamp01(launchTimer / LaunchSeconds), 2) * (ArtHeight + 200) : 0;
+                DrawShaft(new Rect(Mathf.Lerp(1060, 500, eased), 0, Mathf.Lerp(495, 330, eased), ArtHeight), 1, descent);
+                DrawShaft(new Rect(870, 0, 330, ArtHeight), eased, descent);
+                if (fade >= 1f && !launching)
+                {
+                    DrawMenuLabel(playerOneButton, "PLAYER 1", playerOneLabel, ref playerOneLabelTexture, ref playerOneShapeHash, false);
+                    DrawMenuLabel(rivalButton, playerTwoSelected ? "PLAYER 2" : "CPU", rivalLabel, ref rivalLabelTexture, ref rivalShapeHash, true);
+                    if (modeSelection == 0)
+                        GUI.Label(new Rect(rivalButton.x + 8, rivalButton.y + 4, 52, rivalButton.height - 8), "○", startCircle);
+                    DrawChoiceArrow(new Rect(rivalButton.x - 55, rivalButton.center.y - 27, 48, 55), false, ref leftChoiceArrowTexture);
+                    DrawChoiceArrow(new Rect(rivalButton.xMax + 5, rivalButton.center.y - 27, 48, 55), true, ref rightChoiceArrowTexture);
+                    DrawMenuLabel(startButton, "START", startLabel, ref startLabelTexture, ref startShapeHash, false);
+                    if (modeSelection == 1)
+                        GUI.Label(new Rect(startButton.x + 8, startButton.y + 7, 52, startButton.height - 14), "○", startCircle);
+                    if (GUI.Button(startButton, GUIContent.none, GUIStyle.none)) { modeSelection = 1; StartSelectedMode(); }
+                    if (playerTwoUnavailable)
+                        GUI.Label(new Rect(640, 1010, 420, 50), "PLAYER 2 COMING SOON", caption);
+                }
+                if (launching) Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(0, 0, 0,
+                    Mathf.Clamp01((launchTimer / LaunchSeconds - .55f) * 2.2f)));
+            }
+            GUI.matrix = oldMatrix;
+        }
+
+        void DrawShaft(Rect rect, float alpha, float descent)
+        {
+            Rect shaftSource = new Rect(1060f / ArtWidth, 0, 495f / ArtWidth, 1);
+            DrawArt(rect, shaftSource, alpha);
+            DrawMovingTracks(rect, alpha);
+            if (descent <= 0) return;
+
+            float cabinX = rect.x + rect.width * 32f / 495f;
+            float cabinWidth = rect.width * 427f / 495f;
+            Rect originalCabin = new Rect(cabinX, 185, cabinWidth, 546);
+            Panel(originalCabin, new Color(16f / 255f, 16f / 255f, 17f / 255f, alpha));
+            Rect cabinSource = new Rect(1092f / ArtWidth, 1f - 731f / ArtHeight,
+                427f / ArtWidth, 546f / ArtHeight);
+            DrawArt(new Rect(cabinX, 185 + descent, cabinWidth, 546), cabinSource, alpha);
+        }
+
+        void DrawMovingTracks(Rect shaft, float alpha)
+        {
+            float stripWidth = shaft.width * 34f / 495f;
+            DrawMovingTrack(new Rect(shaft.x, shaft.y, stripWidth, shaft.height), alpha);
+            DrawMovingTrack(new Rect(shaft.xMax - stripWidth, shaft.y, stripWidth, shaft.height), alpha);
+        }
+
+        void DrawMovingTrack(Rect rect, float alpha)
+        {
+            GUI.BeginGroup(rect);
+            Panel(new Rect(0, 0, rect.width, rect.height), new Color(29f / 255f, 40f / 255f, 38f / 255f, alpha));
+            float offset = Mathf.Repeat(Time.unscaledTime * 130f, 160f);
+            for (float y = offset - 160f; y < rect.height; y += 160f)
+                Panel(new Rect(0, y, rect.width, 18), new Color(12f / 255f, 55f / 255f, 48f / 255f, alpha));
+            GUI.EndGroup();
+        }
+
+        void DrawMenuLabel(Rect rect, string label, MenuLabelShape shape, ref Texture2D texture, ref int shapeHash, bool rival)
+        {
+            int currentHash = shape.topLeft.GetHashCode();
+            currentHash = currentHash * 31 + shape.topRight.GetHashCode();
+            currentHash = currentHash * 31 + shape.bottomRight.GetHashCode();
+            currentHash = currentHash * 31 + shape.bottomLeft.GetHashCode();
+            if (texture == null || shapeHash != currentHash)
+            {
+                if (texture != null) Destroy(texture);
+                texture = CreateLabelTexture(shape);
+                shapeHash = currentHash;
+            }
+            GUI.DrawTexture(rect, texture);
+            GUI.Label(new Rect(rect.x + 35, rect.y, rect.width - 45, rect.height), label, menuLabelText);
+            if (rival && GUI.Button(rect, GUIContent.none, GUIStyle.none)) { modeSelection = 0; playerTwoSelected = !playerTwoSelected; playerTwoUnavailable = false; }
+        }
+
+        static Texture2D CreateLabelTexture(MenuLabelShape shape)
+        {
+            const int width = 256, height = 80;
+            var pixels = new Color32[width * height];
+            Vector2[] corners = { shape.topLeft, shape.topRight, shape.bottomRight, shape.bottomLeft };
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int covered = 0;
+                for (int sy = 0; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++)
+                {
+                    var point = new Vector2((x + (sx + .5f) * .5f) / width,
+                        1f - (y + (sy + .5f) * .5f) / height);
+                    bool inside = true;
+                    for (int edge = 0; edge < 4; edge++)
+                    {
+                        Vector2 a = corners[edge], b = corners[(edge + 1) % 4];
+                        if ((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x) < 0)
+                        { inside = false; break; }
+                    }
+                    if (inside) covered++;
+                }
+                pixels[y * width + x] = new Color32(5, 220, 197, (byte)(covered * 255 / 4));
+            }
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        static Texture2D CreateTriangleCursor()
+        {
+            const int width = 128, height = 64;
+            var pixels = new Color32[width * height];
+            Vector2 left = new Vector2(7, 55), right = new Vector2(121, 55), tip = new Vector2(64, 7);
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                Vector2 point = new Vector2(x + .5f, y + .5f);
+                float distance = Mathf.Min(DistanceToSegment(point, left, right),
+                    Mathf.Min(DistanceToSegment(point, right, tip), DistanceToSegment(point, tip, left)));
+                byte alpha = (byte)(Mathf.Clamp01(3f - distance) * 255);
+                pixels[y * width + x] = new Color32(5, 220, 197, alpha);
+            }
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        void DrawChoiceArrow(Rect hitArea, bool pointsRight, ref Texture2D texture)
+        {
+            if (texture == null) texture = CreateChoiceArrow(pointsRight);
+            GUI.DrawTexture(new Rect(hitArea.center.x - 13, hitArea.center.y - 16, 26, 32), texture);
+            if (GUI.Button(hitArea, GUIContent.none, GUIStyle.none))
+            {
+                modeSelection = 0;
+                playerTwoSelected = !playerTwoSelected;
+                playerTwoUnavailable = false;
+            }
+        }
+
+        static Texture2D CreateChoiceArrow(bool pointsRight)
+        {
+            const int width = 64, height = 80;
+            var pixels = new Color32[width * height];
+            Vector2 tip = new Vector2(pointsRight ? 59 : 5, 40);
+            Vector2 top = new Vector2(pointsRight ? 5 : 59, 74);
+            Vector2 bottom = new Vector2(pointsRight ? 5 : 59, 6);
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int covered = 0;
+                for (int sy = 0; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++)
+                {
+                    Vector2 point = new Vector2(x + (sx + .5f) * .5f, y + (sy + .5f) * .5f);
+                    float a = Cross(tip, top, point), b = Cross(top, bottom, point), c = Cross(bottom, tip, point);
+                    if (!((a < 0 || b < 0 || c < 0) && (a > 0 || b > 0 || c > 0))) covered++;
+                }
+                pixels[y * width + x] = new Color32(5, 220, 197, (byte)(covered * 255 / 4));
+            }
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        static float Cross(Vector2 a, Vector2 b, Vector2 point) =>
+            (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+
+        static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 segment = b - a;
+            float position = Mathf.Clamp01(Vector2.Dot(point - a, segment) / segment.sqrMagnitude);
+            return Vector2.Distance(point, a + segment * position);
+        }
+
+        void DrawArt(Rect destination, Rect source, float alpha)
+        {
+            Color previous = GUI.color;
+            GUI.color = new Color(1, 1, 1, alpha);
+            GUI.DrawTextureWithTexCoords(destination, menuArtwork, source);
+            GUI.color = previous;
+        }
+
+        static void ExitGame()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         void DrawPassengerOverlay()
@@ -168,6 +509,8 @@ namespace CrazyElevator.Managers
             cardTitle = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 25, 23, 38) };
             GameTypography.Apply(cardTitle, true);
             cardTitle.normal.textColor = Ink;
+            menuLabelText = new GUIStyle(cardTitle) { fontSize = 42 };
+            menuLabelText.normal.textColor = Ink;
             caption = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 48, 14, 19), fontStyle = FontStyle.Normal };
             GameTypography.Apply(caption);
             caption.normal.textColor = Cream;
@@ -177,6 +520,9 @@ namespace CrazyElevator.Managers
             cardCaption.normal.textColor = Ink;
             body = new GUIStyle(caption) { alignment = TextAnchor.MiddleLeft, fontSize = Mathf.Clamp(Screen.height / 55, 12, 16) };
             GameTypography.Apply(body);
+            startCircle = new GUIStyle(GUI.skin.label)
+            { alignment = TextAnchor.MiddleCenter, fontSize = 48, fontStyle = FontStyle.Bold };
+            startCircle.normal.textColor = Ink;
         }
 
         void DrawMode(Rect rect, Color accent, string heading, string detail, bool duel, bool selected)
@@ -200,7 +546,17 @@ namespace CrazyElevator.Managers
                 SelectAndStart(duel);
         }
 
-        void StartSelectedMode() => SelectAndStart(selectedDuel);
+        void StartSelectedMode()
+        {
+            if (playerTwoSelected)
+            {
+                playerTwoUnavailable = true;
+                return;
+            }
+            // CPU is the existing 1v1 match; the rival is driven by NpcElevator.
+            launching = true;
+            launchTimer = 0;
+        }
 
         void SelectAndStart(bool duel)
         {
