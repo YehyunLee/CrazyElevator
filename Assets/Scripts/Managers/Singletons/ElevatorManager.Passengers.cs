@@ -14,7 +14,12 @@ namespace CrazyElevator.Managers
         static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
         static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
         const float CabinBackEdge = 4.72f;
-        const int CabinRows = 4;
+        const int CabinColumns = 3;
+        const int CabinRows = 3;
+        static readonly float[] CabinTileXBounds = { -2.08f, -.693f, .693f, 2.08f };
+        static readonly float[] CabinTileZBounds = { .35f, 1.82f, 3.29f, 4.58f };
+        static readonly float[] CabinTileX = { -1.3865f, 0f, 1.3865f };
+        static readonly float[] CabinTileZ = { 1.085f, 2.555f, 3.935f };
         Rider selectedRider;
         Color selectionTint;
         Rider draggedRider;
@@ -36,16 +41,91 @@ namespace CrazyElevator.Managers
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
-            // Use continuous floor distance instead of a fixed row/seat grid.
-            // The grid rejected open middle-back floor when a nearby rider was
-            // visually in another part of the cabin.
-            foreach (var other in round.Riders)
+            return TryCabinTilePlacement(rider, position, true, out _);
+        }
+
+        // Resolve a passenger to one horizontal run of the 3x3 cabin grid.
+        // Multi-space passengers occupy adjacent tiles in the same row.
+        bool TryCabinTilePlacement(Rider rider, Vector3 desired, bool nearestOnly, out Vector3 placement)
+        {
+            placement = desired;
+            if (rider == null || round == null) return false;
+
+            bool[] occupied = new bool[CabinColumns * CabinRows];
+            foreach (Rider other in round.Riders)
             {
                 if (other == rider || !round.Owns(other)) continue;
-                Vector3 placed = cabinPositions.TryGetValue(other, out var spot) ? spot : RiderPosition(other);
-                if (new Vector2(position.x - placed.x, position.z - placed.z).magnitude < PartyRadius(rider) + PartyRadius(other)) return false;
+                Vector3 placed = cabinPositions.TryGetValue(other, out Vector3 saved)
+                    ? saved : RiderPosition(other);
+                MarkNearestCabinTiles(other, placed, occupied);
             }
-            return true;
+
+            int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
+            float nearestDistance = float.MaxValue;
+            float nearestOpenDistance = float.MaxValue;
+            Vector3 nearest = desired;
+            Vector3 nearestOpen = desired;
+            bool nearestIsOpen = false;
+            bool foundOpen = false;
+            for (int row = 0; row < CabinRows; row++)
+            for (int start = 0; start <= CabinColumns - width; start++)
+            {
+                const float xPadding = .05f;
+                const float zPadding = .05f;
+                // Keep free placement inside the chosen tile run. Clamping only
+                // prevents crossing into another tile; it does not snap to center.
+                Vector3 candidate = new Vector3(
+                    Mathf.Clamp(desired.x, CabinTileXBounds[start] + xPadding,
+                        CabinTileXBounds[start + width] - xPadding),
+                    .12f,
+                    Mathf.Clamp(desired.z, CabinTileZBounds[row] + zPadding,
+                        CabinTileZBounds[row + 1] - zPadding));
+                float distance = new Vector2(desired.x - candidate.x, desired.z - candidate.z).sqrMagnitude;
+                bool open = true;
+                for (int column = start; column < start + width; column++)
+                    if (occupied[row * CabinColumns + column]) { open = false; break; }
+
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearest = candidate;
+                    nearestIsOpen = open;
+                }
+                if (open && distance < nearestOpenDistance)
+                {
+                    nearestOpenDistance = distance;
+                    nearestOpen = candidate;
+                    foundOpen = true;
+                }
+            }
+
+            if (nearestOnly)
+            {
+                placement = nearest;
+                return nearestIsOpen;
+            }
+            placement = nearestOpen;
+            return foundOpen;
+        }
+
+        void MarkNearestCabinTiles(Rider rider, Vector3 position, bool[] occupied)
+        {
+            int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
+            int bestRow = 0;
+            int bestStart = 0;
+            float bestDistance = float.MaxValue;
+            for (int row = 0; row < CabinRows; row++)
+            for (int start = 0; start <= CabinColumns - width; start++)
+            {
+                float centerX = (CabinTileX[start] + CabinTileX[start + width - 1]) * .5f;
+                float distance = new Vector2(position.x - centerX, position.z - CabinTileZ[row]).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                bestRow = row;
+                bestStart = start;
+            }
+            for (int column = bestStart; column < bestStart + width; column++)
+                occupied[bestRow * CabinColumns + column] = true;
         }
         bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !rider.Resolved
             && !boardingTransfers.ContainsKey(rider) && !exiting.ContainsKey(rider)
@@ -58,25 +138,7 @@ namespace CrazyElevator.Managers
         {
             if (rider.Boarded) return true;
             if (!round.HasCapacityFor(rider)) return false;
-            if (keepDoorwayClear)
-            {
-                // Check every seat the player can actually drop into, including
-                // seats outside the automatic boarding animation's preferred spots.
-                for (int row = 0; row < CabinRows; row++)
-                for (int seat = 0; seat < 3; seat++)
-                {
-                    Vector3 spot = new Vector3(-1.12f + seat * 1.12f, .12f, .48f + row * 1.16f);
-                    if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
-                }
-                return false;
-            }
-            for (float z = 1f; z <= 3f; z += .7f)
-            for (float x = -1.4f; x <= 1.41f; x += .7f)
-            {
-                Vector3 spot = new Vector3(x, .12f, z);
-                if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
-            }
-            return false;
+            return TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out _);
         }
 
         void SelectRider(Rider rider)
@@ -230,10 +292,11 @@ namespace CrazyElevator.Managers
             // clearly outside before release counts as a kick.
             dragKickReady = draggedWasBoarded && local.z < KickOutBoundaryZ;
             bool inside = IsInsideCabin(draggedRider, local);
-            bool hasSpace = (draggedWasBoarded || round.HasCapacityFor(draggedRider))
-                && CabinPlacementClear(draggedRider, local);
+            bool hasCapacity = draggedWasBoarded || round.HasCapacityFor(draggedRider);
+            Vector3 placement = local;
+            bool hasSpace = hasCapacity && TryCabinTilePlacement(draggedRider, local, true, out placement);
             SetSelectionTint(dragKickReady || !inside ? Gold : hasSpace ? BoardingValid : BoardingInvalid);
-            figure.localPosition = local;
+            figure.localPosition = inside && hasSpace ? placement : local;
             figure.localScale = dragKickReady
                 ? Vector3.Scale(dragOriginalScale, new Vector3(1.12f, .85f, 1.12f)) : dragOriginalScale;
             figure.localRotation = dragKickReady

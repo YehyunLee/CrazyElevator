@@ -13,7 +13,7 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
-            rewardPoints, rewardCaption, calloutNumber, calloutText;
+            rewardPoints, rewardCaption, calloutNumber, calloutText, selectionArrow;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
 
@@ -47,12 +47,15 @@ namespace CrazyElevator.Managers
             GameTypography.Apply(rewardPoints, true);
             rewardCaption = new GUIStyle(buttonStyle) { fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             GameTypography.Apply(rewardCaption, true);
-            calloutNumber = new GUIStyle(buttonStyle) { fontSize = 31, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            calloutNumber = new GUIStyle(buttonStyle) { fontSize = 25, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(calloutNumber, true);
             calloutNumber.normal.textColor = UiWhite;
             calloutText = new GUIStyle(buttonStyle) { fontSize = 13, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Clip };
             GameTypography.Apply(calloutText, true);
             calloutText.normal.textColor = UiWhite;
+            selectionArrow = new GUIStyle(buttonStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            GameTypography.Apply(selectionArrow, true);
+            selectionArrow.normal.textColor = Gold;
         }
         // Draw a solid panel and restore the GUI tint.
         void Panel(Rect r, Color c) { var old = GUI.color; GUI.color = c; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = old; }
@@ -91,13 +94,17 @@ namespace CrazyElevator.Managers
         }
         void OutlinedLabel(Rect rect, string value, GUIStyle style)
         {
+            OutlinedLabel(rect, value, style, UiWhite);
+        }
+        void OutlinedLabel(Rect rect, string value, GUIStyle style, Color foreground)
+        {
             Color previous = style.normal.textColor;
             style.normal.textColor = UiBlack;
             for (int y = -1; y <= 1; y++)
                 for (int x = -1; x <= 1; x++)
                     if (x != 0 || y != 0)
                         GUI.Label(new Rect(rect.x + x, rect.y + y, rect.width, rect.height), value, style);
-            style.normal.textColor = UiWhite;
+            style.normal.textColor = foreground;
             GUI.Label(rect, value, style);
             style.normal.textColor = previous;
         }
@@ -346,8 +353,8 @@ namespace CrazyElevator.Managers
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
         }
 
-        // Screen-space passenger tags stay crisp and never disappear behind
-        // the 3D models. Only one rider speaks at a time to keep the cabin calm.
+        // Destination plaques sit at passengers' feet, leaving the space above
+        // their heads for a clear selection arrow and occasional dialogue.
         void DrawPassengerCallouts()
         {
             if (BuildingView) return;
@@ -367,33 +374,35 @@ namespace CrazyElevator.Managers
                 { speaker = rider; break; }
             if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
 
-            var occupiedBadges = new List<Rect>();
             foreach (Rider rider in visible)
             {
-                // The character and its world-space patience meter animate in
-                // different Unity phases. Hide head UI during the brief walk
-                // instead of letting the layers visibly trail one another.
-                if (boardingTransfers.ContainsKey(rider)) continue;
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
-                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
-                if (point.z <= 0) continue;
-                float localX = point.x - view.x;
-                float localY = view.y + view.height - point.y;
+                Vector3 headPoint = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
+                Vector3 footPoint = eye.WorldToScreenPoint(figure.position + Vector3.up * .05f);
+                if (headPoint.z <= 0 || footPoint.z <= 0) continue;
+                float localX = footPoint.x - view.x;
+                float footY = view.y + view.height - footPoint.y;
+                float headY = view.y + view.height - headPoint.y;
                 float x = Mathf.Round(Mathf.Clamp(localX, 30f, viewWidth - 30f));
-                float y = Mathf.Round(Mathf.Clamp(localY, 82f, viewHeight - 94f));
+                footY = Mathf.Round(Mathf.Clamp(footY, 96f, viewHeight - 38f));
+                headY = Mathf.Round(Mathf.Clamp(headY, 72f, viewHeight - 116f));
                 Color accent = Palette[rider.Color % Palette.Length];
+                bool selected = rider == selectedRider || rider == draggedRider;
 
-                Rect badge = new Rect(x - 17f, y - 16f, 34f, 34f);
-                for (int attempt = 0; attempt < 4; attempt++)
+                Rect badge = new Rect(x - 18f, footY - 2f, 36f, 30f);
+                Color badgeBorder = selected
+                    ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
+                    : new Color32(145, 153, 166, 255);
+                FramedPanel(badge, badgeBorder, 2f);
+                OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
+                    rider.Destination.ToString(), calloutNumber);
+
+                Rect arrow = new Rect(x - 24f, headY - 26f, 48f, 40f);
+                if (selected)
                 {
-                    bool overlaps = false;
-                    foreach (Rect occupied in occupiedBadges)
-                        if (badge.Overlaps(occupied)) { overlaps = true; break; }
-                    if (!overlaps) break;
-                    badge.y = Mathf.Max(84f, badge.y - 42f);
+                    Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
+                    OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
                 }
-                occupiedBadges.Add(badge);
-                OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
 
                 if (rider != speaker) continue;
                 string message = PassengerCalloutText(rider);
@@ -401,7 +410,7 @@ namespace CrazyElevator.Managers
                 float width = Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
                 const float quoteHeight = 28f;
                 Rect quote = new Rect(Mathf.Clamp(x - width * .5f, 12f, viewWidth - width - 12f),
-                    badge.y - quoteHeight - 2f, width, quoteHeight);
+                    (selected ? arrow.y : headY - 4f) - quoteHeight - 3f, width, quoteHeight);
                 SpeechBubblePanel(quote, accent);
                 GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
                     message, calloutText);
@@ -427,11 +436,11 @@ namespace CrazyElevator.Managers
                     || boardingTransfers.ContainsKey(rider)) continue;
                 if (!figures.TryGetValue(rider, out Transform figure) || !figure.gameObject.activeInHierarchy) continue;
 
-                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
+                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .05f);
                 if (point.z <= 0) continue;
                 float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + 18f, preview.xMax - 18f));
                 float y = Mathf.Round(Mathf.Clamp(Screen.height - point.y, preview.yMin + 30f, preview.yMax - 22f));
-                Rect badge = new Rect(x - 18f, y - 17f, 36f, 34f);
+                Rect badge = new Rect(x - 17f, y - 2f, 34f, 28f);
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     bool overlaps = false;
@@ -441,6 +450,7 @@ namespace CrazyElevator.Managers
                     badge.y = Mathf.Max(preview.yMin + 28f, badge.y - 30f);
                 }
                 occupiedBadges.Add(badge);
+                FramedPanel(badge, new Color32(145, 153, 166, 255), 2f);
                 OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
             }
 

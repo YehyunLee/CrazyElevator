@@ -653,24 +653,6 @@ namespace CrazyElevator.Managers
         bool OfficeInterior => BandForFloor(round != null ? round.Floor : 0) == WorldBand.Office;
         bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0 || HandymanRepairActive;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
-        static readonly Vector3[] OfficeCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
-        static readonly Vector3[] ClearDoorwayCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
 
         void InitializeExtendedInterior()
         {
@@ -821,45 +803,73 @@ namespace CrazyElevator.Managers
             if (shader == null) return;
             passengerGridMaterial = new Material(shader) { name = "Passenger grid material" };
 
-            Color[] colors =
-            {
-                new Color(0.15f, 0.95f, 0.92f, 1f),
-                new Color(1f, 0.56f, 0.28f, 1f),
-                new Color(1f, 0.88f, 0.25f, 1f)
-            };
-            float[] xBoundaries = { -1.68f, -.56f, .56f, 1.68f };
-            float[] zBoundaries = { -.10f, 1.06f, 2.22f, 3.38f };
+            Color gridGray = new Color32(154, 162, 174, 235);
+            if (passengerGridMaterial.HasProperty("_BaseColor"))
+                passengerGridMaterial.SetColor("_BaseColor", gridGray);
+            if (passengerGridMaterial.HasProperty("_Color"))
+                passengerGridMaterial.SetColor("_Color", gridGray);
+            float[] xBoundaries = CabinTileXBounds;
+            float[] zBoundaries = CabinTileZBounds;
+            Color tileGray = new Color32(82, 96, 116, 210);
 
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .035f, zBoundaries[0]),
-                    new Vector3(xBoundaries[i], .035f, zBoundaries[3]), colors[(i - 1) % colors.Length]);
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .035f, zBoundaries[i]),
-                    new Vector3(xBoundaries[3], .035f, zBoundaries[i]), colors[i % colors.Length]);
+            // Give every space a visible floor tile. The dividers alone read as
+            // loose lines from the enlarged camera angle; these nine inset
+            // boxes make the actual placement zones obvious.
+            for (int row = 0; row < 3; row++)
+            for (int column = 0; column < 3; column++)
+            {
+                Vector3 center = new Vector3(
+                    (xBoundaries[column] + xBoundaries[column + 1]) * .5f,
+                    .061f,
+                    (zBoundaries[row] + zBoundaries[row + 1]) * .5f);
+                Vector3 size = new Vector3(
+                    xBoundaries[column + 1] - xBoundaries[column] - .09f,
+                    .012f,
+                    zBoundaries[row + 1] - zBoundaries[row] - .09f);
+                Transform tile = Shape("Grid tile " + row + " " + column,
+                    PrimitiveType.Cube, center, size, tileGray, passengerGridObject.transform);
+                Renderer tileRenderer = tile.GetComponent<Renderer>();
+                if (tileRenderer != null)
+                {
+                    tileRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    tileRenderer.receiveShadows = false;
+                }
+                DisableCollider(tile);
+            }
+
+            for (int i = 0; i < 4; i++)
+                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .076f, zBoundaries[0]),
+                    new Vector3(xBoundaries[i], .076f, zBoundaries[3]), gridGray);
+            for (int i = 0; i < 4; i++)
+                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .076f, zBoundaries[i]),
+                    new Vector3(xBoundaries[3], .076f, zBoundaries[i]), gridGray);
+            passengerGridObject.SetActive(false);
         }
 
         void CreatePassengerGridLine(string lineName, Vector3 start, Vector3 end, Color color)
         {
-            var lineObject = new GameObject(lineName);
-            lineObject.transform.SetParent(passengerGridObject.transform, false);
-            var line = lineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = false;
-            line.positionCount = 2;
-            line.SetPosition(0, start);
-            line.SetPosition(1, end);
-            line.startWidth = .055f;
-            line.endWidth = .055f;
-            line.startColor = color;
-            line.endColor = color;
-            line.material = passengerGridMaterial;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.alignment = LineAlignment.View;
+            Vector3 delta = end - start;
+            Vector3 size = Mathf.Abs(delta.x) > Mathf.Abs(delta.z)
+                ? new Vector3(Mathf.Abs(delta.x), .014f, .045f)
+                : new Vector3(.045f, .014f, Mathf.Abs(delta.z));
+            Transform line = Shape(lineName, PrimitiveType.Cube, (start + end) * .5f,
+                size, color, passengerGridObject.transform);
+            Renderer renderer = line.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = passengerGridMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+            DisableCollider(line);
         }
 
         void UpdateInteriorPersona(float dt)
         {
             if (!extendedInterior || !persona) return;
+            if (passengerGridObject != null)
+                passengerGridObject.SetActive(phase == Phase.Boarding
+                    && (selectedRider != null || draggedRider != null || boardingTransfers.Count > 0));
             repairedFor = Mathf.Max(0, repairedFor - dt);
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);
@@ -990,28 +1000,8 @@ namespace CrazyElevator.Managers
                 Play(buzz);
                 return;
             }
-            if (keepDoorwayClear)
+            if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
-                Vector3[] spots = OfficeInterior ? OfficeCabinSpots : ClearDoorwayCabinSpots;
-                foreach (Vector3 spot in spots)
-                {
-                    if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
-                    if (!round.Board(rider)) return;
-                    cabinPositions[rider] = spot;
-                    BeginPersonaBoard(rider, figure.localPosition, spot);
-                    notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
-                    return;
-                }
-                SetControlStatus("OVERLOADED");
-                notice = "ELEVATOR OVERLOADED! This passenger needs " + rider.Space + " adjacent spaces. Unload someone first.";
-                Play(buzz);
-                return;
-            }
-            for (float z = 1f; z <= 3f; z += .7f)
-            for (float x = -1.4f; x <= 1.41f; x += .7f)
-            {
-                Vector3 spot = new Vector3(x, .12f, z);
-                if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
                 if (!round.Board(rider)) return;
                 cabinPositions[rider] = spot;
                 BeginPersonaBoard(rider, figure.localPosition, spot);
@@ -1019,7 +1009,8 @@ namespace CrazyElevator.Managers
                 return;
             }
             SetControlStatus("OVERLOADED");
-            notice = "ELEVATOR OVERLOADED! No clear space for this passenger. Unload someone first.";
+            notice = "ELEVATOR OVERLOADED! This passenger needs " + rider.Space + " adjacent tile"
+                + (rider.Space == 1 ? "." : "s.") + " Unload someone first.";
             Play(buzz);
         }
 
