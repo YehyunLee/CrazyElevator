@@ -64,13 +64,22 @@ namespace CrazyElevator.Managers
         }
         void AngularPanel(Rect r, Color accent)
         {
-            // Overlap the left edge by one pixel so fractional screen-space
-            // rectangles cannot leave a pale seam between the accent and panel.
-            float left = Mathf.Floor(r.x) - 1f;
-            float width = Mathf.Ceil(r.xMax) - left;
-            Panel(new Rect(left, r.y, width, r.height), UiBlack);
-            Panel(new Rect(left, r.yMax - 4f, width, 4f), accent);
-            AccentBar(new Rect(left, r.y + 2f, 10f, r.height - 6f), accent);
+            FramedPanel(r, accent, 3f);
+        }
+        void SpeechBubblePanel(Rect r, Color accent)
+        {
+            FramedPanel(r, accent, 2f);
+        }
+        void FramedPanel(Rect r, Color accent, float border)
+        {
+            Rect outer = new Rect(
+                Mathf.Round(r.x), Mathf.Round(r.y),
+                Mathf.Max(1f, Mathf.Round(r.width)), Mathf.Max(1f, Mathf.Round(r.height)));
+            Panel(outer, accent);
+            Panel(new Rect(
+                outer.x + border, outer.y + border,
+                Mathf.Max(1f, outer.width - border * 2f),
+                Mathf.Max(1f, outer.height - border * 2f)), UiBlack);
         }
         // Use the body style unless a custom style is supplied.
         void Label(Rect r, string text, GUIStyle style = null)
@@ -272,16 +281,32 @@ namespace CrazyElevator.Managers
                 rewardPoints.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, alpha);
                 GUI.Label(pointsRect, "+" + popup.Points, rewardPoints);
 
-                float bannerWidth = Mathf.Min(width * .82f, 230f * uiScale);
-                Rect banner = new Rect(centerX - bannerWidth * .5f, centerY + 14f * uiScale,
-                    bannerWidth, 30f * uiScale);
-                Panel(banner, new Color(Ink.r, Ink.g, Ink.b, alpha * .9f));
-                Panel(new Rect(banner.x, banner.y, 5f * uiScale, banner.height),
-                    new Color(accent.r, accent.g, accent.b, alpha));
-                rewardCaption.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
                 string caption = popup.Combo > 1 ? "QUICK COMBO  x" + popup.Combo
                     : popup.Happy ? "PERFECT DROP!" : "RIGHT FLOOR!";
-                GUI.Label(banner, caption, rewardCaption);
+                bool floatingPerfect = popup.Happy && popup.Combo <= 1;
+                if (floatingPerfect)
+                {
+                    // Perfect drops use the same floating 3D treatment as the
+                    // points, so the reward does not get buried in another box.
+                    rewardCaption.fontSize = Mathf.Max(14, Mathf.RoundToInt(21f * uiScale));
+                    Rect captionRect = new Rect(centerX - width * .5f, centerY + 14f * uiScale,
+                        width, 30f * uiScale);
+                    rewardCaption.normal.textColor = new Color(Ink.r, Ink.g, Ink.b, alpha * .8f);
+                    GUI.Label(new Rect(captionRect.x + 3f, captionRect.y + 3f,
+                        captionRect.width, captionRect.height), caption, rewardCaption);
+                    rewardCaption.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+                    GUI.Label(captionRect, caption, rewardCaption);
+                }
+                else
+                {
+                    float bannerWidth = Mathf.Min(width * .82f, 230f * uiScale);
+                    Rect banner = new Rect(centerX - bannerWidth * .5f, centerY + 14f * uiScale,
+                        bannerWidth, 30f * uiScale);
+                    FramedPanel(banner, accent, 2f);
+                    rewardCaption.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+                    GUI.Label(new Rect(banner.x + 6f, banner.y, banner.width - 12f, banner.height),
+                        caption, rewardCaption);
+                }
 
                 rewardPoints.fontSize = previousPointSize;
                 rewardCaption.fontSize = previousCaptionSize;
@@ -373,12 +398,13 @@ namespace CrazyElevator.Managers
                 if (rider != speaker) continue;
                 string message = PassengerCalloutText(rider);
                 if (string.IsNullOrEmpty(message)) continue;
-                float width = Mathf.Clamp(76f + message.Length * 5f, 120f, 176f);
-                const float quoteHeight = 24f;
+                float width = Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
+                const float quoteHeight = 28f;
                 Rect quote = new Rect(Mathf.Clamp(x - width * .5f, 12f, viewWidth - width - 12f),
                     badge.y - quoteHeight - 2f, width, quoteHeight);
-                AngularPanel(quote, accent);
-                GUI.Label(new Rect(quote.x + 9f, quote.y - 1f, quote.width - 15f, quote.height - 2f), message, calloutText);
+                SpeechBubblePanel(quote, accent);
+                GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
+                    message, calloutText);
             }
         }
 
@@ -492,7 +518,7 @@ namespace CrazyElevator.Managers
             }
             bool pressed = mouse != null && mouse.leftButton.isPressed && rect.Contains(cursor);
             AngularPanel(rect, accent);
-            if (pressed) Panel(new Rect(rect.x + 6f, rect.y + 5f, rect.width - 10f, rect.height - 12f), accent);
+            if (pressed) Panel(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), accent);
             Color previous = buttonStyle.normal.textColor;
             buttonStyle.normal.textColor = pressed ? UiBlack : UiWhite;
             Label(rect, text, buttonStyle);

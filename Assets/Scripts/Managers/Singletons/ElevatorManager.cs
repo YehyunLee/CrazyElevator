@@ -26,6 +26,29 @@ namespace CrazyElevator.Managers
             new Color32(91, 168, 255, 255), Coral, Gold,
             new Color32(177, 120, 255, 255), new Color32(112, 204, 139, 255), new Color32(255, 154, 79, 255)
         };
+        // Seven-segment order: top, upper-right, lower-right, bottom,
+        // lower-left, upper-left, middle.
+        static readonly bool[][] SevenSegmentDigits =
+        {
+            new[] { true,  true,  true,  true,  true,  true,  false }, // 0
+            new[] { false, true,  true,  false, false, false, false }, // 1
+            new[] { true,  true,  false, true,  true,  false, true  }, // 2
+            new[] { true,  true,  true,  true,  false, false, true  }, // 3
+            new[] { false, true,  true,  false, false, true,  true  }, // 4
+            new[] { true,  false, true,  true,  false, true,  true  }, // 5
+            new[] { true,  false, true,  true,  true,  true,  true  }, // 6
+            new[] { true,  true,  true,  false, false, false, false }, // 7
+            new[] { true,  true,  true,  true,  true,  true,  true  }, // 8
+            new[] { true,  true,  true,  true,  false, true,  true  }  // 9
+        };
+        const float LedHorizontalLength = .17f;
+        const float LedVerticalLength = .05f;
+        const float LedSegmentThickness = .022f;
+        const float LedSegmentDepth = .018f;
+        const float LedSideOffset = .08f;
+        const float LedRowOffset = .10f;
+        const float LedDigitPitch = .24f;
+        static readonly Color LedInactive = new Color32(44, 52, 61, 255);
         static readonly string[] FloorNames =
         {
             "LOBBY", "MAIL ROOM", "GARDENS", "OFFICES", "STUDIO", "CAFETERIA",
@@ -180,7 +203,8 @@ namespace CrazyElevator.Managers
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .044f;
+            SetFloorDisplayText("0");
+            if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
@@ -326,7 +350,7 @@ namespace CrazyElevator.Managers
                 {
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
-                    floorSign.text = destination.ToString();
+                    SetFloorDisplayText(destination.ToString());
                     phase = Phase.Opening; phaseTime = 0;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
@@ -340,7 +364,7 @@ namespace CrazyElevator.Managers
             int steps = Mathf.Max(1, Mathf.CeilToInt(dt * 120));
             float step = dt / steps;
             for (int i = 0; i < steps; i++) AdvanceTravelStep(step);
-            floorSign.text = NearbyFloor.ToString();
+            SetFloorDisplayText(NearbyFloor.ToString());
         }
 
         void AdvanceTravelStep(float dt)
@@ -448,9 +472,9 @@ namespace CrazyElevator.Managers
             int shownFloor = origin + direction * completedStep;
             float betweenFloors = exactStep - completedStep;
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
-            floorSign.text = shownFloor.ToString();
-            floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
-            floorSign.characterSize = .044f + .004f * pulse;
+            SetFloorDisplayText(shownFloor.ToString());
+            if (floorLedDigits != null)
+                floorLedDigits.localPosition = floorLedDigitsHome + Vector3.up * (.035f * pulse);
         }
 
         // Apply travel vibration or an arrival bump.
@@ -669,16 +693,10 @@ namespace CrazyElevator.Managers
 
         void ConfigureFloorDisplay()
         {
-            // Replace the old face with a slim overhead indicator. The wider
-            // frame and inset screen make it read as part of the cabin
-            // instead of a floating square above the passengers.
-            floorSign.transform.localPosition = new Vector3(0f, 2.82f, .47f);
-            floorSignHome = floorSign.transform.localPosition;
-            floorSign.anchor = TextAnchor.MiddleCenter;
-            floorSign.alignment = TextAlignment.Center;
-            floorSign.fontSize = 72;
-            floorSign.characterSize = .044f;
-            floorSign.color = new Color32(126, 255, 218, 255);
+            // Replace the old face with a compact overhead indicator. The
+            // frame and inset screen make it read as part of the cabin.
+            string initialFloor = string.IsNullOrEmpty(floorSign.text) ? "0" : floorSign.text;
+            floorSign.gameObject.SetActive(false);
 
             if (floorLedPanel == null)
             {
@@ -686,7 +704,7 @@ namespace CrazyElevator.Managers
                     "Elevator floor LED frame",
                     PrimitiveType.Cube,
                     new Vector3(0f, 2.78f, .33f),
-                    new Vector3(1.48f, .46f, .08f),
+                    new Vector3(1.08f, .42f, .08f),
                     new Color32(43, 48, 78, 255),
                     stage);
                 DisableCollider(floorLedPanel);
@@ -697,11 +715,90 @@ namespace CrazyElevator.Managers
                     "Elevator floor LED screen",
                     PrimitiveType.Cube,
                     new Vector3(0f, 2.78f, .39f),
-                    new Vector3(1.28f, .31f, .035f),
+                    new Vector3(.90f, .29f, .035f),
                     new Color32(28, 39, 51, 255),
                     stage);
                 DisableCollider(floorLedScreen);
             }
+
+            if (floorLedDigits == null)
+            {
+                floorLedDigits = new GameObject("Elevator floor LED digits").transform;
+                floorLedDigits.SetParent(stage, false);
+                floorLedDigits.localPosition = floorLedDigitsHome;
+
+                Vector3[] offsets =
+                {
+                    new Vector3(0f, LedRowOffset, 0f),
+                    new Vector3(LedSideOffset, LedRowOffset * .5f, 0f),
+                    new Vector3(LedSideOffset, -LedRowOffset * .5f, 0f),
+                    new Vector3(0f, -LedRowOffset, 0f),
+                    new Vector3(-LedSideOffset, -LedRowOffset * .5f, 0f),
+                    new Vector3(-LedSideOffset, LedRowOffset * .5f, 0f),
+                    new Vector3(0f, 0f, 0f)
+                };
+                for (int digit = 0; digit < floorSegmentRenderers.Length / 7; digit++)
+                {
+                    for (int segment = 0; segment < 7; segment++)
+                    {
+                        bool horizontal = segment == 0 || segment == 3 || segment == 6;
+                        Vector3 size = horizontal
+                            ? new Vector3(LedHorizontalLength, LedSegmentThickness, LedSegmentDepth)
+                            : new Vector3(LedSegmentThickness, LedVerticalLength, LedSegmentDepth);
+                        Transform part = Shape(
+                            "LED digit " + digit + " segment " + segment,
+                            PrimitiveType.Cube,
+                            offsets[segment],
+                            size,
+                            floorDisplayColor,
+                            floorLedDigits);
+                        floorSegmentRenderers[digit * 7 + segment] = part.GetComponent<Renderer>();
+                        DisableCollider(part);
+                    }
+                }
+            }
+
+            SetFloorDisplayColor(floorDisplayColor);
+            SetFloorDisplayText(initialFloor);
+        }
+
+        void SetFloorDisplayText(string value)
+        {
+            if (floorSign != null) floorSign.text = value;
+            if (floorLedDigits == null) return;
+
+            string display = string.IsNullOrEmpty(value) ? "0" : value;
+            int maxDigits = floorSegmentRenderers.Length / 7;
+            int digitCount = Mathf.Clamp(display.Length, 1, maxDigits);
+            float firstX = -(digitCount - 1) * LedDigitPitch * .5f;
+            for (int digit = 0; digit < maxDigits; digit++)
+            {
+                bool validDigit = digit < digitCount && display[digit] >= '0' && display[digit] <= '9';
+                int digitValue = validDigit ? display[digit] - '0' : 0;
+                for (int segment = 0; segment < 7; segment++)
+                {
+                    Renderer led = floorSegmentRenderers[digit * 7 + segment];
+                    if (led == null) continue;
+                    float segmentX = segment == 1 || segment == 2
+                        ? LedSideOffset
+                        : segment == 4 || segment == 5 ? -LedSideOffset : 0f;
+                    float displayX = firstX + digit * LedDigitPitch + segmentX;
+                    led.transform.localPosition = new Vector3(
+                        -displayX,
+                        led.transform.localPosition.y,
+                        led.transform.localPosition.z);
+                    bool lit = validDigit && SevenSegmentDigits[digitValue][segment];
+                    led.enabled = validDigit;
+                    if (validDigit) led.sharedMaterial = Mat(lit ? floorDisplayColor : LedInactive);
+                }
+            }
+        }
+
+        void SetFloorDisplayColor(Color color)
+        {
+            floorDisplayColor = color;
+            if (floorSign != null) floorSign.color = color;
+            SetFloorDisplayText(floorSign != null ? floorSign.text : "0");
         }
 
         void DisableCollider(Transform part)
@@ -767,11 +864,11 @@ namespace CrazyElevator.Managers
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
-            floorSign.color = band == WorldBand.Office
+            SetFloorDisplayColor(band == WorldBand.Office
                 ? new Color32(140, 196, 255, 255)
                 : band == WorldBand.Candy
                     ? new Color32(255, 179, 222, 255)
-                    : new Color32(93, 240, 230, 255);
+                    : new Color32(93, 240, 230, 255));
             int world = (int)band;
             if (appliedWorld != world)
             {
@@ -929,11 +1026,8 @@ namespace CrazyElevator.Managers
         void BeginPersonaBoard(Rider rider, Vector3 start, Vector3 target)
         {
             if (!extendedInterior || !figures.TryGetValue(rider, out var figure)) return;
-            float depthScale = keepDoorwayClear
-                ? Mathf.Lerp(.72f, .92f, Mathf.InverseLerp(.32f, 3.96f, target.z))
-                : 1f;
             boardingTransfers[rider] = new InteriorTransfer { start = start, target = target, scale = figure.localScale,
-                targetScale = figure.localScale * depthScale,
+                targetScale = figure.localScale,
                 rotation = figure.localRotation, gentle = FriendlyInterior };
             figure.localPosition = start;
             BeginHandymanRepair(rider);
@@ -1387,6 +1481,10 @@ namespace CrazyElevator.Managers
         readonly HashSet<Collider> closeButtons = new HashSet<Collider>();
         readonly List<TextMesh> controlStatuses = new List<TextMesh>();
         readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
+        Transform floorLedDigits;
+        readonly Renderer[] floorSegmentRenderers = new Renderer[21];
+        Vector3 floorLedDigitsHome = new Vector3(0f, 2.78f, .47f);
+        Color floorDisplayColor = new Color32(126, 255, 218, 255);
         Vector3 floorSignHome = new Vector3(0, 2.72f, -.18f);
 
         // Reuse one generated material per color.
