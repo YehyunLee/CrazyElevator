@@ -26,6 +26,29 @@ namespace CrazyElevator.Managers
             new Color32(91, 168, 255, 255), Coral, Gold,
             new Color32(177, 120, 255, 255), new Color32(112, 204, 139, 255), new Color32(255, 154, 79, 255)
         };
+        // Seven-segment order: top, upper-right, lower-right, bottom,
+        // lower-left, upper-left, middle.
+        static readonly bool[][] SevenSegmentDigits =
+        {
+            new[] { true,  true,  true,  true,  true,  true,  false }, // 0
+            new[] { false, true,  true,  false, false, false, false }, // 1
+            new[] { true,  true,  false, true,  true,  false, true  }, // 2
+            new[] { true,  true,  true,  true,  false, false, true  }, // 3
+            new[] { false, true,  true,  false, false, true,  true  }, // 4
+            new[] { true,  false, true,  true,  false, true,  true  }, // 5
+            new[] { true,  false, true,  true,  true,  true,  true  }, // 6
+            new[] { true,  true,  true,  false, false, false, false }, // 7
+            new[] { true,  true,  true,  true,  true,  true,  true  }, // 8
+            new[] { true,  true,  true,  true,  false, true,  true  }  // 9
+        };
+        const float LedHorizontalLength = .17f;
+        const float LedVerticalLength = .05f;
+        const float LedSegmentThickness = .022f;
+        const float LedSegmentDepth = .018f;
+        const float LedSideOffset = .08f;
+        const float LedRowOffset = .10f;
+        const float LedDigitPitch = .24f;
+        static readonly Color LedInactive = new Color32(44, 52, 61, 255);
         static readonly string[] FloorNames =
         {
             "LOBBY", "MAIL ROOM", "GARDENS", "OFFICES", "STUDIO", "CAFETERIA",
@@ -180,7 +203,8 @@ namespace CrazyElevator.Managers
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
+            SetFloorDisplayText("0");
+            if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
@@ -326,7 +350,7 @@ namespace CrazyElevator.Managers
                 {
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
-                    floorSign.text = destination.ToString();
+                    SetFloorDisplayText(destination.ToString());
                     phase = Phase.Opening; phaseTime = 0;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
@@ -340,7 +364,7 @@ namespace CrazyElevator.Managers
             int steps = Mathf.Max(1, Mathf.CeilToInt(dt * 120));
             float step = dt / steps;
             for (int i = 0; i < steps; i++) AdvanceTravelStep(step);
-            floorSign.text = NearbyFloor.ToString();
+            SetFloorDisplayText(NearbyFloor.ToString());
         }
 
         void AdvanceTravelStep(float dt)
@@ -448,9 +472,9 @@ namespace CrazyElevator.Managers
             int shownFloor = origin + direction * completedStep;
             float betweenFloors = exactStep - completedStep;
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
-            floorSign.text = shownFloor.ToString();
-            floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
-            floorSign.characterSize = .04f + .006f * pulse;
+            SetFloorDisplayText(shownFloor.ToString());
+            if (floorLedDigits != null)
+                floorLedDigits.localPosition = floorLedDigitsHome + Vector3.up * (.035f * pulse);
         }
 
         // Apply travel vibration or an arrival bump.
@@ -604,6 +628,8 @@ namespace CrazyElevator.Managers
         ElevatorPersonaRig persona;
         GameObject passengerGridObject;
         Material passengerGridMaterial;
+        readonly List<Transform> passengerGridTiles = new List<Transform>();
+        readonly List<GameObject> authoredPassengerGridParts = new List<GameObject>();
         float repairProgress;
         float repairedFor;
         int appliedWorld = -1;
@@ -629,24 +655,6 @@ namespace CrazyElevator.Managers
         bool OfficeInterior => BandForFloor(round != null ? round.Floor : 0) == WorldBand.Office;
         bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0 || HandymanRepairActive;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
-        static readonly Vector3[] OfficeCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
-        static readonly Vector3[] ClearDoorwayCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
 
         void InitializeExtendedInterior()
         {
@@ -662,15 +670,154 @@ namespace CrazyElevator.Managers
             InitializeImpairmentIndicators();
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
+            CacheAuthoredPassengerGrid();
             CreatePassengerGrid();
-            floorSign.transform.localPosition = new Vector3(1.75f, 2.72f, .2f);
-            floorSignHome = floorSign.transform.localPosition;
+            ConfigureFloorDisplay();
             UpdateInteriorPersona(0);
         }
+
+        void CacheAuthoredPassengerGrid()
+        {
+            authoredPassengerGridParts.Clear();
+            foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
+            {
+                if (part.name.StartsWith("Grid column border")
+                    || part.name.StartsWith("Grid row border")
+                    || part.name.StartsWith("Grid destination"))
+                {
+                    authoredPassengerGridParts.Add(part.gameObject);
+                    part.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        void SetPassengerGridVisible(bool visible)
+        {
+            if (passengerGridObject != null) passengerGridObject.SetActive(visible);
+        }
+
+        void ConfigureFloorDisplay()
+        {
+            // Replace the old face with a compact overhead indicator. The
+            // frame and inset screen make it read as part of the cabin.
+            string initialFloor = string.IsNullOrEmpty(floorSign.text) ? "0" : floorSign.text;
+            floorSign.gameObject.SetActive(false);
+
+            if (floorLedPanel == null)
+            {
+                floorLedPanel = Shape(
+                    "Elevator floor LED frame",
+                    PrimitiveType.Cube,
+                    new Vector3(0f, 2.78f, .33f),
+                    new Vector3(1.08f, .42f, .08f),
+                    new Color32(43, 48, 78, 255),
+                    stage);
+                DisableCollider(floorLedPanel);
+            }
+            if (floorLedScreen == null)
+            {
+                floorLedScreen = Shape(
+                    "Elevator floor LED screen",
+                    PrimitiveType.Cube,
+                    new Vector3(0f, 2.78f, .39f),
+                    new Vector3(.90f, .29f, .035f),
+                    new Color32(28, 39, 51, 255),
+                    stage);
+                DisableCollider(floorLedScreen);
+            }
+
+            if (floorLedDigits == null)
+            {
+                floorLedDigits = new GameObject("Elevator floor LED digits").transform;
+                floorLedDigits.SetParent(stage, false);
+                floorLedDigits.localPosition = floorLedDigitsHome;
+
+                Vector3[] offsets =
+                {
+                    new Vector3(0f, LedRowOffset, 0f),
+                    new Vector3(LedSideOffset, LedRowOffset * .5f, 0f),
+                    new Vector3(LedSideOffset, -LedRowOffset * .5f, 0f),
+                    new Vector3(0f, -LedRowOffset, 0f),
+                    new Vector3(-LedSideOffset, -LedRowOffset * .5f, 0f),
+                    new Vector3(-LedSideOffset, LedRowOffset * .5f, 0f),
+                    new Vector3(0f, 0f, 0f)
+                };
+                for (int digit = 0; digit < floorSegmentRenderers.Length / 7; digit++)
+                {
+                    for (int segment = 0; segment < 7; segment++)
+                    {
+                        bool horizontal = segment == 0 || segment == 3 || segment == 6;
+                        Vector3 size = horizontal
+                            ? new Vector3(LedHorizontalLength, LedSegmentThickness, LedSegmentDepth)
+                            : new Vector3(LedSegmentThickness, LedVerticalLength, LedSegmentDepth);
+                        Transform part = Shape(
+                            "LED digit " + digit + " segment " + segment,
+                            PrimitiveType.Cube,
+                            offsets[segment],
+                            size,
+                            floorDisplayColor,
+                            floorLedDigits);
+                        floorSegmentRenderers[digit * 7 + segment] = part.GetComponent<Renderer>();
+                        DisableCollider(part);
+                    }
+                }
+            }
+
+            SetFloorDisplayColor(floorDisplayColor);
+            SetFloorDisplayText(initialFloor);
+        }
+
+        void SetFloorDisplayText(string value)
+        {
+            if (floorSign != null) floorSign.text = value;
+            if (floorLedDigits == null) return;
+
+            string display = string.IsNullOrEmpty(value) ? "0" : value;
+            int maxDigits = floorSegmentRenderers.Length / 7;
+            int digitCount = Mathf.Clamp(display.Length, 1, maxDigits);
+            float firstX = -(digitCount - 1) * LedDigitPitch * .5f;
+            for (int digit = 0; digit < maxDigits; digit++)
+            {
+                bool validDigit = digit < digitCount && display[digit] >= '0' && display[digit] <= '9';
+                int digitValue = validDigit ? display[digit] - '0' : 0;
+                for (int segment = 0; segment < 7; segment++)
+                {
+                    Renderer led = floorSegmentRenderers[digit * 7 + segment];
+                    if (led == null) continue;
+                    float segmentX = segment == 1 || segment == 2
+                        ? LedSideOffset
+                        : segment == 4 || segment == 5 ? -LedSideOffset : 0f;
+                    float displayX = firstX + digit * LedDigitPitch + segmentX;
+                    led.transform.localPosition = new Vector3(
+                        -displayX,
+                        led.transform.localPosition.y,
+                        led.transform.localPosition.z);
+                    bool lit = validDigit && SevenSegmentDigits[digitValue][segment];
+                    led.enabled = validDigit;
+                    if (validDigit) led.sharedMaterial = Mat(lit ? floorDisplayColor : LedInactive);
+                }
+            }
+        }
+
+        void SetFloorDisplayColor(Color color)
+        {
+            floorDisplayColor = color;
+            if (floorSign != null) floorSign.color = color;
+            SetFloorDisplayText(floorSign != null ? floorSign.text : "0");
+        }
+
+        void DisableCollider(Transform part)
+        {
+            Collider collider = part ? part.GetComponent<Collider>() : null;
+            if (collider) collider.enabled = false;
+        }
+
 
         void CreatePassengerGrid()
         {
             if (passengerGridObject != null) return;
+
+            passengerGridTiles.Clear();
 
             passengerGridObject = new GameObject("Passenger 3x3 floor grid");
             passengerGridObject.transform.SetParent(stage, false);
@@ -681,49 +828,81 @@ namespace CrazyElevator.Managers
             if (shader == null) return;
             passengerGridMaterial = new Material(shader) { name = "Passenger grid material" };
 
-            Color[] colors =
-            {
-                new Color(0.15f, 0.95f, 0.92f, 1f),
-                new Color(1f, 0.56f, 0.28f, 1f),
-                new Color(1f, 0.88f, 0.25f, 1f)
-            };
-            float[] xBoundaries = { -1.68f, -.56f, .56f, 1.68f };
-            float[] zBoundaries = { -.10f, 1.06f, 2.22f, 3.38f };
+            Color gridGray = new Color32(154, 162, 174, 235);
+            if (passengerGridMaterial.HasProperty("_BaseColor"))
+                passengerGridMaterial.SetColor("_BaseColor", gridGray);
+            if (passengerGridMaterial.HasProperty("_Color"))
+                passengerGridMaterial.SetColor("_Color", gridGray);
+            float[] xBoundaries = CabinTileXBounds;
+            float[] zBoundaries = CabinTileZBounds;
+            Color tileGray = new Color32(82, 96, 116, 210);
 
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .035f, zBoundaries[0]),
-                    new Vector3(xBoundaries[i], .035f, zBoundaries[3]), colors[(i - 1) % colors.Length]);
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .035f, zBoundaries[i]),
-                    new Vector3(xBoundaries[3], .035f, zBoundaries[i]), colors[i % colors.Length]);
+            // Give every space a visible floor tile. The dividers alone read as
+            // loose lines from the enlarged camera angle; these nine inset
+            // boxes make the actual placement zones obvious.
+            for (int row = 0; row < 3; row++)
+            for (int column = 0; column < 3; column++)
+            {
+                Vector3 center = new Vector3(
+                    (xBoundaries[column] + xBoundaries[column + 1]) * .5f,
+                    .061f,
+                    (zBoundaries[row] + zBoundaries[row + 1]) * .5f);
+                Vector3 size = new Vector3(
+                    xBoundaries[column + 1] - xBoundaries[column] - .09f,
+                    .012f,
+                    zBoundaries[row + 1] - zBoundaries[row] - .09f);
+                Transform tile = Shape("Grid tile " + row + " " + column,
+                    PrimitiveType.Cube, center, size, tileGray, passengerGridObject.transform);
+                passengerGridTiles.Add(tile);
+                Renderer tileRenderer = tile.GetComponent<Renderer>();
+                if (tileRenderer != null)
+                {
+                    tileRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    tileRenderer.receiveShadows = false;
+                }
+                DisableCollider(tile);
+            }
+
+            for (int i = 0; i < 4; i++)
+                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .076f, zBoundaries[0]),
+                    new Vector3(xBoundaries[i], .076f, zBoundaries[3]), gridGray);
+            for (int i = 0; i < 4; i++)
+                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .076f, zBoundaries[i]),
+                    new Vector3(xBoundaries[3], .076f, zBoundaries[i]), gridGray);
+            passengerGridObject.SetActive(false);
         }
 
         void CreatePassengerGridLine(string lineName, Vector3 start, Vector3 end, Color color)
         {
-            var lineObject = new GameObject(lineName);
-            lineObject.transform.SetParent(passengerGridObject.transform, false);
-            var line = lineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = false;
-            line.positionCount = 2;
-            line.SetPosition(0, start);
-            line.SetPosition(1, end);
-            line.startWidth = .055f;
-            line.endWidth = .055f;
-            line.startColor = color;
-            line.endColor = color;
-            line.material = passengerGridMaterial;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.alignment = LineAlignment.View;
+            Vector3 delta = end - start;
+            Vector3 size = Mathf.Abs(delta.x) > Mathf.Abs(delta.z)
+                ? new Vector3(Mathf.Abs(delta.x), .014f, .045f)
+                : new Vector3(.045f, .014f, Mathf.Abs(delta.z));
+            Transform line = Shape(lineName, PrimitiveType.Cube, (start + end) * .5f,
+                size, color, passengerGridObject.transform);
+            Renderer renderer = line.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = passengerGridMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+            DisableCollider(line);
         }
 
         void UpdateInteriorPersona(float dt)
         {
             if (!extendedInterior || !persona) return;
+            SetPassengerGridVisible(phase == Phase.Boarding && draggedRider != null);
             repairedFor = Mathf.Max(0, repairedFor - dt);
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
+            SetFloorDisplayColor(band == WorldBand.Office
+                ? new Color32(140, 196, 255, 255)
+                : band == WorldBand.Candy
+                    ? new Color32(255, 179, 222, 255)
+                    : new Color32(93, 240, 230, 255));
             int world = (int)band;
             if (appliedWorld != world)
             {
@@ -845,28 +1024,8 @@ namespace CrazyElevator.Managers
                 Play(buzz);
                 return;
             }
-            if (keepDoorwayClear)
+            if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
-                Vector3[] spots = OfficeInterior ? OfficeCabinSpots : ClearDoorwayCabinSpots;
-                foreach (Vector3 spot in spots)
-                {
-                    if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
-                    if (!round.Board(rider)) return;
-                    cabinPositions[rider] = spot;
-                    BeginPersonaBoard(rider, figure.localPosition, spot);
-                    notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
-                    return;
-                }
-                SetControlStatus("OVERLOADED");
-                notice = "ELEVATOR OVERLOADED! This passenger needs " + rider.Space + " adjacent spaces. Unload someone first.";
-                Play(buzz);
-                return;
-            }
-            for (float z = 1f; z <= 3f; z += .7f)
-            for (float x = -1.4f; x <= 1.41f; x += .7f)
-            {
-                Vector3 spot = new Vector3(x, .12f, z);
-                if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
                 if (!round.Board(rider)) return;
                 cabinPositions[rider] = spot;
                 BeginPersonaBoard(rider, figure.localPosition, spot);
@@ -874,18 +1033,16 @@ namespace CrazyElevator.Managers
                 return;
             }
             SetControlStatus("OVERLOADED");
-            notice = "ELEVATOR OVERLOADED! No clear space for this passenger. Unload someone first.";
+            notice = "ELEVATOR OVERLOADED! This passenger needs " + rider.Space + " adjacent tile"
+                + (rider.Space == 1 ? "." : "s.") + " Unload someone first.";
             Play(buzz);
         }
 
         void BeginPersonaBoard(Rider rider, Vector3 start, Vector3 target)
         {
             if (!extendedInterior || !figures.TryGetValue(rider, out var figure)) return;
-            float depthScale = keepDoorwayClear
-                ? Mathf.Lerp(.72f, .92f, Mathf.InverseLerp(.32f, 3.96f, target.z))
-                : 1f;
             boardingTransfers[rider] = new InteriorTransfer { start = start, target = target, scale = figure.localScale,
-                targetScale = figure.localScale * depthScale,
+                targetScale = figure.localScale,
                 rotation = figure.localRotation, gentle = FriendlyInterior };
             figure.localPosition = start;
             BeginHandymanRepair(rider);
@@ -1101,8 +1258,17 @@ namespace CrazyElevator.Managers
         {
             // Keep the captured damage visible until Casey sweeps it away.
             int severity = HandymanRepairPending ? repairStarfishLevel : ImpairmentLevel;
-            if (interiorImpairment) interiorImpairment.SetSeverity(severity);
-            if (exteriorImpairment) exteriorImpairment.SetSeverity(severity);
+            bool showStarfish = InWater;
+            if (interiorImpairment)
+            {
+                interiorImpairment.SetSeverity(severity);
+                interiorImpairment.gameObject.SetActive(showStarfish);
+            }
+            if (exteriorImpairment)
+            {
+                exteriorImpairment.SetSeverity(severity);
+                exteriorImpairment.gameObject.SetActive(showStarfish);
+            }
         }
         string ImpairmentDescription
         {
@@ -1322,6 +1488,7 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         Camera eye;
         Transform stage, leftDoor, rightDoor, scenery;
+        Transform floorLedPanel, floorLedScreen;
         TextMesh floorSign;
         readonly Dictionary<Collider, int> floorButtons = new Dictionary<Collider, int>();
         readonly Dictionary<int, Renderer> floorButtonVisuals = new Dictionary<int, Renderer>();
@@ -1329,6 +1496,10 @@ namespace CrazyElevator.Managers
         readonly HashSet<Collider> closeButtons = new HashSet<Collider>();
         readonly List<TextMesh> controlStatuses = new List<TextMesh>();
         readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
+        Transform floorLedDigits;
+        readonly Renderer[] floorSegmentRenderers = new Renderer[21];
+        Vector3 floorLedDigitsHome = new Vector3(0f, 2.78f, .47f);
+        Color floorDisplayColor = new Color32(126, 255, 218, 255);
         Vector3 floorSignHome = new Vector3(0, 2.72f, -.18f);
 
         // Reuse one generated material per color.

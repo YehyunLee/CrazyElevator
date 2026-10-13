@@ -927,6 +927,7 @@ MonoBehaviour:
   data: {fileID: 0}
   speech: {fileID: 1663808976328272301}
   destination: {fileID: 2857778025041858732}
+  patienceBarHeight: 2.23
   jackets:
   - {fileID: 4503104322475524074}
 --- !u!1 &2541751916018995297

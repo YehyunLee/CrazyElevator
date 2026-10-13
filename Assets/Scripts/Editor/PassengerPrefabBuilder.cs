@@ -63,11 +63,11 @@ namespace CrazyElevator.EditorTools
             // Active game kinds. Their gameplay identities stay unchanged while
             // their silhouettes and clothing follow the supplied character sheet.
             Build("COURIER", ResourcePrefabFolder + "/Passenger-COURIER.prefab", BuildOfficeBadge, .5f);
-            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f);
+            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f, 2.32f, .55f);
             Build("INTERVIEW", ResourcePrefabFolder + "/Passenger-INTERVIEW.prefab", BuildOfficeTie, .5f);
-            Build("BOSS", ResourcePrefabFolder + "/Passenger-BOSS.prefab", BuildCandyGentleman, .55f);
-            Build("ELDERLY", ResourcePrefabFolder + "/Passenger-ELDERLY.prefab", BuildGranny, .53f);
-            Build("GROUP", ResourcePrefabFolder + "/Passenger-GROUP.prefab", BuildClownTrio, .82f);
+            Build("BOSS", ResourcePrefabFolder + "/Passenger-BOSS.prefab", BuildCandyGentleman, .55f, 2.23f);
+            Build("ELDERLY", ResourcePrefabFolder + "/Passenger-ELDERLY.prefab", BuildGranny, .53f, 2.10f);
+            Build("GROUP", ResourcePrefabFolder + "/Passenger-GROUP.prefab", BuildClownTrio, .82f, 2.10f);
             Build("HANDYMAN", PersonaFolder + "/Prefabs/Passenger-HANDYMAN.prefab", BuildAtlanteanMechanic, .62f);
 
             // Standalone concept exports retain the two underwater ideas even
@@ -87,7 +87,7 @@ namespace CrazyElevator.EditorTools
         {
             EnsureFolder(MaterialFolder);
             materials.Clear();
-            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f);
+            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f, 2.32f, .55f);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("Rebuilt the separate Mom and Baby passenger prefab.");
@@ -190,7 +190,8 @@ namespace CrazyElevator.EditorTools
             UnityEngine.Object.DestroyImmediate(root);
         }
 
-        static void Build(string kind, string path, Action<Transform, List<Renderer>> art, float radius)
+        static void Build(string kind, string path, Action<Transform, List<Renderer>> art, float radius,
+            float patienceBarHeight = 1.88f, float patienceBarCameraOffset = 0f)
         {
             var root = new GameObject("Passenger-" + kind);
             var hit = root.AddComponent<CapsuleCollider>();
@@ -209,6 +210,8 @@ namespace CrazyElevator.EditorTools
             view.kind = kind;
             view.speech = speech;
             view.destination = destination;
+            view.patienceBarHeight = patienceBarHeight;
+            view.patienceBarCameraOffset = patienceBarCameraOffset;
             // Only tiny accent pieces are recoloured by the existing gameplay
             // palette; authored clothes and faces keep their concept colours.
             view.jackets = accents.ToArray();

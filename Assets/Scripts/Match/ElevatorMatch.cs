@@ -500,9 +500,9 @@ namespace CrazyElevator.Match
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width / 5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                seat == 0 ? "YOU" : "NPC", "F" + Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
+                seat == 0 ? "YOU" : "NPC", Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
-                new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/10");
+                new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/" + actor.MaxCapacity);
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
                 Teal, "SCORE", actor.Points.ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth * 3f, bar.y, tileWidth, bar.height),
