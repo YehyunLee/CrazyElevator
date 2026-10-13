@@ -70,16 +70,13 @@ namespace CrazyElevator.Managers
             for (int row = 0; row < CabinRows; row++)
             for (int start = 0; start <= CabinColumns - width; start++)
             {
-                const float xPadding = .05f;
-                const float zPadding = .05f;
-                // Keep free placement inside the chosen tile run. Clamping only
-                // prevents crossing into another tile; it does not snap to center.
+                // Use the larger cabin bounds from the current branch, but keep
+                // Zoe's magnetic behavior: once the cursor enters a cell, the
+                // passenger is pulled to that cell (or adjacent cell run).
                 Vector3 candidate = new Vector3(
-                    Mathf.Clamp(desired.x, CabinTileXBounds[start] + xPadding,
-                        CabinTileXBounds[start + width] - xPadding),
+                    (CabinTileX[start] + CabinTileX[start + width - 1]) * .5f,
                     .12f,
-                    Mathf.Clamp(desired.z, CabinTileZBounds[row] + zPadding,
-                        CabinTileZBounds[row + 1] - zPadding));
+                    CabinTileZ[row]);
                 float distance = new Vector2(desired.x - candidate.x, desired.z - candidate.z).sqrMagnitude;
                 bool open = true;
                 for (int column = start; column < start + width; column++)
@@ -1038,10 +1035,11 @@ namespace CrazyElevator.Managers
             if (passengerPatienceBarPrefab == null || rider == null || figure == null) return;
             PassengerPatienceBar bar = Instantiate(passengerPatienceBarPrefab, figure, false);
             bar.name = rider.Name + " patience";
+            PassengerView view = figure.GetComponent<PassengerView>();
             // Sit just above the authored passenger's head, below the small
             // destination badge, instead of floating near the ceiling.
-            bar.transform.localPosition = new Vector3(0, 1.88f, 0);
-            bar.Bind(eye);
+            bar.transform.localPosition = new Vector3(0, view != null ? view.patienceBarHeight : 1.88f, 0);
+            bar.Bind(eye, view != null ? view.patienceBarCameraOffset : 0f);
             bar.gameObject.SetActive(false);
             patienceBars[rider] = bar;
         }

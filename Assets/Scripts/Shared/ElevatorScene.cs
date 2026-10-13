@@ -9,6 +9,9 @@ namespace CrazyElevator.Shared
         public Transform cabin;
         public Transform leftDoor, rightDoor, passingLights;
         public TextMesh floorDisplay;
+        // Nine editable labels, ordered front-to-back and left-to-right.
+        public TextMesh[] gridDestinations;
+        public Shader gridLabelShader;
         public TextMesh[] controlDisplays;
         public Vector3 leftDoorClosed = new Vector3(-1.32f, 1.35f, .08f);
         public Vector3 rightDoorClosed = new Vector3(1.32f, 1.35f, .08f);

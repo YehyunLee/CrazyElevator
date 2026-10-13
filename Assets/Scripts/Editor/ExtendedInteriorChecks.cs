@@ -62,6 +62,7 @@ public static class ExtendedInteriorChecks
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
+            else if (action == "grid-checks") RunGridChecks(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
             {
@@ -276,6 +277,64 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "solo-basic");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check 3x3 Cabin Occupancy")]
+    public static void RequestGridChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "grid-checks");
+    }
+
+    static void RunGridChecks(Game game)
+    {
+        CrazyElevator.Managers.MenuManager.Close();
+        var titleCanvas = GameObject.Find("Title Menu Canvas");
+        if (titleCanvas) titleCanvas.SetActive(false);
+        Call(game, "Restart");
+        var round = (Round)Get(game, "round");
+        var courier = round.Riders.Find(r => r.Origin == 0 && r.Space == 2);
+        var single = round.Riders.Find(r => r.Origin == 0 && r.Space == 1);
+        Require(courier != null && single != null, "The first floor needs two-space and one-space riders.");
+
+        var find = typeof(Game).GetMethod("TryFindGridPlacement", Flags);
+        var place = typeof(Game).GetMethod("TryGridPlacement", Flags);
+        object[] findArgs = { courier, Vector3.zero };
+        Require((bool)find.Invoke(game, findArgs), "A two-cell rider cannot find an empty pair.");
+        Vector3 pair = (Vector3)findArgs[1];
+        Require(round.Board(courier), "The two-cell rider did not board.");
+        ((IDictionary)Get(game, "cabinPositions"))[courier] = pair;
+
+        object[] overlap = { single, pair, Vector3.zero };
+        Require(!(bool)place.Invoke(game, overlap), "A second rider entered an occupied grid cell.");
+        object[] neighbor = { single, new Vector3(1.27f, .12f, pair.z), Vector3.zero };
+        Require((bool)place.Invoke(game, neighbor), "The free neighboring cell is not usable.");
+        Require(round.Board(single), "The single-cell rider did not board.");
+        ((IDictionary)Get(game, "cabinPositions"))[single] = neighbor[2];
+
+        Call(game, "UpdateGridDestinations");
+        var labels = game.sceneView.gridDestinations;
+        Require(labels.Length == 9 && labels[0].text == courier.Destination.ToString()
+            && labels[1].text == "+" && labels[2].text == single.Destination.ToString(),
+            "The visible cell labels do not match the occupied footprints.");
+        File.WriteAllText(Work + "/result.txt", "3x3 occupancy, adjacent placement, and floor labels passed.");
+
+        // Leave a crowded cabin running for a visual check of floor-label
+        // size, passenger occlusion, and the waiting-only overhead badges.
+        var extraPair = round.Riders.Find(r => r != courier && r.Space == 2);
+        var extraSingles = round.Riders.FindAll(r => r != single && r.Space == 1);
+        Require(extraPair != null && extraSingles.Count >= 2, "Not enough riders for a crowded preview.");
+        void ShowOnGrid(SharedRider rider, Vector3 spot)
+        {
+            rider.Boarded = true;
+            rider.BoardedBySeat = round.Seat;
+            ((IDictionary)Get(game, "cabinPositions"))[rider] = spot;
+        }
+        ShowOnGrid(extraSingles[0], new Vector3(-1.266667f, .12f, 2.3f));
+        ShowOnGrid(extraPair, new Vector3(.633333f, .12f, 2.3f));
+        ShowOnGrid(extraSingles[1], new Vector3(0f, .12f, 3.733333f));
+        Call(game, "SyncFigures", 2f);
     }
 
     static void RunSoloBasic(Game game)
