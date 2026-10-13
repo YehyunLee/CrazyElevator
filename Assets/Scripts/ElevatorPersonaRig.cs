@@ -14,13 +14,22 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
     float clock;
     Vector3 faceHome;
 
-    void Awake() { faceHome = face.localPosition; RestHands(); }
+    void Awake()
+    {
+        faceHome = face ? face.localPosition : Vector3.zero;
+        // The cabin now uses the centered floor display instead of an expressive
+        // elevator face. Keep the serialized face references for prefab
+        // compatibility, but never show the old artwork at runtime.
+        if (face) face.gameObject.SetActive(false);
+        RestHands();
+    }
 
     public void SetWorld(bool isFriendly, bool isRepaired)
         => SetWorld(isFriendly ? WorldBand.Candy : WorldBand.Water, isRepaired);
 
     public void SetWorld(WorldBand world, bool isRepaired)
     {
+        if (face) face.gameObject.SetActive(false);
         band = world;
         friendly = world != WorldBand.Water;
         repaired = isRepaired;

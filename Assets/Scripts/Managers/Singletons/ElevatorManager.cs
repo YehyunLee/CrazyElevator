@@ -180,7 +180,7 @@ namespace CrazyElevator.Managers
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
+            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .044f;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
@@ -450,7 +450,7 @@ namespace CrazyElevator.Managers
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
             floorSign.text = shownFloor.ToString();
             floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
-            floorSign.characterSize = .04f + .006f * pulse;
+            floorSign.characterSize = .044f + .004f * pulse;
         }
 
         // Apply travel vibration or an arrival bump.
@@ -663,10 +663,53 @@ namespace CrazyElevator.Managers
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
             CreatePassengerGrid();
-            floorSign.transform.localPosition = new Vector3(1.75f, 2.72f, .2f);
-            floorSignHome = floorSign.transform.localPosition;
+            ConfigureFloorDisplay();
             UpdateInteriorPersona(0);
         }
+
+        void ConfigureFloorDisplay()
+        {
+            // Replace the old face with a slim overhead indicator. The wider
+            // frame and inset screen make it read as part of the cabin
+            // instead of a floating square above the passengers.
+            floorSign.transform.localPosition = new Vector3(0f, 2.82f, .47f);
+            floorSignHome = floorSign.transform.localPosition;
+            floorSign.anchor = TextAnchor.MiddleCenter;
+            floorSign.alignment = TextAlignment.Center;
+            floorSign.fontSize = 72;
+            floorSign.characterSize = .044f;
+            floorSign.color = new Color32(126, 255, 218, 255);
+
+            if (floorLedPanel == null)
+            {
+                floorLedPanel = Shape(
+                    "Elevator floor LED frame",
+                    PrimitiveType.Cube,
+                    new Vector3(0f, 2.78f, .33f),
+                    new Vector3(1.48f, .46f, .08f),
+                    new Color32(43, 48, 78, 255),
+                    stage);
+                DisableCollider(floorLedPanel);
+            }
+            if (floorLedScreen == null)
+            {
+                floorLedScreen = Shape(
+                    "Elevator floor LED screen",
+                    PrimitiveType.Cube,
+                    new Vector3(0f, 2.78f, .39f),
+                    new Vector3(1.28f, .31f, .035f),
+                    new Color32(28, 39, 51, 255),
+                    stage);
+                DisableCollider(floorLedScreen);
+            }
+        }
+
+        void DisableCollider(Transform part)
+        {
+            Collider collider = part ? part.GetComponent<Collider>() : null;
+            if (collider) collider.enabled = false;
+        }
+
 
         void CreatePassengerGrid()
         {
@@ -724,6 +767,11 @@ namespace CrazyElevator.Managers
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
+            floorSign.color = band == WorldBand.Office
+                ? new Color32(140, 196, 255, 255)
+                : band == WorldBand.Candy
+                    ? new Color32(255, 179, 222, 255)
+                    : new Color32(93, 240, 230, 255);
             int world = (int)band;
             if (appliedWorld != world)
             {
@@ -1101,8 +1149,17 @@ namespace CrazyElevator.Managers
         {
             // Keep the captured damage visible until Casey sweeps it away.
             int severity = HandymanRepairPending ? repairStarfishLevel : ImpairmentLevel;
-            if (interiorImpairment) interiorImpairment.SetSeverity(severity);
-            if (exteriorImpairment) exteriorImpairment.SetSeverity(severity);
+            bool showStarfish = InWater;
+            if (interiorImpairment)
+            {
+                interiorImpairment.SetSeverity(severity);
+                interiorImpairment.gameObject.SetActive(showStarfish);
+            }
+            if (exteriorImpairment)
+            {
+                exteriorImpairment.SetSeverity(severity);
+                exteriorImpairment.gameObject.SetActive(showStarfish);
+            }
         }
         string ImpairmentDescription
         {
@@ -1322,6 +1379,7 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         Camera eye;
         Transform stage, leftDoor, rightDoor, scenery;
+        Transform floorLedPanel, floorLedScreen;
         TextMesh floorSign;
         readonly Dictionary<Collider, int> floorButtons = new Dictionary<Collider, int>();
         readonly Dictionary<int, Renderer> floorButtonVisuals = new Dictionary<int, Renderer>();

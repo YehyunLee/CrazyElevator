@@ -374,8 +374,9 @@ namespace CrazyElevator.Managers
                 string message = PassengerCalloutText(rider);
                 if (string.IsNullOrEmpty(message)) continue;
                 float width = Mathf.Clamp(76f + message.Length * 5f, 120f, 176f);
+                const float quoteHeight = 24f;
                 Rect quote = new Rect(Mathf.Clamp(x - width * .5f, 12f, viewWidth - width - 12f),
-                    badge.y - 33f, width, 27f);
+                    badge.y - quoteHeight - 2f, width, quoteHeight);
                 AngularPanel(quote, accent);
                 GUI.Label(new Rect(quote.x + 9f, quote.y - 1f, quote.width - 15f, quote.height - 2f), message, calloutText);
             }
