@@ -180,7 +180,7 @@ namespace CrazyElevator.Managers
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            floorSign.text = "0"; floorSign.transform.localPosition = floorSignHome; floorSign.characterSize = .04f;
+            SetFloorIndicator(0);
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
@@ -214,6 +214,15 @@ namespace CrazyElevator.Managers
             floorSign = sceneView.floorDisplay;
             foreach (TextMesh label in sceneView.GetComponentsInChildren<TextMesh>(true))
                 GameTypography.Apply(label, true);
+            if (sceneView.gridLabelShader != null && GameTypography.Bold != null
+                && sceneView.gridDestinations != null)
+            {
+                floorGridTextMaterial = new Material(sceneView.gridLabelShader);
+                floorGridTextMaterial.mainTexture = GameTypography.Bold.material.mainTexture;
+                foreach (TextMesh label in sceneView.gridDestinations)
+                    if (label && label.TryGetComponent(out MeshRenderer renderer))
+                        renderer.sharedMaterial = floorGridTextMaterial;
+            }
             floorSignHome = floorSign.transform.localPosition;
             cabinCameraDepth = eye.depth;
             // ElevatorMatch is initialized before either elevator controller,
@@ -326,7 +335,7 @@ namespace CrazyElevator.Managers
                 {
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
-                    floorSign.text = destination.ToString();
+                    SetFloorIndicator(destination);
                     phase = Phase.Opening; phaseTime = 0;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
@@ -340,7 +349,7 @@ namespace CrazyElevator.Managers
             int steps = Mathf.Max(1, Mathf.CeilToInt(dt * 120));
             float step = dt / steps;
             for (int i = 0; i < steps; i++) AdvanceTravelStep(step);
-            floorSign.text = NearbyFloor.ToString();
+            SetFloorIndicator(NearbyFloor);
         }
 
         void AdvanceTravelStep(float dt)
@@ -448,9 +457,7 @@ namespace CrazyElevator.Managers
             int shownFloor = origin + direction * completedStep;
             float betweenFloors = exactStep - completedStep;
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
-            floorSign.text = shownFloor.ToString();
-            floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
-            floorSign.characterSize = .04f + .006f * pulse;
+            SetFloorIndicator(shownFloor, pulse);
         }
 
         // Apply travel vibration or an arrival bump.
@@ -602,8 +609,6 @@ namespace CrazyElevator.Managers
         [Range(1, 11)] public int candyStartsAtFloor = 4;
         [Range(1, 11)] public int underwaterStartsAtFloor = 8;
         ElevatorPersonaRig persona;
-        GameObject passengerGridObject;
-        Material passengerGridMaterial;
         float repairProgress;
         float repairedFor;
         int appliedWorld = -1;
@@ -629,25 +634,6 @@ namespace CrazyElevator.Managers
         bool OfficeInterior => BandForFloor(round != null ? round.Floor : 0) == WorldBand.Office;
         bool PersonaBusy => boardingTransfers.Count > 0 || exiting.Count > 0 || HandymanRepairActive;
         float PersonaExitDuration => FriendlyInterior ? 1.35f : .78f;
-        static readonly Vector3[] OfficeCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
-        static readonly Vector3[] ClearDoorwayCabinSpots =
-        {
-            new Vector3(-1.12f, .12f, .48f), new Vector3(0, .12f, .48f),
-            new Vector3(1.12f, .12f, .48f), new Vector3(-1.12f, .12f, 1.64f),
-            new Vector3(0, .12f, 1.64f), new Vector3(1.12f, .12f, 1.64f),
-            new Vector3(-1.12f, .12f, 2.8f), new Vector3(0, .12f, 2.8f),
-            new Vector3(1.12f, .12f, 2.8f), new Vector3(-1.12f, .12f, 3.96f),
-            new Vector3(0, .12f, 3.96f), new Vector3(1.12f, .12f, 3.96f)
-        };
-
         void InitializeExtendedInterior()
         {
             if (!extendedInterior) return;
@@ -662,59 +648,37 @@ namespace CrazyElevator.Managers
             InitializeImpairmentIndicators();
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
-            CreatePassengerGrid();
-            floorSign.transform.localPosition = new Vector3(1.75f, 2.72f, .2f);
-            floorSignHome = floorSign.transform.localPosition;
+            SetFloorIndicator(round.Floor);
             UpdateInteriorPersona(0);
         }
 
-        void CreatePassengerGrid()
+        void SetFloorIndicator(int floor, float pulse = 0f)
         {
-            if (passengerGridObject != null) return;
-
-            passengerGridObject = new GameObject("Passenger 3x3 floor grid");
-            passengerGridObject.transform.SetParent(stage, false);
-            passengerGridObject.transform.localPosition = Vector3.zero;
-            passengerGridObject.transform.localRotation = Quaternion.identity;
-
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            if (shader == null) return;
-            passengerGridMaterial = new Material(shader) { name = "Passenger grid material" };
-
-            Color[] colors =
-            {
-                new Color(0.15f, 0.95f, 0.92f, 1f),
-                new Color(1f, 0.56f, 0.28f, 1f),
-                new Color(1f, 0.88f, 0.25f, 1f)
-            };
-            float[] xBoundaries = { -1.68f, -.56f, .56f, 1.68f };
-            float[] zBoundaries = { -.10f, 1.06f, 2.22f, 3.38f };
-
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid column " + i, new Vector3(xBoundaries[i], .035f, zBoundaries[0]),
-                    new Vector3(xBoundaries[i], .035f, zBoundaries[3]), colors[(i - 1) % colors.Length]);
-            for (int i = 1; i < 3; i++)
-                CreatePassengerGridLine("Grid row " + i, new Vector3(xBoundaries[0], .035f, zBoundaries[i]),
-                    new Vector3(xBoundaries[3], .035f, zBoundaries[i]), colors[i % colors.Length]);
+            string number = floor.ToString();
+            floorSign.text = number;
+            floorSign.transform.localPosition = floorSignHome + Vector3.up * (.055f * pulse);
+            floorSign.characterSize = .075f + .008f * pulse;
         }
 
-        void CreatePassengerGridLine(string lineName, Vector3 start, Vector3 end, Color color)
+        void UpdateGridDestinations()
         {
-            var lineObject = new GameObject(lineName);
-            lineObject.transform.SetParent(passengerGridObject.transform, false);
-            var line = lineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = false;
-            line.positionCount = 2;
-            line.SetPosition(0, start);
-            line.SetPosition(1, end);
-            line.startWidth = .055f;
-            line.endWidth = .055f;
-            line.startColor = color;
-            line.endColor = color;
-            line.material = passengerGridMaterial;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.alignment = LineAlignment.View;
+            var labels = sceneView.gridDestinations;
+            if (labels == null || labels.Length != 9) return;
+            foreach (TextMesh label in labels)
+                if (label) { label.text = ""; label.color = Cream; }
+            foreach (Rider rider in round.Riders)
+            {
+                if (!round.Owns(rider) || exiting.ContainsKey(rider) || boardingTransfers.ContainsKey(rider)) continue;
+                Vector3 position = cabinPositions.TryGetValue(rider, out var saved) ? saved : RiderPosition(rider);
+                GridAnchor(rider, position, out int row, out int column);
+                for (int offset = 0; offset < GridSpan(rider); offset++)
+                {
+                    TextMesh label = labels[row * CabinColumns + column + offset];
+                    if (!label) continue;
+                    label.text = offset == 0 ? rider.Destination.ToString() : "+";
+                    label.color = offset == 0 ? Cream : Teal;
+                }
+            }
         }
 
         void UpdateInteriorPersona(float dt)
@@ -847,11 +811,8 @@ namespace CrazyElevator.Managers
             }
             if (keepDoorwayClear)
             {
-                Vector3[] spots = OfficeInterior ? OfficeCabinSpots : ClearDoorwayCabinSpots;
-                foreach (Vector3 spot in spots)
+                if (TryFindGridPlacement(rider, out Vector3 spot) && round.Board(rider))
                 {
-                    if (!IsInsideCabin(rider, spot) || !CabinPlacementClear(rider, spot)) continue;
-                    if (!round.Board(rider)) return;
                     cabinPositions[rider] = spot;
                     BeginPersonaBoard(rider, figure.localPosition, spot);
                     notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
@@ -959,6 +920,7 @@ namespace CrazyElevator.Managers
                     : "C/'A' / STOP near a floor   |   Shift+↑↓ to build speed")
                     : "Drag riders to board or kick   |   C close & travel")
                 : selectedRider.Name + " → F" + selectedRider.Destination
+                    + "  ·  " + selectedRider.Space + (selectedRider.Space == 1 ? " CELL" : " CELLS")
                     + (selectedRider.Boarded ? "  ·  C to unload / drag out to kick" : "  ·  C to board / drag in");
             Label(new Rect(24, screenHeight - 48, width - 24, 30), BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
@@ -1279,7 +1241,6 @@ namespace CrazyElevator.Managers
         {
             if (!BuildingView || !exteriorCamera) return;
             DrawCabinPreviewFrame();
-            DrawCabinPreviewCallouts();
             int floor = NearbyFloor;
             float markerX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
             Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(markerX, floor * ShaftFloorHeight + 1.4f, -.8f)));
@@ -1291,7 +1252,7 @@ namespace CrazyElevator.Managers
             var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
             Panel(new Rect(x - 78 * size, y + 49 * size, 156 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
             Label(new Rect(x - 76 * size, y + 50 * size, 152 * size, 26 * size),
-                CanStopAtFloor ? "F" + floor + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
+                CanStopAtFloor ? floor + "  ·  STOP" : floor.ToString(), markerStyle);
         }
 
         void DrawCabinPreviewFrame()
@@ -1323,6 +1284,7 @@ namespace CrazyElevator.Managers
         Camera eye;
         Transform stage, leftDoor, rightDoor, scenery;
         TextMesh floorSign;
+        Material floorGridTextMaterial;
         readonly Dictionary<Collider, int> floorButtons = new Dictionary<Collider, int>();
         readonly Dictionary<int, Renderer> floorButtonVisuals = new Dictionary<int, Renderer>();
         readonly HashSet<Collider> openButtons = new HashSet<Collider>();
@@ -1635,7 +1597,7 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             ReleaseCabinPreview();
-            if (passengerGridMaterial) Destroy(passengerGridMaterial);
+            if (floorGridTextMaterial) Destroy(floorGridTextMaterial);
             foreach (var m in materials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
             if (generatedGroove && groove) Destroy(groove);
@@ -1771,7 +1733,7 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in round.Riders)
             {
                 if (rider.Boarded || rider.Resolved || !round.IsOffered(rider) || rider.Arrival > 0) continue;
-                if (!CanSelect(rider)) continue;
+                if (!CanSelect(rider) || !HasBoardingSpace(rider)) continue;
                 SelectRider(rider);
                 BoardPassengerWithPersona(rider);
                 SelectRider(null);

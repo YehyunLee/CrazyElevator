@@ -14,7 +14,12 @@ namespace CrazyElevator.Managers
         static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
         static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
         const float CabinBackEdge = 4.72f;
-        const int CabinRows = 4;
+        const int CabinRows = 3;
+        const int CabinColumns = 3;
+        const float GridLeft = -1.9f;
+        const float GridFront = .15f;
+        const float GridCellWidth = 3.8f / CabinColumns;
+        const float GridCellDepth = 4.3f / CabinRows;
         Rider selectedRider;
         Color selectionTint;
         Rider draggedRider;
@@ -36,6 +41,7 @@ namespace CrazyElevator.Managers
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
+            if (keepDoorwayClear) return TryGridPlacement(rider, position, out _);
             // Use continuous floor distance instead of a fixed row/seat grid.
             // The grid rejected open middle-back floor when a nearby rider was
             // visually in another part of the cabin.
@@ -46,6 +52,62 @@ namespace CrazyElevator.Managers
                 if (new Vector2(position.x - placed.x, position.z - placed.z).magnitude < PartyRadius(rider) + PartyRadius(other)) return false;
             }
             return true;
+        }
+
+        // A rider occupies Space neighboring cells in one row. The same cells
+        // decide automatic boarding, drag drops, and the floor labels.
+        int GridSpan(Rider rider) => Mathf.Clamp(rider.Space, 1, CabinColumns);
+
+        Vector3 GridSpot(int row, int column, int span) => new Vector3(
+            GridLeft + (column + span * .5f) * GridCellWidth,
+            .12f,
+            GridFront + (row + .5f) * GridCellDepth);
+
+        void GridAnchor(Rider rider, Vector3 position, out int row, out int column)
+        {
+            int span = GridSpan(rider);
+            row = Mathf.Clamp(Mathf.FloorToInt((position.z - GridFront) / GridCellDepth), 0, CabinRows - 1);
+            float firstCenter = GridLeft + span * GridCellWidth * .5f;
+            column = Mathf.Clamp(Mathf.RoundToInt((position.x - firstCenter) / GridCellWidth),
+                0, CabinColumns - span);
+        }
+
+        bool GridCellsClear(Rider rider, int row, int column)
+        {
+            int end = column + GridSpan(rider);
+            foreach (Rider other in round.Riders)
+            {
+                if (other == rider || !round.Owns(other)) continue;
+                Vector3 placed = cabinPositions.TryGetValue(other, out var saved) ? saved : RiderPosition(other);
+                GridAnchor(other, placed, out int otherRow, out int otherColumn);
+                if (otherRow == row && column < otherColumn + GridSpan(other) && otherColumn < end)
+                    return false;
+            }
+            return true;
+        }
+
+        bool TryGridPlacement(Rider rider, Vector3 desired, out Vector3 snapped)
+        {
+            snapped = desired;
+            if (desired.x < GridLeft || desired.x > -GridLeft
+                || desired.z < GridFront || desired.z > GridFront + CabinRows * GridCellDepth)
+                return false;
+            GridAnchor(rider, desired, out int row, out int column);
+            snapped = GridSpot(row, column, GridSpan(rider));
+            return IsInsideCabin(rider, snapped) && GridCellsClear(rider, row, column);
+        }
+
+        bool TryFindGridPlacement(Rider rider, out Vector3 spot)
+        {
+            int span = GridSpan(rider);
+            for (int row = 0; row < CabinRows; row++)
+            for (int column = 0; column <= CabinColumns - span; column++)
+            {
+                spot = GridSpot(row, column, span);
+                if (IsInsideCabin(rider, spot) && GridCellsClear(rider, row, column)) return true;
+            }
+            spot = default;
+            return false;
         }
         bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !rider.Resolved
             && !boardingTransfers.ContainsKey(rider) && !exiting.ContainsKey(rider)
@@ -58,18 +120,7 @@ namespace CrazyElevator.Managers
         {
             if (rider.Boarded) return true;
             if (!round.HasCapacityFor(rider)) return false;
-            if (keepDoorwayClear)
-            {
-                // Check every seat the player can actually drop into, including
-                // seats outside the automatic boarding animation's preferred spots.
-                for (int row = 0; row < CabinRows; row++)
-                for (int seat = 0; seat < 3; seat++)
-                {
-                    Vector3 spot = new Vector3(-1.12f + seat * 1.12f, .12f, .48f + row * 1.16f);
-                    if (IsInsideCabin(rider, spot) && CabinPlacementClear(rider, spot)) return true;
-                }
-                return false;
-            }
+            if (keepDoorwayClear) return TryFindGridPlacement(rider, out _);
             for (float z = 1f; z <= 3f; z += .7f)
             for (float x = -1.4f; x <= 1.41f; x += .7f)
             {
@@ -233,7 +284,8 @@ namespace CrazyElevator.Managers
             bool hasSpace = (draggedWasBoarded || round.HasCapacityFor(draggedRider))
                 && CabinPlacementClear(draggedRider, local);
             SetSelectionTint(dragKickReady || !inside ? Gold : hasSpace ? BoardingValid : BoardingInvalid);
-            figure.localPosition = local;
+            figure.localPosition = hasSpace && keepDoorwayClear
+                && TryGridPlacement(draggedRider, local, out Vector3 snapped) ? snapped : local;
             figure.localScale = dragKickReady
                 ? Vector3.Scale(dragOriginalScale, new Vector3(1.12f, .85f, 1.12f)) : dragOriginalScale;
             figure.localRotation = dragKickReady
@@ -276,6 +328,8 @@ namespace CrazyElevator.Managers
                 }
                 if (draggedWasBoarded || round.Board(rider))
                 {
+                    if (keepDoorwayClear && TryGridPlacement(rider, released, out Vector3 snapped))
+                        released = snapped;
                     cabinPositions[rider] = released;
                     if (!draggedWasBoarded) BeginHandymanRepair(rider);
                     SelectRider(null);
@@ -631,7 +685,7 @@ namespace CrazyElevator.Managers
             destinationTags[p] = view.destination;
             StyleDestinationTag(view.destination);
             foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
-            AttachPatienceBar(p, root);
+            AttachPatienceBar(p, view);
             EnsurePassengerEffect(p, root);
             // Extended mode uses one screen-space callout system in both solo
             // and 1v1. Keep the authored world bubble only for legacy layouts.
@@ -925,6 +979,7 @@ namespace CrazyElevator.Managers
                 if (figures.TryGetValue(p, out var figure)) figure.gameObject.SetActive(false);
             }
             UpdatePassengerEffects(dt);
+            UpdateGridDestinations();
         }
 
         // Choose dialogue from the rider's request and mood.
@@ -970,15 +1025,15 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Rider, PassengerPatienceBar> patienceBars =
             new Dictionary<Rider, PassengerPatienceBar>();
 
-        void AttachPatienceBar(Rider rider, Transform figure)
+        void AttachPatienceBar(Rider rider, PassengerView figure)
         {
             if (passengerPatienceBarPrefab == null || rider == null || figure == null) return;
-            PassengerPatienceBar bar = Instantiate(passengerPatienceBarPrefab, figure, false);
+            PassengerPatienceBar bar = Instantiate(passengerPatienceBarPrefab, figure.transform, false);
             bar.name = rider.Name + " patience";
-            // Sit just above the authored passenger's head, below the small
-            // destination badge, instead of floating near the ceiling.
-            bar.transform.localPosition = new Vector3(0, 1.88f, 0);
-            bar.Bind(eye);
+            // Each prefab sets this above its hair or hat so the model cannot
+            // hide the meter.
+            bar.transform.localPosition = new Vector3(0, figure.patienceBarHeight, 0);
+            bar.Bind(eye, figure.patienceBarCameraOffset);
             bar.gameObject.SetActive(false);
             patienceBars[rider] = bar;
         }

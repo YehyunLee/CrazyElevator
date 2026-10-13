@@ -314,15 +314,15 @@ namespace CrazyElevator.Managers
             Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
-                WorldName(round.Floor), "F" + round.Floor); cursor += 152;
+                "FLOOR", round.Floor.ToString()); cursor += 152;
             DrawHudTile(new Rect(cursor, y, 108, 48), Gold, "LOAD", round.Load + "/" + ElevatorRound.Capacity); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
         }
 
-        // Screen-space passenger tags stay crisp and never disappear behind
-        // the 3D models. Only one rider speaks at a time to keep the cabin calm.
+        // Waiting riders show their destination overhead. Once aboard, the
+        // floor grid owns that number; speech can still appear when needed.
         void DrawPassengerCallouts()
         {
             if (BuildingView) return;
@@ -358,66 +358,40 @@ namespace CrazyElevator.Managers
                 float y = Mathf.Round(Mathf.Clamp(localY, 82f, viewHeight - 94f));
                 Color accent = Palette[rider.Color % Palette.Length];
 
-                Rect badge = new Rect(x - 17f, y - 16f, 34f, 34f);
-                for (int attempt = 0; attempt < 4; attempt++)
+                float quoteAnchorY = y - 16f;
+                if (!rider.Boarded)
                 {
-                    bool overlaps = false;
-                    foreach (Rect occupied in occupiedBadges)
-                        if (badge.Overlaps(occupied)) { overlaps = true; break; }
-                    if (!overlaps) break;
-                    badge.y = Mathf.Max(84f, badge.y - 42f);
+                    float badgeWidth = rider.Space > 1 ? 82f : 34f;
+                    Rect badge = new Rect(x - badgeWidth * .5f, y - 16f, badgeWidth, 34f);
+                    for (int attempt = 0; attempt < 4; attempt++)
+                    {
+                        bool overlaps = false;
+                        foreach (Rect occupied in occupiedBadges)
+                            if (badge.Overlaps(occupied)) { overlaps = true; break; }
+                        if (!overlaps) break;
+                        badge.y = Mathf.Max(84f, badge.y - 42f);
+                    }
+                    occupiedBadges.Add(badge);
+                    quoteAnchorY = badge.y;
+                    Rect number = rider.Space == 1 ? badge : new Rect(badge.x, badge.y, 34f, badge.height);
+                    OutlinedLabel(number, rider.Destination.ToString(), calloutNumber);
+                    if (rider.Space > 1)
+                    {
+                        Rect spaces = new Rect(number.xMax, badge.y + 6f, badge.width - number.width, 22f);
+                        Panel(spaces, new Color(Ink.r, Ink.g, Ink.b, .86f));
+                        GUI.Label(spaces, rider.Space + " CELLS", calloutText);
+                    }
                 }
-                occupiedBadges.Add(badge);
-                OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
 
                 if (rider != speaker) continue;
                 string message = PassengerCalloutText(rider);
                 if (string.IsNullOrEmpty(message)) continue;
                 float width = Mathf.Clamp(76f + message.Length * 5f, 120f, 176f);
                 Rect quote = new Rect(Mathf.Clamp(x - width * .5f, 12f, viewWidth - width - 12f),
-                    badge.y - 33f, width, 27f);
+                    quoteAnchorY - 33f, width, 27f);
                 AngularPanel(quote, accent);
                 GUI.Label(new Rect(quote.x + 9f, quote.y - 1f, quote.width - 15f, quote.height - 2f), message, calloutText);
             }
-        }
-
-        // The cabin camera is much smaller during shaft travel, so the authored
-        // world-space numbers become illegible. Redraw only the onboard riders'
-        // destinations in screen space, sized for the preview itself.
-        void DrawCabinPreviewCallouts()
-        {
-            if (!BuildingView || !showCabinPreview || !eye.enabled) return;
-
-            Rect pixels = eye.pixelRect;
-            Rect preview = new Rect(pixels.x, Screen.height - pixels.yMax, pixels.width, pixels.height);
-            int previousSize = calloutNumber.fontSize;
-            calloutNumber.fontSize = Mathf.Clamp(Mathf.RoundToInt(preview.height * .13f), 22, 30);
-
-            var occupiedBadges = new List<Rect>();
-            foreach (Rider rider in round.Riders)
-            {
-                if (!round.Owns(rider) || exiting.ContainsKey(rider)
-                    || boardingTransfers.ContainsKey(rider)) continue;
-                if (!figures.TryGetValue(rider, out Transform figure) || !figure.gameObject.activeInHierarchy) continue;
-
-                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
-                if (point.z <= 0) continue;
-                float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + 18f, preview.xMax - 18f));
-                float y = Mathf.Round(Mathf.Clamp(Screen.height - point.y, preview.yMin + 30f, preview.yMax - 22f));
-                Rect badge = new Rect(x - 18f, y - 17f, 36f, 34f);
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    bool overlaps = false;
-                    foreach (Rect occupied in occupiedBadges)
-                        if (badge.Overlaps(occupied)) { overlaps = true; break; }
-                    if (!overlaps) break;
-                    badge.y = Mathf.Max(preview.yMin + 28f, badge.y - 30f);
-                }
-                occupiedBadges.Add(badge);
-                OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
-            }
-
-            calloutNumber.fontSize = previousSize;
         }
 
         string PassengerCalloutText(Rider rider)

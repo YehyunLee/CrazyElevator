@@ -9,6 +9,8 @@ namespace CrazyElevator.Shared
         public PassengerData data;
         public TextMesh speech, destination;
         public Renderer[] jackets;
+        [Min(0f)] public float patienceBarHeight = 1.88f;
+        [Min(0f)] public float patienceBarCameraOffset;
 
         public string ResolvedKind => data != null && !string.IsNullOrEmpty(data.kind) ? data.kind : kind;
 

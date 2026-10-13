@@ -17,6 +17,8 @@ namespace CrazyElevator.Shared
         Transform greenFill, redFill;
         TextMesh madLabel;
         Material sharedMaterial;
+        Vector3 anchorLocalPosition;
+        float cameraOffset;
         bool built;
         bool mad;
 
@@ -29,9 +31,11 @@ namespace CrazyElevator.Shared
             SetState(1f, false);
         }
 
-        public void Bind(Camera cameraToFace)
+        public void Bind(Camera cameraToFace, float offsetTowardCamera)
         {
             viewCamera = cameraToFace;
+            anchorLocalPosition = transform.localPosition;
+            cameraOffset = Mathf.Max(0f, offsetTowardCamera);
         }
 
         public void SetState(float remainingFraction, bool isMad)
@@ -51,6 +55,13 @@ namespace CrazyElevator.Shared
             Camera cameraToFace = viewCamera != null ? viewCamera : Camera.main;
             if (cameraToFace != null)
             {
+                if (cameraOffset > 0f && transform.parent != null)
+                {
+                    Vector3 anchor = transform.parent.TransformPoint(anchorLocalPosition);
+                    Vector3 towardCamera = cameraToFace.transform.position - anchor;
+                    towardCamera.y = 0f;
+                    transform.position = anchor + towardCamera.normalized * cameraOffset;
+                }
                 Vector3 awayFromCamera = transform.position - cameraToFace.transform.position;
                 if (awayFromCamera.sqrMagnitude > .0001f)
                     transform.rotation = Quaternion.LookRotation(awayFromCamera, cameraToFace.transform.up);
