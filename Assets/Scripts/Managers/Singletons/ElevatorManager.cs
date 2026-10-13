@@ -628,6 +628,8 @@ namespace CrazyElevator.Managers
         ElevatorPersonaRig persona;
         GameObject passengerGridObject;
         Material passengerGridMaterial;
+        readonly List<Transform> passengerGridTiles = new List<Transform>();
+        readonly List<GameObject> authoredPassengerGridParts = new List<GameObject>();
         float repairProgress;
         float repairedFor;
         int appliedWorld = -1;
@@ -668,9 +670,30 @@ namespace CrazyElevator.Managers
             InitializeImpairmentIndicators();
             foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Hall back wall" || part.name == "Hall wall seam") part.gameObject.SetActive(false);
+            CacheAuthoredPassengerGrid();
             CreatePassengerGrid();
             ConfigureFloorDisplay();
             UpdateInteriorPersona(0);
+        }
+
+        void CacheAuthoredPassengerGrid()
+        {
+            authoredPassengerGridParts.Clear();
+            foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
+            {
+                if (part.name.StartsWith("Grid column border")
+                    || part.name.StartsWith("Grid row border")
+                    || part.name.StartsWith("Grid destination"))
+                {
+                    authoredPassengerGridParts.Add(part.gameObject);
+                    part.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        void SetPassengerGridVisible(bool visible)
+        {
+            if (passengerGridObject != null) passengerGridObject.SetActive(visible);
         }
 
         void ConfigureFloorDisplay()
@@ -794,6 +817,8 @@ namespace CrazyElevator.Managers
         {
             if (passengerGridObject != null) return;
 
+            passengerGridTiles.Clear();
+
             passengerGridObject = new GameObject("Passenger 3x3 floor grid");
             passengerGridObject.transform.SetParent(stage, false);
             passengerGridObject.transform.localPosition = Vector3.zero;
@@ -828,6 +853,7 @@ namespace CrazyElevator.Managers
                     zBoundaries[row + 1] - zBoundaries[row] - .09f);
                 Transform tile = Shape("Grid tile " + row + " " + column,
                     PrimitiveType.Cube, center, size, tileGray, passengerGridObject.transform);
+                passengerGridTiles.Add(tile);
                 Renderer tileRenderer = tile.GetComponent<Renderer>();
                 if (tileRenderer != null)
                 {
@@ -867,9 +893,7 @@ namespace CrazyElevator.Managers
         void UpdateInteriorPersona(float dt)
         {
             if (!extendedInterior || !persona) return;
-            if (passengerGridObject != null)
-                passengerGridObject.SetActive(phase == Phase.Boarding
-                    && (selectedRider != null || draggedRider != null || boardingTransfers.Count > 0));
+            SetPassengerGridVisible(phase == Phase.Boarding && draggedRider != null);
             repairedFor = Mathf.Max(0, repairedFor - dt);
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);

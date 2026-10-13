@@ -13,13 +13,19 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Renderer, MaterialPropertyBlock> selectionMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
         static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
         static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
-        const float CabinBackEdge = 4.72f;
+        const float CabinSideEdge = 2.75f;
+        const float CabinBackEdge = 5.00f;
         const int CabinColumns = 3;
         const int CabinRows = 3;
-        static readonly float[] CabinTileXBounds = { -2.08f, -.693f, .693f, 2.08f };
-        static readonly float[] CabinTileZBounds = { .35f, 1.82f, 3.29f, 4.58f };
-        static readonly float[] CabinTileX = { -1.3865f, 0f, 1.3865f };
-        static readonly float[] CabinTileZ = { 1.085f, 2.555f, 3.935f };
+        // The authored cabin floor is approximately 5.62 x 5.08 units. Keep
+        // a small wall/door margin, but use most of that floor for placement.
+        static readonly float[] CabinTileXBounds = { -2.55f, -.85f, .85f, 2.55f };
+        static readonly float[] CabinTileZBounds = { .30f, 1.85f, 3.40f, 4.95f };
+        static readonly float[] CabinTileX = { -1.70f, 0f, 1.70f };
+        static readonly float[] CabinTileZ = { 1.075f, 2.625f, 4.175f };
+        static readonly Color GridTileGray = new Color32(82, 96, 116, 210);
+        static readonly Color GridTileValid = new Color32(69, 231, 137, 190);
+        static readonly Color GridTileInvalid = new Color32(255, 82, 74, 205);
         Rider selectedRider;
         Color selectionTint;
         Rider draggedRider;
@@ -36,12 +42,74 @@ namespace CrazyElevator.Managers
         {
             float radius = PartyRadius(rider);
             float rearEdge = keepDoorwayClear ? .28f : .42f + radius * .20f;
-            return Mathf.Abs(position.x) <= 2.18f - radius * .45f
+            return Mathf.Abs(position.x) <= CabinSideEdge - radius * .45f
                 && position.z >= rearEdge && position.z <= CabinBackEdge - radius * .25f;
         }
         bool CabinPlacementClear(Rider rider, Vector3 position)
         {
             return TryCabinTilePlacement(rider, position, true, out _);
+        }
+
+        Vector3 CabinTileCenter(int row, int start, int width)
+        {
+            return new Vector3(
+                (CabinTileXBounds[start] + CabinTileXBounds[start + width]) * .5f,
+                .12f,
+                (CabinTileZBounds[row] + CabinTileZBounds[row + 1]) * .5f);
+        }
+
+        // Magnetic placement should select a tile run, not erase the player's
+        // precise drop location. Keep the passenger inside the selected cells
+        // with enough margin for its model, while preserving movement freedom.
+        Vector3 ConstrainToCabinTiles(Rider rider, Vector3 desired, int row, int start, int width)
+        {
+            float radius = PartyRadius(rider);
+            float left = CabinTileXBounds[start];
+            float right = CabinTileXBounds[start + width];
+            float front = CabinTileZBounds[row];
+            float back = CabinTileZBounds[row + 1];
+            float xInset = Mathf.Min(radius * .72f, (right - left) * .34f);
+            float zInset = Mathf.Min(radius * .62f, (back - front) * .34f);
+            return new Vector3(
+                Mathf.Clamp(desired.x, left + xInset, right - xInset),
+                .12f,
+                Mathf.Clamp(desired.z, front + zInset, back - zInset));
+        }
+
+        void SetPassengerGridPreview(Rider rider, Vector3 desired, bool valid)
+        {
+            if (passengerGridTiles == null || passengerGridTiles.Count != CabinColumns * CabinRows)
+                return;
+
+            for (int i = 0; i < passengerGridTiles.Count; i++)
+            {
+                Renderer renderer = passengerGridTiles[i] ? passengerGridTiles[i].GetComponent<Renderer>() : null;
+                if (renderer != null) renderer.sharedMaterial = Mat(GridTileGray);
+            }
+            if (rider == null || !IsInsideCabin(rider, desired)) return;
+
+            int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
+            int bestRow = 0, bestStart = 0;
+            float bestDistance = float.MaxValue;
+            for (int row = 0; row < CabinRows; row++)
+            for (int start = 0; start <= CabinColumns - width; start++)
+            {
+                Vector3 center = CabinTileCenter(row, start, width);
+                float distance = new Vector2(desired.x - center.x, desired.z - center.z).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                bestRow = row;
+                bestStart = start;
+            }
+
+            Color previewColor = valid ? GridTileValid : GridTileInvalid;
+            for (int column = bestStart; column < bestStart + width; column++)
+            {
+                int index = bestRow * CabinColumns + column;
+                Renderer renderer = passengerGridTiles[index]
+                    ? passengerGridTiles[index].GetComponent<Renderer>() : null;
+                if (renderer != null) renderer.sharedMaterial = Mat(previewColor);
+            }
         }
 
         // Resolve a passenger to one horizontal run of the 3x3 cabin grid.
@@ -67,16 +135,14 @@ namespace CrazyElevator.Managers
             Vector3 nearestOpen = desired;
             bool nearestIsOpen = false;
             bool foundOpen = false;
+            int nearestRow = 0, nearestStart = 0;
             for (int row = 0; row < CabinRows; row++)
             for (int start = 0; start <= CabinColumns - width; start++)
             {
                 // Use the larger cabin bounds from the current branch, but keep
                 // Zoe's magnetic behavior: once the cursor enters a cell, the
                 // passenger is pulled to that cell (or adjacent cell run).
-                Vector3 candidate = new Vector3(
-                    (CabinTileX[start] + CabinTileX[start + width - 1]) * .5f,
-                    .12f,
-                    CabinTileZ[row]);
+                Vector3 candidate = CabinTileCenter(row, start, width);
                 float distance = new Vector2(desired.x - candidate.x, desired.z - candidate.z).sqrMagnitude;
                 bool open = true;
                 for (int column = start; column < start + width; column++)
@@ -87,6 +153,8 @@ namespace CrazyElevator.Managers
                     nearestDistance = distance;
                     nearest = candidate;
                     nearestIsOpen = open;
+                    nearestRow = row;
+                    nearestStart = start;
                 }
                 if (open && distance < nearestOpenDistance)
                 {
@@ -98,7 +166,9 @@ namespace CrazyElevator.Managers
 
             if (nearestOnly)
             {
-                placement = nearest;
+                placement = nearestIsOpen
+                    ? ConstrainToCabinTiles(rider, desired, nearestRow, nearestStart, width)
+                    : nearest;
                 return nearestIsOpen;
             }
             placement = nearestOpen;
@@ -280,7 +350,7 @@ namespace CrazyElevator.Managers
             Ray ray = eye.ScreenPointToRay(cursor);
             if (!plane.Raycast(ray, out float distance)) return;
             Vector3 local = stage.InverseTransformPoint(ray.GetPoint(distance) + dragOffset);
-            local.x = Mathf.Clamp(local.x, -2.55f, 2.55f);
+            local.x = Mathf.Clamp(local.x, -2.85f, 2.85f);
             // Match the full cabin placement depth. The old 3.45 limit made
             // the new rear row visually available but unreachable by dragging.
             local.z = Mathf.Clamp(local.z, -2.65f, CabinBackEdge);
@@ -293,6 +363,7 @@ namespace CrazyElevator.Managers
             Vector3 placement = local;
             bool hasSpace = hasCapacity && TryCabinTilePlacement(draggedRider, local, true, out placement);
             SetSelectionTint(dragKickReady || !inside ? Gold : hasSpace ? BoardingValid : BoardingInvalid);
+            SetPassengerGridPreview(draggedRider, local, inside && hasSpace && !dragKickReady);
             figure.localPosition = inside && hasSpace ? placement : local;
             figure.localScale = dragKickReady
                 ? Vector3.Scale(dragOriginalScale, new Vector3(1.12f, .85f, 1.12f)) : dragOriginalScale;
@@ -306,6 +377,7 @@ namespace CrazyElevator.Managers
         {
             Rider rider = draggedRider;
             draggedRider = null;
+            SetPassengerGridPreview(null, Vector3.zero, false);
             if (rider == null || !figures.TryGetValue(rider, out var figure)) return;
             figure.localScale = dragOriginalScale;
             figure.localRotation = dragOriginalRotation;
@@ -360,6 +432,7 @@ namespace CrazyElevator.Managers
             }
             draggedRider = null;
             dragKickReady = false;
+            SetPassengerGridPreview(null, Vector3.zero, false);
         }
 
         Rider PickHoveredRider(Vector2 cursor)
