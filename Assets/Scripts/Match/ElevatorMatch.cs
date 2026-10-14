@@ -29,6 +29,7 @@ namespace CrazyElevator.Match
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
         bool humanRival;
+        bool humanPlayer;
         public bool Finished => Running && player != null && Rival != null
             && player.ShiftFinished && Rival.ShiftFinished;
         ElevatorScene rivalView;
@@ -53,6 +54,7 @@ namespace CrazyElevator.Match
                 enabled = false;
                 return;
             }
+            humanPlayer = !MenuManager.ConsumePlayerOneCpuRequest();
             humanRival = MenuManager.ConsumePlayerTwoRequest();
 
             if (player == null || player.sceneView == null)
@@ -61,7 +63,13 @@ namespace CrazyElevator.Match
                 enabled = false;
                 return;
             }
-            player.ConfigureMatch(this, 0);
+            player.ConfigureMatch(this, 0, !humanPlayer);
+            if (!humanPlayer)
+            {
+                var npc = player.GetComponent<NpcElevator>();
+                if (npc == null) npc = player.gameObject.AddComponent<NpcElevator>();
+                npc.game = player;
+            }
             CreateRival();
             collisionClip = CreateCollisionClip();
             collisionParticles = CreateCollisionParticles(player.sceneView.exteriorCar.parent);
@@ -532,7 +540,7 @@ namespace CrazyElevator.Match
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width / 5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                seat == 0 ? "PLAYER 1" : actor.IsNpc ? "CPU" : "PLAYER 2",
+                actor.IsNpc ? "CPU" : seat == 0 ? "PLAYER 1" : "PLAYER 2",
                 Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
                 new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/" + actor.MaxCapacity);
@@ -604,7 +612,7 @@ namespace CrazyElevator.Match
             float cardY = Screen.height * .34f;
             Rect playerCard = new Rect((Screen.width - cardsWidth) * .5f, cardY, cardWidth, 142f);
             Rect rivalCard = new Rect(playerCard.xMax + gap, cardY, cardWidth, 142f);
-            DrawRevealScoreCard(playerCard, "PLAYER 1", player.Points, Teal,
+            DrawRevealScoreCard(playerCard, player.IsNpc ? "CPU" : "PLAYER 1", player.Points, Teal,
                 Reveal01((time - 2.65f) / .75f));
             DrawRevealScoreCard(rivalCard, rivalName, Rival.Points, Coral,
                 Reveal01((time - 3.55f) / .75f));

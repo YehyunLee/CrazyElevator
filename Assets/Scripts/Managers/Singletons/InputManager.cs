@@ -55,6 +55,7 @@ namespace CrazyElevator.Managers
             public bool BoostHeld;
             public bool MutePressed;
             public bool StartPressed;
+            public bool StartButtonPressed;
             public Vector2 Pointer;
             public bool PointerPressed;
             public bool PointerReleased;
@@ -220,7 +221,8 @@ namespace CrazyElevator.Managers
                 RepairHeld = repair,
                 BoostHeld = boost,
                 MutePressed = mute,
-                StartPressed = start
+                StartPressed = start,
+                StartButtonPressed = pad != null && pad.startButton.wasPressedThisFrame
             };
             if (!controllerAssigned && !playerTwo && Mouse.current != null)
             {
