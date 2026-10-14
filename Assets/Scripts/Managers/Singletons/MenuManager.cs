@@ -130,6 +130,9 @@ namespace CrazyElevator.Managers
             var input = InputManager.Instance;
             if (input == null) return;
 
+            if (choosingMode && input.HasController(1))
+                playerTwoSelected = true;
+
             bool horizontal = Mathf.Abs(input.Move.x) >= .55f;
             bool vertical = Mathf.Abs(input.Move.y) >= .55f;
             if (choosingMode && modeSelection == 0 && horizontal && !horizontalHeld)
@@ -150,7 +153,7 @@ namespace CrazyElevator.Managers
                 }
                 else if (!choosingMode)
                 {
-                    if (titleSelection == 0) choosingMode = true;
+                    if (titleSelection == 0) BeginModeSelection();
                     else if (titleSelection == 2) ExitGame();
                 }
             }
@@ -169,9 +172,16 @@ namespace CrazyElevator.Managers
             titleButtons.blocksRaycasts = IsOpen && !choosingMode;
         }
 
-        public void OnTitleStart() { titleSelection = 0; choosingMode = true; SyncTitleButtons(); }
+        public void OnTitleStart() { titleSelection = 0; BeginModeSelection(); }
         public void OnTitleOptions() { titleSelection = 1; }
         public void OnTitleExit() { titleSelection = 2; ExitGame(); }
+
+        void BeginModeSelection()
+        {
+            choosingMode = true;
+            InputManager.Instance?.BeginControllerJoining();
+            SyncTitleButtons();
+        }
 
         public static bool ConsumeDuelRequest()
         {
