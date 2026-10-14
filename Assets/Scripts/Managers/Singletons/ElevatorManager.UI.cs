@@ -17,7 +17,6 @@ namespace CrazyElevator.Managers
             encounterKicker, encounterTitle, encounterBody, encounterBadge;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
-        const float EncounterCardDuration = 3.1f;
         readonly HashSet<WorldBand> encounteredWorlds = new HashSet<WorldBand>();
         readonly HashSet<string> encounteredPassengerKinds = new HashSet<string>();
         readonly Queue<EncounterCard> encounterCards = new Queue<EncounterCard>();
@@ -485,8 +484,9 @@ namespace CrazyElevator.Managers
         void ActivateEncounterCard(EncounterCard card)
         {
             activeEncounterCard = card;
-            encounterCardTime = EncounterCardDuration;
+            encounterCardTime = 0f;
             PrepareEncounterPreview(card);
+            if (Match != null && Match.Running) Match.BeginEncounterCardPause();
         }
 
         void TickEncounterCards(float dt)
@@ -494,22 +494,21 @@ namespace CrazyElevator.Managers
             if (activeEncounterCard == null || dt <= 0f) return;
             if (encounterPreviewPivot != null && encounterPreviewModel != null)
             {
-                float age = EncounterCardDuration - encounterCardTime;
                 encounterPreviewPivot.localRotation = Quaternion.Euler(0f,
-                    activeEncounterCard.PreviewYaw + Mathf.Sin(age * 1.15f) * 13f, 0f);
+                    activeEncounterCard.PreviewYaw + Mathf.Sin(encounterCardTime * 1.15f) * 13f, 0f);
             }
-            encounterCardTime -= dt;
-            if (encounterCardTime > 0f) return;
+            encounterCardTime += dt;
+        }
+
+        public bool HasActiveEncounterCard => activeEncounterCard != null;
+
+        public void AdvanceEncounterCardAfterConfirmation()
+        {
+            activeEncounterCard = null;
+            encounterCardTime = 0f;
+            ClearEncounterPreviewModel();
             if (encounterCards.Count > 0)
-            {
                 ActivateEncounterCard(encounterCards.Dequeue());
-            }
-            else
-            {
-                activeEncounterCard = null;
-                encounterCardTime = 0f;
-                ClearEncounterPreviewModel();
-            }
         }
 
         void DrawEncounterCard(float viewWidth, float viewHeight)
@@ -517,13 +516,10 @@ namespace CrazyElevator.Managers
             if (activeEncounterCard == null || Event.current.type != EventType.Repaint) return;
             bool compact = Match != null;
             float width = Mathf.Min(compact ? 520f : 760f, viewWidth - (compact ? 20f : 48f));
-            float height = compact ? 108f : 128f;
+            float height = compact ? 132f : 154f;
             float targetX = (viewWidth - width) * .5f;
-            float age = EncounterCardDuration - encounterCardTime;
-            float enter = EaseOut(Mathf.Clamp01(age / .24f));
-            float exit = EaseOut(Mathf.Clamp01((.34f - encounterCardTime) / .34f));
+            float enter = EaseOut(Mathf.Clamp01(encounterCardTime / .24f));
             float x = Mathf.Lerp(viewWidth + 24f, targetX, enter);
-            x = Mathf.Lerp(x, -width - 24f, exit);
             float y = compact ? 78f : 94f;
             Rect card = new Rect(Mathf.Round(x), y, width, height);
             Panel(new Rect(card.x + 8f, card.y + 9f, card.width, card.height), new Color(0f, 0f, 0f, .35f));
@@ -561,7 +557,11 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(contentX, card.y + (compact ? 25f : 27f), contentWidth,
                 compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
-                compact ? 34f : 36f), activeEncounterCard.Description, encounterBody);
+                compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
+            string confirmPrompt = Match == null ? "PRESS A / V TO CONTINUE"
+                : Seat == 0 ? "PLAYER 1: PRESS A / V" : "PLAYER 2: PRESS A / PERIOD";
+            GUI.Label(new Rect(contentX, card.y + card.height - 24f, contentWidth, 18f),
+                confirmPrompt, encounterKicker);
             encounterTitle.fontSize = oldTitleSize;
             encounterBody.fontSize = oldBodySize;
             encounterBadge.fontSize = oldBadgeSize;

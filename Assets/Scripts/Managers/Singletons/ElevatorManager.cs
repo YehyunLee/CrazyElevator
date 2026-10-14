@@ -84,7 +84,19 @@ namespace CrazyElevator.Managers
         void Update()
         {
             if (MenuManager.IsOpen) return;
-            if (Match != null && ((!Match.Running && phase != Phase.Intro) || Match.Paused)) return;
+            if (Match != null && !Match.Running && phase != Phase.Intro) return;
+            if (activeEncounterCard != null)
+            {
+                TickEncounterCards(Time.unscaledDeltaTime);
+                if (Match == null)
+                {
+                    if (SeatControls.ConfirmPressed)
+                        AdvanceEncounterCardAfterConfirmation();
+                    return;
+                }
+                if (Match.Paused) return;
+            }
+            if (Match != null && Match.Paused) return;
             var inputManager = InputManager.Instance;
             InputManager.SeatInput input = SeatControls;
             bool menu = phase == Phase.Results;

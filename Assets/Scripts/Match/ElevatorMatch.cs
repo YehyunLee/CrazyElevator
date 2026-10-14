@@ -28,6 +28,8 @@ namespace CrazyElevator.Match
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
+        public bool EncounterCardPaused { get; private set; }
+        readonly bool[] encounterCardConfirmations = new bool[2];
         bool humanRival;
         bool humanPlayer;
         public bool Finished => Running && player != null && Rival != null
@@ -128,6 +130,12 @@ namespace CrazyElevator.Match
         void Update()
         {
             if (!enabled || player == null) return;
+            if (EncounterCardPaused)
+            {
+                UpdateEncounterCardConfirmations();
+                return;
+            }
+            if (Paused) return;
             float dt = Time.unscaledDeltaTime;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
@@ -172,10 +180,26 @@ namespace CrazyElevator.Match
             // Pause is owned by GameManager so InputManager only fires once.
         }
 
+        void UpdateEncounterCardConfirmations()
+        {
+            if (player.IntroPlaying || MenuManager.IsOpen) return;
+            var input = InputManager.Instance;
+            if (input == null) return;
+            InputManager.SeatInput playerOne = input.ReadForSeat(0, true);
+            InputManager.SeatInput playerTwo = input.ReadForSeat(1, true);
+            if (humanPlayer && !encounterCardConfirmations[0] && playerOne.ConfirmPressed)
+                encounterCardConfirmations[0] = true;
+            if (humanRival && !encounterCardConfirmations[1] && playerTwo.ConfirmPressed)
+                encounterCardConfirmations[1] = true;
+            ResumeEncounterCardsIfConfirmed();
+        }
+
         // Both shifts start together; a restart clears both scores and NPC state.
         public void StartMatch()
         {
             Paused = false;
+            EncounterCardPaused = false;
+            encounterCardConfirmations[0] = encounterCardConfirmations[1] = false;
             resultRevealStartedAt = -1f;
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
@@ -185,13 +209,45 @@ namespace CrazyElevator.Match
             Rival.GetComponent<NpcElevator>()?.ResetDecisions();
             Running = true;
             Paused = false;
+            if (player.HasActiveEncounterCard || Rival.HasActiveEncounterCard)
+                BeginEncounterCardPause();
         }
 
         float ResultRevealTime => resultRevealStartedAt < 0f
             ? 0f : Time.unscaledTime - resultRevealStartedAt;
 
+        public void BeginEncounterCardPause()
+        {
+            if (EncounterCardPaused) return;
+            EncounterCardPaused = true;
+            encounterCardConfirmations[0] = !humanPlayer;
+            encounterCardConfirmations[1] = !humanRival;
+            Paused = true;
+            player.SetMatchPaused(true);
+            Rival.SetMatchPaused(true);
+        }
+
+        void ResumeEncounterCardsIfConfirmed()
+        {
+            if ((humanPlayer && !encounterCardConfirmations[0])
+                || (humanRival && !encounterCardConfirmations[1])) return;
+            player.AdvanceEncounterCardAfterConfirmation();
+            Rival.AdvanceEncounterCardAfterConfirmation();
+            if (player.HasActiveEncounterCard || Rival.HasActiveEncounterCard)
+            {
+                encounterCardConfirmations[0] = !humanPlayer;
+                encounterCardConfirmations[1] = !humanRival;
+                return;
+            }
+            EncounterCardPaused = false;
+            Paused = false;
+            player.SetMatchPaused(false);
+            Rival.SetMatchPaused(false);
+        }
+
         public void TogglePause()
         {
+            if (EncounterCardPaused) return;
             Paused = !Paused;
             player.SetMatchPaused(Paused);
             Rival.SetMatchPaused(Paused);
@@ -473,6 +529,7 @@ namespace CrazyElevator.Match
             DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
+            else if (EncounterCardPaused) DrawEncounterConfirmation();
             else if (Paused) DrawPauseOverlay();
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
@@ -691,6 +748,22 @@ namespace CrazyElevator.Match
             }
             resultGlowTexture.SetPixels(pixels);
             resultGlowTexture.Apply(false, true);
+        }
+
+        void DrawEncounterConfirmation()
+        {
+            float y = Screen.height - 82f;
+            Fill(new Rect(0, y, Screen.width, 82f), new Color(Ink.r, Ink.g, Ink.b, .96f));
+            string headingText = humanPlayer && humanRival
+                ? "NEW DISCOVERY. BOTH PLAYERS CONFIRM TO RESUME"
+                : "NEW DISCOVERY. CONFIRM TO RESUME";
+            GUI.Label(new Rect(16, y + 8f, Screen.width - 32f, 30f), headingText, centred);
+            string playerOneText = !humanPlayer ? "PLAYER 1 CPU"
+                : "PLAYER 1 A / V: " + (encounterCardConfirmations[0] ? "READY" : "CONFIRM");
+            string playerTwoText = !humanRival ? "PLAYER 2 CPU"
+                : "PLAYER 2 A / PERIOD: " + (encounterCardConfirmations[1] ? "READY" : "CONFIRM");
+            GUI.Label(new Rect(16, y + 42f, Screen.width - 32f, 28f),
+                playerOneText + "       " + playerTwoText, centred);
         }
 
         void DrawPauseOverlay()
