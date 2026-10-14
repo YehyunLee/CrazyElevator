@@ -10,6 +10,8 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         readonly Dictionary<Rider, Vector3> cabinPositions = new Dictionary<Rider, Vector3>();
+        // Vector2Int.x = first column, Vector2Int.y = row.
+        readonly Dictionary<Rider, Vector2Int> cabinTileRuns = new Dictionary<Rider, Vector2Int>();
         readonly Dictionary<Renderer, MaterialPropertyBlock> selectionMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
         static readonly Color BoardingValid = new Color32(69, 231, 137, 255);
         static readonly Color BoardingInvalid = new Color32(255, 82, 74, 255);
@@ -58,6 +60,89 @@ namespace CrazyElevator.Managers
                 (CabinTileZBounds[row] + CabinTileZBounds[row + 1]) * .5f);
         }
 
+        void FindNearestCabinTileRun(Rider rider, Vector3 desired, out int row, out int start)
+        {
+            int width = Mathf.Clamp(rider != null ? rider.Space : 1, 1, CabinColumns);
+            row = 0;
+            start = 0;
+            float bestDistance = float.MaxValue;
+            for (int candidateRow = 0; candidateRow < CabinRows; candidateRow++)
+            for (int candidateStart = 0; candidateStart <= CabinColumns - width; candidateStart++)
+            {
+                Vector3 center = CabinTileCenter(candidateRow, candidateStart, width);
+                float distance = new Vector2(desired.x - center.x, desired.z - center.z).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                row = candidateRow;
+                start = candidateStart;
+            }
+        }
+
+        void RememberCabinTileRun(Rider rider, Vector3 placed)
+        {
+            if (rider == null) return;
+            FindNearestCabinTileRun(rider, placed, out int row, out int start);
+            cabinTileRuns[rider] = new Vector2Int(start, row);
+        }
+
+        Vector3 PassengerGridAnchor(Rider rider, Transform figure, float inset)
+        {
+            if (rider == null || figure == null || !rider.Boarded || stage == null)
+                return figure != null ? figure.position + Vector3.up * .05f : Vector3.zero;
+
+            Vector3 placed = figure.localPosition;
+            int row, start;
+            if (draggedRider == rider)
+            {
+                FindNearestCabinTileRun(rider, placed, out row, out start);
+            }
+            else if (cabinTileRuns.TryGetValue(rider, out Vector2Int run))
+            {
+                start = run.x;
+                row = run.y;
+            }
+            else
+            {
+                FindNearestCabinTileRun(rider, placed, out row, out start);
+            }
+
+            int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
+            float left = CabinTileXBounds[start];
+            float right = CabinTileXBounds[start + width];
+            float front = CabinTileZBounds[row];
+            float back = CabinTileZBounds[row + 1];
+            Vector3[] corners =
+            {
+                stage.TransformPoint(new Vector3(left + inset, .10f, front + inset)),
+                stage.TransformPoint(new Vector3(left + inset, .10f, back - inset)),
+                stage.TransformPoint(new Vector3(right - inset, .10f, front + inset)),
+                stage.TransformPoint(new Vector3(right - inset, .10f, back - inset))
+            };
+
+            // Choose the visually lower-left corner once from the camera's
+            // resting pose. Do not use the live shaken camera here: its
+            // changing projection can swap corners and make PIP numbers jump.
+            Vector3 cameraRight = cameraHomeRotation * Vector3.right;
+            Vector3 cameraUp = cameraHomeRotation * Vector3.up;
+            Vector3 anchor = corners[0];
+            float bestScore = float.MaxValue;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 offset = corners[i] - cameraHome;
+                float score = Vector3.Dot(offset, cameraRight) + Vector3.Dot(offset, cameraUp);
+                if (score >= bestScore) continue;
+                bestScore = score;
+                anchor = corners[i];
+            }
+            return anchor;
+        }
+
+        Vector3 PassengerDestinationAnchor(Rider rider, Transform figure)
+            => PassengerGridAnchor(rider, figure, .34f);
+
+        Vector3 PassengerFloorMarkerAnchor(Rider rider, Transform figure)
+            => PassengerGridAnchor(rider, figure, .34f);
+
         // Magnetic placement should select a tile run, not erase the player's
         // precise drop location. Keep the passenger inside the selected cells
         // with enough margin for its model, while preserving movement freedom.
@@ -89,18 +174,7 @@ namespace CrazyElevator.Managers
             if (rider == null || !IsInsideCabin(rider, desired)) return;
 
             int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
-            int bestRow = 0, bestStart = 0;
-            float bestDistance = float.MaxValue;
-            for (int row = 0; row < CabinRows; row++)
-            for (int start = 0; start <= CabinColumns - width; start++)
-            {
-                Vector3 center = CabinTileCenter(row, start, width);
-                float distance = new Vector2(desired.x - center.x, desired.z - center.z).sqrMagnitude;
-                if (distance >= bestDistance) continue;
-                bestDistance = distance;
-                bestRow = row;
-                bestStart = start;
-            }
+            FindNearestCabinTileRun(rider, desired, out int bestRow, out int bestStart);
 
             Color previewColor = valid ? GridTileValid : GridTileInvalid;
             for (int column = bestStart; column < bestStart + width; column++)
@@ -167,7 +241,7 @@ namespace CrazyElevator.Managers
             if (nearestOnly)
             {
                 placement = nearestIsOpen
-                    ? ConstrainToCabinTiles(rider, desired, nearestRow, nearestStart, width)
+                    ? CabinTileCenter(nearestRow, nearestStart, width)
                     : nearest;
                 return nearestIsOpen;
             }
@@ -251,7 +325,8 @@ namespace CrazyElevator.Managers
         void UpdatePassengerSelection()
         {
             if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
-            var mouse = Mouse.current;
+            Mouse mouse = Match != null && Seat == 1 ? null : Mouse.current;
+            InputManager.SeatInput input = SeatControls;
             if (draggedRider != null)
             {
                 Vector2 cursor = mouse != null ? mouse.position.ReadValue() : lastMousePosition;
@@ -261,7 +336,7 @@ namespace CrazyElevator.Managers
             }
             if (phase != Phase.Boarding) { SelectRider(null); return; }
             if (!CanSelect(selectedRider)) SelectRider(null);
-            Vector2 navigation = InputManager.Instance != null ? InputManager.Instance.Select : Vector2.zero;
+            Vector2 navigation = input.Select;
             bool navigationActive = navigation.magnitude >= .55f;
             // Keyboard/controller selection wins immediately, even if the
             // mouse happens to be parked outside this player's split-screen.
@@ -392,6 +467,7 @@ namespace CrazyElevator.Managers
             if (draggedWasBoarded && dragKickReady && released.z < KickOutBoundaryZ)
             {
                 cabinPositions.Remove(rider);
+                cabinTileRuns.Remove(rider);
                 SelectRider(null);
                 QueueRiderExit(rider, released);
                 return;
@@ -409,6 +485,7 @@ namespace CrazyElevator.Managers
                 if (draggedWasBoarded || round.Board(rider))
                 {
                     cabinPositions[rider] = released;
+                    RememberCabinTileRun(rider, released);
                     if (!draggedWasBoarded) BeginHandymanRepair(rider);
                     SelectRider(null);
                     SetControlStatus(draggedWasBoarded ? "REARRANGED" : "ON BOARD");
@@ -499,7 +576,8 @@ namespace CrazyElevator.Managers
             Rider rider = selectedRider; SelectRider(null);
             if (rider.Boarded)
             {
-                cabinPositions.Remove(rider); QueueRiderExit(rider, figures[rider].localPosition);
+                cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
+                QueueRiderExit(rider, figures[rider].localPosition);
                 notice = "Helping " + rider.Name + " out at floor " + round.Floor + ".";
             }
             else BoardPassengerWithPersona(rider);
@@ -723,6 +801,13 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Rider, Transform> figures = new Dictionary<Rider, Transform>();
         readonly Dictionary<Rider, TextMesh> bubbles = new Dictionary<Rider, TextMesh>();
         readonly Dictionary<Rider, TextMesh> destinationTags = new Dictionary<Rider, TextMesh>();
+        sealed class FloorMarker
+        {
+            public Transform Root;
+            public Transform Border;
+            public TextMesh Label;
+        }
+        readonly Dictionary<Rider, FloorMarker> floorMarkers = new Dictionary<Rider, FloorMarker>();
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
         const float SharedPickupDepartureSeconds = .85f;
@@ -763,6 +848,7 @@ namespace CrazyElevator.Managers
             bubbles[p] = view.speech;
             destinationTags[p] = view.destination;
             StyleDestinationTag(view.destination);
+            if (extendedInterior) CreateFloorMarker(p);
             foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
             AttachPatienceBar(p, root);
             EnsurePassengerEffect(p, root);
@@ -770,6 +856,65 @@ namespace CrazyElevator.Managers
             // and 1v1. Keep the authored world bubble only for legacy layouts.
             if (Match != null && !extendedInterior) AttachSpeechBubble(p, root);
             return root;
+        }
+
+        void CreateFloorMarker(Rider rider)
+        {
+            if (rider == null || stage == null || floorMarkers.ContainsKey(rider)) return;
+            var root = new GameObject(rider.Name + " floor marker").transform;
+            root.SetParent(stage, false);
+
+            Transform border = Shape("Destination floor marker border", PrimitiveType.Cube,
+                new Vector3(0, -.018f, 0), new Vector3(.54f, .022f, .40f), Cream, root);
+            Transform panel = Shape("Destination floor marker panel", PrimitiveType.Cube,
+                new Vector3(0, .002f, 0), new Vector3(.44f, .028f, .30f), Ink, root);
+            DisableCollider(border);
+            DisableCollider(panel);
+
+            var labelObject = new GameObject("Destination floor marker number");
+            labelObject.transform.SetParent(root, false);
+            labelObject.transform.localPosition = new Vector3(0, .026f, 0);
+            // Lay the number face-up on the cabin floor, then turn it around
+            // the floor normal so its top points away from the rear camera.
+            labelObject.transform.localRotation = Quaternion.Euler(0f, 180f, 0f)
+                * Quaternion.Euler(90f, 0f, 0f);
+            labelObject.transform.localScale = Vector3.one;
+            TextMesh label = labelObject.AddComponent<TextMesh>();
+            label.fontSize = 72;
+            label.characterSize = .030f;
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.color = Cream;
+            GameTypography.Apply(label, true);
+            MeshRenderer renderer = label.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sortingOrder = 30;
+            }
+
+            root.gameObject.SetActive(false);
+            floorMarkers[rider] = new FloorMarker { Root = root, Border = border, Label = label };
+        }
+
+        void UpdateFloorMarker(Rider rider, Transform figure, bool hidden)
+        {
+            if (!floorMarkers.TryGetValue(rider, out FloorMarker marker) || marker == null) return;
+            bool show = extendedInterior && rider.Boarded && !hidden
+                && !boardingTransfers.ContainsKey(rider);
+            marker.Root.gameObject.SetActive(show);
+            if (!show) return;
+
+            marker.Root.position = PassengerFloorMarkerAnchor(rider, figure);
+            marker.Root.localRotation = Quaternion.identity;
+            marker.Label.text = rider.Destination.ToString();
+            bool selected = rider == selectedRider || rider == draggedRider;
+            Color borderColor = selected
+                ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
+                : Cream;
+            Renderer borderRenderer = marker.Border.GetComponent<Renderer>();
+            if (borderRenderer != null) borderRenderer.sharedMaterial = Mat(borderColor);
         }
 
         // Make the baby state readable without relying on audio or text alone.
@@ -984,7 +1129,11 @@ namespace CrazyElevator.Managers
                     figure = MakeRider(p); figure.localPosition = RiderPosition(p); figures.Add(p, figure);
                 }
                 figure.gameObject.SetActive(visible);
-                if (!visible) continue;
+                if (!visible)
+                {
+                    UpdateFloorMarker(p, figure, true);
+                    continue;
+                }
 
                 if (departing)
                 {
@@ -1044,10 +1193,10 @@ namespace CrazyElevator.Managers
                     // color. Mood is already communicated by the patience bar
                     // and speech bubble, so it should not reduce legibility.
                     destinationTag.color = Ink;
-                    destinationTag.transform.localPosition = new Vector3(
-                        0, 2.16f, p.Boarded ? -.08f : .08f);
+                    destinationTag.transform.position = PassengerDestinationAnchor(p, figure);
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
+                UpdateFloorMarker(p, figure, isExiting || departing);
                 UpdatePatienceBar(p, isExiting);
             }
             UpdateOccasionalSpeech(dt);

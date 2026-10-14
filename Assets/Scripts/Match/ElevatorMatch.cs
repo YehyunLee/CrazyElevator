@@ -28,6 +28,7 @@ namespace CrazyElevator.Match
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
+        bool humanRival;
         public bool Finished => Running && player != null && Rival != null
             && player.ShiftFinished && Rival.ShiftFinished;
         ElevatorScene rivalView;
@@ -50,6 +51,7 @@ namespace CrazyElevator.Match
                 enabled = false;
                 return;
             }
+            humanRival = MenuManager.ConsumePlayerTwoRequest();
 
             if (player == null || player.sceneView == null)
             {
@@ -68,7 +70,7 @@ namespace CrazyElevator.Match
         {
             var source = player.sceneView;
             rivalView = Instantiate(source);
-            rivalView.name = "NPC elevator scene";
+            rivalView.name = humanRival ? "Player 2 elevator scene" : "NPC elevator scene";
             Transform duplicateWorld = rivalView.exteriorCar.parent;
             rivalView.exteriorCar.SetParent(source.exteriorCar.parent, false);
             rivalView.exteriorCar.name = "NPC exterior car";
@@ -102,13 +104,13 @@ namespace CrazyElevator.Match
             }
 
             // Assign references before Awake runs on the rival controller.
-            var actor = new GameObject("NPC elevator controller");
+            var actor = new GameObject(humanRival ? "Player 2 elevator controller" : "NPC elevator controller");
             actor.SetActive(false);
             Rival = actor.AddComponent<Game>();
             Rival.sceneView = rivalView;
             player.CopyMatchSettingsTo(Rival);
-            Rival.ConfigureMatch(this, 1, true);
-            actor.AddComponent<NpcElevator>().game = Rival;
+            Rival.ConfigureMatch(this, 1, !humanRival);
+            if (!humanRival) actor.AddComponent<NpcElevator>().game = Rival;
             actor.SetActive(true);
             ConfigureCameras();
         }
@@ -141,7 +143,11 @@ namespace CrazyElevator.Match
 
             if (!Running || Finished)
             {
-                if (input.StartPressed || input.ConfirmPressed) StartMatch();
+                InputManager.SeatInput playerOne = input.ReadForSeat(0, true);
+                InputManager.SeatInput playerTwo = input.ReadForSeat(1, true);
+                if (playerOne.StartPressed || playerOne.ConfirmPressed
+                    || playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                    StartMatch();
             }
             // Pause is owned by GameManager so InputManager only fires once.
         }
@@ -155,7 +161,7 @@ namespace CrazyElevator.Match
             collisionCooldown = collisionFlash = 0;
             player.StartMatchShift();
             Rival.StartMatchShift(player);
-            Rival.GetComponent<NpcElevator>().ResetDecisions();
+            Rival.GetComponent<NpcElevator>()?.ResetDecisions();
             Running = true;
             Paused = false;
         }
@@ -500,7 +506,8 @@ namespace CrazyElevator.Match
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width / 5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                seat == 0 ? "YOU" : "NPC", Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
+                seat == 0 ? "PLAYER 1" : actor.IsNpc ? "CPU" : "PLAYER 2",
+                Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
                 new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/" + actor.MaxCapacity);
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
@@ -544,12 +551,13 @@ namespace CrazyElevator.Match
             Fill(box, Ink);
             string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : Paused ? "BOTH ELEVATORS PAUSED" : "SHIFT COMPLETE";
             GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
-            string copy = "YOU vs NPC — one 3-minute shift.\n\nLeft: your elevator. Right: your rival.\nDrag passengers in or out. During shaft travel, use left/right or A / D to switch between the two tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
+            string rivalName = Rival != null && Rival.IsNpc ? "CPU" : "PLAYER 2";
+            string copy = "PLAYER 1 vs " + rivalName + " — one 3-minute shift.\n\nLeft: Player 1. Right: " + rivalName + ".\nPlayer 1: WASD + C/I/H/R/Shift. Player 2: arrows + Right Ctrl confirm, Right Shift boost, Right Alt hold, / repair, and . eject.\nDuring shaft travel, horizontal keys switch tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             if (Finished)
             {
-                string winner = player.Points == Rival.Points ? "DRAW!" : player.Points > Rival.Points ? "YOU WIN!" : "NPC WINS — REMATCH?";
-                copy = winner + "\n\nYOU: " + player.Points + " points\nNPC: " + Rival.Points + " points\n\nTry a different passenger mix and route. Highest score wins, not highest floor.";
+                string winner = player.Points == Rival.Points ? "DRAW!" : player.Points > Rival.Points ? "PLAYER 1 WINS!" : rivalName + " WINS — REMATCH?";
+                copy = winner + "\n\nPLAYER 1: " + player.Points + " points\n" + rivalName + ": " + Rival.Points + " points\n\nTry a different passenger mix and route. Highest score wins, not highest floor.";
             }
             GUI.Label(new Rect(box.x + 24, box.y + 72, width - 48, height - 130), copy, text);
             var button = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);

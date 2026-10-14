@@ -180,6 +180,13 @@ namespace CrazyElevator.Managers
             return requested;
         }
 
+        public static bool ConsumePlayerTwoRequest()
+        {
+            bool requested = playerTwoSelected;
+            playerTwoSelected = false;
+            return requested;
+        }
+
         public static void Open() => IsOpen = true;
         public static void Close() => IsOpen = false;
 
@@ -239,7 +246,7 @@ namespace CrazyElevator.Managers
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
                 "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", false, !playerTwoSelected);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "Local duel  ·  NPC rival for now", true, playerTwoSelected);
+                "1V1", "Local duel  ·  CPU or Player 2", true, playerTwoSelected);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
                 "PICK A MODE", caption);
         }
@@ -548,12 +555,7 @@ namespace CrazyElevator.Managers
 
         void StartSelectedMode()
         {
-            if (playerTwoSelected)
-            {
-                playerTwoUnavailable = true;
-                return;
-            }
-            // CPU is the existing 1v1 match; the rival is driven by NpcElevator.
+            // The selected rival can be CPU or a second local keyboard player.
             launching = true;
             launchTimer = 0;
         }

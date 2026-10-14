@@ -32,6 +32,32 @@ namespace CrazyElevator.Managers
         public bool PointerReleased { get; private set; }
         public bool PointerHeld { get; private set; }
 
+        // Split-screen keyboard input is read per seat so Player 2 can play
+        // without stealing Player 1's WASD/actions. Player 1 keeps the
+        // existing keyboard and controller mapping; Player 2 uses arrows and
+        // the right-side modifier keys.
+        public struct SeatInput
+        {
+            public Vector2 Move;
+            public Vector2 Select;
+            public bool MovePressed;
+            public bool SelectPressed;
+            public bool ConfirmPressed;
+            public bool KickoutPressed;
+            public bool PausePressed;
+            public bool OverlayPressed;
+            public bool CloseDoorsPressed;
+            public bool HoldDoorHeld;
+            public bool RepairHeld;
+            public bool BoostHeld;
+            public bool MutePressed;
+            public bool StartPressed;
+            public Vector2 Pointer;
+            public bool PointerPressed;
+            public bool PointerReleased;
+            public bool PointerHeld;
+        }
+
         public event Action OnPause;
         public event Action OnOverlay;
         public event Action OnConfirm;
@@ -52,6 +78,102 @@ namespace CrazyElevator.Managers
         }
 
         public void SetView(GameView view) => ActiveView = view;
+
+        // Read a seat-specific frame without changing the legacy seat-0
+        // properties/events used by menus and solo play. In split-screen,
+        // Player 1 uses WASD and Player 2 uses the arrow keys.
+        public SeatInput ReadForSeat(int seat, bool splitKeyboard)
+        {
+            var keyboard = Keyboard.current;
+            var pad = seat == 0 ? Gamepad.current : null;
+            bool playerTwo = seat == 1 && splitKeyboard;
+
+            Vector2 keys = Vector2.zero;
+            if (keyboard != null)
+            {
+                if (playerTwo)
+                {
+                    keys.x = (keyboard.rightArrowKey.isPressed ? 1 : 0)
+                        - (keyboard.leftArrowKey.isPressed ? 1 : 0);
+                    keys.y = (keyboard.upArrowKey.isPressed ? 1 : 0)
+                        - (keyboard.downArrowKey.isPressed ? 1 : 0);
+                }
+                else
+                {
+                    keys.x = (keyboard.dKey.isPressed || (!splitKeyboard && keyboard.rightArrowKey.isPressed) ? 1 : 0)
+                        - (keyboard.aKey.isPressed || (!splitKeyboard && keyboard.leftArrowKey.isPressed) ? 1 : 0);
+                    keys.y = (keyboard.wKey.isPressed || (!splitKeyboard && keyboard.upArrowKey.isPressed) ? 1 : 0)
+                        - (keyboard.sKey.isPressed || (!splitKeyboard && keyboard.downArrowKey.isPressed) ? 1 : 0);
+                }
+            }
+
+            Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
+            Vector2 navigation = stick + keys;
+            bool confirm = playerTwo
+                ? keyboard != null && keyboard.rightCtrlKey.wasPressedThisFrame
+                : keyboard != null && keyboard.cKey.wasPressedThisFrame
+                    || pad != null && pad.buttonSouth.wasPressedThisFrame;
+            bool kickout = playerTwo
+                ? keyboard != null && keyboard.periodKey.wasPressedThisFrame
+                : keyboard != null && keyboard.iKey.wasPressedThisFrame
+                    || pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger;
+            bool pause = keyboard != null && keyboard.escapeKey.wasPressedThisFrame
+                || pad != null && pad.startButton.wasPressedThisFrame
+                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            bool overlay = !playerTwo && keyboard != null
+                && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
+            bool closeDoors = !playerTwo && pad != null && pad.buttonNorth.wasPressedThisFrame
+                && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            bool hold = playerTwo
+                ? keyboard != null && keyboard.rightAltKey.isPressed
+                : keyboard != null && keyboard.hKey.isPressed
+                    || pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger;
+            bool repair = playerTwo
+                ? keyboard != null && keyboard.slashKey.isPressed
+                : keyboard != null && keyboard.rKey.isPressed
+                    || pad != null && pad.rightShoulder.isPressed;
+            bool boost = playerTwo
+                ? keyboard != null && keyboard.rightShiftKey.isPressed
+                : keyboard != null && (splitKeyboard
+                    ? keyboard.leftShiftKey.isPressed
+                    : keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed)
+                    || pad != null && (pad.leftShoulder.isPressed
+                        || pad.leftTrigger.isPressed || pad.rightTrigger.isPressed);
+            bool mute = !playerTwo && keyboard != null && keyboard.mKey.wasPressedThisFrame;
+            bool start = playerTwo
+                ? keyboard != null && keyboard.rightCtrlKey.wasPressedThisFrame
+                : keyboard != null && keyboard.enterKey.wasPressedThisFrame
+                    || pad != null && (pad.buttonSouth.wasPressedThisFrame
+                        || pad.startButton.wasPressedThisFrame
+                            && (ActiveView == GameView.Menu || ActiveView == GameView.Pause));
+
+            var result = new SeatInput
+            {
+                Move = navigation,
+                Select = navigation,
+                MovePressed = navigation.magnitude >= .55f,
+                SelectPressed = navigation.magnitude >= .55f,
+                ConfirmPressed = confirm,
+                KickoutPressed = kickout,
+                PausePressed = pause,
+                OverlayPressed = overlay,
+                CloseDoorsPressed = closeDoors,
+                HoldDoorHeld = hold,
+                RepairHeld = repair,
+                BoostHeld = boost,
+                MutePressed = mute,
+                StartPressed = start
+            };
+            if (!playerTwo && Mouse.current != null)
+            {
+                var mouse = Mouse.current;
+                result.Pointer = mouse.position.ReadValue();
+                result.PointerPressed = mouse.leftButton.wasPressedThisFrame;
+                result.PointerReleased = mouse.leftButton.wasReleasedThisFrame;
+                result.PointerHeld = mouse.leftButton.isPressed;
+            }
+            return result;
+        }
 
         void Update()
         {

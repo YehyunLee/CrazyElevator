@@ -85,9 +85,10 @@ namespace CrazyElevator.Managers
         {
             if (MenuManager.IsOpen) return;
             if (Match != null && ((!Match.Running && phase != Phase.Intro) || Match.Paused)) return;
-            var input = InputManager.Instance;
+            var inputManager = InputManager.Instance;
+            InputManager.SeatInput input = SeatControls;
             bool menu = phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results;
-            if (extendedInterior && input != null)
+            if (extendedInterior && inputManager != null)
             {
                 if (menu && input.StartPressed) { StartOrContinue(); return; }
             }
@@ -103,9 +104,9 @@ namespace CrazyElevator.Managers
                 return;
             }
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
-            if (IsNpc && input != null && input.PausePressed && phase != Phase.Welcome && phase != Phase.Results)
+            if (IsNpc && inputManager != null && input.PausePressed && phase != Phase.Welcome && phase != Phase.Results)
                 paused = !paused;
-            if (input != null && input.StartPressed && menu) StartOrContinue();
+            if (inputManager != null && input.StartPressed && menu) StartOrContinue();
             if (paused || phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results) return;
             // A scene/domain reload can run one Update before the fresh round
             // has been created. Wait for initialization instead of spamming a
@@ -194,9 +195,12 @@ namespace CrazyElevator.Managers
             ClearPatienceBars();
             ClearSpeechBubbles();
             ResetBabyComboFeedback();
+            foreach (var marker in floorMarkers.Values)
+                if (marker != null && marker.Root) Destroy(marker.Root.gameObject);
+            floorMarkers.Clear();
             foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear();
             passengerEffects.Clear();
-            bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); exiting.Clear(); exitStarts.Clear();
+            bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); cabinTileRuns.Clear(); exiting.Clear(); exitStarts.Clear();
             sharedPickupDepartures.Clear(); riderHits.Clear();
             selectedRider = null;
             round = CreateExtendedRound();
@@ -949,8 +953,8 @@ namespace CrazyElevator.Managers
 
         void HandleInteriorController(float dt)
         {
-            var input = InputManager.Instance;
-            var mouse = Mouse.current;
+            InputManager.SeatInput input = SeatControls;
+            Mouse mouse = Match != null && Seat == 1 ? null : Mouse.current;
             Vector2 mouseGui = mouse == null ? Vector2.zero
                 : new Vector2(mouse.position.ReadValue().x, Screen.height - mouse.position.ReadValue().y);
             if (Match != null)
@@ -961,10 +965,10 @@ namespace CrazyElevator.Managers
             }
             GetMouseControlRects(out var mouseUp, out var mouseDown, out var mouseStop,
                 out var mouseClose, out var mouseHold, out var mouseRepair);
-            bool confirm = input != null && input.ConfirmPressed;
+            bool confirm = input.ConfirmPressed;
             if (phase == Phase.Moving)
             {
-                float horizontal = input != null ? input.Move.x : 0f;
+                float horizontal = input.Move.x;
                 if (Match != null)
                 {
                     if (Mathf.Abs(horizontal) < .35f) lastTrackInput = 0f;
@@ -972,11 +976,11 @@ namespace CrazyElevator.Managers
                         Match.RequestTrack(this, horizontal > 0 ? 1 : -1);
                     lastTrackInput = horizontal;
                 }
-                float vertical = input != null ? input.Move.y : 0f;
+                float vertical = input.Move.y;
                 bool mouseUpHeld = mouse != null && mouse.leftButton.isPressed && mouseUp.Contains(mouseGui);
                 bool mouseDownHeld = mouse != null && mouse.leftButton.isPressed && mouseDown.Contains(mouseGui);
                 if (mouseUpHeld || mouseDownHeld) vertical = mouseUpHeld ? 1 : -1;
-                bool boost = (input != null && input.BoostHeld) || mouseUpHeld || mouseDownHeld;
+                bool boost = input.BoostHeld || mouseUpHeld || mouseDownHeld;
                 SetTravelInput(vertical, boost);
                 bool mouseStopPressed = mouse != null && mouse.leftButton.wasPressedThisFrame && mouseStop.Contains(mouseGui);
                 if (confirm || mouseStopPressed) RequestFloorStop();
@@ -985,7 +989,7 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Boarding) return;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
-            if (input != null && input.CloseDoorsPressed) { CloseAndTravel(); return; }
+            if (input.CloseDoorsPressed) { CloseAndTravel(); return; }
             if (confirm)
             {
                 if (draggedRider != null) return;
@@ -993,11 +997,11 @@ namespace CrazyElevator.Managers
                 else CloseAndTravel();
                 return;
             }
-            if (input != null && input.KickoutPressed) { KickoutSelectedPublic(); return; }
-            bool hold = (input != null && input.HoldDoorHeld)
+            if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
+            bool hold = input.HoldDoorHeld
                 || mouse != null && mouse.leftButton.isPressed && mouseHold.Contains(mouseGui);
             if (hold) { round.HoldDoor(dt); notice = "Holding the door for passengers."; }
-            bool repair = (input != null && input.RepairHeld)
+            bool repair = input.RepairHeld
                 || mouse != null && mouse.leftButton.isPressed && mouseRepair.Contains(mouseGui);
             if (!FriendlyInterior && repairedFor <= 0 && repair)
             {
@@ -1028,6 +1032,7 @@ namespace CrazyElevator.Managers
             {
                 if (!round.Board(rider)) return;
                 cabinPositions[rider] = spot;
+                RememberCabinTileRun(rider, spot);
                 BeginPersonaBoard(rider, figure.localPosition, spot);
                 notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
                 return;
@@ -1834,12 +1839,17 @@ namespace CrazyElevator.Managers
         public int PassengerLoad => round != null ? round.Load : 0;
         public int HappyDeliveries => round != null ? round.Happy : 0;
         public float SecondsLeft => round != null ? round.TimeLeft : ElevatorRound.Duration;
-        public float CurrentFloor => BuildingView ? travelFloor : round.Floor;
+        public float CurrentFloor => BuildingView ? travelFloor : round != null ? round.Floor : 0f;
         public bool Traveling => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         public bool MovingInShaft => phase == Phase.Moving;
         public bool AtStop => phase == Phase.Boarding && !paused && !ShiftFinished;
         public bool BusyWithPassenger => PersonaBusy;
         public bool IsBoarding => phase == Phase.Boarding && !paused && !ShiftFinished && !PersonaBusy;
+
+        InputManager.SeatInput SeatControls
+            => InputManager.Instance != null
+                ? InputManager.Instance.ReadForSeat(Seat, Match != null && !IsNpc)
+                : default;
 
         int npcTargetFloor = -1;
         float ViewWidth => Match != null ? Match.ViewRect(Seat).width : Screen.width;
@@ -1928,7 +1938,7 @@ namespace CrazyElevator.Managers
             {
                 if (!round.Owns(rider) || rider.Destination != round.Floor) continue;
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
-                cabinPositions.Remove(rider);
+                cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
                 QueueRiderExit(rider, figure.localPosition);
                 return true;
             }
