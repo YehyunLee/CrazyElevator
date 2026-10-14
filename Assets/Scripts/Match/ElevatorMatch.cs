@@ -154,7 +154,14 @@ namespace CrazyElevator.Match
             var input = InputManager.Instance;
             if (input == null) return;
 
-            if (!Running || (Finished && ResultRevealTime >= ResultRevealInputAt))
+            // The lobby already confirms the matchup, so begin immediately
+            // after the intro instead of blocking on another tutorial popup.
+            if (!Running)
+            {
+                StartMatch();
+                return;
+            }
+            if (Finished && ResultRevealTime >= ResultRevealInputAt)
             {
                 InputManager.SeatInput playerOne = input.ReadForSeat(0, true);
                 InputManager.SeatInput playerTwo = input.ReadForSeat(1, true);
@@ -466,7 +473,7 @@ namespace CrazyElevator.Match
             DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
-            else if (!Running || Paused) DrawMatchOverlay();
+            else if (Paused) DrawPauseOverlay();
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;
@@ -686,42 +693,30 @@ namespace CrazyElevator.Match
             resultGlowTexture.Apply(false, true);
         }
 
-        void DrawMatchOverlay()
+        void DrawPauseOverlay()
         {
             Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, .78f));
             float width = Mathf.Min(620, Screen.width - 32), height = Mathf.Min(310, Screen.height - 32);
             var box = new Rect((Screen.width - width) * .5f, (Screen.height - height) * .5f, width, height);
             Fill(box, Ink);
-            string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : "BOTH ELEVATORS PAUSED";
-            GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
-            string rivalName = Rival != null && Rival.IsNpc ? "CPU" : "PLAYER 2";
-            string copy = "PLAYER 1 vs " + rivalName + " — one 3-minute shift.\n\nLeft: Player 1. Right: " + rivalName + ".\nPlayer 1: WASD + C/I/H/R/Shift. Player 2: arrows + Right Ctrl confirm, Right Shift boost, Right Alt hold, / repair, and . eject.\nDuring shaft travel, horizontal keys switch tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
-            if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
-            GUI.Label(new Rect(box.x + 24, box.y + 72, width - 48, height - 130), copy, text);
-            if (Paused)
-            {
-                var lobbyButton = new Rect(box.x + 24, box.yMax - 94, (width - 60) * .5f, 34);
-                var menuButton = new Rect(lobbyButton.xMax + 12, lobbyButton.y, lobbyButton.width, 34);
-                if (MenuManager.PauseSelection == 1)
-                    Fill(new Rect(lobbyButton.x - 3, lobbyButton.y - 3, lobbyButton.width + 6, lobbyButton.height + 6), Color.white);
-                if (MenuManager.PauseSelection == 2)
-                    Fill(new Rect(menuButton.x - 3, menuButton.y - 3, menuButton.width + 6, menuButton.height + 6), Color.white);
-                Fill(lobbyButton, Coral);
-                Fill(menuButton, Gold);
-                if (GUI.Button(lobbyButton, "BACK TO LOBBY")) MenuManager.ReturnToLobby();
-                if (GUI.Button(menuButton, "MAIN MENU")) MenuManager.ReturnToMainMenu();
-                var resumeButton = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
-                if (MenuManager.PauseSelection == 0)
-                    Fill(new Rect(resumeButton.x - 3, resumeButton.y - 3, resumeButton.width + 6, resumeButton.height + 6), Color.white);
-                Fill(resumeButton, Teal);
-                if (GUI.Button(resumeButton, "RESUME BOTH")) TogglePause();
-            }
-            else
-            {
-                var button = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
-                Fill(button, Teal);
-                if (GUI.Button(button, "START BOTH / ENTER")) StartMatch();
-            }
+            GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), "BOTH ELEVATORS PAUSED", centred);
+            GUI.Label(new Rect(box.x + 24, box.y + 72, width - 48, height - 130),
+                "Both elevators are paused.\n\nResume when you're ready.", text);
+            var lobbyButton = new Rect(box.x + 24, box.yMax - 94, (width - 60) * .5f, 34);
+            var menuButton = new Rect(lobbyButton.xMax + 12, lobbyButton.y, lobbyButton.width, 34);
+            if (MenuManager.PauseSelection == 1)
+                Fill(new Rect(lobbyButton.x - 3, lobbyButton.y - 3, lobbyButton.width + 6, lobbyButton.height + 6), Color.white);
+            if (MenuManager.PauseSelection == 2)
+                Fill(new Rect(menuButton.x - 3, menuButton.y - 3, menuButton.width + 6, menuButton.height + 6), Color.white);
+            Fill(lobbyButton, Coral);
+            Fill(menuButton, Gold);
+            if (GUI.Button(lobbyButton, "BACK TO LOBBY")) MenuManager.ReturnToLobby();
+            if (GUI.Button(menuButton, "MAIN MENU")) MenuManager.ReturnToMainMenu();
+            var resumeButton = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
+            if (MenuManager.PauseSelection == 0)
+                Fill(new Rect(resumeButton.x - 3, resumeButton.y - 3, resumeButton.width + 6, resumeButton.height + 6), Color.white);
+            Fill(resumeButton, Teal);
+            if (GUI.Button(resumeButton, "RESUME BOTH")) TogglePause();
         }
     }
 }

@@ -325,7 +325,7 @@ namespace CrazyElevator.Managers
         void UpdatePassengerSelection()
         {
             if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
-            Mouse mouse = Match != null && Seat == 1 ? null : Mouse.current;
+            Mouse mouse = Mouse.current;
             InputManager.SeatInput input = SeatControls;
             if (draggedRider != null)
             {
@@ -1123,6 +1123,8 @@ namespace CrazyElevator.Managers
                 bool departing = sharedPickupDepartures.ContainsKey(p);
                 bool visible = departing || isExiting || !p.Resolved && (round.Owns(p)
                     || !p.Boarded && p.Origin == round.Floor && hallVisible && round.IsOffered(p));
+                if (visible && !departing && !isExiting && !p.Boarded && round.IsOffered(p))
+                    DiscoverPassenger(p);
                 if (!hasFigure)
                 {
                     if (!visible) continue;
