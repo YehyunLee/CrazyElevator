@@ -378,26 +378,34 @@ namespace CrazyElevator.Managers
             {
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
                 Vector3 headPoint = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
-                Vector3 footPoint = eye.WorldToScreenPoint(figure.position + Vector3.up * .05f);
+                Vector3 footPoint = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
                 if (headPoint.z <= 0 || footPoint.z <= 0) continue;
                 float localX = footPoint.x - view.x;
                 float footY = view.y + view.height - footPoint.y;
                 float headY = view.y + view.height - headPoint.y;
                 float x = Mathf.Round(Mathf.Clamp(localX, 30f, viewWidth - 30f));
+                float headX = Mathf.Round(Mathf.Clamp(headPoint.x - view.x, 30f, viewWidth - 30f));
                 footY = Mathf.Round(Mathf.Clamp(footY, 96f, viewHeight - 38f));
                 headY = Mathf.Round(Mathf.Clamp(headY, 72f, viewHeight - 116f));
                 Color accent = Palette[rider.Color % Palette.Length];
                 bool selected = rider == selectedRider || rider == draggedRider;
 
-                Rect badge = new Rect(x - 18f, footY - 2f, 36f, 30f);
-                Color badgeBorder = selected
-                    ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
-                    : new Color32(145, 153, 166, 255);
-                FramedPanel(badge, badgeBorder, 2f);
-                OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
-                    rider.Destination.ToString(), calloutNumber);
+                // Extended cabin view uses the perspective-matched 3D floor
+                // marker. Keep the old screen badge only for legacy layouts.
+                if (!extendedInterior)
+                {
+                    Rect badge = new Rect(x - 18f, footY - 2f, 36f, 30f);
+                    Color badgeBorder = selected
+                        ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
+                        : new Color32(145, 153, 166, 255);
+                    FramedPanel(badge, badgeBorder, 2f);
+                    OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
+                        rider.Destination.ToString(), calloutNumber);
+                }
 
-                Rect arrow = new Rect(x - 24f, headY - 26f, 48f, 40f);
+                // The selection arrow belongs above the passenger, not above
+                // the lower-left floor marker—especially for multi-cell boxes.
+                Rect arrow = new Rect(headX - 24f, headY - 26f, 48f, 40f);
                 if (selected)
                 {
                     Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
@@ -409,7 +417,8 @@ namespace CrazyElevator.Managers
                 if (string.IsNullOrEmpty(message)) continue;
                 float width = Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
                 const float quoteHeight = 28f;
-                Rect quote = new Rect(Mathf.Clamp(x - width * .5f, 12f, viewWidth - width - 12f),
+                float quoteX = headX;
+                Rect quote = new Rect(Mathf.Clamp(quoteX - width * .5f, 12f, viewWidth - width - 12f),
                     (selected ? arrow.y : headY - 4f) - quoteHeight - 3f, width, quoteHeight);
                 SpeechBubblePanel(quote, accent);
                 GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
@@ -436,7 +445,7 @@ namespace CrazyElevator.Managers
                     || boardingTransfers.ContainsKey(rider)) continue;
                 if (!figures.TryGetValue(rider, out Transform figure) || !figure.gameObject.activeInHierarchy) continue;
 
-                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .05f);
+                Vector3 point = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
                 if (point.z <= 0) continue;
                 float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + 18f, preview.xMax - 18f));
                 float y = Mathf.Round(Mathf.Clamp(Screen.height - point.y, preview.yMin + 30f, preview.yMax - 22f));
