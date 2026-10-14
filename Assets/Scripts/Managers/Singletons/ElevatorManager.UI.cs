@@ -604,7 +604,7 @@ namespace CrazyElevator.Managers
                 GUI.matrix = Matrix4x4.identity;
                 return;
             }
-            if (phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results || paused)
+            if (phase == Phase.Results || paused)
             {
                 scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
                 offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 1000 * scale) / 2;
@@ -625,7 +625,7 @@ namespace CrazyElevator.Managers
                 Panel(new Rect(Screen.width * .5f - 1f, 16f, 2f, 16f), Cream);
             }
             GUI.matrix = Matrix4x4.identity;
-            if (phase != Phase.Welcome && phase != Phase.Tutorial && phase != Phase.Results && !paused)
+            if (phase != Phase.Results && !paused)
             {
                 DrawTravelView();
                 float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;
@@ -1060,7 +1060,7 @@ namespace CrazyElevator.Managers
                 Label(new Rect(x + i * letterWidth, y, letterWidth, 82), word[i].ToString(), stampWord);
         }
 
-        // Show welcome, tutorial, pause, or final results.
+        // Show pause or final results.
         void Overlay()
         {
             Panel(new Rect(0, 104, 1440, 796), new Color(0, 0, 0, .82f));
@@ -1068,27 +1068,15 @@ namespace CrazyElevator.Managers
             Panel(new Rect(308, 162, 824, 590), UiBlack);
             Panel(new Rect(308, 162, 824, 7), Teal);
             AccentBar(new Rect(304, 186, 9, 522), Teal);
-            string heading = paused ? "TAKE A BREATHER" : phase == Phase.Welcome ? "YOUR SHIFT. THEIR CHAOS." : phase == Phase.Tutorial ? "HOW TO PLAY" : "SHIFT COMPLETE";
+            string heading = paused ? "TAKE A BREATHER" : "SHIFT COMPLETE";
             Label(new Rect(354, 196, 700, 52), heading, title);
-            string copy;
-            if (paused) copy = "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu.";
-            else if (phase == Phase.Welcome) copy = "3 minutes. Drop riders at their floors for points.\n\nOffice (0–3) → Candy (4–7) → Underwater (8–11).\n\nDrag to board or kick. CLOSE & TRAVEL, then hold UP/DOWN and STOP near a floor.";
-            else if (phase == Phase.Tutorial) copy = "Three things to know.\n\nThe bold number above each rider is their destination floor.";
-            else copy = "FINAL SCORE: " + round.Score
-                + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
-                + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
-                + "\n\nYour 3-minute shift is over. Try again for a better mix!";
+            string copy = paused
+                ? "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu."
+                : "FINAL SCORE: " + round.Score
+                    + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
+                    + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
+                    + "\n\nYour 3-minute shift is over. Try again for a better mix!";
             Label(new Rect(356, 292, 690, 240), copy, body);
-            if (phase == Phase.Tutorial)
-            {
-                Panel(new Rect(350, 468, 210, 162), UiWhite); Panel(new Rect(350, 468, 210, 7), Teal);
-                Panel(new Rect(578, 468, 210, 162), UiWhite); Panel(new Rect(578, 468, 210, 7), Gold);
-                Panel(new Rect(806, 468, 210, 162), UiWhite); Panel(new Rect(806, 468, 210, 7), Coral);
-                Label(new Rect(368, 482, 174, 128), "1  BOARD\nDrag a rider inside,\nor select + press C.", inkBody);
-                Label(new Rect(596, 482, 174, 128), "2  TRAVEL\nPress C with no rider\nselected, then move.", inkBody);
-                Label(new Rect(824, 482, 174, 128), "3  STOP / EJECT\nPress C near a floor.\nDrag rider out to eject.", inkBody);
-                Label(new Rect(350, 646, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
-            }
             if (paused)
             {
                 if (Button(new Rect(350, 610, 724, 42), "RESUME SHIFT  /  START or ESC", Teal,
@@ -1107,9 +1095,7 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                string action = phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
-                    : phase == Phase.Tutorial ? "START SHIFT  /  CLICK or ENTER" : "TRY AGAIN  /  CLICK or ENTER";
-                if (Button(new Rect(350, 700, 724, 48), action, Teal))
+                if (Button(new Rect(350, 700, 724, 48), "TRY AGAIN  /  CLICK or ENTER", Teal))
                     StartOrContinue();
             }
         }

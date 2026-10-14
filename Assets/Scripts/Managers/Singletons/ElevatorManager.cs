@@ -14,7 +14,7 @@ namespace CrazyElevator.Managers
         [Header("Editable scene objects")]
         public ElevatorScene sceneView;
         // The phase controls input, animation, and whether the round clock runs.
-        enum Phase { Intro, Welcome, Tutorial, Boarding, Closing, Closed, Moving, Docking, Opening, Results }
+        enum Phase { Intro, Boarding, Closing, Closed, Moving, Docking, Opening, Results }
         static readonly Color Ink = new Color32(43, 48, 78, 255);
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
@@ -59,7 +59,7 @@ namespace CrazyElevator.Managers
         ElevatorRound round;
         Phase phase;
         float phaseTime, introTime, doors = 1;
-        bool paused, tutorialSeen, stampPlayed;
+        bool paused, stampPlayed;
         string notice = "Welcome aboard. Your shift starts when you are ready.";
 
         // Bind editable scene objects, then start audio and a fresh round.
@@ -87,7 +87,7 @@ namespace CrazyElevator.Managers
             if (Match != null && ((!Match.Running && phase != Phase.Intro) || Match.Paused)) return;
             var inputManager = InputManager.Instance;
             InputManager.SeatInput input = SeatControls;
-            bool menu = phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results;
+            bool menu = phase == Phase.Results;
             if (extendedInterior && inputManager != null)
             {
                 if (menu && input.StartPressed) { StartOrContinue(); return; }
@@ -100,14 +100,14 @@ namespace CrazyElevator.Managers
                 if (!stampPlayed && introTime >= 1.12f) { stampPlayed = true; Play(stamp); }
                 float opening = Mathf.Clamp01((introTime - IntroRevealStart) / IntroRevealDuration);
                 SetDoors(EaseOut(opening));
-                if (introTime >= IntroRevealStart + IntroRevealDuration + .15f) { phase = Phase.Welcome; introTime = 0; SetDoors(1); }
+                if (introTime >= IntroRevealStart + IntroRevealDuration + .15f) { phase = Phase.Boarding; introTime = 0; SetDoors(1); }
                 return;
             }
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
-            if (IsNpc && inputManager != null && input.PausePressed && phase != Phase.Welcome && phase != Phase.Results)
+            if (IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
             if (inputManager != null && input.StartPressed && menu) StartOrContinue();
-            if (paused || phase == Phase.Welcome || phase == Phase.Tutorial || phase == Phase.Results) return;
+            if (paused || phase == Phase.Results) return;
             // A scene/domain reload can run one Update before the fresh round
             // has been created. Wait for initialization instead of spamming a
             // NullReferenceException from the gameplay tick.
@@ -172,16 +172,8 @@ namespace CrazyElevator.Managers
             UpdateInteriorPersona(dt);
         }
 
-        // Show the tutorial once, then begin a fresh shift.
-        void StartOrContinue()
-        {
-            if (phase == Phase.Welcome && !tutorialSeen)
-            {
-                tutorialSeen = true; phase = Phase.Tutorial; phaseTime = 0; Play(chime);
-                return;
-            }
-            Restart();
-        }
+        // Restart the shift from the results screen.
+        void StartOrContinue() => Restart();
 
         // Clear old rider state and reset the shift.
         void Restart() => RestartWithPool(null);
