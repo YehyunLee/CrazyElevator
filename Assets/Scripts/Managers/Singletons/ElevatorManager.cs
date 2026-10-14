@@ -85,18 +85,12 @@ namespace CrazyElevator.Managers
         {
             if (MenuManager.IsOpen) return;
             if (Match != null && !Match.Running && phase != Phase.Intro) return;
-            if (activeEncounterCard != null)
-            {
-                TickEncounterCards(Time.unscaledDeltaTime);
-                if (Match == null)
-                {
-                    if (SeatControls.ConfirmPressed)
-                        AdvanceEncounterCardAfterConfirmation();
-                    return;
-                }
-                if (Match.Paused) return;
-            }
             if (Match != null && Match.Paused) return;
+            if (activeEncounterCard != null && SeatControls.ConfirmPressed)
+            {
+                AdvanceEncounterCardAfterConfirmation();
+                encounterConfirmationConsumedFrame = Time.frameCount;
+            }
             var inputManager = InputManager.Instance;
             InputManager.SeatInput input = SeatControls;
             bool menu = phase == Phase.Results;
@@ -972,7 +966,7 @@ namespace CrazyElevator.Managers
             }
             GetMouseControlRects(out var mouseUp, out var mouseDown, out var mouseStop,
                 out var mouseClose, out var mouseHold, out var mouseRepair);
-            bool confirm = input.ConfirmPressed;
+            bool confirm = input.ConfirmPressed && encounterConfirmationConsumedFrame != Time.frameCount;
             if (phase == Phase.Moving)
             {
                 float horizontal = input.Move.x;

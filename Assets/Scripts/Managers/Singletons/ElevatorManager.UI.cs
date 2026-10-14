@@ -14,14 +14,23 @@ namespace CrazyElevator.Managers
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
             rewardPoints, rewardCaption, calloutNumber, calloutText, selectionArrow,
-            encounterKicker, encounterTitle, encounterBody, encounterBadge;
+            encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
         readonly HashSet<WorldBand> encounteredWorlds = new HashSet<WorldBand>();
         readonly HashSet<string> encounteredPassengerKinds = new HashSet<string>();
+        static readonly HashSet<WorldBand>[] completedWorldTutorials =
+        {
+            new HashSet<WorldBand>(), new HashSet<WorldBand>()
+        };
+        static readonly HashSet<string>[] completedPassengerTutorials =
+        {
+            new HashSet<string>(), new HashSet<string>()
+        };
         readonly Queue<EncounterCard> encounterCards = new Queue<EncounterCard>();
         EncounterCard activeEncounterCard;
         float encounterCardTime;
+        int encounterConfirmationConsumedFrame = -1;
         const int EncounterPreviewLayer = 30;
         const int EncounterPreviewWidth = 384;
         const int EncounterPreviewHeight = 256;
@@ -41,6 +50,16 @@ namespace CrazyElevator.Managers
             public Color Accent;
             public GameObject PreviewSource;
             public float PreviewYaw;
+            public bool IsWorldDiscovery;
+            public WorldBand World;
+            public string PassengerKind;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetEncounterTutorialProgress()
+        {
+            foreach (HashSet<WorldBand> worlds in completedWorldTutorials) worlds.Clear();
+            foreach (HashSet<string> passengers in completedPassengerTutorials) passengers.Clear();
         }
 
         // Rebuild native GUI styles when returning to Play Mode without domain reload.
@@ -88,6 +107,10 @@ namespace CrazyElevator.Managers
             GameTypography.Apply(encounterTitle, true);
             encounterBody = new GUIStyle(body) { fontSize = 15, wordWrap = true };
             GameTypography.Apply(encounterBody);
+            encounterPrompt = new GUIStyle(buttonStyle)
+            { fontSize = 18, alignment = TextAnchor.MiddleLeft, wordWrap = false, clipping = TextClipping.Clip };
+            GameTypography.Apply(encounterPrompt, true);
+            encounterPrompt.normal.textColor = Gold;
             encounterBadge = new GUIStyle(title) { fontSize = 44, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(encounterBadge, true);
         }
@@ -177,7 +200,13 @@ namespace CrazyElevator.Managers
 
         void DiscoverWorld(WorldBand world)
         {
-            if (IsNpc || !encounteredWorlds.Add(world)) return;
+            if (IsNpc) return;
+            QueueWorldDiscoveryCard(world);
+        }
+
+        void QueueWorldDiscoveryCard(WorldBand world)
+        {
+            if (IsNpc || !encounteredWorlds.Add(world) || completedWorldTutorials[Seat].Contains(world)) return;
             string titleText;
             string description;
             string badge;
@@ -208,6 +237,8 @@ namespace CrazyElevator.Managers
                 Kicker = "NEW DIMENSION",
                 Title = titleText,
                 Description = description,
+                IsWorldDiscovery = true,
+                World = world,
                 Badge = badge,
                 Accent = accent,
                 PreviewSource = FindWorldPreviewSource(world),
@@ -217,8 +248,15 @@ namespace CrazyElevator.Managers
 
         void DiscoverPassenger(Rider rider)
         {
+            if (IsNpc || rider == null || string.IsNullOrEmpty(rider.Kind)) return;
+            QueuePassengerDiscoveryCard(rider);
+        }
+
+        void QueuePassengerDiscoveryCard(Rider rider)
+        {
             if (IsNpc || rider == null || string.IsNullOrEmpty(rider.Kind)
-                || !encounteredPassengerKinds.Add(rider.Kind)) return;
+                || !encounteredPassengerKinds.Add(rider.Kind)
+                || completedPassengerTutorials[Seat].Contains(rider.Kind)) return;
             string titleText = rider.Name.ToUpperInvariant();
             string description;
             switch (rider.Kind)
@@ -259,6 +297,7 @@ namespace CrazyElevator.Managers
                 Kicker = "NEW PASSENGER",
                 Title = titleText,
                 Description = description,
+                PassengerKind = rider.Kind,
                 Badge = string.IsNullOrEmpty(rider.Badge) ? "?" : rider.Badge,
                 Accent = Palette[Mathf.Abs(rider.Color) % Palette.Length],
                 PreviewSource = FindPassengerPreviewSource(rider),
@@ -486,7 +525,6 @@ namespace CrazyElevator.Managers
             activeEncounterCard = card;
             encounterCardTime = 0f;
             PrepareEncounterPreview(card);
-            if (Match != null && Match.Running) Match.BeginEncounterCardPause();
         }
 
         void TickEncounterCards(float dt)
@@ -500,10 +538,13 @@ namespace CrazyElevator.Managers
             encounterCardTime += dt;
         }
 
-        public bool HasActiveEncounterCard => activeEncounterCard != null;
-
         public void AdvanceEncounterCardAfterConfirmation()
         {
+            if (activeEncounterCard == null) return;
+            if (activeEncounterCard.IsWorldDiscovery)
+                completedWorldTutorials[Seat].Add(activeEncounterCard.World);
+            if (!string.IsNullOrEmpty(activeEncounterCard.PassengerKind))
+                completedPassengerTutorials[Seat].Add(activeEncounterCard.PassengerKind);
             activeEncounterCard = null;
             encounterCardTime = 0f;
             ClearEncounterPreviewModel();
@@ -559,9 +600,9 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
                 compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
             string confirmPrompt = Match == null ? "PRESS A / V TO CONTINUE"
-                : Seat == 0 ? "PLAYER 1: PRESS A / V" : "PLAYER 2: PRESS A / PERIOD";
-            GUI.Label(new Rect(contentX, card.y + card.height - 24f, contentWidth, 18f),
-                confirmPrompt, encounterKicker);
+                : Seat == 0 ? "P1: PRESS A / V" : "P2: PRESS A / PERIOD";
+            GUI.Label(new Rect(contentX, card.y + card.height - 28f, contentWidth, 24f),
+                confirmPrompt, encounterPrompt);
             encounterTitle.fontSize = oldTitleSize;
             encounterBody.fontSize = oldBodySize;
             encounterBadge.fontSize = oldBadgeSize;
