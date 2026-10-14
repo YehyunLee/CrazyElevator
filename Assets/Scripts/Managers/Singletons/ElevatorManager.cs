@@ -954,7 +954,7 @@ namespace CrazyElevator.Managers
         void HandleInteriorController(float dt)
         {
             InputManager.SeatInput input = SeatControls;
-            Mouse mouse = Match != null && Seat == 1 ? null : Mouse.current;
+            Mouse mouse = Mouse.current;
             Vector2 mouseGui = mouse == null ? Vector2.zero
                 : new Vector2(mouse.position.ReadValue().x, Screen.height - mouse.position.ReadValue().y);
             if (Match != null)

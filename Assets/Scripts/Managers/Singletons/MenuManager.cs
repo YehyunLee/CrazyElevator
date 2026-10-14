@@ -167,6 +167,7 @@ namespace CrazyElevator.Managers
             var playerOneInput = input.ReadForSeat(0, true);
             var playerTwoInput = input.ReadForSeat(1, true);
             bool playerTwoRegistered = input.HasInput(1);
+            bool playerTwoAvailable = input.HasLobbyInput(1);
             if (choosingMode)
             {
                 if (playerTwoRegistered && !lastPlayerTwoRegistered)
@@ -174,7 +175,7 @@ namespace CrazyElevator.Managers
                     playerTwoSelected = true;
                     playerTwoReady = false;
                 }
-                if (!playerTwoRegistered)
+                if (!playerTwoRegistered && !input.CanUseSplitKeyboard)
                 {
                     playerTwoSelected = false;
                     playerTwoReady = true;
@@ -192,8 +193,18 @@ namespace CrazyElevator.Managers
             if (choosingMode && transition >= TransitionSeconds)
             {
                 MoveLobbyCursor(ref playerOneCursor, playerOneInput.Move, ref playerOneCursorHeld, 0);
-                if (playerTwoRegistered)
+                if (playerTwoAvailable)
                     MoveLobbyCursor(ref playerTwoCursor, playerTwoInput.Move, ref playerTwoCursorHeld, 1);
+            }
+
+            // Once the selected sides are ready, Enter should start from
+            // anywhere in the lobby instead of requiring a precise cursor stop
+            // on the small Start tile.
+            if (choosingMode && transition >= TransitionSeconds
+                && AllPlayersReady && playerOneInput.StartPressed)
+            {
+                StartSelectedMode();
+                return;
             }
 
             if (playerOneInput.ConfirmPressed)
@@ -206,7 +217,7 @@ namespace CrazyElevator.Managers
                     else if (titleSelection == 2) ExitGame();
                 }
             }
-            if (choosingMode && transition >= TransitionSeconds && playerTwoRegistered
+            if (choosingMode && transition >= TransitionSeconds && playerTwoAvailable
                 && playerTwoInput.ConfirmPressed)
                 HandleLobbyConfirm(1);
             if (!playerTwoSelected) playerTwoUnavailable = false;
@@ -263,9 +274,9 @@ namespace CrazyElevator.Managers
             }
             if (cursor == 1)
             {
-                if (!InputManager.Instance.HasInput(1)) return;
+                if (!InputManager.Instance.HasLobbyInput(1)) return;
                 playerTwoSelected = !playerTwoSelected;
-                playerTwoReady = !playerTwoSelected;
+                playerTwoReady = !playerTwoSelected || InputManager.Instance.CanUseSplitKeyboard;
                 return;
             }
             if (cursor == 2)
@@ -275,7 +286,8 @@ namespace CrazyElevator.Managers
             }
             if (cursor == 3)
             {
-                if (seat == 1 && playerTwoSelected) playerTwoReady = !playerTwoReady;
+                if (playerTwoSelected && (seat == 1 || InputManager.Instance.CanUseSplitKeyboard))
+                    playerTwoReady = !playerTwoReady;
                 return;
             }
             if (cursor == 4 && AllPlayersReady)
@@ -503,8 +515,8 @@ namespace CrazyElevator.Managers
                     GUI.Label(backButton, "BACK", cardTitle);
                     if (GUI.Button(backButton, GUIContent.none, GUIStyle.none))
                         ReturnToMainMenu();
-                    bool playerTwoRegistered = InputManager.Instance != null
-                        && InputManager.Instance.HasInput(1);
+                    bool playerTwoAvailable = InputManager.Instance != null
+                        && InputManager.Instance.HasLobbyInput(1);
                     bool startEnabled = !BothCpu;
                     Color startFill = AllPlayersReady ? CombinedColour
                         : startEnabled ? new Color32(75, 75, 82, 255) : DisabledColour;
@@ -522,14 +534,36 @@ namespace CrazyElevator.Managers
                         ? (playerTwoReady ? "READY" : "UNREADY") : "CPU READY",
                         startLabel, ref startLabelTexture, ref startShapeHash, false, true);
                     DrawMenuLabel(startButton, "START", startLabel, ref startLabelTexture, ref startShapeHash, false);
-                    DrawLobbyCursor(playerOneButton, playerOneCursor == 0, playerTwoCursor == 0, playerTwoRegistered, false);
-                    DrawLobbyCursor(rivalButton, playerOneCursor == 1, playerTwoCursor == 1, playerTwoRegistered, false);
-                    DrawLobbyCursor(playerOneReadyButton, playerOneCursor == 2, playerTwoCursor == 2, playerTwoRegistered, playerOneReady);
-                    DrawLobbyCursor(playerTwoReadyButton, playerOneCursor == 3, playerTwoCursor == 3, playerTwoRegistered, playerTwoReady);
+                    // The lobby is drawn with IMGUI labels, so provide
+                    // transparent hitboxes for mouse users as well as the
+                    // keyboard/controller cursor.
+                    if (GUI.Button(playerOneButton, GUIContent.none, GUIStyle.none))
+                    {
+                        playerOneHuman = !playerOneHuman;
+                        playerOneReady = !playerOneHuman;
+                    }
+                    if (GUI.Button(rivalButton, GUIContent.none, GUIStyle.none)
+                        && playerTwoAvailable)
+                    {
+                        playerTwoSelected = !playerTwoSelected;
+                        playerTwoReady = !playerTwoSelected || InputManager.Instance.CanUseSplitKeyboard;
+                    }
+                    if (GUI.Button(playerOneReadyButton, GUIContent.none, GUIStyle.none)
+                        && playerOneHuman)
+                        playerOneReady = !playerOneReady;
+                    if (GUI.Button(playerTwoReadyButton, GUIContent.none, GUIStyle.none)
+                        && playerTwoSelected)
+                        playerTwoReady = !playerTwoReady;
+                    if (GUI.Button(startButton, GUIContent.none, GUIStyle.none) && AllPlayersReady)
+                        StartSelectedMode();
+                    DrawLobbyCursor(playerOneButton, playerOneCursor == 0, playerTwoCursor == 0, playerTwoAvailable, false);
+                    DrawLobbyCursor(rivalButton, playerOneCursor == 1, playerTwoCursor == 1, playerTwoAvailable, false);
+                    DrawLobbyCursor(playerOneReadyButton, playerOneCursor == 2, playerTwoCursor == 2, playerTwoAvailable, playerOneReady);
+                    DrawLobbyCursor(playerTwoReadyButton, playerOneCursor == 3, playerTwoCursor == 3, playerTwoAvailable, playerTwoReady);
                     DrawLobbyCursor(startButton, playerOneCursor == 4,
-                        playerTwoCursor == 4, playerTwoRegistered,
+                        playerTwoCursor == 4, playerTwoAvailable,
                         playerOneReady || playerTwoReady);
-                    DrawLobbyCursor(backButton, playerOneCursor == 5, false, playerTwoRegistered, false);
+                    DrawLobbyCursor(backButton, playerOneCursor == 5, false, playerTwoAvailable, false);
                     if (AllPlayersReady)
                     {
                         Panel(new Rect(560, 1018, 580, 52), new Color(Ink.r, Ink.g, Ink.b, .94f));

@@ -695,7 +695,7 @@ namespace CrazyElevator.Match
             string title = !Running ? "TWO ELEVATORS. ONE SHIFT." : "BOTH ELEVATORS PAUSED";
             GUI.Label(new Rect(box.x + 20, box.y + 20, width - 40, 40), title, centred);
             string rivalName = Rival != null && Rival.IsNpc ? "CPU" : "PLAYER 2";
-            string copy = "PLAYER 1 vs " + rivalName + " — one 3-minute shift.\n\nLeft: Player 1. Right: " + rivalName + ".\nPlayer 1: WASD + C/I/H/R/Shift. Player 2: arrows + Right Ctrl confirm, Right Shift boost, Right Alt hold, / repair, and . eject.\nDuring shaft travel, horizontal keys switch tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
+            string copy = "PLAYER 1 vs " + rivalName + " — one 3-minute shift.\n\nLeft: Player 1. Right: " + rivalName + ".\nPlayer 1: WASD + V action/stop, E close, Left Shift boost. Player 2: arrows + . action/stop, / close, Right Shift boost.\nDuring shaft travel, horizontal keys switch tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             GUI.Label(new Rect(box.x + 24, box.y + 72, width - 48, height - 130), copy, text);
             if (Paused)

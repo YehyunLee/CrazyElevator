@@ -13,6 +13,7 @@ namespace CrazyElevator.Managers
 
         static readonly int[] joinedGamepadIds = { -1, -1 };
         static int keyboardMouseSeat = -1;
+        static bool keyboardModeSession;
         enum InputSource { None, Gamepad, KeyboardMouse }
         InputSource menuInputSource;
         Gamepad menuGamepad;
@@ -40,9 +41,8 @@ namespace CrazyElevator.Managers
         public bool PointerHeld { get; private set; }
 
         // Split-screen keyboard input is read per seat so Player 2 can play
-        // without stealing Player 1's WASD/actions. Player 1 keeps the
-        // existing keyboard and controller mapping; Player 2 uses arrows and
-        // the right-side modifier keys.
+        // without stealing Player 1's WASD/actions. Player 1 uses WASD + V/E;
+        // Player 2 uses arrows + period/slash.
         public struct SeatInput
         {
             public Vector2 Move;
@@ -89,6 +89,7 @@ namespace CrazyElevator.Managers
             joinedGamepadIds[0] = -1;
             joinedGamepadIds[1] = -1;
             keyboardMouseSeat = -1;
+            keyboardModeSession = false;
         }
 
         void OnDestroy()
@@ -104,14 +105,34 @@ namespace CrazyElevator.Managers
         public bool HasInput(int seat)
             => HasController(seat) || keyboardMouseSeat == seat;
 
+        // A single keyboard can drive both duel elevators: Player 1 uses WASD
+        // and Player 2 uses the arrow keys. It is not a second joined device,
+        // but the lobby should still expose Player 2 as a valid choice.
+        public bool CanUseSplitKeyboard
+            => keyboardModeSession && Keyboard.current != null;
+
+        public bool HasLobbyInput(int seat)
+            => HasInput(seat) || (seat == 1 && CanUseSplitKeyboard);
+
         int NextAvailableSeat => !HasInput(0) ? 0 : !HasInput(1) ? 1 : -1;
 
         public void BeginControllerJoining()
         {
             controllerJoining = true;
             var playerInputManager = GetComponent<PlayerInputManager>();
-            if (!HasInput(0) && menuInputSource == InputSource.KeyboardMouse)
+            if (menuInputSource == InputSource.KeyboardMouse)
+                keyboardModeSession = true;
+            // Entering the lobby by clicking or pressing a menu button can
+            // happen before the source detector sees a keyboard event. Claim
+            // the keyboard immediately when no controller source was chosen so
+            // the lobby can always receive WASD/V input.
+            if (!HasInput(0) && menuInputSource != InputSource.Gamepad
+                && Keyboard.current != null && Mouse.current != null)
+            {
+                menuInputSource = InputSource.KeyboardMouse;
+                keyboardModeSession = true;
                 RegisterKeyboardMouse(0);
+            }
             else if (!HasController(0) && menuGamepad != null)
             {
                 var playerInput = JoinGamepad(playerInputManager, 0, menuGamepad);
@@ -140,7 +161,11 @@ namespace CrazyElevator.Managers
             manager.EnableJoining();
             var playerInput = manager.JoinPlayer(seat, -1, "Keyboard&Mouse", Keyboard.current, Mouse.current);
             manager.DisableJoining();
-            if (playerInput != null) keyboardMouseSeat = seat;
+            if (playerInput != null)
+            {
+                keyboardMouseSeat = seat;
+                if (seat == 0) keyboardModeSession = true;
+            }
         }
 
         bool KeyboardActivityThisFrame()
@@ -196,7 +221,11 @@ namespace CrazyElevator.Managers
             bool replacementKeyboard = seat == 0 && keyboardMouseSeat == 1;
             RemovePlayerInput(PlayerInput.GetPlayerByIndex(seat));
             joinedGamepadIds[seat] = -1;
-            if (keyboardMouseSeat == seat) keyboardMouseSeat = -1;
+            if (keyboardMouseSeat == seat)
+            {
+                keyboardMouseSeat = -1;
+                if (seat == 0) keyboardModeSession = false;
+            }
             if (seat == 0)
             {
                 RemovePlayerInput(PlayerInput.GetPlayerByIndex(1));
@@ -222,6 +251,7 @@ namespace CrazyElevator.Managers
             joinedGamepadIds[0] = -1;
             joinedGamepadIds[1] = -1;
             keyboardMouseSeat = -1;
+            keyboardModeSession = false;
             controllerJoining = false;
             menuInputSource = InputSource.None;
             menuGamepad = null;
@@ -276,16 +306,20 @@ namespace CrazyElevator.Managers
             var pad = GamepadForSeat(seat);
             bool controllerAssigned = HasController(seat);
             bool keyboardAssigned = keyboardMouseSeat == seat;
+            bool splitKeyboardActive = splitKeyboard && keyboardModeSession;
             bool inputAssigned = controllerAssigned || keyboardAssigned;
-            bool playerTwo = seat == 1 && splitKeyboard && !inputAssigned;
+            bool virtualPlayerTwoKeyboard = seat == 1 && splitKeyboardActive && !inputAssigned;
+            bool playerTwoKeyboard = seat == 1 && splitKeyboard
+                && (keyboardAssigned || virtualPlayerTwoKeyboard);
             bool keyboardAvailable = keyboard != null && (keyboardAssigned
-                || !controllerJoining && (menuInputSource == InputSource.KeyboardMouse
-                    || Gamepad.all.Count == 0));
+                || virtualPlayerTwoKeyboard
+                || seat == 0 && !controllerJoining
+                    && (menuInputSource == InputSource.KeyboardMouse || Gamepad.all.Count == 0));
 
             Vector2 keys = Vector2.zero;
             if (keyboardAvailable)
             {
-                if (playerTwo)
+                if (playerTwoKeyboard)
                 {
                     keys.x = (keyboard.rightArrowKey.isPressed ? 1 : 0)
                         - (keyboard.leftArrowKey.isPressed ? 1 : 0);
@@ -303,40 +337,43 @@ namespace CrazyElevator.Managers
 
             Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
             Vector2 navigation = stick + keys;
-            bool confirm = playerTwo
-                ? keyboardAvailable && keyboard.rightCtrlKey.wasPressedThisFrame
+            bool playerTwoConfirm = keyboardAvailable && keyboard.periodKey.wasPressedThisFrame;
+            bool confirm = playerTwoKeyboard
+                ? playerTwoConfirm
                 : keyboardAvailable && keyboard.vKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
-            bool kickout = playerTwo
-                ? keyboardAvailable && keyboard.periodKey.wasPressedThisFrame
+            bool kickout = playerTwoKeyboard
+                ? false
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
                     || pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger;
             bool pause = keyboardAvailable && keyboard.escapeKey.wasPressedThisFrame
                 || pad != null && pad.startButton.wasPressedThisFrame
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
-            bool overlay = !playerTwo && keyboardAvailable
+            bool overlay = !playerTwoKeyboard && keyboardAvailable
                 && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            bool closeDoors = !playerTwo && keyboardAvailable && keyboard.eKey.wasPressedThisFrame
-                || !playerTwo && pad != null && pad.buttonNorth.wasPressedThisFrame
-                && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
-            bool hold = playerTwo
+            bool closeDoors = playerTwoKeyboard
+                ? keyboardAvailable && keyboard.slashKey.wasPressedThisFrame
+                : keyboardAvailable && keyboard.eKey.wasPressedThisFrame
+                    || pad != null && pad.buttonNorth.wasPressedThisFrame
+                        && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            bool hold = playerTwoKeyboard
                 ? keyboardAvailable && keyboard.rightAltKey.isPressed
                 : keyboardAvailable && keyboard.hKey.isPressed
                     || pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger;
-            bool repair = playerTwo
-                ? keyboardAvailable && keyboard.slashKey.isPressed
+            bool repair = playerTwoKeyboard
+                ? false
                 : keyboardAvailable && keyboard.rKey.isPressed
                     || pad != null && pad.rightShoulder.isPressed;
-            bool boost = playerTwo
+            bool boost = playerTwoKeyboard
                 ? keyboardAvailable && keyboard.rightShiftKey.isPressed
                 : keyboardAvailable && (splitKeyboard
                     ? keyboard.leftShiftKey.isPressed
                     : keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed)
                     || pad != null && (pad.leftShoulder.isPressed
                         || pad.leftTrigger.isPressed || pad.rightTrigger.isPressed);
-            bool mute = !playerTwo && keyboardAvailable && keyboard.mKey.wasPressedThisFrame;
-            bool start = playerTwo
-                ? keyboardAvailable && keyboard.rightCtrlKey.wasPressedThisFrame
+            bool mute = !playerTwoKeyboard && keyboardAvailable && keyboard.mKey.wasPressedThisFrame;
+            bool start = playerTwoKeyboard
+                ? playerTwoConfirm
                 : keyboardAvailable && keyboard.enterKey.wasPressedThisFrame
                     || pad != null && (pad.buttonSouth.wasPressedThisFrame
                         || pad.startButton.wasPressedThisFrame
@@ -362,7 +399,7 @@ namespace CrazyElevator.Managers
                 DeregisterPressed = keyboardAssigned && keyboard.tKey.wasPressedThisFrame
                     || pad != null && pad.selectButton.wasPressedThisFrame
             };
-            if (keyboardAvailable && !playerTwo && Mouse.current != null)
+            if (keyboardAvailable && !playerTwoKeyboard && Mouse.current != null)
             {
                 var mouse = Mouse.current;
                 result.Pointer = mouse.position.ReadValue();
