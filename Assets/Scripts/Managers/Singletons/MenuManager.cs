@@ -471,8 +471,8 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(100, 34, 1500, 82), "CONTROLLER CONTROLS", title);
             GUI.Label(new Rect(48, 126, 790, 42), "PASSENGERS", caption);
             GUI.Label(new Rect(862, 126, 790, 42), "ELEVATOR", caption);
-            Rect passengerImage = new Rect(48, 176, 790, 526);
-            Rect elevatorImage = new Rect(862, 176, 790, 526);
+            Rect passengerImage = new Rect(48, 176, 790, 590);
+            Rect elevatorImage = new Rect(862, 176, 790, 590);
             Panel(passengerImage, Cream);
             Panel(elevatorImage, Cream);
             if (controllerPassengerInstructions != null)
