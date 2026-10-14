@@ -84,7 +84,17 @@ namespace CrazyElevator.Managers
         {
             if (phase != Phase.Moving) return;
             boostAxis = Mathf.Abs(axis) > .25f ? Mathf.Clamp(axis, -1f, 1f) : 0f;
-            if (boostAxis != 0) travelDirection = boostAxis > 0 ? 1 : -1;
+            if (boostAxis != 0)
+            {
+                int requestedDirection = boostAxis > 0 ? 1 : -1;
+                if (requestedDirection != travelDirection
+                    && travelVelocity * requestedDirection < 0f
+                    && collisionRecoilTimer <= 0f)
+                {
+                    travelVelocity = requestedDirection * CruiseSpeed;
+                }
+                travelDirection = requestedDirection;
+            }
             boostHeld = boost && boostAxis != 0;
         }
 

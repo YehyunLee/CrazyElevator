@@ -307,7 +307,6 @@ namespace CrazyElevator.Managers
         float lastTrackInput;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
         bool boostHeld;
-        bool initialVelocityPending;
         readonly HashSet<int> passedFloors = new HashSet<int>();
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), 0, ElevatorRound.Floors - 1);
@@ -329,11 +328,12 @@ namespace CrazyElevator.Managers
             passedFloors.Clear(); passedFloors.Add(round.Floor);
             round.LeaveFloor();
             travelFloor = round.Floor;
-            travelVelocity = 0;
+            // Depart at the world's normal cruising speed. Boost should feel
+            // like extra acceleration, not a requirement to overcome a sluggish launch.
+            travelVelocity = travelDirection * CruiseSpeed;
             boostAxis = 0; boostHeld = false;
-            initialVelocityPending = true;
             phase = Phase.Moving; phaseTime = 0; destination = -1;
-            notice = "Hold Shift / shoulder / trigger with up/down to build speed. Confirm near a floor to stop.";
+            notice = "Cruising. Hold Shift / shoulder / trigger with up/down for extra speed. Confirm near a floor to stop.";
         }
         void RequestFloorStop()
         {
@@ -383,27 +383,11 @@ namespace CrazyElevator.Managers
             else if (oldVelocity * travelDirection < CruiseSpeed)
                 travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
             else travelVelocity = oldVelocity; // Releasing boost preserves the accumulated momentum.
-            if (Mathf.Abs(boostAxis) > .25f)
-            {
-                // A fresh direction input starts the elevator at cruise speed;
-                // the existing acceleration path then builds speed from there.
-                if (initialVelocityPending)
-                {
-                    travelVelocity = travelDirection * CruiseSpeed;
-                    initialVelocityPending = false;
-                }
-                oldVelocity = Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
-                if (boostHeld)
-                    travelVelocity = Mathf.Clamp(oldVelocity + boostAxis * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
-                else if (oldVelocity * travelDirection < CruiseSpeed)
-                    travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
-                else travelVelocity = oldVelocity;
-            }
-            else travelVelocity = oldVelocity;
             float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, 0, ElevatorRound.Floors - 1);
             travelFloor = Match != null
                 ? Match.ConstrainTravel(this, before, candidate, ref travelVelocity)
                 : candidate;
+            Match?.EvaluateJunction(this, before, travelFloor);
             if (travelFloor <= 0 && travelVelocity < 0 || travelFloor >= ElevatorRound.Floors - 1 && travelVelocity > 0) travelVelocity = 0;
             int motionDirection = travelFloor >= before ? 1 : -1;
             // A skipped floor counts only after leaving its stopping window; docking there never incurs a missed-stop penalty.
@@ -422,6 +406,7 @@ namespace CrazyElevator.Managers
         {
             travelFloor = round.Floor; travelDirection = 1; destination = -1; passedFloors.Clear();
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
+            routeBoostPulse = 0f;
             lastTrackInput = collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
             SelectRider(null); controllerSelection = false; lastSelectionDirection = Vector2.zero;
         }
@@ -1297,7 +1282,6 @@ namespace CrazyElevator.Managers
         const int ExteriorLayer = 31;
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
         public const float ShaftFloorHeight = 13.2f;
-        const float SecurityCameraFieldOfView = 90f;
         [Header("Shaft view")]
         public bool showCabinPreview = true;
         [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
@@ -1334,6 +1318,7 @@ namespace CrazyElevator.Managers
         {
             get
             {
+                if (exteriorCar != null) return exteriorCar.position;
                 float x = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
                 Vector3 local = new Vector3(x, CurrentFloor * ShaftFloorHeight + 1.4f, -.8f);
                 return exteriorCar != null && exteriorCar.parent != null
@@ -1409,24 +1394,13 @@ namespace CrazyElevator.Managers
                 ? Mathf.Sin((1f - collisionImpact) * Mathf.PI * 3f) * collisionImpact : 0f;
             float carX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
             float outward = Seat == 0 ? -1f : 1f;
-            exteriorCar.localPosition = new Vector3(carX + outward * collisionKick * .28f,
-                travelFloor * ShaftFloorHeight + 1.4f + Mathf.Abs(collisionKick) * .11f, -.8f);
-            exteriorCar.localRotation = exteriorCarHomeRotation * Quaternion.Euler(0f, 0f,
-                collisionKick * (Seat == 0 ? -4.5f : 4.5f));
-            Vector3 shaftCameraPosition = new Vector3(carX, travelFloor * ShaftFloorHeight + 4, -44);
-            Quaternion shaftCameraRotation = Quaternion.Euler(5, 0, 0);
-            if (phase == Phase.Moving)
-            {
-                float clock = Time.unscaledTime;
-                float strength = shaftTravelShake * travelShakeBlend;
-                shaftCameraPosition += new Vector3(Mathf.Sin(clock * 15f), Mathf.Sin(clock * 21f) * .65f, 0) * strength;
-                shaftCameraRotation *= Quaternion.Euler(0, 0, Mathf.Sin(clock * 13f) * strength * .7f);
-            }
-            exteriorCamera.transform.position = shaftCameraPosition;
-            exteriorCamera.transform.rotation = shaftCameraRotation;
-            exteriorCamera.fieldOfView = SecurityCameraFieldOfView;
-            if (Match != null)
-                exteriorCamera.orthographicSize = Mathf.Max(9.5f, (Match.shaftSpacing + 3f) / exteriorCamera.aspect);
+            Vector3 carLocal = CrazyTravelLocalPosition(carX, travelFloor);
+            carLocal += new Vector3(outward * collisionKick * .42f,
+                Mathf.Abs(collisionKick) * .17f, 0f);
+            exteriorCar.localPosition = carLocal;
+            exteriorCar.localRotation = CrazyTravelLocalRotation(travelFloor, collisionKick);
+            EnsureCrazyRouteMap();
+            UpdateCrazyTravelCamera(carLocal);
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
         }
 
@@ -1451,9 +1425,11 @@ namespace CrazyElevator.Managers
             if (!BuildingView || !exteriorCamera) return;
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
+            DrawCrazyJunctionGuide();
             int floor = NearbyFloor;
             float markerX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
-            Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(new Vector3(markerX, floor * ShaftFloorHeight + 1.4f, -.8f)));
+            Vector3 markerLocal = CrazyTravelLocalPosition(markerX, floor);
+            Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(markerLocal));
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
             float x = point.x, y = Screen.height - point.y;
@@ -1923,11 +1899,56 @@ namespace CrazyElevator.Managers
 
         public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)
         {
+            bool knockedFromStop = phase != Phase.Moving;
             ApplyMatchCollision(slowSeconds, 1f);
-            if (phase != Phase.Moving) return;
+            if (!EnterMatchKnockbackTravel()) return;
+            travelDirection = reboundVelocity >= 0f ? 1 : -1;
             travelVelocity = reboundVelocity;
-            collisionRecoilTimer = .3f;
-            notice = IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS";
+            collisionRecoilTimer = knockedFromStop ? .62f : .48f;
+            notice = knockedFromStop
+                ? (IsNpc ? "KNOCKED OFF THE FLOOR!" : "KNOCKED OFF YOUR STOP — RECOVER!")
+                : (IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS");
+        }
+
+        bool EnterMatchKnockbackTravel()
+        {
+            if (phase == Phase.Moving) return true;
+            if (phase == Phase.Intro || phase == Phase.Welcome
+                || phase == Phase.Tutorial || phase == Phase.Results)
+                return false;
+
+            bool alreadyLeftFloor = phase == Phase.Docking;
+            CancelPassengerDrag();
+            SelectRider(null);
+            ClearHandymanRepair();
+            ClearInteriorTransfers();
+            if (!alreadyLeftFloor)
+            {
+                travelFloor = round.Floor;
+                round.LeaveFloor();
+            }
+            passedFloors.Clear();
+            passedFloors.Add(round.Floor);
+            destination = -1;
+            phase = Phase.Moving;
+            phaseTime = 0f;
+            doors = 0f;
+            SetDoors(0f);
+            SetControlStatus("KNOCKED AWAY");
+            return true;
+        }
+
+        public void ApplyExpressJunction()
+        {
+            if (phase != Phase.Moving) return;
+            float direction = Mathf.Abs(travelVelocity) > .05f
+                ? Mathf.Sign(travelVelocity) : travelDirection;
+            float boostedSpeed = Mathf.Max(Mathf.Abs(travelVelocity), CruiseSpeed)
+                + Mathf.Max(.45f, SpeedLimit * .28f);
+            travelVelocity = direction * Mathf.Min(SpeedLimit, boostedSpeed);
+            routeBoostPulse = 1f;
+            notice = IsNpc ? "CPU CAUGHT THE EXPRESS LINE" : "EXPRESS LINE! FREE SPEED BURST";
+            Play(chime, .95f);
         }
 
         // NPC uses the same passenger placement, scoring, and kick animation.
