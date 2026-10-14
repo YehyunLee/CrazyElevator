@@ -215,6 +215,19 @@ namespace CrazyElevator.Managers
             OnControllerJoined?.Invoke(-1);
         }
 
+        public void ResetRegistrations()
+        {
+            for (int i = PlayerInput.all.Count - 1; i >= 0; i--)
+                RemovePlayerInput(PlayerInput.all[i]);
+            joinedGamepadIds[0] = -1;
+            joinedGamepadIds[1] = -1;
+            keyboardMouseSeat = -1;
+            controllerJoining = false;
+            menuInputSource = InputSource.None;
+            menuGamepad = null;
+            GetComponent<PlayerInputManager>()?.DisableJoining();
+        }
+
         void RemovePlayerInput(PlayerInput playerInput)
         {
             if (playerInput == null) return;

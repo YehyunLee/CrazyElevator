@@ -698,10 +698,30 @@ namespace CrazyElevator.Match
             string copy = "PLAYER 1 vs " + rivalName + " — one 3-minute shift.\n\nLeft: Player 1. Right: " + rivalName + ".\nPlayer 1: WASD + C/I/H/R/Shift. Player 2: arrows + Right Ctrl confirm, Right Shift boost, Right Alt hold, / repair, and . eject.\nDuring shaft travel, horizontal keys switch tracks. Elevators in the same track block each other; switch tracks to pass.\n\nHighest delivery score wins.";
             if (Paused) copy = "Both elevators are paused.\n\nResume when you're ready.";
             GUI.Label(new Rect(box.x + 24, box.y + 72, width - 48, height - 130), copy, text);
-            var button = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
-            Fill(button, Teal);
-            if (GUI.Button(button, Paused ? "RESUME BOTH" : "START BOTH / ENTER"))
-            { if (Paused) TogglePause(); else StartMatch(); }
+            if (Paused)
+            {
+                var lobbyButton = new Rect(box.x + 24, box.yMax - 94, (width - 60) * .5f, 34);
+                var menuButton = new Rect(lobbyButton.xMax + 12, lobbyButton.y, lobbyButton.width, 34);
+                if (MenuManager.PauseSelection == 1)
+                    Fill(new Rect(lobbyButton.x - 3, lobbyButton.y - 3, lobbyButton.width + 6, lobbyButton.height + 6), Color.white);
+                if (MenuManager.PauseSelection == 2)
+                    Fill(new Rect(menuButton.x - 3, menuButton.y - 3, menuButton.width + 6, menuButton.height + 6), Color.white);
+                Fill(lobbyButton, Coral);
+                Fill(menuButton, Gold);
+                if (GUI.Button(lobbyButton, "BACK TO LOBBY")) MenuManager.ReturnToLobby();
+                if (GUI.Button(menuButton, "MAIN MENU")) MenuManager.ReturnToMainMenu();
+                var resumeButton = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
+                if (MenuManager.PauseSelection == 0)
+                    Fill(new Rect(resumeButton.x - 3, resumeButton.y - 3, resumeButton.width + 6, resumeButton.height + 6), Color.white);
+                Fill(resumeButton, Teal);
+                if (GUI.Button(resumeButton, "RESUME BOTH")) TogglePause();
+            }
+            else
+            {
+                var button = new Rect(box.x + 24, box.yMax - 52, width - 48, 34);
+                Fill(button, Teal);
+                if (GUI.Button(button, "START BOTH / ENTER")) StartMatch();
+            }
         }
     }
 }
