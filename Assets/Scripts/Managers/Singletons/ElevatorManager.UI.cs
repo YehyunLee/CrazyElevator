@@ -13,9 +13,36 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
-            rewardPoints, rewardCaption, calloutNumber, calloutText, selectionArrow;
+            rewardPoints, rewardCaption, calloutNumber, calloutText, selectionArrow,
+            encounterKicker, encounterTitle, encounterBody, encounterBadge;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
+        const float EncounterCardDuration = 3.1f;
+        readonly HashSet<WorldBand> encounteredWorlds = new HashSet<WorldBand>();
+        readonly HashSet<string> encounteredPassengerKinds = new HashSet<string>();
+        readonly Queue<EncounterCard> encounterCards = new Queue<EncounterCard>();
+        EncounterCard activeEncounterCard;
+        float encounterCardTime;
+        const int EncounterPreviewLayer = 30;
+        const int EncounterPreviewWidth = 384;
+        const int EncounterPreviewHeight = 256;
+        Transform encounterPreviewStage;
+        Transform encounterPreviewPivot;
+        Camera encounterPreviewCamera;
+        RenderTexture encounterPreviewTexture;
+        GameObject encounterPreviewModel;
+        EncounterCard renderedEncounterCard;
+
+        sealed class EncounterCard
+        {
+            public string Kicker;
+            public string Title;
+            public string Description;
+            public string Badge;
+            public Color Accent;
+            public GameObject PreviewSource;
+            public float PreviewYaw;
+        }
 
         // Rebuild native GUI styles when returning to Play Mode without domain reload.
         void OnEnable() { body = null; }
@@ -56,6 +83,14 @@ namespace CrazyElevator.Managers
             selectionArrow = new GUIStyle(buttonStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(selectionArrow, true);
             selectionArrow.normal.textColor = Gold;
+            encounterKicker = new GUIStyle(small) { fontSize = 12, fontStyle = FontStyle.Bold, wordWrap = false };
+            GameTypography.Apply(encounterKicker, true);
+            encounterTitle = new GUIStyle(title) { fontSize = 42, wordWrap = false, clipping = TextClipping.Clip };
+            GameTypography.Apply(encounterTitle, true);
+            encounterBody = new GUIStyle(body) { fontSize = 15, wordWrap = true };
+            GameTypography.Apply(encounterBody);
+            encounterBadge = new GUIStyle(title) { fontSize = 44, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            GameTypography.Apply(encounterBadge, true);
         }
         // Draw a solid panel and restore the GUI tint.
         void Panel(Rect r, Color c) { var old = GUI.color; GUI.color = c; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = old; }
@@ -130,6 +165,408 @@ namespace CrazyElevator.Managers
             return "3 spaces together";
         }
 
+        void ResetEncounterCards()
+        {
+            encounteredWorlds.Clear();
+            encounteredPassengerKinds.Clear();
+            encounterCards.Clear();
+            activeEncounterCard = null;
+            encounterCardTime = 0f;
+            ClearEncounterPreviewModel();
+            DiscoverWorld(WorldBand.Office);
+        }
+
+        void DiscoverWorld(WorldBand world)
+        {
+            if (IsNpc || !encounteredWorlds.Add(world)) return;
+            string titleText;
+            string description;
+            string badge;
+            Color accent;
+            switch (world)
+            {
+                case WorldBand.Candy:
+                    titleText = "CANDY DIMENSION";
+                    description = "Bigger groups and louder problems start appearing here.";
+                    badge = "02";
+                    accent = new Color32(236, 118, 188, 255);
+                    break;
+                case WorldBand.Water:
+                    titleText = "UNDERWATER DIMENSION";
+                    description = "Rust slows the elevator. A handyman keeps it moving.";
+                    badge = "03";
+                    accent = new Color32(48, 196, 210, 255);
+                    break;
+                default:
+                    titleText = "OFFICE DIMENSION";
+                    description = "Start simple. Match each passenger to the correct floor.";
+                    badge = "01";
+                    accent = new Color32(98, 132, 178, 255);
+                    break;
+            }
+            EnqueueEncounterCard(new EncounterCard
+            {
+                Kicker = "NEW DIMENSION",
+                Title = titleText,
+                Description = description,
+                Badge = badge,
+                Accent = accent,
+                PreviewSource = FindWorldPreviewSource(world),
+                PreviewYaw = world == WorldBand.Office ? -12f : world == WorldBand.Candy ? 18f : -20f
+            });
+        }
+
+        void DiscoverPassenger(Rider rider)
+        {
+            if (IsNpc || rider == null || string.IsNullOrEmpty(rider.Kind)
+                || !encounteredPassengerKinds.Add(rider.Kind)) return;
+            string titleText = rider.Name.ToUpperInvariant();
+            string description;
+            switch (rider.Kind)
+            {
+                case "ELDERLY":
+                    titleText = "GRANDMA";
+                    description = "Moves slowly and reduces your elevator speed.";
+                    break;
+                case "PREGNANT":
+                    titleText = "MOM + BABY";
+                    description = "The crying baby drains every onboard passenger's patience faster.";
+                    break;
+                case "BOSS":
+                    titleText = "THE BOSS";
+                    description = "Hold the door open to earn an extra bonus.";
+                    break;
+                case "GROUP":
+                    titleText = "THE TRIO";
+                    description = "Takes three spaces and boosts elevator speed.";
+                    break;
+                case "HANDYMAN":
+                    titleText = "HANDYMAN";
+                    description = "Prevents underwater rust from slowing the elevator.";
+                    break;
+                case "COURIER":
+                    description = "Takes two spaces and wants a quick one floor trip.";
+                    break;
+                case "INTERVIEW":
+                    description = "Very impatient. Deliver this passenger quickly.";
+                    break;
+                default:
+                    description = string.IsNullOrEmpty(rider.Request)
+                        ? "A new passenger has joined the queue." : rider.Request;
+                    break;
+            }
+            EnqueueEncounterCard(new EncounterCard
+            {
+                Kicker = "NEW PASSENGER",
+                Title = titleText,
+                Description = description,
+                Badge = string.IsNullOrEmpty(rider.Badge) ? "?" : rider.Badge,
+                Accent = Palette[Mathf.Abs(rider.Color) % Palette.Length],
+                PreviewSource = FindPassengerPreviewSource(rider),
+                PreviewYaw = 0f
+            });
+        }
+
+        GameObject FindPassengerPreviewSource(Rider rider)
+        {
+            if (rider == null) return null;
+            if (rider.Data != null && rider.Data.prefab != null)
+                return rider.Data.prefab.gameObject;
+            if (sceneView == null || sceneView.passengers == null) return null;
+            foreach (PassengerView passenger in sceneView.passengers)
+                if (passenger != null && passenger.ResolvedKind == rider.Kind)
+                    return passenger.gameObject;
+            return null;
+        }
+
+        GameObject FindWorldPreviewSource(WorldBand world)
+        {
+            string wanted = world == WorldBand.Office ? "Office Band"
+                : world == WorldBand.Candy ? "Candy Band" : "Water Band";
+            string featuredSection = world == WorldBand.Office ? "Office Floor 1"
+                : world == WorldBand.Candy ? "Candy Floor 4" : "Reef Floor 8";
+            if (!gameObject.scene.IsValid()) return null;
+            foreach (GameObject sceneRoot in gameObject.scene.GetRootGameObjects())
+            {
+                foreach (Transform candidate in sceneRoot.GetComponentsInChildren<Transform>(true))
+                {
+                    if (candidate == null) continue;
+                    string candidateName = candidate.name.Replace("(Clone)", string.Empty).Trim();
+                    if (candidateName != wanted) continue;
+                    foreach (Transform section in candidate.GetComponentsInChildren<Transform>(true))
+                    {
+                        string sectionName = section.name.Replace("(Clone)", string.Empty).Trim();
+                        if (sectionName == featuredSection) return section.gameObject;
+                    }
+                    return candidate.gameObject;
+                }
+            }
+            return null;
+        }
+
+        void EnsureEncounterPreview()
+        {
+            if (encounterPreviewStage != null && encounterPreviewCamera != null
+                && encounterPreviewTexture != null) return;
+
+            GameObject stageObject = new GameObject("Encounter 3D preview stage");
+            stageObject.hideFlags = HideFlags.HideAndDontSave;
+            stageObject.transform.position = new Vector3(10000f, -10000f, 10000f);
+            encounterPreviewStage = stageObject.transform;
+
+            GameObject pivotObject = new GameObject("Preview model pivot");
+            pivotObject.hideFlags = HideFlags.HideAndDontSave;
+            pivotObject.transform.SetParent(encounterPreviewStage, false);
+            encounterPreviewPivot = pivotObject.transform;
+
+            encounterPreviewTexture = new RenderTexture(EncounterPreviewWidth, EncounterPreviewHeight, 24,
+                RenderTextureFormat.ARGB32)
+            {
+                name = "Encounter 3D preview",
+                antiAliasing = 2,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            encounterPreviewTexture.Create();
+
+            GameObject cameraObject = new GameObject("Encounter 3D preview camera");
+            cameraObject.hideFlags = HideFlags.HideAndDontSave;
+            cameraObject.transform.SetParent(encounterPreviewStage, false);
+            encounterPreviewCamera = cameraObject.AddComponent<Camera>();
+            encounterPreviewCamera.clearFlags = CameraClearFlags.SolidColor;
+            encounterPreviewCamera.backgroundColor = UiBlack;
+            encounterPreviewCamera.cullingMask = 1 << EncounterPreviewLayer;
+            encounterPreviewCamera.orthographic = true;
+            encounterPreviewCamera.allowHDR = false;
+            encounterPreviewCamera.allowMSAA = true;
+            encounterPreviewCamera.aspect = (float)EncounterPreviewWidth / EncounterPreviewHeight;
+            encounterPreviewCamera.targetTexture = encounterPreviewTexture;
+            encounterPreviewCamera.enabled = false;
+
+            GameObject keyObject = new GameObject("Encounter preview key light");
+            keyObject.hideFlags = HideFlags.HideAndDontSave;
+            keyObject.transform.SetParent(encounterPreviewStage, false);
+            keyObject.transform.localRotation = Quaternion.Euler(32f, -28f, 0f);
+            Light key = keyObject.AddComponent<Light>();
+            key.type = LightType.Directional;
+            key.intensity = 1.15f;
+            key.color = new Color(1f, .96f, .88f);
+            key.cullingMask = 1 << EncounterPreviewLayer;
+
+            GameObject fillObject = new GameObject("Encounter preview fill light");
+            fillObject.hideFlags = HideFlags.HideAndDontSave;
+            fillObject.transform.SetParent(encounterPreviewStage, false);
+            fillObject.transform.localPosition = new Vector3(2.8f, 2.2f, -3.5f);
+            Light fill = fillObject.AddComponent<Light>();
+            fill.type = LightType.Point;
+            fill.range = 18f;
+            fill.intensity = 2.2f;
+            fill.color = new Color(.58f, .82f, 1f);
+            fill.cullingMask = 1 << EncounterPreviewLayer;
+        }
+
+        void PrepareEncounterPreview(EncounterCard card)
+        {
+            ClearEncounterPreviewModel();
+            if (card == null || card.PreviewSource == null) return;
+            EnsureEncounterPreview();
+
+            encounterPreviewModel = Instantiate(card.PreviewSource, encounterPreviewPivot, false);
+            encounterPreviewModel.name = card.Title + " encounter preview";
+            encounterPreviewModel.hideFlags = HideFlags.HideAndDontSave;
+            encounterPreviewModel.transform.localPosition = Vector3.zero;
+            encounterPreviewModel.transform.localRotation = Quaternion.identity;
+            encounterPreviewModel.transform.localScale = Vector3.one;
+            encounterPreviewModel.SetActive(true);
+
+            PassengerView passenger = encounterPreviewModel.GetComponentInChildren<PassengerView>(true);
+            if (passenger != null && passenger.jackets != null)
+                foreach (Renderer jacket in passenger.jackets)
+                    if (jacket != null) jacket.sharedMaterial = Mat(card.Accent);
+
+            foreach (Transform child in encounterPreviewModel.GetComponentsInChildren<Transform>(true))
+            {
+                child.gameObject.layer = EncounterPreviewLayer;
+                child.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            foreach (MonoBehaviour behaviour in encounterPreviewModel.GetComponentsInChildren<MonoBehaviour>(true))
+                behaviour.enabled = false;
+            foreach (Collider collider in encounterPreviewModel.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
+            foreach (AudioSource source in encounterPreviewModel.GetComponentsInChildren<AudioSource>(true))
+                source.enabled = false;
+            foreach (Camera nestedCamera in encounterPreviewModel.GetComponentsInChildren<Camera>(true))
+                nestedCamera.enabled = false;
+            foreach (Light nestedLight in encounterPreviewModel.GetComponentsInChildren<Light>(true))
+                nestedLight.enabled = false;
+            foreach (TextMesh textMesh in encounterPreviewModel.GetComponentsInChildren<TextMesh>(true))
+            {
+                Renderer textRenderer = textMesh.GetComponent<Renderer>();
+                if (textRenderer != null) textRenderer.enabled = false;
+            }
+
+            if (!TryGetEncounterPreviewBounds(encounterPreviewModel, out Bounds bounds))
+            {
+                ClearEncounterPreviewModel();
+                return;
+            }
+
+            Vector3 centerInPivot = encounterPreviewPivot.InverseTransformPoint(bounds.center);
+            encounterPreviewModel.transform.localPosition -= centerInPivot;
+            float horizontalRadius = Mathf.Sqrt(bounds.extents.x * bounds.extents.x
+                + bounds.extents.z * bounds.extents.z);
+            float fittedHalfHeight = Mathf.Max(bounds.extents.y,
+                horizontalRadius / encounterPreviewCamera.aspect);
+            encounterPreviewCamera.orthographicSize = Mathf.Max(.7f, fittedHalfHeight * 1.16f);
+            float distance = Mathf.Max(7f, bounds.extents.magnitude * 2.4f);
+            encounterPreviewCamera.transform.localPosition = new Vector3(0f, 0f, -distance);
+            encounterPreviewCamera.transform.localRotation = Quaternion.identity;
+            encounterPreviewCamera.nearClipPlane = .03f;
+            encounterPreviewCamera.farClipPlane = distance * 3f + 20f;
+            encounterPreviewCamera.backgroundColor = Color.Lerp(UiBlack, card.Accent, .09f);
+            encounterPreviewPivot.localRotation = Quaternion.Euler(0f, card.PreviewYaw, 0f);
+            encounterPreviewCamera.enabled = true;
+            renderedEncounterCard = card;
+        }
+
+        bool TryGetEncounterPreviewBounds(GameObject model, out Bounds bounds)
+        {
+            bounds = default;
+            bool found = false;
+            if (model == null) return false;
+            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                if (!found) { bounds = renderer.bounds; found = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            return found;
+        }
+
+        void ClearEncounterPreviewModel()
+        {
+            if (encounterPreviewModel != null)
+            {
+                encounterPreviewModel.SetActive(false);
+                Destroy(encounterPreviewModel);
+            }
+            encounterPreviewModel = null;
+            renderedEncounterCard = null;
+            if (encounterPreviewCamera != null) encounterPreviewCamera.enabled = false;
+        }
+
+        void ReleaseEncounterPreview()
+        {
+            ClearEncounterPreviewModel();
+            if (encounterPreviewCamera != null) encounterPreviewCamera.targetTexture = null;
+            if (encounterPreviewTexture != null)
+            {
+                encounterPreviewTexture.Release();
+                Destroy(encounterPreviewTexture);
+            }
+            if (encounterPreviewStage != null) Destroy(encounterPreviewStage.gameObject);
+            encounterPreviewStage = null;
+            encounterPreviewPivot = null;
+            encounterPreviewCamera = null;
+            encounterPreviewTexture = null;
+        }
+
+        void EnqueueEncounterCard(EncounterCard card)
+        {
+            if (card == null) return;
+            if (activeEncounterCard == null)
+            {
+                ActivateEncounterCard(card);
+            }
+            else encounterCards.Enqueue(card);
+        }
+
+        void ActivateEncounterCard(EncounterCard card)
+        {
+            activeEncounterCard = card;
+            encounterCardTime = EncounterCardDuration;
+            PrepareEncounterPreview(card);
+        }
+
+        void TickEncounterCards(float dt)
+        {
+            if (activeEncounterCard == null || dt <= 0f) return;
+            if (encounterPreviewPivot != null && encounterPreviewModel != null)
+            {
+                float age = EncounterCardDuration - encounterCardTime;
+                encounterPreviewPivot.localRotation = Quaternion.Euler(0f,
+                    activeEncounterCard.PreviewYaw + Mathf.Sin(age * 1.15f) * 13f, 0f);
+            }
+            encounterCardTime -= dt;
+            if (encounterCardTime > 0f) return;
+            if (encounterCards.Count > 0)
+            {
+                ActivateEncounterCard(encounterCards.Dequeue());
+            }
+            else
+            {
+                activeEncounterCard = null;
+                encounterCardTime = 0f;
+                ClearEncounterPreviewModel();
+            }
+        }
+
+        void DrawEncounterCard(float viewWidth, float viewHeight)
+        {
+            if (activeEncounterCard == null || Event.current.type != EventType.Repaint) return;
+            bool compact = Match != null;
+            float width = Mathf.Min(compact ? 520f : 760f, viewWidth - (compact ? 20f : 48f));
+            float height = compact ? 108f : 128f;
+            float targetX = (viewWidth - width) * .5f;
+            float age = EncounterCardDuration - encounterCardTime;
+            float enter = EaseOut(Mathf.Clamp01(age / .24f));
+            float exit = EaseOut(Mathf.Clamp01((.34f - encounterCardTime) / .34f));
+            float x = Mathf.Lerp(viewWidth + 24f, targetX, enter);
+            x = Mathf.Lerp(x, -width - 24f, exit);
+            float y = compact ? 78f : 94f;
+            Rect card = new Rect(Mathf.Round(x), y, width, height);
+            Panel(new Rect(card.x + 8f, card.y + 9f, card.width, card.height), new Color(0f, 0f, 0f, .35f));
+            FramedPanel(card, activeEncounterCard.Accent, 4f);
+            float previewWidth = compact ? 142f : 184f;
+            Rect preview = new Rect(card.x + 4f, card.y + 4f, previewWidth, card.height - 8f);
+            Panel(preview, Color.Lerp(UiBlack, activeEncounterCard.Accent, .16f));
+            if (renderedEncounterCard == activeEncounterCard && encounterPreviewTexture != null
+                && encounterPreviewModel != null)
+            {
+                Color previousGuiColor = GUI.color;
+                GUI.color = Color.white;
+                GUI.DrawTexture(preview, encounterPreviewTexture, ScaleMode.ScaleToFit, false);
+                GUI.color = previousGuiColor;
+            }
+            else
+            {
+                encounterBadge.normal.textColor = activeEncounterCard.Accent;
+                GUI.Label(preview, activeEncounterCard.Badge, encounterBadge);
+            }
+
+            int oldTitleSize = encounterTitle.fontSize;
+            int oldBodySize = encounterBody.fontSize;
+            int oldBadgeSize = encounterBadge.fontSize;
+            encounterTitle.fontSize = compact ? 29 : 42;
+            encounterBody.fontSize = compact ? 13 : 16;
+            encounterBadge.fontSize = compact ? 34 : 46;
+            encounterKicker.normal.textColor = activeEncounterCard.Accent;
+            encounterTitle.normal.textColor = UiWhite;
+            encounterBody.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, .82f);
+            float contentX = preview.xMax + (compact ? 14f : 20f);
+            float contentWidth = card.xMax - contentX - 14f;
+            GUI.Label(new Rect(contentX, card.y + 9f, contentWidth, 18f),
+                activeEncounterCard.Kicker, encounterKicker);
+            GUI.Label(new Rect(contentX, card.y + (compact ? 25f : 27f), contentWidth,
+                compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
+            GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
+                compact ? 34f : 36f), activeEncounterCard.Description, encounterBody);
+            encounterTitle.fontSize = oldTitleSize;
+            encounterBody.fontSize = oldBodySize;
+            encounterBadge.fontSize = oldBadgeSize;
+        }
+
         // Draw menus or the active-shift HUD.
         void OnGUI()
         {
@@ -201,6 +638,7 @@ namespace CrazyElevator.Managers
                 if (extendedInterior && Match == null) DrawPassengerCallouts();
                 DrawMouseControls();
                 DrawDeliveryPopups(Screen.width, Screen.height);
+                DrawEncounterCard(Screen.width, Screen.height);
             }
         }
 
@@ -228,6 +666,7 @@ namespace CrazyElevator.Managers
             if (extendedInterior) DrawPassengerCallouts();
             DrawMouseControls();
             DrawDeliveryPopups(view.width, view.height);
+            DrawEncounterCard(view.width, view.height);
             GUI.matrix = previous;
         }
 

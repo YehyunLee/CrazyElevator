@@ -86,6 +86,10 @@ namespace CrazyElevator.Shared
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
         public float PeakTime;
         public float TimeLeft = Duration;
+        public float Elapsed => Duration - TimeLeft;
+        public int PassengerOfferLimit => Elapsed < 30f ? 2
+            : Elapsed < 70f ? 3
+            : Elapsed < 110f ? 4 : 5;
         bool RefillPassengerQueue;
         bool OwnsPassengerPoolClock = true;
         // Scene variants can opt out of the prototype's consolation points for
@@ -246,12 +250,37 @@ namespace CrazyElevator.Shared
             return replacement;
         }
 
-        static int DestinationFor(string kind, int origin)
+        public static int DestinationFor(string kind, int origin)
         {
             if (kind == "BOSS" || kind == "HANDYMAN") return RandomDestination(origin);
             if (kind == "ELDERLY" || kind == "PREGNANT") return (origin + 2) % Floors;
             if (kind == "INTERVIEW") return (origin + 3) % Floors;
             return (origin + 1) % Floors;
+        }
+
+        // Begin with the two straightforward office riders. New mechanics are
+        // introduced alongside larger queues so the difficulty rises in clear steps.
+        public bool IsPassengerTypeUnlocked(Rider rider)
+        {
+            if (rider == null) return false;
+            switch (rider.Kind)
+            {
+                case "COURIER":
+                case "INTERVIEW":
+                    return true;
+                case "ELDERLY":
+                    return Elapsed >= 30f || Floor >= 8;
+                case "PREGNANT":
+                    return Elapsed >= 30f || Floor >= 4;
+                case "BOSS":
+                    return Elapsed >= 70f;
+                case "HANDYMAN":
+                    return Elapsed >= 90f || Floor >= 8;
+                case "GROUP":
+                    return Elapsed >= 110f;
+                default:
+                    return true;
+            }
         }
 
         // Skip a waiting passenger with the existing penalty.
@@ -261,16 +290,18 @@ namespace CrazyElevator.Shared
             p.Resolved = true; TurnedAway++; Score -= 15; return true;
         }
 
-        // Offer only the first three eligible waiting parties.
+        // Offer a progressively larger queue, filtering out passenger mechanics
+        // that have not reached their introduction point yet.
         public bool IsOffered(Rider candidate)
         {
             if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
-                || candidate.Origin != Floor) return false;
+                || candidate.Origin != Floor || !IsPassengerTypeUnlocked(candidate)) return false;
             int offered = 0;
             foreach (var p in Riders)
             {
-                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != Floor) continue;
-                if (p == candidate) return offered < 3;
+                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != Floor
+                    || !IsPassengerTypeUnlocked(p)) continue;
+                if (p == candidate) return offered < PassengerOfferLimit;
                 offered++;
             }
             return false;

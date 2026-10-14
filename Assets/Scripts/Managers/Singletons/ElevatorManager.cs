@@ -112,6 +112,7 @@ namespace CrazyElevator.Managers
             // has been created. Wait for initialization instead of spamming a
             // NullReferenceException from the gameplay tick.
             if (round == null) return;
+            TickEncounterCards(Time.deltaTime);
             float dt = Time.deltaTime;
             collisionSlowTimer = Mathf.Max(0f, collisionSlowTimer - dt);
             collisionRecoilTimer = Mathf.Max(0f, collisionRecoilTimer - dt);
@@ -211,6 +212,7 @@ namespace CrazyElevator.Managers
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
+            ResetEncounterCards();
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
@@ -354,6 +356,7 @@ namespace CrazyElevator.Managers
                 {
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
+                    DiscoverWorld(BandForFloor(destination));
                     SetFloorDisplayText(destination.ToString());
                     phase = Phase.Opening; phaseTime = 0;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
@@ -1230,6 +1233,7 @@ namespace CrazyElevator.Managers
                     };
                 result.Riders.Insert(first < 0 ? result.Riders.Count : Mathf.Min(first + 2, result.Riders.Count), fixer);
             }
+            ExpandProgressionRoster(result);
             float patienceScale = Mathf.Max(1f, patienceDurationMultiplier);
             foreach (var rider in result.Riders)
             {
@@ -1237,6 +1241,50 @@ namespace CrazyElevator.Managers
                 rider.Remaining = rider.Patience;
             }
             return result;
+        }
+
+        // Keep five potential parties at every floor. The round rules reveal
+        // only 2, 3, 4, then 5 of them as the shift becomes more demanding.
+        // Duplicate only regular passengers so unique mechanic counts stay stable.
+        void ExpandProgressionRoster(ElevatorRound targetRound)
+        {
+            for (int floor = 0; floor < ElevatorRound.Floors; floor++)
+            {
+                var floorRiders = targetRound.Riders.FindAll(rider => rider.Origin == floor);
+                if (floorRiders.Count == 0) continue;
+                string repeatKind = floor < candyStartsAtFloor ? "INTERVIEW"
+                    : floor < underwaterStartsAtFloor ? "PREGNANT" : "ELDERLY";
+                Rider template = floorRiders.Find(rider => rider.Kind == repeatKind)
+                    ?? floorRiders.Find(rider => rider.Kind != "BOSS"
+                        && rider.Kind != "HANDYMAN" && rider.Kind != "GROUP")
+                    ?? floorRiders[0];
+                while (floorRiders.Count < 5)
+                {
+                    int destination = ElevatorRound.DestinationFor(template.Kind, floor);
+                    Rider copy = template.Data != null
+                        ? template.Data.CreateRider(floor, destination)
+                        : new Rider
+                        {
+                            Data = template.Data,
+                            Name = template.Name,
+                            Request = template.Request,
+                            Kind = template.Kind,
+                            Badge = template.Badge,
+                            Color = template.Color,
+                            Origin = floor,
+                            Destination = destination,
+                            Space = template.Space,
+                            Patience = template.Patience,
+                            Remaining = template.Patience,
+                            Arrival = template.Kind == "ELDERLY"
+                                ? ElevatorRound.ElderlyArrivalSeconds : template.Arrival,
+                            Bonus = template.Bonus,
+                            HoldRequired = template.HoldRequired
+                        };
+                    targetRound.Riders.Add(copy);
+                    floorRiders.Add(copy);
+                }
+            }
         }
 
         void InitializeImpairmentIndicators()
@@ -1811,6 +1859,7 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             ReleaseCabinPreview();
+            ReleaseEncounterPreview();
             if (passengerGridMaterial) Destroy(passengerGridMaterial);
             foreach (var m in materials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
