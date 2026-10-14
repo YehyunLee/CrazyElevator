@@ -97,7 +97,15 @@ namespace CrazyElevator.Managers
         public void BeginControllerJoining()
         {
             controllerJoining = true;
-            GetComponent<PlayerInputManager>()?.EnableJoining();
+            var playerInputManager = GetComponent<PlayerInputManager>();
+            playerInputManager?.EnableJoining();
+            if (!HasController(0) && Gamepad.all.Count > 0)
+            {
+                Gamepad primary = Gamepad.all[0];
+                var playerInput = playerInputManager?.JoinPlayer(0, -1, "Gamepad", primary);
+                if (playerInput != null)
+                    joinedGamepadIds[0] = primary.deviceId;
+            }
         }
 
         public void RegisterPlayerInput(PlayerInput playerInput)
@@ -124,7 +132,7 @@ namespace CrazyElevator.Managers
                 foreach (var gamepad in Gamepad.all)
                     if (gamepad.deviceId == joinedGamepadIds[seat]) return gamepad;
             }
-            return seat == 0 ? Gamepad.current : null;
+            return seat == 0 && Gamepad.all.Count > 0 ? Gamepad.all[0] : null;
         }
 
         // Read a seat-specific frame without changing the legacy seat-0
@@ -136,9 +144,10 @@ namespace CrazyElevator.Managers
             var pad = GamepadForSeat(seat);
             bool controllerAssigned = HasController(seat);
             bool playerTwo = seat == 1 && splitKeyboard && !controllerAssigned;
+            bool keyboardAvailable = keyboard != null && Gamepad.all.Count == 0;
 
             Vector2 keys = Vector2.zero;
-            if (keyboard != null && !controllerAssigned)
+            if (keyboardAvailable && !controllerAssigned)
             {
                 if (playerTwo)
                 {
@@ -159,39 +168,39 @@ namespace CrazyElevator.Managers
             Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
             Vector2 navigation = stick + keys;
             bool confirm = playerTwo
-                ? keyboard != null && keyboard.rightCtrlKey.wasPressedThisFrame
-                : !controllerAssigned && keyboard != null && keyboard.cKey.wasPressedThisFrame
+                ? keyboardAvailable && keyboard.rightCtrlKey.wasPressedThisFrame
+                : !controllerAssigned && keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
             bool kickout = playerTwo
-                ? keyboard != null && keyboard.periodKey.wasPressedThisFrame
-                : !controllerAssigned && keyboard != null && keyboard.iKey.wasPressedThisFrame
+                ? keyboardAvailable && keyboard.periodKey.wasPressedThisFrame
+                : !controllerAssigned && keyboardAvailable && keyboard.iKey.wasPressedThisFrame
                     || pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger;
-            bool pause = !controllerAssigned && keyboard != null && keyboard.escapeKey.wasPressedThisFrame
+            bool pause = !controllerAssigned && keyboardAvailable && keyboard.escapeKey.wasPressedThisFrame
                 || pad != null && pad.startButton.wasPressedThisFrame
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
-            bool overlay = !playerTwo && keyboard != null
+            bool overlay = !playerTwo && keyboardAvailable
                 && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
             bool closeDoors = !playerTwo && pad != null && pad.buttonNorth.wasPressedThisFrame
                 && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
             bool hold = playerTwo
-                ? keyboard != null && keyboard.rightAltKey.isPressed
-                : !controllerAssigned && keyboard != null && keyboard.hKey.isPressed
+                ? keyboardAvailable && keyboard.rightAltKey.isPressed
+                : !controllerAssigned && keyboardAvailable && keyboard.hKey.isPressed
                     || pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger;
             bool repair = playerTwo
-                ? keyboard != null && keyboard.slashKey.isPressed
-                : !controllerAssigned && keyboard != null && keyboard.rKey.isPressed
+                ? keyboardAvailable && keyboard.slashKey.isPressed
+                : !controllerAssigned && keyboardAvailable && keyboard.rKey.isPressed
                     || pad != null && pad.rightShoulder.isPressed;
             bool boost = playerTwo
-                ? keyboard != null && keyboard.rightShiftKey.isPressed
-                : !controllerAssigned && keyboard != null && (splitKeyboard
+                ? keyboardAvailable && keyboard.rightShiftKey.isPressed
+                : !controllerAssigned && keyboardAvailable && (splitKeyboard
                     ? keyboard.leftShiftKey.isPressed
                     : keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed)
                     || pad != null && (pad.leftShoulder.isPressed
                         || pad.leftTrigger.isPressed || pad.rightTrigger.isPressed);
-            bool mute = !playerTwo && keyboard != null && keyboard.mKey.wasPressedThisFrame;
+            bool mute = !playerTwo && keyboardAvailable && keyboard.mKey.wasPressedThisFrame;
             bool start = playerTwo
-                ? keyboard != null && keyboard.rightCtrlKey.wasPressedThisFrame
-                : !controllerAssigned && keyboard != null && keyboard.enterKey.wasPressedThisFrame
+                ? keyboardAvailable && keyboard.rightCtrlKey.wasPressedThisFrame
+                : !controllerAssigned && keyboardAvailable && keyboard.enterKey.wasPressedThisFrame
                     || pad != null && (pad.buttonSouth.wasPressedThisFrame
                         || pad.startButton.wasPressedThisFrame
                             && (ActiveView == GameView.Menu || ActiveView == GameView.Pause));

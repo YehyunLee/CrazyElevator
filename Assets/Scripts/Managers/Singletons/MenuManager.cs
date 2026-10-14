@@ -61,6 +61,9 @@ namespace CrazyElevator.Managers
         bool choosingMode;
         bool launching;
         bool playerTwoUnavailable;
+        bool playerOneReady;
+        bool playerTwoReady;
+        bool lastPlayerTwoRegistered;
         int titleSelection;
         int modeSelection;
         bool horizontalHeld;
@@ -130,13 +133,20 @@ namespace CrazyElevator.Managers
             var input = InputManager.Instance;
             if (input == null) return;
 
-            if (choosingMode && input.HasController(1))
-                playerTwoSelected = true;
+            var playerOneInput = input.ReadForSeat(0, true);
+            var playerTwoInput = input.ReadForSeat(1, true);
+            bool playerTwoRegistered = input.HasController(1);
+            if (choosingMode)
+            {
+                if (playerTwoRegistered && !lastPlayerTwoRegistered)
+                    playerTwoReady = false;
+                playerTwoSelected = playerTwoRegistered;
+                if (!playerTwoRegistered) playerTwoReady = true;
+                lastPlayerTwoRegistered = playerTwoRegistered;
+            }
 
             bool horizontal = Mathf.Abs(input.Move.x) >= .55f;
             bool vertical = Mathf.Abs(input.Move.y) >= .55f;
-            if (choosingMode && modeSelection == 0 && horizontal && !horizontalHeld)
-                playerTwoSelected = input.Move.x > 0;
             if (choosingMode && vertical && !verticalHeld && transition >= TransitionSeconds)
                 modeSelection = input.Move.y < 0 ? 1 : 0;
             if (!choosingMode && vertical && !verticalHeld)
@@ -144,12 +154,12 @@ namespace CrazyElevator.Managers
             horizontalHeld = horizontal;
             verticalHeld = vertical;
 
-            if (input.ConfirmPressed)
+            if (playerOneInput.ConfirmPressed)
             {
                 if (choosingMode && transition >= TransitionSeconds)
                 {
-                    if (modeSelection == 0) playerTwoSelected = !playerTwoSelected;
-                    else StartSelectedMode();
+                    if (modeSelection == 0) playerOneReady = !playerOneReady;
+                    else TryStartSelectedMode();
                 }
                 else if (!choosingMode)
                 {
@@ -157,6 +167,12 @@ namespace CrazyElevator.Managers
                     else if (titleSelection == 2) ExitGame();
                 }
             }
+            if (choosingMode && transition >= TransitionSeconds && playerTwoRegistered
+                && playerTwoInput.ConfirmPressed)
+                playerTwoReady = !playerTwoReady;
+            if (choosingMode && transition >= TransitionSeconds && playerTwoRegistered
+                && playerTwoInput.StartPressed && playerOneReady && playerTwoReady)
+                StartSelectedMode();
             if (!playerTwoSelected) playerTwoUnavailable = false;
             if (choosingMode) transition = Mathf.Min(TransitionSeconds, transition + Time.unscaledDeltaTime);
             SyncTitleButtons();
@@ -179,6 +195,10 @@ namespace CrazyElevator.Managers
         void BeginModeSelection()
         {
             choosingMode = true;
+            playerOneReady = false;
+            playerTwoReady = false;
+            playerTwoSelected = false;
+            lastPlayerTwoRegistered = false;
             InputManager.Instance?.BeginControllerJoining();
             SyncTitleButtons();
         }
@@ -306,8 +326,10 @@ namespace CrazyElevator.Managers
                 DrawShaft(new Rect(870, 0, 330, ArtHeight), eased, descent);
                 if (fade >= 1f && !launching)
                 {
-                    DrawMenuLabel(playerOneButton, "PLAYER 1", playerOneLabel, ref playerOneLabelTexture, ref playerOneShapeHash, false);
-                    DrawMenuLabel(rivalButton, playerTwoSelected ? "PLAYER 2" : "CPU", rivalLabel, ref rivalLabelTexture, ref rivalShapeHash, true);
+                    DrawMenuLabel(playerOneButton, playerOneReady ? "PLAYER 1 READY" : "PLAYER 1", playerOneLabel, ref playerOneLabelTexture, ref playerOneShapeHash, false);
+                    DrawMenuLabel(rivalButton, playerTwoSelected
+                        ? (playerTwoReady ? "PLAYER 2 READY" : "PLAYER 2") : "CPU",
+                        rivalLabel, ref rivalLabelTexture, ref rivalShapeHash, true);
                     if (modeSelection == 0)
                         GUI.Label(new Rect(rivalButton.x + 8, rivalButton.y + 4, 52, rivalButton.height - 8), "○", startCircle);
                     DrawChoiceArrow(new Rect(rivalButton.x - 55, rivalButton.center.y - 27, 48, 55), false, ref leftChoiceArrowTexture);
@@ -315,7 +337,8 @@ namespace CrazyElevator.Managers
                     DrawMenuLabel(startButton, "START", startLabel, ref startLabelTexture, ref startShapeHash, false);
                     if (modeSelection == 1)
                         GUI.Label(new Rect(startButton.x + 8, startButton.y + 7, 52, startButton.height - 14), "○", startCircle);
-                    if (GUI.Button(startButton, GUIContent.none, GUIStyle.none)) { modeSelection = 1; StartSelectedMode(); }
+                    if (GUI.Button(startButton, GUIContent.none, GUIStyle.none))
+                    { modeSelection = 1; TryStartSelectedMode(); }
                     if (playerTwoUnavailable)
                         GUI.Label(new Rect(640, 1010, 420, 50), "PLAYER 2 COMING SOON", caption);
                 }
@@ -372,7 +395,6 @@ namespace CrazyElevator.Managers
             }
             GUI.DrawTexture(rect, texture);
             GUI.Label(new Rect(rect.x + 35, rect.y, rect.width - 45, rect.height), label, menuLabelText);
-            if (rival && GUI.Button(rect, GUIContent.none, GUIStyle.none)) { modeSelection = 0; playerTwoSelected = !playerTwoSelected; playerTwoUnavailable = false; }
         }
 
         static Texture2D CreateLabelTexture(MenuLabelShape shape)
@@ -432,12 +454,6 @@ namespace CrazyElevator.Managers
         {
             if (texture == null) texture = CreateChoiceArrow(pointsRight);
             GUI.DrawTexture(new Rect(hitArea.center.x - 13, hitArea.center.y - 16, 26, 32), texture);
-            if (GUI.Button(hitArea, GUIContent.none, GUIStyle.none))
-            {
-                modeSelection = 0;
-                playerTwoSelected = !playerTwoSelected;
-                playerTwoUnavailable = false;
-            }
         }
 
         static Texture2D CreateChoiceArrow(bool pointsRight)
@@ -565,9 +581,14 @@ namespace CrazyElevator.Managers
 
         void StartSelectedMode()
         {
-            // The selected rival can be CPU or a second local keyboard player.
             launching = true;
             launchTimer = 0;
+        }
+
+        void TryStartSelectedMode()
+        {
+            if (!playerOneReady || !playerTwoReady) return;
+            StartSelectedMode();
         }
 
         void SelectAndStart(bool duel)
