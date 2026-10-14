@@ -85,6 +85,7 @@ namespace CrazyElevator.Managers
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
         static bool startDuelOnLoad;
         static bool showControllerInstructionsOnLoad;
+        static bool playerTwoHumanOnLoad;
         bool showingControllerInstructions;
         static bool playerTwoSelected;
         static bool playerOneCpuOnLoad;
@@ -110,6 +111,7 @@ namespace CrazyElevator.Managers
             passengerOverlayOpen = false;
             startDuelOnLoad = false;
             showControllerInstructionsOnLoad = false;
+            playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             openLobbyOnLoad = false;
@@ -356,8 +358,8 @@ namespace CrazyElevator.Managers
 
         public static bool ConsumePlayerTwoRequest()
         {
-            bool requested = playerTwoSelected;
-            playerTwoSelected = false;
+            bool requested = playerTwoHumanOnLoad;
+            playerTwoHumanOnLoad = false;
             return requested;
         }
 
@@ -440,6 +442,7 @@ namespace CrazyElevator.Managers
             sessionReady = false;
             pauseOpen = false;
             startDuelOnLoad = false;
+            playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             InputManager.Instance?.ResetRegistrations();
@@ -893,6 +896,7 @@ namespace CrazyElevator.Managers
             Close();
             showControllerInstructionsOnLoad = true;
             startDuelOnLoad = duel;
+            playerTwoHumanOnLoad = duel && playerTwoSelected;
             playerOneCpuOnLoad = !playerOneHuman;
             SceneManager.LoadScene(duel ? DuelScene : SinglePlayerScene);
         }

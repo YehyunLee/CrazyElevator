@@ -30,6 +30,7 @@ namespace CrazyElevator.Match
         public bool Paused { get; private set; }
         public bool EncounterCardPaused { get; private set; }
         readonly bool[] encounterCardConfirmations = new bool[2];
+        int resumeEncounterAfterFrame = -1;
         bool humanRival;
         bool humanPlayer;
         public bool Finished => Running && player != null && Rival != null
@@ -130,6 +131,16 @@ namespace CrazyElevator.Match
         void Update()
         {
             if (!enabled || player == null) return;
+            if (resumeEncounterAfterFrame >= 0)
+            {
+                if (Time.frameCount < resumeEncounterAfterFrame) return;
+                resumeEncounterAfterFrame = -1;
+                EncounterCardPaused = false;
+                Paused = false;
+                player.SetMatchPaused(false);
+                Rival.SetMatchPaused(false);
+                return;
+            }
             if (EncounterCardPaused)
             {
                 UpdateEncounterCardConfirmations();
@@ -199,6 +210,7 @@ namespace CrazyElevator.Match
         {
             Paused = false;
             EncounterCardPaused = false;
+            resumeEncounterAfterFrame = -1;
             encounterCardConfirmations[0] = encounterCardConfirmations[1] = false;
             resultRevealStartedAt = -1f;
             targetTrack[0] = 0; targetTrack[1] = 1;
@@ -239,10 +251,7 @@ namespace CrazyElevator.Match
                 encounterCardConfirmations[1] = !humanRival;
                 return;
             }
-            EncounterCardPaused = false;
-            Paused = false;
-            player.SetMatchPaused(false);
-            Rival.SetMatchPaused(false);
+            resumeEncounterAfterFrame = Time.frameCount + 1;
         }
 
         public void TogglePause()
