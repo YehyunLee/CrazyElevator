@@ -149,7 +149,7 @@ namespace CrazyElevator.Managers
 
             var playerOneInput = input.ReadForSeat(0, true);
             var playerTwoInput = input.ReadForSeat(1, true);
-            bool playerTwoRegistered = input.HasController(1);
+            bool playerTwoRegistered = input.HasInput(1);
             if (choosingMode)
             {
                 if (playerTwoRegistered && !lastPlayerTwoRegistered)
@@ -241,7 +241,7 @@ namespace CrazyElevator.Managers
             }
             if (cursor == 1)
             {
-                if (!InputManager.Instance.HasController(1)) return;
+                if (!InputManager.Instance.HasInput(1)) return;
                 playerTwoSelected = !playerTwoSelected;
                 playerTwoReady = !playerTwoSelected;
                 return;
@@ -420,7 +420,7 @@ namespace CrazyElevator.Managers
                 if (fade >= 1f && !launching)
                 {
                     bool playerTwoRegistered = InputManager.Instance != null
-                        && InputManager.Instance.HasController(1);
+                        && InputManager.Instance.HasInput(1);
                     bool startEnabled = !BothCpu;
                     Color startFill = AllPlayersReady ? CombinedColour
                         : startEnabled ? new Color32(75, 75, 82, 255) : DisabledColour;
