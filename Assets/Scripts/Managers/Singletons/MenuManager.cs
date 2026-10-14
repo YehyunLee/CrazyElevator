@@ -58,6 +58,7 @@ namespace CrazyElevator.Managers
         [SerializeField] Rect playerOneReadyButton = new Rect(485, 875, 360, 42);
         [SerializeField] Rect playerTwoReadyButton = new Rect(855, 875, 360, 42);
         [SerializeField] Rect startButton = new Rect(715, 930, 270, 80);
+        [SerializeField] Rect backButton = new Rect(48, 46, 220, 58);
         Texture2D playerOneLabelTexture, rivalLabelTexture, startLabelTexture;
         Texture2D triangleCursorTexture;
         Texture2D leftChoiceArrowTexture, rightChoiceArrowTexture;
@@ -83,6 +84,9 @@ namespace CrazyElevator.Managers
         static bool startDuelOnLoad;
         static bool playerTwoSelected;
         static bool playerOneCpuOnLoad;
+        static bool openLobbyOnLoad;
+        static int pauseSelection;
+        static bool pauseMoveHeld;
         static bool pauseOpen;
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
@@ -103,6 +107,7 @@ namespace CrazyElevator.Managers
             startDuelOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
+            openLobbyOnLoad = false;
             overlayGame = null;
         }
 
@@ -118,6 +123,13 @@ namespace CrazyElevator.Managers
                 playerTwoSelected = false;
                 playerOneHuman = true;
                 sessionReady = true;
+            }
+            if (openLobbyOnLoad)
+            {
+                IsOpen = true;
+                openLobbyOnLoad = false;
+                BeginModeSelection();
+                transition = TransitionSeconds;
             }
             SyncTitleButtons();
             InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
@@ -137,6 +149,11 @@ namespace CrazyElevator.Managers
 
         void Update()
         {
+            if (pauseOpen)
+            {
+                UpdatePauseNavigation();
+                return;
+            }
             if (!IsOpen) return;
             if (launching)
             {
@@ -233,6 +250,11 @@ namespace CrazyElevator.Managers
         void HandleLobbyConfirm(int seat)
         {
             int cursor = seat == 0 ? playerOneCursor : playerTwoCursor;
+            if (seat == 0 && cursor == 5)
+            {
+                ReturnToMainMenu();
+                return;
+            }
             if (cursor == 0)
             {
                 playerOneHuman = !playerOneHuman;
@@ -283,9 +305,11 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                if (cursor == 2) cursor = 0;
+                if (cursor == 0 && seat == 0) cursor = 5;
+                else if (cursor == 2) cursor = 0;
                 else if (cursor == 3) cursor = 1;
                 else if (cursor == 4) cursor = seat == 0 ? 2 : 3;
+                else if (cursor == 5) cursor = 0;
             }
         }
 
@@ -316,18 +340,74 @@ namespace CrazyElevator.Managers
         public static void OpenPause()
         {
             pauseOpen = true;
+            pauseSelection = 0;
+            pauseMoveHeld = false;
             InputManager.Instance?.SetView(GameView.Pause);
         }
 
         public static void ClosePause()
         {
             pauseOpen = false;
+            pauseMoveHeld = false;
+        }
+
+        public static int PauseSelection => pauseSelection;
+
+        void UpdatePauseNavigation()
+        {
+            var input = InputManager.Instance;
+            if (input == null) return;
+            for (int seat = 0; seat < 2; seat++)
+            {
+                if (!input.HasInput(seat)) continue;
+                var frame = input.ReadForSeat(seat, true);
+                bool moving = Mathf.Abs(frame.Move.y) >= .55f;
+                if (moving && !pauseMoveHeld)
+                {
+                    pauseSelection = (pauseSelection + (frame.Move.y < 0 ? 1 : 2)) % 3;
+                    pauseMoveHeld = true;
+                }
+                if (!moving) pauseMoveHeld = false;
+                if (frame.ConfirmPressed)
+                {
+                    if (pauseSelection == 0)
+                    {
+                        var game = GameManager.Instance;
+                        if (game != null && game.Player != null && game.Player.Match != null)
+                            game.Player.Match.TogglePause();
+                        else game?.TogglePause();
+                    }
+                    else if (pauseSelection == 1) ReturnToLobby();
+                    else ReturnToMainMenu();
+                    return;
+                }
+            }
         }
 
         public static void TogglePassengerOverlay(bool visible, ElevatorManager game)
         {
             passengerOverlayOpen = visible;
             overlayGame = game;
+        }
+
+        public static void ReturnToLobby()
+        {
+            openLobbyOnLoad = true;
+            pauseOpen = false;
+            InputManager.Instance?.ResetRegistrations();
+            SceneManager.LoadScene(DuelScene);
+        }
+
+        public static void ReturnToMainMenu()
+        {
+            openLobbyOnLoad = false;
+            sessionReady = false;
+            pauseOpen = false;
+            startDuelOnLoad = false;
+            playerTwoSelected = false;
+            playerOneCpuOnLoad = false;
+            InputManager.Instance?.ResetRegistrations();
+            SceneManager.LoadScene(SinglePlayerScene);
         }
 
         void OnGUI()
@@ -419,6 +499,10 @@ namespace CrazyElevator.Managers
                 DrawShaft(new Rect(870, 0, 330, ArtHeight), eased, descent);
                 if (fade >= 1f && !launching)
                 {
+                    Panel(backButton, Cream);
+                    GUI.Label(backButton, "BACK", cardTitle);
+                    if (GUI.Button(backButton, GUIContent.none, GUIStyle.none))
+                        ReturnToMainMenu();
                     bool playerTwoRegistered = InputManager.Instance != null
                         && InputManager.Instance.HasInput(1);
                     bool startEnabled = !BothCpu;
@@ -445,6 +529,7 @@ namespace CrazyElevator.Managers
                     DrawLobbyCursor(startButton, playerOneCursor == 4,
                         playerTwoCursor == 4, playerTwoRegistered,
                         playerOneReady || playerTwoReady);
+                    DrawLobbyCursor(backButton, playerOneCursor == 5, false, playerTwoRegistered, false);
                     if (AllPlayersReady)
                     {
                         Panel(new Rect(560, 1018, 580, 52), new Color(Ink.r, Ink.g, Ink.b, .94f));

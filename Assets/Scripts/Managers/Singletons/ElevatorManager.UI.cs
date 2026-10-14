@@ -109,9 +109,10 @@ namespace CrazyElevator.Managers
             style.normal.textColor = previous;
         }
         // Draw a button and restore shared GUI state.
-        bool Button(Rect r, string text, Color color, bool enabled = true)
+        bool Button(Rect r, string text, Color color, bool enabled = true, bool selected = false)
         {
             bool was = GUI.enabled; GUI.enabled = was && enabled;
+            if (selected) Panel(new Rect(r.x - 4, r.y - 4, r.width + 8, r.height + 8), UiWhite);
             Panel(r, GUI.enabled ? color : new Color(.2f, .25f, .3f));
             var old = buttonStyle.normal.textColor; buttonStyle.normal.textColor = GUI.enabled ? Ink : Color.gray;
             bool pressed = GUI.Button(r, text, buttonStyle); buttonStyle.normal.textColor = old; GUI.enabled = was; return pressed;
@@ -631,7 +632,7 @@ namespace CrazyElevator.Managers
             string heading = paused ? "TAKE A BREATHER" : phase == Phase.Welcome ? "YOUR SHIFT. THEIR CHAOS." : phase == Phase.Tutorial ? "HOW TO PLAY" : "SHIFT COMPLETE";
             Label(new Rect(354, 196, 700, 52), heading, title);
             string copy;
-            if (paused) copy = "The clock is paused.\n\nPress Start / Escape or resume when you are ready.";
+            if (paused) copy = "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu.";
             else if (phase == Phase.Welcome) copy = "3 minutes. Drop riders at their floors for points.\n\nOffice (0–3) → Candy (4–7) → Underwater (8–11).\n\nDrag to board or kick. CLOSE & TRAVEL, then hold UP/DOWN and STOP near a floor.";
             else if (phase == Phase.Tutorial) copy = "Three things to know.\n\nThe bold number above each rider is their destination floor.";
             else copy = "FINAL SCORE: " + round.Score
@@ -649,18 +650,28 @@ namespace CrazyElevator.Managers
                 Label(new Rect(824, 482, 174, 128), "3  STOP / EJECT\nPress C near a floor.\nDrag rider out to eject.", inkBody);
                 Label(new Rect(350, 646, 690, 48), "Office → Candy → Underwater. Shift+↑↓ builds speed. FIX handyman clears rust.", small);
             }
-            string action = paused ? "RESUME SHIFT  /  CLICK, START or ESC"
-                : phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
-                : phase == Phase.Tutorial ? "START SHIFT  /  CLICK or ENTER" : "TRY AGAIN  /  CLICK or ENTER";
-            if (Button(new Rect(350, 700, 724, 48), action, Teal))
+            if (paused)
             {
-                if (paused)
+                if (Button(new Rect(350, 610, 724, 42), "RESUME SHIFT  /  START or ESC", Teal,
+                    true, MenuManager.PauseSelection == 0))
                 {
                     if (Match != null) Match.TogglePause();
                     else if (session != null) session.TogglePause();
                     else paused = false;
                 }
-                else StartOrContinue();
+                if (Button(new Rect(350, 664, 350, 42), "BACK TO LOBBY", Coral,
+                    true, MenuManager.PauseSelection == 1))
+                    MenuManager.ReturnToLobby();
+                if (Button(new Rect(724, 664, 350, 42), "MAIN MENU", Gold,
+                    true, MenuManager.PauseSelection == 2))
+                    MenuManager.ReturnToMainMenu();
+            }
+            else
+            {
+                string action = phase == Phase.Welcome ? "SHOW ME HOW  /  CLICK or ENTER"
+                    : phase == Phase.Tutorial ? "START SHIFT  /  CLICK or ENTER" : "TRY AGAIN  /  CLICK or ENTER";
+                if (Button(new Rect(350, 700, 724, 48), action, Teal))
+                    StartOrContinue();
             }
         }
 
