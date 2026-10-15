@@ -125,7 +125,7 @@ namespace CrazyElevator.Managers
             // Entering the lobby by clicking or pressing a menu button can
             // happen before the source detector sees a keyboard event. Claim
             // the keyboard immediately when no controller source was chosen so
-            // the lobby can always receive WASD/V input.
+            // the lobby can always receive WASD/C input.
             if (!HasInput(0) && menuInputSource != InputSource.Gamepad
                 && Keyboard.current != null && Mouse.current != null)
             {
@@ -176,7 +176,7 @@ namespace CrazyElevator.Managers
                 || keyboard.aKey.wasPressedThisFrame
                 || keyboard.sKey.wasPressedThisFrame
                 || keyboard.dKey.wasPressedThisFrame
-                || keyboard.vKey.wasPressedThisFrame
+                || keyboard.cKey.wasPressedThisFrame
                 || keyboard.eKey.wasPressedThisFrame)
                 || mouse != null && (mouse.leftButton.wasPressedThisFrame
                     || mouse.rightButton.wasPressedThisFrame);
@@ -340,7 +340,7 @@ namespace CrazyElevator.Managers
             bool playerTwoConfirm = keyboardAvailable && keyboard.periodKey.wasPressedThisFrame;
             bool confirm = playerTwoKeyboard
                 ? playerTwoConfirm
-                : keyboardAvailable && keyboard.vKey.wasPressedThisFrame
+                : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
             bool kickout = playerTwoKeyboard
                 ? false
@@ -448,7 +448,7 @@ namespace CrazyElevator.Managers
             MovePressed = navigation.magnitude >= .55f;
             SelectPressed = MovePressed;
 
-            bool confirm = (keyboard != null && keyboard.vKey.wasPressedThisFrame)
+            bool confirm = (keyboard != null && keyboard.cKey.wasPressedThisFrame)
                 || (pad != null && pad.buttonSouth.wasPressedThisFrame);
             bool kickout = (keyboard != null && keyboard.iKey.wasPressedThisFrame)
                 || (pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger);

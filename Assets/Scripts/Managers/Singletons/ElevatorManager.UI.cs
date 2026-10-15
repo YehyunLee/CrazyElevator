@@ -599,8 +599,8 @@ namespace CrazyElevator.Managers
                 compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
                 compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
-            string confirmPrompt = Match == null ? "PRESS A / V TO CONTINUE"
-                : Seat == 0 ? "P1: PRESS A / V" : "P2: PRESS A / PERIOD";
+            string confirmPrompt = Match == null ? "PRESS A / C TO CONTINUE"
+                : Seat == 0 ? "P1: PRESS A / C" : "P2: PRESS A / PERIOD";
             GUI.Label(new Rect(contentX, card.y + card.height - 28f, contentWidth, 24f),
                 confirmPrompt, encounterPrompt);
             encounterTitle.fontSize = oldTitleSize;
