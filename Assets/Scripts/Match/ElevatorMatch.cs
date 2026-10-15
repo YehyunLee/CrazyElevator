@@ -127,7 +127,7 @@ namespace CrazyElevator.Match
 
         void Update()
         {
-            if (!enabled || player == null) return;
+            if (!enabled || player == null || Paused) return;
             float dt = Time.unscaledDeltaTime;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);

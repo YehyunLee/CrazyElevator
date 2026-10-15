@@ -20,6 +20,8 @@ namespace CrazyElevator.Managers
         static readonly Color CombinedColour = new Color32(192, 88, 226, 255);
         static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
+        [SerializeField] Texture2D controllerPassengerInstructions;
+        [SerializeField] Texture2D controllerElevatorInstructions;
         const float ArtWidth = 1700f;
         const float ArtHeight = 1082f;
         const float TransitionSeconds = 1.1f;
@@ -82,6 +84,9 @@ namespace CrazyElevator.Managers
         bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
         static bool startDuelOnLoad;
+        static bool showControllerInstructionsOnLoad;
+        static bool playerTwoHumanOnLoad;
+        bool showingControllerInstructions;
         static bool playerTwoSelected;
         static bool playerOneCpuOnLoad;
         static bool openLobbyOnLoad;
@@ -105,6 +110,8 @@ namespace CrazyElevator.Managers
             pauseOpen = false;
             passengerOverlayOpen = false;
             startDuelOnLoad = false;
+            showControllerInstructionsOnLoad = false;
+            playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             openLobbyOnLoad = false;
@@ -131,6 +138,12 @@ namespace CrazyElevator.Managers
                 BeginModeSelection();
                 transition = TransitionSeconds;
             }
+            if (showControllerInstructionsOnLoad)
+            {
+                IsOpen = true;
+                showingControllerInstructions = true;
+                showControllerInstructionsOnLoad = false;
+            }
             SyncTitleButtons();
             InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
         }
@@ -155,6 +168,17 @@ namespace CrazyElevator.Managers
                 return;
             }
             if (!IsOpen) return;
+            if (showingControllerInstructions)
+            {
+                var instructionInput = InputManager.Instance;
+                if (instructionInput == null) return;
+                var playerOne = instructionInput.ReadForSeat(0, true);
+                var playerTwo = instructionInput.ReadForSeat(1, true);
+                if (playerOne.StartPressed || playerOne.ConfirmPressed
+                    || playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                    DismissControllerInstructions();
+                return;
+            }
             if (launching)
             {
                 launchTimer += Time.unscaledDeltaTime;
@@ -334,8 +358,8 @@ namespace CrazyElevator.Managers
 
         public static bool ConsumePlayerTwoRequest()
         {
-            bool requested = playerTwoSelected;
-            playerTwoSelected = false;
+            bool requested = playerTwoHumanOnLoad;
+            playerTwoHumanOnLoad = false;
             return requested;
         }
 
@@ -405,6 +429,7 @@ namespace CrazyElevator.Managers
         public static void ReturnToLobby()
         {
             openLobbyOnLoad = true;
+            showControllerInstructionsOnLoad = false;
             pauseOpen = false;
             InputManager.Instance?.ResetRegistrations();
             SceneManager.LoadScene(DuelScene);
@@ -413,9 +438,11 @@ namespace CrazyElevator.Managers
         public static void ReturnToMainMenu()
         {
             openLobbyOnLoad = false;
+            showControllerInstructionsOnLoad = false;
             sessionReady = false;
             pauseOpen = false;
             startDuelOnLoad = false;
+            playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             InputManager.Instance?.ResetRegistrations();
@@ -430,10 +457,45 @@ namespace CrazyElevator.Managers
             Styles();
             if (IsOpen)
             {
-                DrawModeSelect();
+                if (showingControllerInstructions) DrawControllerInstructions();
+                else DrawModeSelect();
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();
+        }
+
+        void DrawControllerInstructions()
+        {
+            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
+            float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
+            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
+                (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
+                new Vector3(scale, scale, 1));
+            GUI.Label(new Rect(100, 34, 1500, 82), "CONTROLLER CONTROLS", title);
+            GUI.Label(new Rect(48, 126, 790, 42), "PASSENGERS", caption);
+            GUI.Label(new Rect(862, 126, 790, 42), "ELEVATOR", caption);
+            Rect passengerImage = new Rect(48, 176, 790, 590);
+            Rect elevatorImage = new Rect(862, 176, 790, 590);
+            Panel(passengerImage, Cream);
+            Panel(elevatorImage, Cream);
+            if (controllerPassengerInstructions != null)
+                GUI.DrawTexture(passengerImage, controllerPassengerInstructions, ScaleMode.ScaleToFit);
+            if (controllerElevatorInstructions != null)
+                GUI.DrawTexture(elevatorImage, controllerElevatorInstructions, ScaleMode.ScaleToFit);
+            Rect startButton = new Rect(610, 820, 480, 76);
+            Panel(startButton, Teal);
+            if (GUI.Button(startButton, "START SHIFT", cardTitle))
+                DismissControllerInstructions();
+            GUI.Label(new Rect(400, 912, 900, 38), "PRESS START OR CONFIRM TO BEGIN", caption);
+            GUI.matrix = Matrix4x4.identity;
+        }
+
+        void DismissControllerInstructions()
+        {
+            showingControllerInstructions = false;
+            Close();
+            SyncTitleButtons();
+            InputManager.Instance?.SetView(GameView.ControlElevator);
         }
 
         void DrawModeSelect()
@@ -832,7 +894,9 @@ namespace CrazyElevator.Managers
         void SelectAndStart(bool duel)
         {
             Close();
+            showControllerInstructionsOnLoad = true;
             startDuelOnLoad = duel;
+            playerTwoHumanOnLoad = duel && playerTwoSelected;
             playerOneCpuOnLoad = !playerOneHuman;
             SceneManager.LoadScene(duel ? DuelScene : SinglePlayerScene);
         }
