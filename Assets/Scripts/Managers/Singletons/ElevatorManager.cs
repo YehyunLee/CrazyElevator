@@ -201,7 +201,7 @@ namespace CrazyElevator.Managers
             passengerEffects.Clear();
             bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); cabinTileRuns.Clear(); exiting.Clear(); exitStarts.Clear();
             sharedPickupDepartures.Clear(); riderHits.Clear();
-            selectedRider = null;
+            selectedRider = null; pendingSelectionAfterBoarding = null; selectFirstWaitingWhenAvailable = false;
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;

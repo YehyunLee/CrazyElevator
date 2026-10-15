@@ -29,6 +29,8 @@ namespace CrazyElevator.Managers
         static readonly Color GridTileValid = new Color32(69, 231, 137, 190);
         static readonly Color GridTileInvalid = new Color32(255, 82, 74, 205);
         Rider selectedRider;
+        Rider pendingSelectionAfterBoarding;
+        bool selectFirstWaitingWhenAvailable;
         Color selectionTint;
         Rider draggedRider;
         const float KickOutBoundaryZ = -.4f;
@@ -285,6 +287,11 @@ namespace CrazyElevator.Managers
         void SelectRider(Rider rider)
         {
             if (rider != null && !CanSelect(rider)) rider = null;
+            if (rider != null)
+            {
+                pendingSelectionAfterBoarding = null;
+                selectFirstWaitingWhenAvailable = false;
+            }
             if (selectedRider == rider)
             {
                 if (rider != null && draggedRider == null)
@@ -335,6 +342,23 @@ namespace CrazyElevator.Managers
                 return;
             }
             if (phase != Phase.Boarding) { SelectRider(null); return; }
+            if (pendingSelectionAfterBoarding != null
+                && !boardingTransfers.ContainsKey(pendingSelectionAfterBoarding)
+                && CanSelect(pendingSelectionAfterBoarding))
+            {
+                Rider pending = pendingSelectionAfterBoarding;
+                pendingSelectionAfterBoarding = null;
+                SelectRider(pending);
+            }
+            if (selectFirstWaitingWhenAvailable && selectedRider == null)
+            {
+                Rider firstWaiting = FindFirstWaitingSelection();
+                if (firstWaiting != null)
+                {
+                    selectFirstWaitingWhenAvailable = false;
+                    SelectRider(firstWaiting);
+                }
+            }
             if (!CanSelect(selectedRider)) SelectRider(null);
             Vector2 navigation = input.Select;
             bool navigationActive = navigation.magnitude >= .55f;
@@ -466,10 +490,12 @@ namespace CrazyElevator.Managers
             Vector3 released = figure.localPosition;
             if (draggedWasBoarded && dragKickReady && released.z < KickOutBoundaryZ)
             {
+                Vector2Int movedRun = CabinRunForSelection(rider);
                 cabinPositions.Remove(rider);
                 cabinTileRuns.Remove(rider);
                 SelectRider(null);
                 QueueRiderExit(rider, released);
+                SelectAfterOffboarding(rider, movedRun, released);
                 return;
             }
             if (IsInsideCabin(rider, released))
@@ -570,17 +596,278 @@ namespace CrazyElevator.Managers
             if (best != null) SelectRider(best);
         }
         Vector2 SelectionScreenPoint(Rider rider) => eye.WorldToScreenPoint(figures[rider].position + Vector3.up);
+
+        Dictionary<Rider, Vector2Int> CaptureWaitingSelectionSlots()
+        {
+            var slots = new Dictionary<Rider, Vector2Int>();
+            int slot = 0;
+            int columns = OfficeInterior ? OfficeQueueX.Length : int.MaxValue;
+            foreach (Rider rider in round.Riders)
+            {
+                if (rider.Boarded || rider.Resolved || rider.Origin != round.Floor) continue;
+                slots[rider] = new Vector2Int(
+                    columns == int.MaxValue ? slot : slot % columns,
+                    columns == int.MaxValue ? 0 : slot / columns);
+                slot++;
+            }
+            return slots;
+        }
+
+        Rider FindWaitingSelectionAfter(Rider moved, Vector2Int movedSlot,
+            Dictionary<Rider, Vector2Int> waitingSlots)
+        {
+            Rider right = null;
+            int rightDistance = int.MaxValue;
+            Rider left = null;
+            int leftDistance = int.MaxValue;
+            foreach (Rider candidate in round.Riders)
+            {
+                if (candidate == moved || candidate.Boarded || !CanSelect(candidate)
+                    || !waitingSlots.TryGetValue(candidate, out Vector2Int slot)
+                    || slot.y != movedSlot.y) continue;
+
+                int distance = slot.x - movedSlot.x;
+                if (distance > 0 && distance < rightDistance)
+                {
+                    right = candidate;
+                    rightDistance = distance;
+                }
+                else if (distance < 0 && -distance < leftDistance)
+                {
+                    left = candidate;
+                    leftDistance = -distance;
+                }
+            }
+            if (right != null) return right;
+            if (left != null) return left;
+
+            // A sparse waiting row can leave available riders on another row.
+            // Exhaust those before moving the selection into the cabin.
+            Rider nextRow = null;
+            int nextRowRank = int.MaxValue;
+            int nextColumn = int.MaxValue;
+            foreach (Rider candidate in round.Riders)
+            {
+                if (candidate == moved || candidate.Boarded || !CanSelect(candidate)
+                    || !waitingSlots.TryGetValue(candidate, out Vector2Int slot)) continue;
+                int rowRank = slot.y >= movedSlot.y
+                    ? slot.y - movedSlot.y : CabinRows + movedSlot.y - slot.y;
+                if (rowRank < nextRowRank || rowRank == nextRowRank && slot.x < nextColumn)
+                {
+                    nextRow = candidate;
+                    nextRowRank = rowRank;
+                    nextColumn = slot.x;
+                }
+            }
+            return nextRow;
+        }
+
+        Rider FindOnboardSelectionAfter(Rider moved)
+        {
+            if (!cabinTileRuns.TryGetValue(moved, out Vector2Int movedRun))
+            {
+                FindNearestCabinTileRun(moved, RiderPosition(moved), out int row, out int start);
+                movedRun = new Vector2Int(start, row);
+            }
+
+            for (int row = movedRun.y; row < CabinRows; row++)
+            {
+                Rider right = null;
+                int rightDistance = int.MaxValue;
+                Rider left = null;
+                int leftDistance = int.MaxValue;
+                Rider first = null;
+                int firstColumn = int.MaxValue;
+                foreach (Rider candidate in round.Riders)
+                {
+                    if (candidate == moved || !candidate.Boarded || !CanSelect(candidate)) continue;
+                    if (!cabinTileRuns.TryGetValue(candidate, out Vector2Int run))
+                    {
+                        FindNearestCabinTileRun(candidate, RiderPosition(candidate), out int candidateRow, out int candidateStart);
+                        run = new Vector2Int(candidateStart, candidateRow);
+                    }
+                    if (run.y != row) continue;
+                    if (row == movedRun.y)
+                    {
+                        int distance = run.x - movedRun.x;
+                        if (distance > 0 && distance < rightDistance)
+                        {
+                            right = candidate;
+                            rightDistance = distance;
+                        }
+                        else if (distance < 0 && -distance < leftDistance)
+                        {
+                            left = candidate;
+                            leftDistance = -distance;
+                        }
+                    }
+                    else if (run.x < firstColumn)
+                    {
+                        first = candidate;
+                        firstColumn = run.x;
+                    }
+                }
+                if (right != null) return right;
+                if (left != null) return left;
+                if (first != null) return first;
+            }
+            return null;
+        }
+
+        Vector2Int CabinRunForSelection(Rider rider)
+        {
+            if (cabinTileRuns.TryGetValue(rider, out Vector2Int run)) return run;
+            FindNearestCabinTileRun(rider, RiderPosition(rider), out int row, out int start);
+            return new Vector2Int(start, row);
+        }
+
+        Rider FindOnboardSelectionAfterOffboarding(Rider moved, Vector2Int movedRun)
+        {
+            float movedColumn = movedRun.x + Mathf.Clamp(moved.Space, 1, CabinColumns) * .5f - .5f;
+            for (int row = movedRun.y; row >= 0; row--)
+            {
+                Rider best = null;
+                float bestDistance = float.MaxValue;
+                bool bestIsRight = false;
+                foreach (Rider candidate in round.Riders)
+                {
+                    if (candidate == moved || !candidate.Boarded || !CanSelect(candidate)) continue;
+                    Vector2Int run = CabinRunForSelection(candidate);
+                    if (run.y != row) continue;
+                    float candidateColumn = run.x + Mathf.Clamp(candidate.Space, 1, CabinColumns) * .5f - .5f;
+                    float distance = Mathf.Abs(candidateColumn - movedColumn);
+                    bool isRight = candidateColumn > movedColumn;
+                    if (distance < bestDistance || distance == bestDistance && isRight && !bestIsRight)
+                    {
+                        best = candidate;
+                        bestDistance = distance;
+                        bestIsRight = isRight;
+                    }
+                }
+                if (best != null) return best;
+            }
+            return null;
+        }
+
+        Rider FindFirstWaitingSelection()
+        {
+            foreach (Rider candidate in round.Riders)
+                if (!candidate.Boarded && CanSelect(candidate)) return candidate;
+            return null;
+        }
+
+        Rider FindNearestOnboardSelection(Rider moved, Vector2Int movedRun)
+        {
+            float movedColumn = movedRun.x + Mathf.Clamp(moved.Space, 1, CabinColumns) * .5f - .5f;
+            Rider best = null;
+            float bestDistance = float.MaxValue;
+            bool bestIsRight = false;
+            foreach (Rider candidate in round.Riders)
+            {
+                if (candidate == moved || !candidate.Boarded || !CanSelect(candidate)) continue;
+                Vector2Int run = CabinRunForSelection(candidate);
+                float candidateColumn = run.x + Mathf.Clamp(candidate.Space, 1, CabinColumns) * .5f - .5f;
+                Vector2 delta = new Vector2(candidateColumn - movedColumn, run.y - movedRun.y);
+                float distance = delta.sqrMagnitude;
+                bool isRight = candidateColumn > movedColumn;
+                if (distance < bestDistance || distance == bestDistance && isRight && !bestIsRight)
+                {
+                    best = candidate;
+                    bestDistance = distance;
+                    bestIsRight = isRight;
+                }
+            }
+            return best;
+        }
+
+        Rider FindNearestWaitingSelection(Rider moved, Vector3 from)
+        {
+            Rider best = null;
+            float bestDistance = float.MaxValue;
+            foreach (Rider candidate in round.Riders)
+            {
+                if (candidate == moved || candidate.Boarded || !CanSelect(candidate)) continue;
+                Vector3 position = figures.TryGetValue(candidate, out var figure) && figure != null
+                    ? figure.localPosition : RiderPosition(candidate);
+                float distance = (position.x - from.x) * (position.x - from.x)
+                    + (position.z - from.z) * (position.z - from.z);
+                if (distance >= bestDistance) continue;
+                best = candidate;
+                bestDistance = distance;
+            }
+            return best;
+        }
+
+        void SelectAfterOffboarding(Rider moved, Vector2Int movedRun, Vector3 movedPosition)
+        {
+            Rider next = movedRun.y == 0
+                ? FindNearestOnboardSelection(moved, movedRun)
+                : FindOnboardSelectionAfterOffboarding(moved, movedRun);
+            if (next != null) SelectRider(next);
+            else
+            {
+                bool elevatorEmpty = true;
+                foreach (Rider candidate in round.Riders)
+                    if (candidate != moved && candidate.Boarded && round.Owns(candidate))
+                    { elevatorEmpty = false; break; }
+                if (!elevatorEmpty) return;
+
+                Rider nearestWaiting = FindNearestWaitingSelection(moved, movedPosition);
+                if (nearestWaiting != null) SelectRider(nearestWaiting);
+                else selectFirstWaitingWhenAvailable = true;
+            }
+        }
+
+        void SelectAfterBoarding(Rider moved, Vector2Int movedSlot,
+            Dictionary<Rider, Vector2Int> waitingSlots)
+        {
+            Rider next = FindWaitingSelectionAfter(moved, movedSlot, waitingSlots);
+            if (next == null) next = FindOnboardSelectionAfter(moved);
+            if (next != null)
+            {
+                pendingSelectionAfterBoarding = null;
+                SelectRider(next);
+                return;
+            }
+
+            // Extended-interior boarding temporarily blocks interaction with
+            // the moving figure. Restore the selection as soon as its transfer
+            // finishes; otherwise keep it immediately on the moved rider.
+            pendingSelectionAfterBoarding = moved;
+            if (!boardingTransfers.ContainsKey(moved))
+            {
+                pendingSelectionAfterBoarding = null;
+                SelectRider(moved);
+            }
+        }
+
         void ConfirmPassenger()
         {
             if (!CanSelect(selectedRider)) { notice = "Highlight a passenger with the mouse or stick first."; return; }
-            Rider rider = selectedRider; SelectRider(null);
+            Rider rider = selectedRider;
+            bool waiting = !rider.Boarded;
+            Vector2Int movedSlot = default;
+            Dictionary<Rider, Vector2Int> waitingSlots = null;
+            if (waiting)
+            {
+                waitingSlots = CaptureWaitingSelectionSlots();
+                waitingSlots.TryGetValue(rider, out movedSlot);
+            }
+            SelectRider(null);
             if (rider.Boarded)
             {
+                Vector2Int movedRun = CabinRunForSelection(rider);
+                Vector3 movedPosition = figures[rider].localPosition;
                 cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
                 QueueRiderExit(rider, figures[rider].localPosition);
                 notice = "Helping " + rider.Name + " out at floor " + round.Floor + ".";
+                SelectAfterOffboarding(rider, movedRun, movedPosition);
             }
-            else BoardPassengerWithPersona(rider);
+            else
+            {
+                BoardPassengerWithPersona(rider);
+                if (rider.Boarded) SelectAfterBoarding(rider, movedSlot, waitingSlots);
+            }
         }
         void QueueRiderExit(Rider rider, Vector3 start)
         {
