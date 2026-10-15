@@ -199,9 +199,12 @@ namespace CrazyElevator.Managers
                     playerTwoSelected = true;
                     playerTwoReady = false;
                 }
-                if (!playerTwoRegistered && !input.CanUseSplitKeyboard)
+                // A split keyboard makes Player 2 available, but it does not
+                // mean Player 2 has been selected. While the rival is still
+                // CPU, keep that side ready so the first keyboard ready toggle
+                // can immediately unlock Start.
+                if (!playerTwoRegistered && !playerTwoSelected)
                 {
-                    playerTwoSelected = false;
                     playerTwoReady = true;
                 }
                 lastPlayerTwoRegistered = playerTwoRegistered;
