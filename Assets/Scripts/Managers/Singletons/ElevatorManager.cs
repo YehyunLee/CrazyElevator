@@ -994,8 +994,8 @@ namespace CrazyElevator.Managers
             if (confirm)
             {
                 if (draggedRider != null) return;
-                if (selectedRider != null) ConfirmPassenger();
-                else CloseAndTravel();
+                if (selectedRider == null) return;
+                ConfirmPassenger();
                 return;
             }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
