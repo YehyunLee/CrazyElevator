@@ -268,12 +268,24 @@ namespace CrazyElevator.Managers
             for (int column = bestStart; column < bestStart + width; column++)
                 occupied[bestRow * CabinColumns + column] = true;
         }
-        bool CanSelect(Rider rider) => rider != null && phase == Phase.Boarding && !rider.Resolved
-            && !boardingTransfers.ContainsKey(rider) && !exiting.ContainsKey(rider)
-            && rider != repairingHandyman
-            && figures.TryGetValue(rider, out var figure) && figure.gameObject.activeInHierarchy
-            && (round.Owns(rider) || !rider.Boarded && rider.Origin == round.Floor
-                && rider.Arrival <= 0 && round.IsOffered(rider));
+        bool PassengerFigureInView(Transform figure)
+        {
+            if (eye == null || figure == null) return false;
+            Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .95f);
+            return point.z > 0f && eye.pixelRect.Contains(new Vector2(point.x, point.y));
+        }
+
+        bool CanSelect(Rider rider)
+        {
+            if (rider == null || phase != Phase.Boarding || rider.Resolved
+                || boardingTransfers.ContainsKey(rider) || exiting.ContainsKey(rider)
+                || rider == repairingHandyman || !figures.TryGetValue(rider, out var figure)
+                || figure == null || !figure.gameObject.activeInHierarchy) return false;
+            if (round.Owns(rider)) return true;
+            return !rider.Boarded && rider.Origin == round.Floor && rider.Arrival <= 0
+                && round.IsOffered(rider)
+                && (draggedRider == rider || PassengerFigureInView(figure));
+        }
 
         bool HasBoardingSpace(Rider rider)
         {

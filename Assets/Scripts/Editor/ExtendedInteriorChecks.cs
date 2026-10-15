@@ -64,8 +64,6 @@ public static class ExtendedInteriorChecks
             else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "grid-checks") RunGridChecks(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
-            else if (action == "encounter-world-preview" || action == "encounter-passenger-preview")
-                PreviewEncounterCard(game, action == "encounter-passenger-preview");
             else if (action == "rust-inside" || action == "rust-outside")
             {
                 game.enabled = true; Call(game, "Restart");
@@ -521,38 +519,6 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/result.txt",
             "PASS: points popups created; quick combo reached x2; wrong-floor reset; score unchanged. Editor paused for visual review.");
         EditorApplication.isPaused = true;
-    }
-
-    static void PreviewEncounterCard(Game game, bool passenger)
-    {
-        CrazyElevator.Managers.MenuManager.Close();
-        game.enabled = true;
-        Call(game, "Restart");
-        if (passenger)
-        {
-            SharedRider rider = ((Round)Get(game, "round")).Riders.Find(candidate => candidate.Kind == "COURIER");
-            Require(rider != null, "The encounter preview could not find a courier passenger.");
-            Call(game, "DiscoverPassenger", rider);
-            Call(game, "TickEncounterCards", 3.2f);
-        }
-        Set(game, "encounterCardTime", 60f);
-        RenderTexture preview = (RenderTexture)Get(game, "encounterPreviewTexture");
-        Camera previewCamera = (Camera)Get(game, "encounterPreviewCamera");
-        Require(preview != null && previewCamera != null && Get(game, "encounterPreviewModel") != null,
-            "The encounter card did not create an authored 3D preview model.");
-        previewCamera.Render();
-        RenderTexture previous = RenderTexture.active;
-        RenderTexture.active = preview;
-        var image = new Texture2D(preview.width, preview.height, TextureFormat.RGBA32, false);
-        image.ReadPixels(new Rect(0f, 0f, preview.width, preview.height), 0, 0);
-        image.Apply();
-        File.WriteAllBytes(Work + (passenger ? "/passenger-preview.png" : "/world-preview.png"),
-            image.EncodeToPNG());
-        UnityEngine.Object.DestroyImmediate(image);
-        RenderTexture.active = previous;
-        File.WriteAllText(Work + "/result.txt", passenger
-            ? "PASS: authored passenger prefab rendered into the encounter card preview."
-            : "PASS: authored world model rendered into the encounter card preview.");
     }
 
     static void Input(Game game, Gamepad pad, GamepadState state, float dt = .02f)
