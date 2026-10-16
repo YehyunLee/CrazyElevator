@@ -629,10 +629,9 @@ namespace CrazyElevator.Managers
             }
             Rect startButton = new Rect(610, 952, 480, 76);
             Panel(startButton, Teal);
+            DrawKeyHint(new Rect(startButton.xMax + 16f, startButton.y + 11f, 54f, 54f), StartHintKey);
             if (GUI.Button(startButton, "START", cardTitle))
                 DismissControllerInstructions();
-            GUI.Label(new Rect(400, 1038, 900, 38),
-                "PRESS " + StartHintKey + " TO START", caption);
             GUI.matrix = Matrix4x4.identity;
         }
 
@@ -719,6 +718,9 @@ namespace CrazyElevator.Managers
                 KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER", cardTitle);
             GUI.Label(new Rect(510, 438, 680, 34),
                 KeyboardHintsEnabled ? "C / WASD" : "A / D-PAD", caption);
+            if (optionsSelection == 0)
+                DrawKeyHint(new Rect(modeButton.xMax + 16f, modeButton.y + 43f, 54f, 54f),
+                    KeyboardHintsEnabled ? "C" : "A");
             if (GUI.Button(modeButton, GUIContent.none, GUIStyle.none))
                 SetKeyboardHints(!KeyboardHintsEnabled);
 

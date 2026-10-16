@@ -1101,15 +1101,26 @@ namespace CrazyElevator.Managers
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
-            string prompt = selectedRider == null
-                ? (BuildingView ? (Match != null
-                    ? "Left/Right or A/D switch track   |   STOP near a floor   |   Hold direction to boost"
-                    : "STOP near a floor   |   Hold direction to build speed")
-                    : "Drag riders to board or kick   |   CLOSE & TRAVEL")
-                : selectedRider.Name + " → F" + selectedRider.Destination
-                    + (selectedRider.Boarded ? "  ·  UNLOAD / DRAG OUT TO KICK" : "  ·  BOARD / DRAG IN");
-            string footerKey = BuildingView || selectedRider != null
-                ? GameplayConfirmKey : GameplayCloseKey;
+            string prompt;
+            if (BuildingView)
+            {
+                prompt = Match != null
+                    ? "LEFT / RIGHT OR A / D SWITCH TRACK   ·   STOP NEAR A FLOOR"
+                    : "STOP NEAR A FLOOR   ·   HOLD DIRECTION TO BUILD SPEED";
+            }
+            else if (selectedRider == null)
+            {
+                prompt = "BOARD / KICK   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
+            }
+            else
+            {
+                prompt = selectedRider.Name + " → F" + selectedRider.Destination
+                    + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
+                        : "   ·   BOARD   ·   DRAG IN");
+            }
+            // C (or the seat-specific equivalent) confirms the highlighted
+            // passenger, boards waiting riders, and unloads boarded riders.
+            string footerKey = GameplayConfirmKey;
             DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
             Label(new Rect(76, screenHeight - 48, width - 76, 30),
                 BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);

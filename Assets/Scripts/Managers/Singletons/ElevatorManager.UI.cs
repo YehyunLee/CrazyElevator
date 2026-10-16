@@ -557,7 +557,8 @@ namespace CrazyElevator.Managers
             if (activeEncounterCard == null || Event.current.type != EventType.Repaint) return;
             bool compact = Match != null;
             float width = Mathf.Min(compact ? 520f : 760f, viewWidth - (compact ? 20f : 48f));
-            float height = compact ? 132f : 154f;
+            // Leave enough footer room for the enlarged confirmation keycap.
+            float height = compact ? 164f : 154f;
             float targetX = (viewWidth - width) * .5f;
             float enter = EaseOut(Mathf.Clamp01(encounterCardTime / .24f));
             float x = Mathf.Lerp(viewWidth + 24f, targetX, enter);
@@ -598,10 +599,12 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(contentX, card.y + (compact ? 25f : 27f), contentWidth,
                 compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
-                compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
-            Rect prompt = new Rect(contentX, card.y + card.height - 42f, 42f, 42f);
+                compact ? 40f : 36f), activeEncounterCard.Description, encounterBody);
+            const float promptSize = 52f;
+            Rect prompt = new Rect(contentX, card.y + card.height - promptSize, promptSize, promptSize);
             DrawGameplayKeyHint(prompt, GameplayConfirmKey);
-            GUI.Label(new Rect(prompt.x + 54f, prompt.y + 7f, contentWidth - 54f, 28f),
+            GUI.Label(new Rect(prompt.x + promptSize + 12f, prompt.y + 12f,
+                contentWidth - promptSize - 12f, 28f),
                 "CONTINUE", encounterPrompt);
             encounterTitle.fontSize = oldTitleSize;
             encounterBody.fontSize = oldBodySize;
@@ -891,6 +894,22 @@ namespace CrazyElevator.Managers
                 {
                     Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
                     OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
+
+                    // Keep the confirm action beside the selected passenger so
+                    // it remains visible even when the lower HUD is covered by
+                    // the travel/door controls.
+                    if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    {
+                        float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
+                        float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
+                        Rect hint = new Rect(hintX, hintY, 42f, 42f);
+                        DrawGameplayKeyHint(hint, GameplayConfirmKey);
+                        Color previousHintText = calloutText.normal.textColor;
+                        calloutText.normal.textColor = UiWhite;
+                        GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
+                            rider.Boarded ? "KICK" : "BOARD", calloutText);
+                        calloutText.normal.textColor = previousHintText;
+                    }
                 }
 
                 if (rider != speaker) continue;
