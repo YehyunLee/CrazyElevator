@@ -354,7 +354,7 @@ namespace CrazyElevator.Managers
         void UpdatePassengerSelection()
         {
             if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
-            Mouse mouse = Mouse.current;
+            Mouse mouse = MenuManager.TutorialActive ? null : Mouse.current;
             InputManager.SeatInput input = SeatControls;
             if (draggedRider != null)
             {

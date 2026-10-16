@@ -147,23 +147,28 @@ namespace CrazyElevator.Match
             float rivalTrackBefore = trackPosition[1];
             trackPosition[0] = Mathf.MoveTowards(trackPosition[0], targetTrack[0], switchSpeed * dt);
             trackPosition[1] = Mathf.MoveTowards(trackPosition[1], targetTrack[1], switchSpeed * dt);
+            bool playerWasSwitching = !Mathf.Approximately(playerTrackBefore, targetTrack[0]);
+            bool rivalWasSwitching = !Mathf.Approximately(rivalTrackBefore, targetTrack[1]);
             // Do not spend the collision cooldown while both cars are merely
             // sharing a floor during their boarding/door transition. The
-            // impact must be caused by a car that is actually travelling;
-            // the other car may still be boarding and is a valid target.
+            // impact must be caused by a car that is actually travelling or
+            // changing tracks; the other car may be stopped and valid target.
             bool playerTravelling = player.MovingInShaft
                 && Mathf.Abs(player.TravelVelocity) > .05f;
             bool rivalTravelling = Rival != null && Rival.MovingInShaft
                 && Mathf.Abs(Rival.TravelVelocity) > .05f;
-            if (Running && !Paused && (playerTravelling || rivalTravelling)
+            if (Running && !Paused && (playerTravelling || rivalTravelling
+                    || playerWasSwitching || rivalWasSwitching)
                 && CarsOverlap(player, Rival))
             {
-                bool playerWasSwitching = !Mathf.Approximately(playerTrackBefore, targetTrack[0]);
-                bool rivalWasSwitching = !Mathf.Approximately(rivalTrackBefore, targetTrack[1]);
                 trackPosition[0] = playerTrackBefore;
                 trackPosition[1] = rivalTrackBefore;
-                if (playerWasSwitching) targetTrack[0] = playerTrackBefore < .5f ? 0 : 1;
-                if (rivalWasSwitching) targetTrack[1] = rivalTrackBefore < .5f ? 0 : 1;
+                // A failed lane change must return to the track it came from.
+                // With two tracks that is the opposite of the requested target;
+                // using the current interpolation point would choose the wrong
+                // track when the cars meet just past the midpoint.
+                if (playerWasSwitching) targetTrack[0] = targetTrack[0] == 0 ? 1 : 0;
+                if (rivalWasSwitching) targetTrack[1] = targetTrack[1] == 0 ? 1 : 0;
                 TriggerCollision(player, Rival);
             }
 
@@ -412,34 +417,42 @@ namespace CrazyElevator.Match
                 direction = -Mathf.Sign(second.TravelVelocity);
             float closingSpeed = first != null && second != null
                 ? Mathf.Abs(first.TravelVelocity - second.TravelVelocity) : 0f;
-            PlayCollision(first, second, direction, closingSpeed);
+            PlayCollision(first, second, direction, closingSpeed,
+                TutorialCollisionTarget(first, second));
         }
 
         void TriggerVerticalCollision(Game first, Game second, float direction, float closingSpeed)
-            => PlayCollision(first, second, direction, closingSpeed);
+            // ConstrainTravel calls this with the moving elevator first and
+            // the elevator it hit second. Keep that target stationary during
+            // tutorials so a collision cannot create tutorial momentum.
+            => PlayCollision(first, second, direction, closingSpeed,
+                MenuManager.TutorialActive ? second : null);
 
-        void PlayCollision(Game first, Game second, float verticalDirection, float closingSpeed)
+        void PlayCollision(Game first, Game second, float verticalDirection,
+            float closingSpeed, Game tutorialTarget = null)
         {
             if (collisionCooldown > 0f) return;
             collisionCooldown = .48f;
             collisionFlash = .72f;
             collisionCount++;
-            // A player waiting at the tutorial handoff remains a collision
-            // target, but the collision must not move that player's elevator.
+            // A tutorial collision can still show feedback and stop the
+            // incoming elevator, but it must not move the elevator that was
+            // hit. Otherwise a passenger-view tutorial card can unexpectedly
+            // become an elevator-view card and a stopped car gains momentum.
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
-                if (!TutorialInputLocked(first))
-                    first?.ApplyMatchBounce(collisionSlowSeconds, -verticalDirection * rebound);
-                if (!TutorialInputLocked(second))
-                    second?.ApplyMatchBounce(collisionSlowSeconds, verticalDirection * rebound);
+                if (first != tutorialTarget && !TutorialInputLocked(first))
+                    ApplyCollisionResponse(first, -verticalDirection * rebound);
+                if (second != tutorialTarget && !TutorialInputLocked(second))
+                    ApplyCollisionResponse(second, verticalDirection * rebound);
             }
             else
             {
                 // A lane-change bump still jolts both cars, but does not reverse their vertical travel.
-                if (!TutorialInputLocked(first))
+                if (first != tutorialTarget && !TutorialInputLocked(first))
                     first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
-                if (!TutorialInputLocked(second))
+                if (second != tutorialTarget && !TutorialInputLocked(second))
                     second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
             }
             if (first != null && second != null)
@@ -447,9 +460,40 @@ namespace CrazyElevator.Match
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
         }
 
+        static Game TutorialCollisionTarget(Game first, Game second)
+        {
+            if (!MenuManager.TutorialActive || first == null || second == null)
+                return null;
+            if (first.TutorialPassengerViewActive != second.TutorialPassengerViewActive)
+                return first.TutorialPassengerViewActive ? first : second;
+
+            bool firstMoving = first.MovingInShaft && Mathf.Abs(first.TravelVelocity) > .05f;
+            bool secondMoving = second.MovingInShaft && Mathf.Abs(second.TravelVelocity) > .05f;
+            if (firstMoving != secondMoving)
+                return firstMoving ? second : first;
+            if (first.InPassengerStop != second.InPassengerStop)
+                return first.InPassengerStop ? first : second;
+            return null;
+        }
+
         static bool TutorialInputLocked(Game actor)
             => actor != null && InputManager.Instance != null
                 && InputManager.Instance.IsTutorialInputLocked(actor.Seat);
+
+        static bool TutorialStartingFloorStationary(Game actor)
+            => actor != null && MenuManager.TutorialActive
+                && actor.DiscreteFloor == 0
+                && Mathf.Abs(actor.TravelVelocity) <= .05f;
+
+        void ApplyCollisionResponse(Game actor, float reboundVelocity)
+        {
+            if (actor == null) return;
+            // The opening tutorial position is a stationary staging point. It
+            // can still be hit, but must not inherit a rebound or momentum.
+            if (TutorialStartingFloorStationary(actor))
+                actor.ApplyMatchCollision(collisionSlowSeconds, 1f);
+            else actor.ApplyMatchBounce(collisionSlowSeconds, reboundVelocity);
+        }
 
         ParticleSystem CreateCollisionParticles(Transform parent)
         {

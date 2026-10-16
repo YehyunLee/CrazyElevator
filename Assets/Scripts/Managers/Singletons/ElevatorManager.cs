@@ -355,9 +355,12 @@ namespace CrazyElevator.Managers
         float travelVelocity, boostAxis;
         float lastTrackInput;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
+        bool tutorialPassengerView;
         bool boostHeld;
         readonly HashSet<int> passedFloors = new HashSet<int>();
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
+        bool DisplayBuildingView => BuildingView
+            && !(MenuManager.TutorialActive && tutorialPassengerView);
         int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), 0, ElevatorRound.Floors - 1);
         bool CanStopAtFloor => phase == Phase.Moving && Mathf.Abs(travelFloor - NearbyFloor) <= stopWindow;
 
@@ -990,7 +993,7 @@ namespace CrazyElevator.Managers
         void HandleInteriorController(float dt)
         {
             InputManager.SeatInput input = SeatControls;
-            Mouse mouse = Mouse.current;
+            Mouse mouse = MenuManager.TutorialActive ? null : Mouse.current;
             Vector2 mouseGui = mouse == null ? Vector2.zero
                 : new Vector2(mouse.position.ReadValue().x, Screen.height - mouse.position.ReadValue().y);
             if (Match != null)
@@ -1142,7 +1145,7 @@ namespace CrazyElevator.Managers
             float hudScale = Mathf.Max(1, Screen.height / 900f);
             float screenHeight = Screen.height / hudScale;
             float width = Mathf.Min(680, Screen.width / hudScale - 24);
-            if (!compactTopHud && BuildingView)
+            if (!compactTopHud && DisplayBuildingView)
             {
                 Panel(new Rect(12, 42, 550, 153), new Color(Ink.r, Ink.g, Ink.b, .92f));
                 string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + destination
@@ -1160,9 +1163,10 @@ namespace CrazyElevator.Managers
                 Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders to board, move, or eject", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
-            AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
+            AngularPanel(new Rect(12, screenHeight - 54, width, 42),
+                WorldAccent(DisplayBuildingView ? travelFloor : round.Floor));
             string prompt;
-            if (BuildingView)
+            if (DisplayBuildingView)
             {
                 prompt = Match != null
                     ? "LEFT / RIGHT OR A / D SWITCH TRACK   ·   STOP NEAR A FLOOR"
@@ -1183,7 +1187,7 @@ namespace CrazyElevator.Managers
             string footerKey = GameplayConfirmKey;
             DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
             Label(new Rect(76, screenHeight - 48, width - 76, 30),
-                BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
+                DisplayBuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
     }
 }
@@ -1497,7 +1501,8 @@ namespace CrazyElevator.Managers
         void LateUpdate()
         {
             if (!exteriorCamera || round == null || !eye) return;
-            showingTravelView = BuildingView;
+            if (!MenuManager.TutorialActive) tutorialPassengerView = false;
+            showingTravelView = DisplayBuildingView;
             bool showPreview = showingTravelView && showCabinPreview;
             bool visible = Match == null || Match.IsVisibleSeat(Seat);
             exteriorCamera.enabled = visible && showingTravelView;
@@ -1545,7 +1550,7 @@ namespace CrazyElevator.Managers
 
         void DrawTravelView()
         {
-            if (!BuildingView || !exteriorCamera) return;
+            if (!DisplayBuildingView || !exteriorCamera) return;
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
@@ -1964,6 +1969,8 @@ namespace CrazyElevator.Managers
         public float SecondsLeft => round != null ? round.TimeLeft : ElevatorRound.Duration;
         public float CurrentFloor => BuildingView ? travelFloor : round != null ? round.Floor : 0f;
         public bool Traveling => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
+        public bool TutorialPassengerViewActive
+            => MenuManager.TutorialActive && tutorialPassengerView;
         public bool MovingInShaft => phase == Phase.Moving;
         public bool InPassengerStop => phase == Phase.Opening
             || phase == Phase.Boarding || phase == Phase.Closing;
@@ -2051,8 +2058,15 @@ namespace CrazyElevator.Managers
         public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)
         {
             bool knockedFromStop = phase != Phase.Moving;
+            // Once a tutorial player is viewing the passengers, collisions may
+            // move the elevator but must not switch that player into the shaft
+            // view. Keep the flag through later collisions until the tutorial
+            // ends; normal gameplay still has no passenger-view override.
+            bool keepPassengerView = MenuManager.TutorialActive
+                && (tutorialPassengerView || !BuildingView);
             ApplyMatchCollision(slowSeconds, 1f);
             if (!EnterMatchKnockbackTravel()) return;
+            tutorialPassengerView = keepPassengerView;
             travelDirection = reboundVelocity >= 0f ? 1 : -1;
             travelVelocity = reboundVelocity;
             collisionRecoilTimer = knockedFromStop ? .62f : .48f;

@@ -238,6 +238,7 @@ namespace CrazyElevator.Managers
             if (showControllerInstructionsOnLoad)
             {
                 IsOpen = true;
+                ResetControllerInstructionConfirmations();
                 showingControllerInstructions = true;
                 showControllerInstructionsOnLoad = false;
             }
@@ -276,12 +277,7 @@ namespace CrazyElevator.Managers
             if (!IsOpen) return;
             if (showingControllerInstructions)
             {
-                var instructionInput = InputManager.Instance;
-                if (instructionInput == null) return;
-                var playerOne = instructionInput.ReadForSeat(0, true);
-                var playerTwo = instructionInput.ReadForSeat(1, true);
-                if (playerOne.StartPressed || playerOne.ConfirmPressed
-                    || playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                if (ControllerInstructionsConfirmed())
                     DismissControllerInstructions();
                 return;
             }
@@ -739,9 +735,29 @@ namespace CrazyElevator.Managers
             }
             Rect startButton = new Rect(610, 952, 480, 76);
             Panel(startButton, Teal);
+            if (RequiresBothControllerInstructionConfirmations
+                && controllerInstructionConfirmed[0] && controllerInstructionConfirmed[1])
+            {
+                DrawRectOutline(Expand(startButton, 10f), PlayerOneColour, 5f);
+                DrawRectOutline(Expand(startButton, 5f), PlayerTwoColour, 5f);
+            }
+            else if (controllerInstructionConfirmed[0])
+            {
+                DrawRectOutline(Expand(startButton, 5f), PlayerOneColour, 5f);
+            }
+            else if (RequiresBothControllerInstructionConfirmations
+                && controllerInstructionConfirmed[1])
+            {
+                DrawRectOutline(Expand(startButton, 5f), PlayerTwoColour, 5f);
+            }
             DrawKeyHint(new Rect(startButton.xMax + 16f, startButton.y + 11f, 54f, 54f), StartHintKey);
             if (GUI.Button(startButton, "START", cardTitle))
-                DismissControllerInstructions();
+            {
+                // A shared screen click counts as Player 1's confirmation;
+                // Player 2 must still confirm separately in a duel.
+                if (ToggleControllerInstructionConfirmation(0))
+                    DismissControllerInstructions();
+            }
             GUI.matrix = previousMatrix;
             GUI.depth = previousDepth;
         }

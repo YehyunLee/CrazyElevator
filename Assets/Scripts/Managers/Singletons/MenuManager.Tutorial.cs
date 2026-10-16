@@ -64,6 +64,7 @@ namespace CrazyElevator.Managers
         readonly bool[] tutorialMoveCompleted = new bool[2];
         readonly bool[] tutorialBoostCompleted = new bool[2];
         readonly bool[] tutorialStopCompleted = new bool[2];
+        readonly bool[] controllerInstructionConfirmed = new bool[2];
         readonly float[] tutorialLastFloor = new float[2];
         readonly int[] tutorialTargetFloor = new int[2];
         ElevatorManager tutorialGame;
@@ -81,6 +82,42 @@ namespace CrazyElevator.Managers
                         return true;
                 return false;
             }
+        }
+
+        bool RequiresBothControllerInstructionConfirmations
+            => tutorialActive ? tutorialActors[1] != null : playerTwoHumanOnLoad;
+
+        void ResetControllerInstructionConfirmations()
+        {
+            controllerInstructionConfirmed[0] = false;
+            controllerInstructionConfirmed[1] = false;
+        }
+
+        bool ToggleControllerInstructionConfirmation(int seat)
+        {
+            if (seat < 0 || seat >= controllerInstructionConfirmed.Length) return false;
+            controllerInstructionConfirmed[seat] = !controllerInstructionConfirmed[seat];
+            return ControllerInstructionsReady();
+        }
+
+        bool ControllerInstructionsReady()
+        {
+            return controllerInstructionConfirmed[0]
+                && (!RequiresBothControllerInstructionConfirmations
+                    || controllerInstructionConfirmed[1]);
+        }
+
+        bool ControllerInstructionsConfirmed()
+        {
+            InputManager inputManager = InputManager.Instance;
+            if (inputManager == null) return false;
+            InputManager.SeatInput playerOne = inputManager.ReadForTutorialControls(0, true);
+            InputManager.SeatInput playerTwo = inputManager.ReadForTutorialControls(1, true);
+            if (playerOne.StartPressed || playerOne.ConfirmPressed)
+                ToggleControllerInstructionConfirmation(0);
+            if (playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                ToggleControllerInstructionConfirmation(1);
+            return ControllerInstructionsReady();
         }
 
         void InitializeTutorialOnLoad()
@@ -135,13 +172,7 @@ namespace CrazyElevator.Managers
             TutorialActive = true;
             if (showingControllerInstructions)
             {
-                InputManager controlsInputManager = InputManager.Instance;
-                if (controlsInputManager == null) return;
-                InputManager.SeatInput controlsInput = controlsInputManager.ReadForSeat(0, true);
-                InputManager.SeatInput secondControlsInput = tutorialActors[1] != null
-                    ? controlsInputManager.ReadForSeat(1, true) : default;
-                if (controlsInput.StartPressed || controlsInput.ConfirmPressed
-                    || secondControlsInput.StartPressed || secondControlsInput.ConfirmPressed)
+                if (ControllerInstructionsConfirmed())
                     DismissControllerInstructions();
                 return;
             }
@@ -332,6 +363,9 @@ namespace CrazyElevator.Managers
         {
             tutorialNextSteps[index] = nextStep;
             tutorialResumeActorOnCardSettled[index] = resumeWhenSettled;
+            InputManager.TutorialInputMode inputMode = TutorialInputModeForStep(nextStep);
+            InputManager.Instance?.SetTutorialInputMode(tutorialActors[index] != null
+                ? tutorialActors[index].Seat : index, inputMode);
             if (nextStep >= ActiveTutorialStepCount)
             {
                 // The waiting state is a handoff, not another tutorial card.
@@ -350,6 +384,22 @@ namespace CrazyElevator.Managers
             tutorialCardMotionTimes[index] = 0f;
             if (nextStep == 0) tutorialPracticeTimes[index] = 0f;
             PauseTutorialActor(index);
+        }
+
+        InputManager.TutorialInputMode TutorialInputModeForStep(int step)
+        {
+            switch (step)
+            {
+                case 0: return InputManager.TutorialInputMode.SelectPassenger;
+                case 1: return InputManager.TutorialInputMode.BoardPassengers;
+                case 2: return InputManager.TutorialInputMode.CloseDoors;
+                case 3: return InputManager.TutorialInputMode.Move;
+                case 4: return InputManager.TutorialInputMode.Boost;
+                case 5: return InputManager.TutorialInputMode.Stop;
+                case 6: return InputManager.TutorialInputMode.HelpPassenger;
+                case 7: return InputManager.TutorialInputMode.Kickout;
+                default: return InputManager.TutorialInputMode.Free;
+            }
         }
 
         void UpdateTutorialCardMotion(int index)
@@ -430,6 +480,7 @@ namespace CrazyElevator.Managers
                     {
                         tutorialFinalePhase = TutorialFinalePhase.Controls;
                         tutorialFinaleTimer = 0f;
+                        ResetControllerInstructionConfirmations();
                         showingControllerInstructions = true;
                     }
                     break;
@@ -467,7 +518,7 @@ namespace CrazyElevator.Managers
                     case 3: return "D-PAD";
                     case 4: return "BOOST";
                     case 5: return "A";
-                    case 7: return "A/B";
+                    case 7: return "A";
                     case 8: return "A/D";
                     default: return "A";
                 }
@@ -493,7 +544,7 @@ namespace CrazyElevator.Managers
                 case 3: return "W/S";
                 case 4: return "SHIFT";
                 case 5: return "C";
-                case 7: return "C/I";
+                case 7: return "C";
                 case 8: return "A/D";
                 default: return "C";
             }

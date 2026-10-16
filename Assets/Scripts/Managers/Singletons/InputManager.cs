@@ -15,10 +15,25 @@ namespace CrazyElevator.Managers
         static int keyboardMouseSeat = -1;
         static bool keyboardModeSession;
         readonly bool[] tutorialInputLocks = new bool[2];
+        readonly TutorialInputMode[] tutorialInputModes =
+            { TutorialInputMode.Free, TutorialInputMode.Free };
         enum InputSource { None, Gamepad, KeyboardMouse }
         InputSource menuInputSource;
         Gamepad menuGamepad;
         bool controllerJoining;
+
+        public enum TutorialInputMode
+        {
+            Free,
+            SelectPassenger,
+            BoardPassengers,
+            CloseDoors,
+            Move,
+            Boost,
+            Stop,
+            HelpPassenger,
+            Kickout
+        }
 
         public GameView ActiveView { get; private set; } = GameView.Menu;
 
@@ -107,13 +122,29 @@ namespace CrazyElevator.Managers
         {
             if (seat < 0 || seat >= tutorialInputLocks.Length) return;
             tutorialInputLocks[seat] = true;
+            tutorialInputModes[seat] = TutorialInputMode.Free;
             if (seat == 0) ClearLegacyInput();
+        }
+
+        public void SetTutorialInputMode(int seat, TutorialInputMode mode)
+        {
+            if (seat < 0 || seat >= tutorialInputModes.Length) return;
+            tutorialInputModes[seat] = mode;
+        }
+
+        public TutorialInputMode GetTutorialInputMode(int seat)
+        {
+            return seat >= 0 && seat < tutorialInputModes.Length
+                ? tutorialInputModes[seat] : TutorialInputMode.Free;
         }
 
         public void ClearTutorialInputLocks()
         {
             for (int i = 0; i < tutorialInputLocks.Length; i++)
+            {
                 tutorialInputLocks[i] = false;
+                tutorialInputModes[i] = TutorialInputMode.Free;
+            }
             ClearLegacyInput();
         }
 
@@ -365,8 +396,25 @@ namespace CrazyElevator.Managers
         // properties/events used by menus and solo play. In split-screen,
         // Player 1 uses WASD and Player 2 uses the arrow keys.
         public SeatInput ReadForSeat(int seat, bool splitKeyboard)
+            => ReadForSeatInternal(seat, splitKeyboard, false, false);
+
+        // The tutorial controls card is shown while completed players remain
+        // input-locked. It may read only the Continue action, without opening
+        // the normal gameplay input path back up.
+        public SeatInput ReadForTutorialControls(int seat, bool splitKeyboard)
         {
-            if (IsTutorialInputLocked(seat)) return default;
+            SeatInput input = ReadForSeatInternal(seat, splitKeyboard, true, true);
+            return new SeatInput
+            {
+                ConfirmPressed = input.ConfirmPressed,
+                StartPressed = input.StartPressed
+            };
+        }
+
+        SeatInput ReadForSeatInternal(int seat, bool splitKeyboard,
+            bool ignoreTutorialLock, bool ignoreTutorialRestrictions)
+        {
+            if (!ignoreTutorialLock && IsTutorialInputLocked(seat)) return default;
 
             var keyboard = Keyboard.current;
             var pad = GamepadForSeat(seat);
@@ -405,7 +453,9 @@ namespace CrazyElevator.Managers
                 }
             }
 
-            Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
+            Vector2 leftStick = pad == null ? Vector2.zero : pad.leftStick.ReadValue();
+            Vector2 dpad = pad == null ? Vector2.zero : pad.dpad.ReadValue();
+            Vector2 stick = leftStick + dpad;
             Vector2 navigation = stick + keys;
             bool playerTwoConfirm = keyboardAvailable
                 && (keyboard.periodKey.wasPressedThisFrame
@@ -479,7 +529,57 @@ namespace CrazyElevator.Managers
                 result.PointerReleased = mouse.leftButton.wasReleasedThisFrame;
                 result.PointerHeld = mouse.leftButton.isPressed;
             }
+            if (!ignoreTutorialRestrictions)
+                ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat),
+                    pad != null, leftStick, keys);
             return result;
+        }
+
+        static void ApplyTutorialInputMode(ref SeatInput input, TutorialInputMode mode,
+            bool controllerAssigned, Vector2 leftStick, Vector2 keyboardMove)
+        {
+            if (mode == TutorialInputMode.Free) return;
+
+            bool pause = input.PausePressed;
+            Vector2 select = controllerAssigned ? leftStick : keyboardMove;
+            Vector2 move = input.Move;
+            bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
+            bool confirm = input.ConfirmPressed;
+            bool closeDoors = input.CloseDoorsPressed;
+            input = default;
+            input.PausePressed = pause;
+
+            switch (mode)
+            {
+                case TutorialInputMode.SelectPassenger:
+                case TutorialInputMode.HelpPassenger:
+                case TutorialInputMode.Kickout:
+                    input.Select = select;
+                    input.SelectPressed = select.magnitude >= .55f;
+                    if (mode == TutorialInputMode.HelpPassenger)
+                        input.ConfirmPressed = confirm;
+                    else if (mode == TutorialInputMode.Kickout)
+                        input.KickoutPressed = confirm;
+                    break;
+                case TutorialInputMode.BoardPassengers:
+                    input.ConfirmPressed = confirm;
+                    break;
+                case TutorialInputMode.CloseDoors:
+                    input.CloseDoorsPressed = closeDoors;
+                    break;
+                case TutorialInputMode.Move:
+                    input.Move = move;
+                    input.MovePressed = move.magnitude >= .55f;
+                    break;
+                case TutorialInputMode.Boost:
+                case TutorialInputMode.Stop:
+                    input.Move = move;
+                    input.MovePressed = move.magnitude >= .55f;
+                    input.BoostHeld = boost;
+                    if (mode == TutorialInputMode.Stop)
+                        input.ConfirmPressed = confirm;
+                    break;
+            }
         }
 
         void Update()

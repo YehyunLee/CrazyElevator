@@ -96,6 +96,11 @@ namespace CrazyElevator.Managers
         {
             if (Player == null) { GoToView(GameView.Menu); return; }
             if (Player.IsPaused) { GoToView(GameView.Pause); return; }
+            if (Player.TutorialPassengerViewActive)
+            {
+                GoToView(GameView.Passenger);
+                return;
+            }
             GoToView(Player.Traveling ? GameView.ControlElevator : GameView.Passenger);
         }
 
