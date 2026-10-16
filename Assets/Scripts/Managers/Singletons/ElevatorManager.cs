@@ -1964,8 +1964,7 @@ namespace CrazyElevator.Managers
         bool EnterMatchKnockbackTravel()
         {
             if (phase == Phase.Moving) return true;
-            if (phase == Phase.Intro || phase == Phase.Welcome
-                || phase == Phase.Tutorial || phase == Phase.Results)
+            if (phase == Phase.Intro || phase == Phase.Results)
                 return false;
 
             bool alreadyLeftFloor = phase == Phase.Docking;
