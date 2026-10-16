@@ -30,6 +30,9 @@ namespace CrazyElevator.Match
         public bool Paused { get; private set; }
         bool humanRival;
         bool humanPlayer;
+        public bool SplitScreen => humanPlayer && humanRival;
+        public bool IsVisibleSeat(int seat) => SplitScreen
+            || seat == (humanPlayer || !humanRival ? 0 : 1);
         public bool Finished => Running && player != null && Rival != null
             && player.ShiftFinished && Rival.ShiftFinished;
         public int CollisionCount => collisionCount;
@@ -238,19 +241,28 @@ namespace CrazyElevator.Match
             SetCameraRect(player, 0);
             SetCameraRect(Rival, 1);
             if (player.sceneView.clearCamera != null)
+            {
+                player.sceneView.clearCamera.gameObject.SetActive(IsVisibleSeat(0));
                 player.sceneView.clearCamera.rect = CameraRect(0);
+            }
             if (Rival.sceneView.clearCamera != null)
-                Rival.sceneView.clearCamera.gameObject.SetActive(false);
+            {
+                Rival.sceneView.clearCamera.gameObject.SetActive(IsVisibleSeat(1));
+                Rival.sceneView.clearCamera.rect = CameraRect(1);
+            }
         }
 
-        static void SetCameraRect(Game game, int seat)
+        void SetCameraRect(Game game, int seat)
         {
             Rect rect = CameraRect(seat);
             game.sceneView.cabinCamera.rect = rect;
             game.sceneView.exteriorCamera.rect = rect;
+            game.sceneView.cabinCamera.enabled = IsVisibleSeat(seat);
+            game.sceneView.exteriorCamera.enabled = IsVisibleSeat(seat);
             game.sceneView.cabinCamera.targetTexture = null;
             game.sceneView.exteriorCamera.targetTexture = null;
-            float aspect = Mathf.Max(.1f, Screen.width * .5f / Screen.height);
+            float aspect = Mathf.Max(.1f, Screen.width * rect.width
+                / Mathf.Max(1f, Screen.height * rect.height));
             game.sceneView.cabinCamera.aspect = aspect;
             game.sceneView.cabinCamera.fieldOfView =
                 Mathf.Clamp(game.Match.cabinVerticalFieldOfView, 45f, 90f);
@@ -527,17 +539,18 @@ namespace CrazyElevator.Match
 {
     public sealed partial class ElevatorMatch
     {
-        // Two full-height screen regions; cameras render directly into each half.
+        // Only two human players need separate camera panes.
         public Rect ViewRect(int seat)
         {
+            if (!SplitScreen) return new Rect(0, 0, Screen.width, Screen.height);
             float paneWidth = Screen.width * .5f;
             return new Rect(seat * paneWidth + (seat == 1 ? 2 : 0), 0,
                 Mathf.Max(1, paneWidth - 2), Mathf.Max(1, Screen.height));
         }
 
-        public static Rect CameraRect(int seat)
+        public Rect CameraRect(int seat)
         {
-            return new Rect(seat * .5f, 0, .5f, 1);
+            return SplitScreen ? new Rect(seat * .5f, 0, .5f, 1) : new Rect(0, 0, 1, 1);
         }
     }
 }
@@ -577,9 +590,9 @@ namespace CrazyElevator.Match
                 GUI.contentColor = previousContent;
                 return;
             }
-            DrawSeat(player, 0, Teal);
-            DrawSeat(Rival, 1, Coral);
-            DrawSplitDivider();
+            if (IsVisibleSeat(0)) DrawSeat(player, 0, Teal);
+            if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Coral);
+            if (SplitScreen) DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
             else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
@@ -660,7 +673,8 @@ namespace CrazyElevator.Match
             actor.DrawMatchViewGUI();
             int seconds = Mathf.CeilToInt(player.SecondsLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            float barWidth = Mathf.Max(1f, view.width - 16f);
+            float barWidth = Mathf.Max(1f, Mathf.Min(view.width - 16f,
+                SplitScreen ? view.width : 760f));
             var bar = new Rect(view.x + 8f, view.y + 8f, barWidth, 58f);
             Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));

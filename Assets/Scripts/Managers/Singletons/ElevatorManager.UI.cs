@@ -902,7 +902,7 @@ namespace CrazyElevator.Managers
         {
             int seconds = Mathf.CeilToInt(round.TimeLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            const float totalWidth = 636f;
+            const float totalWidth = 524f;
             const float y = 16f;
             const float x = 16f;
 
@@ -911,7 +911,6 @@ namespace CrazyElevator.Managers
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
                 WorldName(round.Floor), "F" + round.Floor); cursor += 152;
-            DrawHudTile(new Rect(cursor, y, 108, 48), Gold, "LOAD", round.Load + "/" + ElevatorRound.Capacity); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
@@ -992,6 +991,18 @@ namespace CrazyElevator.Managers
                     }
                 }
 
+                string cue = PassengerVisualCue(rider, selected);
+                if (!string.IsNullOrEmpty(cue))
+                {
+                    float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
+                    float cueX = headX + 22f + cueWidth <= viewWidth - 8f
+                        ? headX + 22f : headX - cueWidth - 22f;
+                    Rect cueRect = new Rect(Mathf.Clamp(cueX, 8f, viewWidth - cueWidth - 8f),
+                        headY + 8f, cueWidth, 22f);
+                    FramedPanel(cueRect, rider.HasFeature(PassengerFeature.SpeedSlow) ? Coral : Teal, 2f);
+                    Label(new Rect(cueRect.x + 8f, cueRect.y + 2f, cueRect.width - 12f, 18f), cue, small);
+                }
+
                 if (rider != speaker) continue;
                 bool mad = rider.Boarded && rider.Remaining <= 0;
                 string message = PassengerCalloutText(rider);
@@ -1015,6 +1026,19 @@ namespace CrazyElevator.Managers
                         message, calloutText);
                 }
             }
+        }
+
+        string PassengerVisualCue(Rider rider, bool selected)
+        {
+            if (!rider.Boarded)
+                return selected && rider.Space > 1 ? rider.Space + " TILES" : null;
+            if (!round.Owns(rider)) return null;
+            if (rider.HasFeature(PassengerFeature.SpeedSlow))
+                return round.BabyCalmedByGrandma ? "SPEED ↓ + CALM" : "SPEED ↓";
+            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED ↑";
+            if (rider.HasFeature(PassengerFeature.CryingBaby))
+                return round.BabyCalmedByGrandma ? "BABY CALM" : "PATIENCE ↓";
+            return null;
         }
 
         // The cabin camera is much smaller during shaft travel, so the authored
@@ -1140,7 +1164,7 @@ namespace CrazyElevator.Managers
         {
             up = down = stop = close = hold = repair = new Rect();
             if (!extendedInterior || paused) return;
-            bool split = Match != null;
+            bool split = Match != null && Match.SplitScreen;
             float width = split
                 ? Mathf.Clamp(ViewWidth * .25f, 170f, 220f)
                 : Mathf.Clamp(ViewWidth * .18f, 220f, 280f);
