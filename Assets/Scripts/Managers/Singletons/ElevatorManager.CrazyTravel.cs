@@ -69,11 +69,8 @@ namespace CrazyElevator.Managers
         void UpdateCrazyTravelCamera(Vector3 carLocal)
         {
             Transform world = exteriorCar.parent;
-            float baseX = Match != null ? Match.ShaftX(this) : ElevatorMatchType.ShaftCenterX;
-            float side = Match == null ? -8.5f : Seat == 0 ? -7.2f : 7.2f;
-            float bend = carLocal.x - baseX;
             Vector3 cameraLocal = new Vector3(
-                baseX + side + bend * .24f,
+                carLocal.x,
                 carLocal.y + 5.2f,
                 -34f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
 

@@ -1069,7 +1069,7 @@ MonoBehaviour:
   keepDoorwayClear: 1
   cameraLift: 0.12
   cabinVerticalFieldOfView: 90
-  cabinAimDown: 9
+  cabinAimDown: 15
   sceneView: {fileID: 4304945}
   floorsPerSecond: 0.85
   candyFloorsPerSecond: 1.25

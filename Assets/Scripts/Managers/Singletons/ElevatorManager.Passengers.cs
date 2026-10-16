@@ -1663,7 +1663,7 @@ namespace CrazyElevator.Managers
         [Range(45f, 90f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
         public float cabinVerticalFieldOfView = 90f;
         [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
-        public float cabinAimDown = 9f;
+        public float cabinAimDown = 15f;
 
         readonly Dictionary<Rider, PassengerSpeechBubble> speechBubbleViews =
             new Dictionary<Rider, PassengerSpeechBubble>();

@@ -373,9 +373,9 @@ public static class ExtendedInteriorChecks
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
         Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - centre) < .001f
-            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) > 4f
+            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) < .001f
             && !game.sceneView.exteriorCamera.orthographic,
-            "Solo travel must keep the car centred while the perspective camera observes it diagonally.");
+            "Solo travel must keep the car and perspective camera aligned straight on.");
         var shaft = game.sceneView.exteriorCar.parent;
         foreach (int floor in new[] { 1, 11 })
         {
@@ -556,7 +556,7 @@ public static class ExtendedInteriorChecks
             "The highlighted express track did not grant its speed burst.");
         match.StartMatch();
         File.WriteAllText(Work + "/result.txt",
-            "PASS: Main creates two centred 1v1 tracks; visible-car collision, sparks and stronger vertical bounce work; stopped boarding cars can be knocked away; 3D junction perspective and express boost work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+            "PASS: Main creates two centred 1v1 tracks; front-on travel cameras, visible-car collision, sparks and stronger vertical bounce work; stopped boarding cars can be knocked away; 3D junction perspective and express boost work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
