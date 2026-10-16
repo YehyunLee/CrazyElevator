@@ -261,7 +261,8 @@ namespace CrazyElevator.Managers
                 || keyboard.eKey.wasPressedThisFrame
                 || keyboard.periodKey.wasPressedThisFrame
                 || keyboard.slashKey.wasPressedThisFrame
-                || keyboard.enterKey.wasPressedThisFrame)
+                || keyboard.enterKey.wasPressedThisFrame
+                || keyboard.spaceKey.wasPressedThisFrame)
                 || mouse != null && (mouse.leftButton.wasPressedThisFrame
                     || mouse.rightButton.wasPressedThisFrame);
         }
@@ -430,7 +431,9 @@ namespace CrazyElevator.Managers
             bool keyboardAvailable = keyboard != null && (keyboardAssigned
                 || virtualPlayerTwoKeyboard
                 || seat == 0 && !controllerJoining
-                    && (menuInputSource == InputSource.KeyboardMouse || Gamepad.all.Count == 0));
+                    && (ActiveView == GameView.Menu
+                        || menuInputSource == InputSource.KeyboardMouse
+                        || Gamepad.all.Count == 0));
 
             Vector2 keys = Vector2.zero;
             if (keyboardAvailable)
@@ -603,8 +606,9 @@ namespace CrazyElevator.Managers
 
             Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
             Vector2 keys = Vector2.zero;
-            bool keyboardOwnsMenu = ActiveView != GameView.Menu
-                || menuInputSource != InputSource.Gamepad;
+            // Menu navigation is shared: a keyboard/mouse must remain usable
+            // even when a gamepad was the first device to move.
+            bool keyboardOwnsMenu = true;
             if (keyboard != null && keyboardOwnsMenu)
             {
                 keys.x = (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0)

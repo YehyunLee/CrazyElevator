@@ -38,6 +38,12 @@ namespace CrazyElevator.Managers
             new Rect(383f, 826f, 301f, 102f), // OPTIONS
             new Rect(434f, 939f, 185f, 98f)   // EXIT
         };
+        static readonly Rect[] OptionsButtonRects =
+        {
+            new Rect(480f, 360f, 740f, 140f),
+            new Rect(480f, 535f, 740f, 120f),
+            new Rect(620f, 730f, 460f, 90f)
+        };
         const string InputHintsPreference = "CrazyElevator.InputHints.Keyboard";
         const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
         [Header("First menu buttons")]
@@ -299,7 +305,10 @@ namespace CrazyElevator.Managers
             var playerOneInput = input.ReadForSeat(0, true);
             var playerTwoInput = input.ReadForSeat(1, true);
             var keyboard = Keyboard.current;
-            bool keyboardMenuConfirm = keyboard != null && keyboard.cKey.wasPressedThisFrame;
+            bool keyboardMenuConfirm = keyboard != null
+                && (keyboard.cKey.wasPressedThisFrame
+                    || keyboard.enterKey.wasPressedThisFrame
+                    || keyboard.spaceKey.wasPressedThisFrame);
             bool splitKeyboardMenu = keyboard != null && !input.HasController(1);
             if (splitKeyboardMenu)
             {
@@ -314,6 +323,14 @@ namespace CrazyElevator.Managers
                     || keyboard.slashKey.wasPressedThisFrame;
                 playerTwoInput.ConfirmPressed |= playerTwoConfirm;
                 playerTwoInput.StartPressed |= playerTwoConfirm;
+            }
+            if (keyboard != null && choosingMode)
+            {
+                // The lobby's Player 1 cursor is shared by keyboard, controller,
+                // and mouse. Keep Player 2's arrow-key controls independent.
+                playerOneInput.Move += KeyboardMenuMove(splitKeyboardMenu);
+                playerOneInput.ConfirmPressed |= keyboardMenuConfirm;
+                playerOneInput.StartPressed |= keyboardMenuConfirm;
             }
             bool playerTwoMenuStart = !choosingMode && keyboard != null
                 && (keyboard.periodKey.wasPressedThisFrame
@@ -339,13 +356,17 @@ namespace CrazyElevator.Managers
             }
 
             Vector2 titleNavigation = input.Move;
-            if (!choosingMode && keyboard != null)
+            if (!choosingMode)
             {
-                titleNavigation += new Vector2(
-                    (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0)
-                        - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0),
-                    (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0)
-                        - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0));
+                if (keyboard != null)
+                {
+                    titleNavigation += new Vector2(
+                        (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0)
+                            - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0),
+                        (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0)
+                            - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0));
+                }
+                UpdateTitleMouseCursor();
             }
             bool horizontal = Mathf.Abs(titleNavigation.x) >= .55f;
             bool vertical = Mathf.Abs(titleNavigation.y) >= .55f;
@@ -359,6 +380,7 @@ namespace CrazyElevator.Managers
                 MoveLobbyCursor(ref playerOneCursor, playerOneInput.Move, ref playerOneCursorHeld, 0);
                 if (playerTwoAvailable)
                     MoveLobbyCursor(ref playerTwoCursor, playerTwoInput.Move, ref playerTwoCursorHeld, 1);
+                UpdateLobbyMouseCursor(playerTwoAvailable);
             }
 
             // Start only from the START tile. In particular, Player 2's
@@ -417,10 +439,19 @@ namespace CrazyElevator.Managers
         }
         public void OnTitleExit() { titleSelection = 2; ExitGame(); }
 
+        void UpdateTitleMouseCursor()
+        {
+            if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
+            int hovered = MenuRectIndex(pointer, TitleButtonRects);
+            if (hovered >= 0) titleSelection = hovered;
+        }
+
         void UpdateOptionsNavigation()
         {
             var input = InputManager.Instance;
             if (input == null) return;
+
+            UpdateOptionsMouseCursor();
 
             var playerOne = input.ReadForSeat(0, true);
             var keyboard = Keyboard.current;
@@ -432,7 +463,8 @@ namespace CrazyElevator.Managers
                     (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0)
                         - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0));
                 playerOne.ConfirmPressed |= keyboard.cKey.wasPressedThisFrame;
-                playerOne.StartPressed |= keyboard.enterKey.wasPressedThisFrame;
+                playerOne.StartPressed |= keyboard.enterKey.wasPressedThisFrame
+                    || keyboard.spaceKey.wasPressedThisFrame;
             }
             bool vertical = Mathf.Abs(playerOne.Move.y) >= .55f;
             bool horizontal = Mathf.Abs(playerOne.Move.x) >= .55f;
@@ -564,6 +596,66 @@ namespace CrazyElevator.Managers
                 else if (cursor == 4) cursor = seat == 0 ? 2 : 3;
                 else if (cursor == 5) cursor = 0;
             }
+        }
+
+        Vector2 KeyboardMenuMove(bool splitKeyboard)
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null) return Vector2.zero;
+
+            bool useArrows = !splitKeyboard;
+            return new Vector2(
+                (keyboard.dKey.isPressed || useArrows && keyboard.rightArrowKey.isPressed ? 1 : 0)
+                    - (keyboard.aKey.isPressed || useArrows && keyboard.leftArrowKey.isPressed ? 1 : 0),
+                (keyboard.wKey.isPressed || useArrows && keyboard.upArrowKey.isPressed ? 1 : 0)
+                    - (keyboard.sKey.isPressed || useArrows && keyboard.downArrowKey.isPressed ? 1 : 0));
+        }
+
+        void UpdateOptionsMouseCursor()
+        {
+            if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
+            int hovered = MenuRectIndex(pointer, OptionsButtonRects);
+            if (hovered >= 0) optionsSelection = hovered;
+        }
+
+        void UpdateLobbyMouseCursor(bool playerTwoAvailable)
+        {
+            if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
+
+            if (backButton.Contains(pointer))
+            {
+                playerOneCursor = 5;
+                return;
+            }
+            if (playerOneButton.Contains(pointer)) playerOneCursor = 0;
+            else if (playerTwoAvailable && rivalButton.Contains(pointer)) playerOneCursor = 1;
+            else if (playerOneReadyButton.Contains(pointer)) playerOneCursor = 2;
+            else if (playerTwoSelected && playerTwoReadyButton.Contains(pointer)) playerOneCursor = 3;
+            else if (startButton.Contains(pointer)) playerOneCursor = 4;
+        }
+
+        static int MenuRectIndex(Vector2 point, Rect[] rects)
+        {
+            for (int i = 0; i < rects.Length; i++)
+                if (rects[i].Contains(point)) return i;
+            return -1;
+        }
+
+        bool TryGetMenuArtPointer(out Vector2 point)
+        {
+            point = Vector2.zero;
+            var mouse = Mouse.current;
+            if (mouse == null) return false;
+
+            float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
+            Vector2 offset = new Vector2(
+                (Screen.width - ArtWidth * scale) * .5f,
+                (Screen.height - ArtHeight * scale) * .5f);
+            Vector2 screenPoint = mouse.position.ReadValue();
+            point = new Vector2(
+                (screenPoint.x - offset.x) / scale,
+                (Screen.height - screenPoint.y - offset.y) / scale);
+            return new Rect(0f, 0f, ArtWidth, ArtHeight).Contains(point);
         }
 
         public static bool ConsumeDuelRequest()
@@ -968,6 +1060,17 @@ namespace CrazyElevator.Managers
                 {
                     DrawTitleActionHint();
                     DrawMovingTracks(new Rect(1060, 0, 495, ArtHeight), 1);
+                    if (!hasCanvasTitle)
+                    {
+                        for (int i = 0; i < TitleButtonRects.Length; i++)
+                        {
+                            if (!GUI.Button(TitleButtonRects[i], GUIContent.none, GUIStyle.none))
+                                continue;
+                            titleSelection = i;
+                            ActivateTitleSelection();
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -985,7 +1088,10 @@ namespace CrazyElevator.Managers
                     DrawKeyHint(new Rect(backButton.x + backButton.width + 16f,
                         backButton.y + 2f, 54f, 54f), KeyboardHintsEnabled ? "C" : "A");
                     if (GUI.Button(backButton, GUIContent.none, GUIStyle.none))
+                    {
+                        playerOneCursor = 5;
                         ReturnToMainMenu();
+                    }
                     bool playerTwoAvailable = InputManager.Instance != null
                         && InputManager.Instance.HasLobbyInput(1);
                     bool startEnabled = !BothCpu;
@@ -1032,23 +1138,32 @@ namespace CrazyElevator.Managers
                     // keyboard/controller cursor.
                     if (GUI.Button(playerOneButton, GUIContent.none, GUIStyle.none))
                     {
-                        playerOneHuman = !playerOneHuman;
-                        playerOneReady = !playerOneHuman;
+                        playerOneCursor = 0;
+                        HandleLobbyConfirm(0);
                     }
                     if (GUI.Button(rivalButton, GUIContent.none, GUIStyle.none)
                         && playerTwoAvailable)
                     {
-                        playerTwoSelected = !playerTwoSelected;
-                        playerTwoReady = !playerTwoSelected;
+                        playerOneCursor = 1;
+                        HandleLobbyConfirm(0);
                     }
                     if (GUI.Button(playerOneReadyButton, GUIContent.none, GUIStyle.none)
                         && playerOneHuman)
-                        playerOneReady = !playerOneReady;
+                    {
+                        playerOneCursor = 2;
+                        HandleLobbyConfirm(0);
+                    }
                     if (GUI.Button(playerTwoReadyButton, GUIContent.none, GUIStyle.none)
                         && playerTwoSelected)
-                        playerTwoReady = !playerTwoReady;
+                    {
+                        playerOneCursor = 3;
+                        HandleLobbyConfirm(0);
+                    }
                     if (GUI.Button(startButton, GUIContent.none, GUIStyle.none) && AllPlayersReady)
-                        StartSelectedMode();
+                    {
+                        playerOneCursor = 4;
+                        HandleLobbyConfirm(0);
+                    }
                     DrawLobbyCursor(backButton, playerOneCursor == 5, false, playerTwoAvailable);
                     if (AllPlayersReady)
                     {
@@ -1070,6 +1185,13 @@ namespace CrazyElevator.Managers
                 selectedButton.y + (selectedButton.height - hintSize) * .5f,
                 hintSize, hintSize);
             DrawKeyHint(hint, KeyboardHintsEnabled ? "C" : "A");
+        }
+
+        void ActivateTitleSelection()
+        {
+            if (titleSelection == 0) BeginModeSelection();
+            else if (titleSelection == 1) OnTitleOptions();
+            else if (titleSelection == 2) ExitGame();
         }
 
         void DrawKeyHint(Rect hint, string key)
