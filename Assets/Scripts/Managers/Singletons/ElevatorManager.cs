@@ -1118,12 +1118,16 @@ namespace CrazyElevator.Managers
             AngularPanel(new Rect(12, screenHeight - 54, width, 42), WorldAccent(BuildingView ? travelFloor : round.Floor));
             string prompt = selectedRider == null
                 ? (BuildingView ? (Match != null
-                    ? "Left/Right or A/D switch track   |   C stop   |   Shift+↑↓ or LT+RT+Up/Down for speed"
-                    : "C/'A' / STOP near a floor   |   Shift+↑↓ to build speed")
-                    : "Drag riders to board or kick   |   C close & travel")
+                    ? "Left/Right or A/D switch track   |   STOP near a floor   |   Hold direction to boost"
+                    : "STOP near a floor   |   Hold direction to build speed")
+                    : "Drag riders to board or kick   |   CLOSE & TRAVEL")
                 : selectedRider.Name + " → F" + selectedRider.Destination
-                    + (selectedRider.Boarded ? "  ·  C to unload / drag out to kick" : "  ·  C to board / drag in");
-            Label(new Rect(24, screenHeight - 48, width - 24, 30), BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
+                    + (selectedRider.Boarded ? "  ·  UNLOAD / DRAG OUT TO KICK" : "  ·  BOARD / DRAG IN");
+            string footerKey = BuildingView || selectedRider != null
+                ? GameplayConfirmKey : GameplayCloseKey;
+            DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
+            Label(new Rect(76, screenHeight - 48, width - 76, 30),
+                BuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
     }
 }

@@ -599,10 +599,10 @@ namespace CrazyElevator.Managers
                 compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
                 compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
-            string confirmPrompt = Match == null ? "PRESS A / C TO CONTINUE"
-                : Seat == 0 ? "P1: PRESS A / C" : "P2: PRESS A / PERIOD";
-            GUI.Label(new Rect(contentX, card.y + card.height - 28f, contentWidth, 24f),
-                confirmPrompt, encounterPrompt);
+            Rect prompt = new Rect(contentX, card.y + card.height - 42f, 42f, 42f);
+            DrawGameplayKeyHint(prompt, GameplayConfirmKey);
+            GUI.Label(new Rect(prompt.x + 54f, prompt.y + 7f, contentWidth - 54f, 28f),
+                "CONTINUE", encounterPrompt);
             encounterTitle.fontSize = oldTitleSize;
             encounterBody.fontSize = oldBodySize;
             encounterBadge.fontSize = oldBadgeSize;
@@ -996,15 +996,16 @@ namespace CrazyElevator.Managers
         {
             if (!extendedInterior || IsNpc) return;
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var hold, out var repair);
-            DrawMouseControl(up, "HOLD  ↑  UP", Teal);
-            DrawMouseControl(down, "HOLD  ↓  DOWN", Teal);
-            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold);
-            DrawMouseControl(close, "CLOSE & TRAVEL", Coral);
-            DrawMouseControl(hold, "HOLD DOOR", Teal);
-            DrawMouseControl(repair, "HOLD TO REPAIR", Gold);
+            DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
+            DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
+            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
+                GameplayConfirmKey);
+            DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
+            DrawMouseControl(hold, "HOLD DOOR", Teal, GameplayHoldKey);
+            DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
         }
 
-        void DrawMouseControl(Rect rect, string text, Color accent)
+        void DrawMouseControl(Rect rect, string text, Color accent, string key)
         {
             if (rect.width <= 0) return;
             var mouse = Mouse.current;
@@ -1021,8 +1022,41 @@ namespace CrazyElevator.Managers
             if (pressed) Panel(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), accent);
             Color previous = buttonStyle.normal.textColor;
             buttonStyle.normal.textColor = pressed ? UiBlack : UiWhite;
-            Label(rect, text, buttonStyle);
+            Rect labelRect = rect;
+            if (!string.IsNullOrEmpty(key))
+            {
+                Rect hint = new Rect(rect.x + 8f, rect.y + (rect.height - 40f) * .5f, 40f, 40f);
+                DrawGameplayKeyHint(hint, key);
+                labelRect = new Rect(rect.x + 58f, rect.y, rect.width - 66f, rect.height);
+            }
+            Label(labelRect, text, buttonStyle);
             buttonStyle.normal.textColor = previous;
+        }
+
+        bool GameplayUsesKeyboard => MenuManager.KeyboardHintsEnabled;
+        string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
+        string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
+        string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
+        string GameplayCloseKey => GameplayUsesKeyboard ? "E" : "Y";
+        string GameplayHoldKey => GameplayUsesKeyboard ? "H" : "B";
+        string GameplayRepairKey => GameplayUsesKeyboard ? "R" : "RB";
+
+        void DrawGameplayKeyHint(Rect rect, string key)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+
+            FramedPanel(rect, Teal, 3f);
+
+            int previousFontSize = buttonStyle.fontSize;
+            TextAnchor previousAlignment = buttonStyle.alignment;
+            Color previousTextColor = buttonStyle.normal.textColor;
+            buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .42f), 11, 20);
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            buttonStyle.normal.textColor = UiWhite;
+            GUI.Label(rect, key, buttonStyle);
+            buttonStyle.fontSize = previousFontSize;
+            buttonStyle.alignment = previousAlignment;
+            buttonStyle.normal.textColor = previousTextColor;
         }
 
         void DrawHudTile(Rect area, Color color, string caption, string value)

@@ -653,8 +653,52 @@ namespace CrazyElevator.Managers
         void DrawKeyboardHint(Rect rect, string key, string label)
         {
             Panel(rect, new Color(16f / 255f, 16f / 255f, 17f / 255f, .96f));
-            GUI.Label(new Rect(rect.x, rect.y + 8, rect.width, 48), key, cardTitle);
-            GUI.Label(new Rect(rect.x, rect.y + 56, rect.width, 30), label, caption);
+
+            if (key == "W A S D")
+            {
+                float keySize = 28f;
+                float gap = 3f;
+                float topY = rect.y + 4f;
+                float bottomY = topY + keySize + 1f;
+                float centerX = rect.center.x;
+                DrawKeyboardKeycap(new Rect(centerX - keySize * .5f, topY, keySize, keySize), "W");
+                DrawKeyboardKeycap(new Rect(centerX - keySize * 1.5f - gap, bottomY, keySize, keySize), "A");
+                DrawKeyboardKeycap(new Rect(centerX - keySize * .5f, bottomY, keySize, keySize), "S");
+                DrawKeyboardKeycap(new Rect(centerX + keySize * .5f + gap, bottomY, keySize, keySize), "D");
+            }
+            else if (key == "Y / TAB")
+            {
+                DrawKeyboardKeycap(new Rect(rect.center.x - 57f, rect.y + 8f, 44f, 32f), "Y");
+                DrawKeyboardKeycap(new Rect(rect.center.x + 8f, rect.y + 8f, 78f, 32f), "TAB");
+            }
+            else
+            {
+                float keyWidth = Mathf.Clamp(28f + key.Length * 15f, 44f, 112f);
+                DrawKeyboardKeycap(new Rect(rect.center.x - keyWidth * .5f, rect.y + 8f,
+                    keyWidth, 32f), key);
+            }
+
+            Color previousCaption = caption.normal.textColor;
+            caption.normal.textColor = Cream;
+            GUI.Label(new Rect(rect.x, rect.y + 62f, rect.width, 30f), label, caption);
+            caption.normal.textColor = previousCaption;
+        }
+
+        void DrawKeyboardKeycap(Rect rect, string key)
+        {
+            Panel(rect, Teal);
+            Panel(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, rect.height - 4f), Ink);
+
+            int previousFontSize = cardTitle.fontSize;
+            TextAnchor previousAlignment = cardTitle.alignment;
+            Color previousTextColor = cardTitle.normal.textColor;
+            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .55f), 15, 24);
+            cardTitle.alignment = TextAnchor.MiddleCenter;
+            cardTitle.normal.textColor = Cream;
+            GUI.Label(rect, key, cardTitle);
+            cardTitle.fontSize = previousFontSize;
+            cardTitle.alignment = previousAlignment;
+            cardTitle.normal.textColor = previousTextColor;
         }
 
         void DrawOptionsScreen()
