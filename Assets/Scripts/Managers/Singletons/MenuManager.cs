@@ -8,7 +8,7 @@ namespace CrazyElevator.Managers
 {
     // Mode select, pause overlay, and passenger destination overlay.
     [DefaultExecutionOrder(32000)]
-    public sealed class MenuManager : MonoBehaviour
+    public sealed partial class MenuManager : MonoBehaviour
     {
         const string SinglePlayerScene = "Assets/Scenes/Main.unity";
         const string DuelScene = SinglePlayerScene;
@@ -29,7 +29,17 @@ namespace CrazyElevator.Managers
         const float ArtHeight = 1082f;
         const float TransitionSeconds = 1.1f;
         const float LaunchSeconds = .95f;
+        const float MenuFadeSeconds = .55f;
+        // Keep the IMGUI cursor and action hint locked to the same reference-
+        // resolution rectangles as the title Canvas buttons in Main.unity.
+        static readonly Rect[] TitleButtonRects =
+        {
+            new Rect(402f, 707f, 246f, 104f), // START
+            new Rect(383f, 826f, 301f, 102f), // OPTIONS
+            new Rect(434f, 939f, 185f, 98f)   // EXIT
+        };
         const string InputHintsPreference = "CrazyElevator.InputHints.Keyboard";
+        const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
         [Header("First menu buttons")]
         [SerializeField] CanvasGroup titleButtons;
         [System.Serializable]
@@ -88,6 +98,8 @@ namespace CrazyElevator.Managers
         bool optionsVerticalHeld;
         static bool keyboardHints;
         static bool inputHintsLoaded;
+        static bool tutorialMode = true;
+        static bool tutorialModeLoaded;
         bool horizontalHeld;
         bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
@@ -98,13 +110,32 @@ namespace CrazyElevator.Managers
         static bool playerTwoSelected;
         static bool playerOneCpuOnLoad;
         static bool openLobbyOnLoad;
+        static bool fadeMenuOnLoad;
         static int pauseSelection;
         static bool pauseMoveHeld;
         static bool pauseOpen;
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
+        float menuFadeAlpha;
         public static bool IsOpen { get; private set; }
         public static bool PauseOpen => pauseOpen;
+        public static MenuManager Current { get; private set; }
+        public static bool FullScreenOverlayActive
+        {
+            get
+            {
+                // Scene reloads can briefly leave Current pointing at the
+                // destroyed menu object while its replacement is already
+                // drawing. Resolve the live scene object as a fallback so
+                // the split HUD cannot paint over a full-screen takeover.
+                MenuManager menu = FindAnyObjectByType<MenuManager>();
+                if (menu == null) menu = Current;
+                return menu != null
+                    && (menu.showingControllerInstructions
+                        || menu.tutorialActive
+                            && menu.tutorialFinalePhase != TutorialFinalePhase.None);
+            }
+        }
         // Survives Main reloads after the player picks a mode (LoadScene).
         static bool sessionReady;
 
@@ -117,6 +148,15 @@ namespace CrazyElevator.Managers
             }
         }
 
+        public static bool TutorialModeEnabled
+        {
+            get
+            {
+                LoadTutorialModePreference();
+                return tutorialMode;
+            }
+        }
+
         static void LoadInputHintsPreference()
         {
             if (inputHintsLoaded) return;
@@ -124,11 +164,26 @@ namespace CrazyElevator.Managers
             inputHintsLoaded = true;
         }
 
+        static void LoadTutorialModePreference()
+        {
+            if (tutorialModeLoaded) return;
+            tutorialMode = PlayerPrefs.GetInt(TutorialModePreference, 1) == 1;
+            tutorialModeLoaded = true;
+        }
+
         static void SetKeyboardHints(bool enabled)
         {
             keyboardHints = enabled;
             inputHintsLoaded = true;
             PlayerPrefs.SetInt(InputHintsPreference, enabled ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
+        static void SetTutorialMode(bool enabled)
+        {
+            tutorialMode = enabled;
+            tutorialModeLoaded = true;
+            PlayerPrefs.SetInt(TutorialModePreference, enabled ? 1 : 0);
             PlayerPrefs.Save();
         }
 
@@ -147,13 +202,21 @@ namespace CrazyElevator.Managers
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             openLobbyOnLoad = false;
+            fadeMenuOnLoad = false;
+            tutorialOnLoad = false;
+            TutorialActive = false;
             overlayGame = null;
             inputHintsLoaded = false;
+            tutorialModeLoaded = false;
         }
 
         void Awake()
         {
+            Current = this;
+            menuFadeAlpha = fadeMenuOnLoad ? 1f : 0f;
+            fadeMenuOnLoad = false;
             LoadInputHintsPreference();
+            LoadTutorialModePreference();
             // Scene object in Main — do not spawn a hidden DDOL menu.
             if (!sessionReady)
             {
@@ -178,6 +241,7 @@ namespace CrazyElevator.Managers
                 showingControllerInstructions = true;
                 showControllerInstructionsOnLoad = false;
             }
+            InitializeTutorialOnLoad();
             SyncTitleButtons();
             InputManager.Instance?.SetView(IsOpen ? GameView.Menu : GameView.ControlElevator);
         }
@@ -186,6 +250,7 @@ namespace CrazyElevator.Managers
 
         void OnDestroy()
         {
+            if (Current == this) Current = null;
             if (playerOneLabelTexture != null) Destroy(playerOneLabelTexture);
             if (rivalLabelTexture != null) Destroy(rivalLabelTexture);
             if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
@@ -196,6 +261,13 @@ namespace CrazyElevator.Managers
 
         void Update()
         {
+            menuFadeAlpha = Mathf.MoveTowards(menuFadeAlpha, 0f,
+                Time.unscaledDeltaTime / MenuFadeSeconds);
+            if (tutorialActive)
+            {
+                UpdateTutorial();
+                return;
+            }
             if (pauseOpen)
             {
                 UpdatePauseNavigation();
@@ -369,7 +441,7 @@ namespace CrazyElevator.Managers
             bool vertical = Mathf.Abs(playerOne.Move.y) >= .55f;
             bool horizontal = Mathf.Abs(playerOne.Move.x) >= .55f;
             if (vertical && !optionsVerticalHeld)
-                optionsSelection = optionsSelection == 0 ? 1 : 0;
+                optionsSelection = (optionsSelection + (playerOne.Move.y < 0 ? 1 : 2)) % 3;
             if (horizontal && !optionsHorizontalHeld && optionsSelection == 0)
                 SetKeyboardHints(playerOne.Move.x > 0);
 
@@ -380,7 +452,10 @@ namespace CrazyElevator.Managers
             bool back = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
             if (confirm)
             {
-                if (optionsSelection == 1) CloseOptions();
+                if (optionsSelection == 1)
+                    SetTutorialMode(!TutorialModeEnabled);
+                else if (optionsSelection == 2)
+                    CloseOptions();
             }
             else if (back)
             {
@@ -575,6 +650,7 @@ namespace CrazyElevator.Managers
         public static void ReturnToLobby()
         {
             openLobbyOnLoad = true;
+            fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
             pauseOpen = false;
             InputManager.Instance?.ResetRegistrations();
@@ -584,7 +660,10 @@ namespace CrazyElevator.Managers
         public static void ReturnToMainMenu()
         {
             openLobbyOnLoad = false;
+            fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
+            tutorialOnLoad = false;
+            TutorialActive = false;
             sessionReady = false;
             pauseOpen = false;
             startDuelOnLoad = false;
@@ -606,13 +685,43 @@ namespace CrazyElevator.Managers
                 if (showingControllerInstructions) DrawControllerInstructions();
                 else if (showingOptions) DrawOptionsScreen();
                 else DrawModeSelect();
+                DrawMenuFade();
+                return;
+            }
+            if (tutorialActive)
+            {
+                if (showingControllerInstructions)
+                {
+                    DrawControllerInstructions();
+                    DrawMenuFade();
+                    return;
+                }
+                int previousDepth = GUI.depth;
+                GUI.depth = -1000;
+                if (tutorialFinalePhase != TutorialFinalePhase.None)
+                    DrawTutorialFinale();
+                else
+                    DrawTutorialOverlay();
+                GUI.depth = previousDepth;
+                if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();
+            DrawMenuFade();
+        }
+
+        void DrawMenuFade()
+        {
+            if (menuFadeAlpha <= .001f) return;
+            Panel(new Rect(0, 0, Screen.width, Screen.height),
+                new Color(0f, 0f, 0f, menuFadeAlpha));
         }
 
         void DrawControllerInstructions()
         {
+            int previousDepth = GUI.depth;
+            GUI.depth = -1000;
+            Matrix4x4 previousMatrix = GUI.matrix;
             Panel(new Rect(0, 0, Screen.width, Screen.height), Color.black);
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
@@ -632,7 +741,8 @@ namespace CrazyElevator.Managers
             DrawKeyHint(new Rect(startButton.xMax + 16f, startButton.y + 11f, 54f, 54f), StartHintKey);
             if (GUI.Button(startButton, "START", cardTitle))
                 DismissControllerInstructions();
-            GUI.matrix = Matrix4x4.identity;
+            GUI.matrix = previousMatrix;
+            GUI.depth = previousDepth;
         }
 
         string StartHintKey => KeyboardHintsEnabled ? "C" : "A";
@@ -718,28 +828,52 @@ namespace CrazyElevator.Managers
                 KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER", cardTitle);
             GUI.Label(new Rect(510, 438, 680, 34),
                 KeyboardHintsEnabled ? "C / WASD" : "A / D-PAD", caption);
-            if (optionsSelection == 0)
-                DrawKeyHint(new Rect(modeButton.xMax + 16f, modeButton.y + 43f, 54f, 54f),
-                    KeyboardHintsEnabled ? "C" : "A");
+            // Keep the navigation instruction attached to the key-hint choice.
+            GUI.Label(new Rect(modeButton.xMax + 16f, modeButton.y + 45f, 360f, 50f),
+                "LEFT / RIGHT TO CHANGE", caption);
             if (GUI.Button(modeButton, GUIContent.none, GUIStyle.none))
                 SetKeyboardHints(!KeyboardHintsEnabled);
 
-            Rect back = new Rect(620, 700, 460, 90);
-            DrawSelectionFrame(back, optionsSelection == 1, false);
+            Rect tutorialButton = new Rect(480, 535, 740, 120);
+            DrawSelectionFrame(tutorialButton, optionsSelection == 1, false);
+            Panel(tutorialButton, TutorialModeEnabled ? Teal : Coral);
+            GUI.Label(new Rect(510, 550, 680, 48), "TUTORIAL MODE", cardTitle);
+            GUI.Label(new Rect(510, 600, 680, 30), TutorialModeEnabled ? "ON" : "OFF", caption);
+            if (optionsSelection == 1)
+            {
+                DrawKeyHint(new Rect(tutorialButton.xMax + 16f, tutorialButton.y + 33f, 54f, 54f),
+                    KeyboardHintsEnabled ? "C" : "A");
+                GUI.Label(new Rect(tutorialButton.xMax + 84f, tutorialButton.y + 35f, 300f, 50f),
+                    "PRESS TO TOGGLE", caption);
+            }
+            if (GUI.Button(tutorialButton, GUIContent.none, GUIStyle.none))
+                SetTutorialMode(!TutorialModeEnabled);
+
+            Rect back = new Rect(620, 730, 460, 90);
+            DrawSelectionFrame(back, optionsSelection == 2, false);
             Panel(back, Cream);
             GUI.Label(back, "BACK", cardTitle);
             DrawKeyHint(new Rect(back.x + back.width + 16f, back.y + 18f, 54f, 54f),
                 KeyboardHintsEnabled ? "C" : "A");
             if (GUI.Button(back, GUIContent.none, GUIStyle.none)) CloseOptions();
 
-            GUI.Label(new Rect(420, 850, 860, 42),
-                "LEFT / RIGHT TO CHANGE", caption);
             GUI.matrix = Matrix4x4.identity;
         }
 
         void DismissControllerInstructions()
         {
+            if (tutorialActive && tutorialFinalePhase == TutorialFinalePhase.Controls)
+            {
+                showingControllerInstructions = false;
+                tutorialFinalePhase = TutorialFinalePhase.Countdown;
+                tutorialFinaleTimer = 0f;
+                Close();
+                SyncTitleButtons();
+                InputManager.Instance?.SetView(GameView.ControlElevator);
+                return;
+            }
             showingControllerInstructions = false;
+            if (tutorialActive) ResumeTutorialGame();
             Close();
             SyncTitleButtons();
             InputManager.Instance?.SetView(GameView.ControlElevator);
@@ -805,13 +939,13 @@ namespace CrazyElevator.Managers
                 if (triangleCursorTexture == null) triangleCursorTexture = CreateTriangleCursor();
                 const float cursorWidth = 48f;
                 const float cursorGap = 2f;
-                float buttonLeft = titleSelection == 0 ? 402f
-                    : titleSelection == 1 ? 383f : 434f;
-                float cursorX = buttonLeft - cursorWidth - cursorGap;
+                Rect selectedButton = TitleButtonRects[titleSelection];
+                float cursorX = selectedButton.x - cursorWidth - cursorGap;
+                float cursorY = selectedButton.y + (selectedButton.height - cursorWidth) * .5f;
                 Color cursorColor = GUI.color;
                 GUI.color = new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b,
                     choosingMode ? 1f - fade : 1f);
-                GUI.DrawTexture(new Rect(cursorX, 742 + titleSelection * 118,
+                GUI.DrawTexture(new Rect(cursorX, cursorY,
                     cursorWidth, cursorWidth), triangleCursorTexture);
                 GUI.color = cursorColor;
                 if (!choosingMode)
@@ -914,10 +1048,11 @@ namespace CrazyElevator.Managers
 
         void DrawTitleActionHint()
         {
-            float[] buttonWidths = { 246f, 301f, 194f };
-            float[] buttonLefts = { 402f, 383f, 434f };
-            Rect hint = new Rect(buttonLefts[titleSelection] + buttonWidths[titleSelection] + 16f,
-                740f + titleSelection * 118f, 54f, 54f);
+            Rect selectedButton = TitleButtonRects[titleSelection];
+            const float hintSize = 54f;
+            Rect hint = new Rect(selectedButton.xMax + 16f,
+                selectedButton.y + (selectedButton.height - hintSize) * .5f,
+                hintSize, hintSize);
             DrawKeyHint(hint, KeyboardHintsEnabled ? "C" : "A");
         }
 
@@ -933,7 +1068,9 @@ namespace CrazyElevator.Managers
             GUIStyle keyLabel = new GUIStyle(cardTitle)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 25,
+                fontSize = Mathf.Clamp(27 - key.Length * 3, 14, 25),
+                wordWrap = false,
+                clipping = TextClipping.Overflow,
                 padding = new RectOffset(0, 0, 0, 0)
             };
             keyLabel.normal.textColor = Cream;
@@ -1338,10 +1475,15 @@ namespace CrazyElevator.Managers
         void SelectAndStart(bool duel)
         {
             Close();
-            showControllerInstructionsOnLoad = true;
+            tutorialOnLoad = TutorialModeEnabled;
+            // Tutorial mode presents the controls after both players finish
+            // the guided shift. No-tutorial mode goes straight into the intro.
+            showControllerInstructionsOnLoad = false;
             startDuelOnLoad = duel;
             playerTwoHumanOnLoad = duel && playerTwoSelected;
             playerOneCpuOnLoad = !playerOneHuman;
+            if (duel && playerTwoSelected)
+                InputManager.Instance?.EnableSplitKeyboard();
             SceneManager.LoadScene(duel ? DuelScene : SinglePlayerScene);
         }
 

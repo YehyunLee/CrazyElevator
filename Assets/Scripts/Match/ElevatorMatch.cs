@@ -32,6 +32,7 @@ namespace CrazyElevator.Match
         bool humanPlayer;
         public bool Finished => Running && player != null && Rival != null
             && player.ShiftFinished && Rival.ShiftFinished;
+        public int CollisionCount => collisionCount;
         ElevatorScene rivalView;
         Transform rivalShaft;
         readonly Transform[] soloRails = new Transform[2];
@@ -39,6 +40,7 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        int collisionCount;
         static readonly float[] JunctionFloorPositions = { 2.5f, 5.5f, 8.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
@@ -142,7 +144,16 @@ namespace CrazyElevator.Match
             float rivalTrackBefore = trackPosition[1];
             trackPosition[0] = Mathf.MoveTowards(trackPosition[0], targetTrack[0], switchSpeed * dt);
             trackPosition[1] = Mathf.MoveTowards(trackPosition[1], targetTrack[1], switchSpeed * dt);
-            if (Running && !Paused && CarsOverlap(player, Rival))
+            // Do not spend the collision cooldown while both cars are merely
+            // sharing a floor during their boarding/door transition. The
+            // impact must be caused by a car that is actually travelling;
+            // the other car may still be boarding and is a valid target.
+            bool playerTravelling = player.MovingInShaft
+                && Mathf.Abs(player.TravelVelocity) > .05f;
+            bool rivalTravelling = Rival != null && Rival.MovingInShaft
+                && Mathf.Abs(Rival.TravelVelocity) > .05f;
+            if (Running && !Paused && (playerTravelling || rivalTravelling)
+                && CarsOverlap(player, Rival))
             {
                 bool playerWasSwitching = !Mathf.Approximately(playerTrackBefore, targetTrack[0]);
                 bool rivalWasSwitching = !Mathf.Approximately(rivalTrackBefore, targetTrack[1]);
@@ -170,7 +181,8 @@ namespace CrazyElevator.Match
                 player.PlayEndingDrum();
             }
 
-            if (player.IntroPlaying || MenuManager.IsOpen) return;
+            if (player.IntroPlaying || player.CountdownPlaying
+                || Rival.CountdownPlaying || MenuManager.IsOpen) return;
             var input = InputManager.Instance;
             if (input == null) return;
 
@@ -200,6 +212,7 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            collisionCount = 0;
             int firstExpressTrack = Random.Range(0, 2);
             expressTrack[0] = firstExpressTrack;
             expressTrack[1] = 1 - firstExpressTrack;
@@ -324,9 +337,17 @@ namespace CrazyElevator.Match
             Game other = Other(actor);
             if (other == null || !HorizontallyOverlaps(actor, other)) return candidate;
 
+            // At a shaft boundary the clamped candidate can equal `before`
+            // even though the car is still pushing toward the other car.
+            // Keep the signed velocity so a stopped boarding elevator at that
+            // floor can still be rammed and knocked away.
             float direction = Mathf.Sign(candidate - before);
+            if (direction == 0f) direction = Mathf.Sign(velocity);
             if (direction == 0) return candidate;
-            float otherFloor = other.CurrentFloor;
+            // Opening/boarding cars are in the cabin view, but their physical
+            // collision position is the docked passenger floor, not a stale
+            // travel interpolation value.
+            float otherFloor = other.CollisionFloor;
             bool approaching = direction > 0 ? before <= otherFloor : before >= otherFloor;
             if (!approaching) return candidate;
 
@@ -360,7 +381,8 @@ namespace CrazyElevator.Match
         bool CarsOverlap(Game first, Game second)
         {
             if (first == null || second == null || !HorizontallyOverlaps(first, second)) return false;
-            float verticalDistance = Mathf.Abs(first.CurrentFloor - second.CurrentFloor) * Game.ShaftFloorHeight;
+            float verticalDistance = Mathf.Abs(first.CollisionFloor - second.CollisionFloor)
+                * Game.ShaftFloorHeight;
             float combinedHalfHeights = first.ExteriorCollisionHalfSize.y
                 + second.ExteriorCollisionHalfSize.y + collisionPadding;
             return verticalDistance <= combinedHalfHeights;
@@ -372,9 +394,9 @@ namespace CrazyElevator.Match
         void TriggerCollision(Game first, Game second)
         {
             float direction = 0f;
-            if (first != null && first.MovingInShaft && Mathf.Abs(first.TravelVelocity) > .05f)
+            if (first != null && Mathf.Abs(first.TravelVelocity) > .05f)
                 direction = Mathf.Sign(first.TravelVelocity);
-            else if (second != null && second.MovingInShaft && Mathf.Abs(second.TravelVelocity) > .05f)
+            else if (second != null && Mathf.Abs(second.TravelVelocity) > .05f)
                 direction = -Mathf.Sign(second.TravelVelocity);
             float closingSpeed = first != null && second != null
                 ? Mathf.Abs(first.TravelVelocity - second.TravelVelocity) : 0f;
@@ -389,6 +411,7 @@ namespace CrazyElevator.Match
             if (collisionCooldown > 0f) return;
             collisionCooldown = .48f;
             collisionFlash = .72f;
+            collisionCount++;
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
@@ -538,6 +561,8 @@ namespace CrazyElevator.Match
         void OnGUI()
         {
             if (player == null || Rival == null) return;
+            if (player.CountdownPlaying || Rival.CountdownPlaying) return;
+            if (MenuManager.FullScreenOverlayActive) return;
             var previousMatrix = GUI.matrix;
             var previousColour = GUI.color;
             var previousContent = GUI.contentColor;
@@ -549,6 +574,7 @@ namespace CrazyElevator.Match
             if (player.IntroPlaying)
             {
                 player.DrawMatchIntroGUI();
+                DrawSessionFade(player.SessionFadeAlpha);
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -559,10 +585,20 @@ namespace CrazyElevator.Match
             DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
-            else if (Paused) DrawPauseOverlay();
+            else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
+            DrawSessionFade(player.SessionFadeAlpha);
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;
+        }
+
+        void DrawSessionFade(float alpha)
+        {
+            if (alpha <= .001f) return;
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, Mathf.Clamp01(alpha));
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         void MatchStyles()
@@ -631,17 +667,12 @@ namespace CrazyElevator.Match
             var bar = new Rect(view.x + 8f, view.y + 8f, barWidth, 58f);
             Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            float tileWidth = bar.width / 5f;
+            float tileWidth = bar.width / 3f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                actor.IsNpc ? "CPU" : seat == 0 ? "PLAYER 1" : "PLAYER 2",
-                Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
+                actor.IsNpc ? "CPU" : "PLAYER", (seat + 1).ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
-                new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/" + actor.MaxCapacity);
+                colour, "FLOOR", Mathf.RoundToInt(actor.CurrentFloor).ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
-                Teal, "SCORE", Running ? "???" : "—");
-            DrawSeatTile(new Rect(bar.x + tileWidth * 3f, bar.y, tileWidth, bar.height),
-                Coral, "HAPPY", actor.HappyDeliveries.ToString());
-            DrawSeatTile(new Rect(bar.x + tileWidth * 4f, bar.y, tileWidth, bar.height),
                 new Color32(112, 183, 255, 255), "TIME", clock);
         }
 

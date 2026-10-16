@@ -111,6 +111,16 @@ namespace CrazyElevator.Managers
         public bool CanUseSplitKeyboard
             => keyboardModeSession && Keyboard.current != null;
 
+        // Player 2 can be selected from the lobby with a mouse or controller,
+        // then still use the shared keyboard in the duel. Keep that decision
+        // alive across the scene reload instead of waiting for another keypress.
+        public void EnableSplitKeyboard()
+        {
+            keyboardModeSession = true;
+            if (keyboardMouseSeat < 0 && Keyboard.current != null && Mouse.current != null)
+                RegisterKeyboardMouse(0);
+        }
+
         public bool HasLobbyInput(int seat)
             => HasInput(seat) || (seat == 1 && CanUseSplitKeyboard);
 
@@ -387,7 +397,7 @@ namespace CrazyElevator.Managers
             bool kickout = playerTwoKeyboard
                 ? false
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
-                    || pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger;
+                    || pad != null && pad.buttonEast.wasPressedThisFrame;
             bool pause = keyboardAvailable && keyboard.escapeKey.wasPressedThisFrame
                 || pad != null && pad.startButton.wasPressedThisFrame
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
@@ -493,7 +503,7 @@ namespace CrazyElevator.Managers
             bool confirm = (keyboard != null && keyboard.cKey.wasPressedThisFrame)
                 || (pad != null && pad.buttonSouth.wasPressedThisFrame);
             bool kickout = (keyboard != null && keyboard.iKey.wasPressedThisFrame)
-                || (pad != null && pad.buttonEast.wasPressedThisFrame && ActiveView == GameView.Passenger);
+                || (pad != null && pad.buttonEast.wasPressedThisFrame);
             bool pause = (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
                 || (pad != null && pad.startButton.wasPressedThisFrame
                     && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger));

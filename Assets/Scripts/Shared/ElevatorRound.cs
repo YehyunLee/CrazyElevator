@@ -223,7 +223,16 @@ namespace CrazyElevator.Shared
                 || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
             p.BoardedBySeat = Seat;
-            if (RefillPassengerQueue) Riders.Add(CreateReplacement(p));
+            if (RefillPassengerQueue)
+            {
+                // A shared duel queue must stay stocked for both elevators.
+                // The solo queue uses the short walk-in delay, but delaying a
+                // duel replacement lets one player consume the entire visible
+                // offer before the other player can board anything.
+                Rider replacement = CreateReplacement(p);
+                replacement.SpawnDelay = 0f;
+                Riders.Add(replacement);
+            }
             return true;
         }
 
