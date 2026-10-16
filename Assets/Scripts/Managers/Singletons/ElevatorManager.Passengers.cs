@@ -25,9 +25,9 @@ namespace CrazyElevator.Managers
         static readonly float[] CabinTileZBounds = { .30f, 1.85f, 3.40f, 4.95f };
         static readonly float[] CabinTileX = { -1.70f, 0f, 1.70f };
         static readonly float[] CabinTileZ = { 1.075f, 2.625f, 4.175f };
-        static readonly Color GridTileGray = new Color32(82, 96, 116, 210);
-        static readonly Color GridTileValid = new Color32(69, 231, 137, 190);
-        static readonly Color GridTileInvalid = new Color32(255, 82, 74, 205);
+        static readonly Color GridTileOpen = new Color32(69, 231, 137, 150);
+        static readonly Color GridTileOccupied = new Color32(255, 82, 74, 190);
+        static readonly Color GridTilePreview = new Color32(255, 205, 82, 220);
         Rider selectedRider;
         Rider pendingSelectionAfterBoarding;
         bool selectFirstWaitingWhenAvailable;
@@ -168,17 +168,27 @@ namespace CrazyElevator.Managers
             if (passengerGridTiles == null || passengerGridTiles.Count != CabinColumns * CabinRows)
                 return;
 
+            bool[] occupied = new bool[CabinColumns * CabinRows];
+            if (round != null)
+                foreach (Rider other in round.Riders)
+                {
+                    if (other == rider || !round.Owns(other)) continue;
+                    Vector3 placed = cabinPositions.TryGetValue(other, out Vector3 saved)
+                        ? saved : RiderPosition(other);
+                    MarkNearestCabinTiles(other, placed, occupied);
+                }
             for (int i = 0; i < passengerGridTiles.Count; i++)
             {
                 Renderer renderer = passengerGridTiles[i] ? passengerGridTiles[i].GetComponent<Renderer>() : null;
-                if (renderer != null) renderer.sharedMaterial = Mat(GridTileGray);
+                if (renderer != null)
+                    renderer.sharedMaterial = Mat(occupied[i] ? GridTileOccupied : GridTileOpen);
             }
             if (rider == null || !IsInsideCabin(rider, desired)) return;
 
             int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
             FindNearestCabinTileRun(rider, desired, out int bestRow, out int bestStart);
 
-            Color previewColor = valid ? GridTileValid : GridTileInvalid;
+            Color previewColor = valid ? GridTilePreview : GridTileOccupied;
             for (int column = bestStart; column < bestStart + width; column++)
             {
                 int index = bestRow * CabinColumns + column;
