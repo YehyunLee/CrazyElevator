@@ -14,6 +14,8 @@ namespace CrazyElevator.Managers
         const string DuelScene = SinglePlayerScene;
         static readonly Color Ink = new Color32(9, 11, 16, 255);
         static readonly Color Teal = new Color32(75, 226, 202, 255);
+        // Match the turquoise baked into the title artwork's menu buttons.
+        static readonly Color TitleTeal = new Color32(90, 201, 179, 255);
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
         static readonly Color PlayerOneColour = new Color32(255, 80, 80, 255);
@@ -587,9 +589,15 @@ namespace CrazyElevator.Managers
             if (fade < 1f)
             {
                 if (triangleCursorTexture == null) triangleCursorTexture = CreateTriangleCursor();
+                const float cursorWidth = 48f;
+                const float cursorGap = 2f;
+                float buttonLeft = titleSelection == 0 ? 402f
+                    : titleSelection == 1 ? 383f : 434f;
+                float cursorX = buttonLeft - cursorWidth - cursorGap;
                 Color cursorColor = GUI.color;
-                GUI.color = new Color(1, 1, 1, 1f - fade);
-                GUI.DrawTexture(new Rect(290, 741 + titleSelection * 118, 96, 50), triangleCursorTexture);
+                GUI.color = new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b, 1f - fade);
+                GUI.DrawTexture(new Rect(cursorX, 742 + titleSelection * 118,
+                    cursorWidth, cursorWidth), triangleCursorTexture);
                 GUI.color = cursorColor;
                 if (!choosingMode)
                     DrawMovingTracks(new Rect(1060, 0, 495, ArtHeight), 1);
@@ -875,12 +883,11 @@ namespace CrazyElevator.Managers
 
         static Texture2D CreateTriangleCursor()
         {
-            const int width = 128, height = 64;
+            const int width = 48, height = 48;
             var pixels = new Color32[width * height];
-            // Texture rows start at the bottom, so these points render as a
-            // right-facing chevron in the GUI: >
-            Vector2 leftTop = new Vector2(7, 7), leftBottom = new Vector2(7, 57),
-                tip = new Vector2(121, 32);
+            // Equal side lengths create a regular triangle rotated right.
+            Vector2 leftTop = new Vector2(2, 2), leftBottom = new Vector2(2, 46),
+                tip = new Vector2(40, 24);
             for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
@@ -889,7 +896,7 @@ namespace CrazyElevator.Managers
                     Mathf.Min(DistanceToSegment(point, leftBottom, tip),
                         DistanceToSegment(point, tip, leftTop)));
                 byte alpha = (byte)(Mathf.Clamp01(3f - distance) * 255);
-                pixels[y * width + x] = new Color32(5, 220, 197, alpha);
+                pixels[y * width + x] = new Color32(255, 255, 255, alpha);
             }
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
             { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
