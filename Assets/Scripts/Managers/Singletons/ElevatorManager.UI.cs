@@ -1002,13 +1002,18 @@ namespace CrazyElevator.Managers
                 float quoteX = headX;
                 Rect quote = new Rect(Mathf.Clamp(quoteX - width * .5f, 12f, viewWidth - width - 12f),
                     (selected ? arrow.y : headY - 4f) - quoteHeight - 3f, width, quoteHeight);
-                SpeechBubblePanel(quote, accent);
                 if (mad)
-                    DrawPassengerBadgeIcon(new Rect(quote.x + 5f, quote.y + 5f,
-                        quote.width - 10f, quote.height - 10f), "MAD", Coral);
+                {
+                    // MAD uses the simple standalone angry face. It should
+                    // read as a passenger mood icon, not as a boxed message.
+                    DrawPassengerAngryIcon(quote);
+                }
                 else
+                {
+                    SpeechBubblePanel(quote, accent);
                     GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
                         message, calloutText);
+                }
             }
         }
 
@@ -1072,6 +1077,22 @@ namespace CrazyElevator.Managers
             if (!passengerIconTextures.TryGetValue(key, out Texture2D texture) || texture == null)
             {
                 texture = PassengerIconLibrary.CreatePassengerBadge(kind, accent, UiBlack, UiWhite);
+                passengerIconTextures[key] = texture;
+            }
+
+            Color previous = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit, true);
+            GUI.color = previous;
+        }
+
+        void DrawPassengerAngryIcon(Rect rect)
+        {
+            const string kind = "MAD_FACE";
+            string key = kind + ColorUtility.ToHtmlStringRGBA(Coral);
+            if (!passengerIconTextures.TryGetValue(key, out Texture2D texture) || texture == null)
+            {
+                texture = PassengerIconLibrary.CreateAngryFace(Coral, UiBlack);
                 passengerIconTextures[key] = texture;
             }
 

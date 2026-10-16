@@ -15,9 +15,6 @@ namespace CrazyElevator.Shared
 
         Camera viewCamera;
         Transform greenFill, redFill;
-        SpriteRenderer madIcon;
-        Sprite madSprite;
-        Texture2D madTexture;
         Material sharedMaterial;
         Vector3 anchorLocalPosition;
         float cameraOffset;
@@ -49,7 +46,6 @@ namespace CrazyElevator.Shared
             float redFraction = 1f - DisplayedPatience;
             SetSegment(greenFill, DisplayedPatience, -width * .5f, true);
             SetSegment(redFill, redFraction, width * .5f, false);
-            madIcon.gameObject.SetActive(isMad);
         }
 
         void LateUpdate()
@@ -71,11 +67,6 @@ namespace CrazyElevator.Shared
                 transform.localScale = Vector3.one * distanceScale;
             }
 
-            if (madIcon != null && mad)
-            {
-                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 9f) * .08f;
-                madIcon.transform.localScale = Vector3.one * (.42f * pulse);
-            }
         }
 
         void SetSegment(Transform segment, float fraction, float edge, bool anchoredLeft)
@@ -113,18 +104,6 @@ namespace CrazyElevator.Shared
             SetColor(greenRenderer, patientColor);
             SetColor(redRenderer, impatientColor);
 
-            GameObject iconObject = new GameObject("MAD icon");
-            iconObject.transform.SetParent(transform, false);
-            iconObject.transform.localPosition = new Vector3(0, .10f, -.04f);
-            iconObject.transform.localScale = Vector3.one * .42f;
-            madIcon = iconObject.AddComponent<SpriteRenderer>();
-            madTexture = PassengerIconLibrary.CreateAngryFace(impatientColor, frameColor);
-            madSprite = Sprite.Create(madTexture, new Rect(0, 0, madTexture.width, madTexture.height),
-                new Vector2(.5f, .5f), madTexture.width);
-            madSprite.name = "MAD icon sprite";
-            madIcon.sprite = madSprite;
-            madIcon.sortingOrder = 1;
-            madIcon.gameObject.SetActive(false);
         }
 
         Renderer CreatePart(string partName, Vector3 position, Vector3 scale, out Transform part)
@@ -156,10 +135,5 @@ namespace CrazyElevator.Shared
             renderer.SetPropertyBlock(properties);
         }
 
-        void OnDestroy()
-        {
-            if (madSprite != null) Destroy(madSprite);
-            if (madTexture != null) Destroy(madTexture);
-        }
     }
 }

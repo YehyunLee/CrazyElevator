@@ -1937,6 +1937,10 @@ namespace CrazyElevator.Managers
         public float CurrentFloor => BuildingView ? travelFloor : round != null ? round.Floor : 0f;
         public bool Traveling => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         public bool MovingInShaft => phase == Phase.Moving;
+        public bool InPassengerStop => phase == Phase.Opening
+            || phase == Phase.Boarding || phase == Phase.Closing;
+        public float CollisionFloor => InPassengerStop && round != null
+            ? round.Floor : CurrentFloor;
         public bool AtStop => phase == Phase.Boarding && !paused && !ShiftFinished;
         public bool BusyWithPassenger => PersonaBusy;
         public bool IsBoarding => phase == Phase.Boarding && !paused && !ShiftFinished && !PersonaBusy;
@@ -2024,9 +2028,31 @@ namespace CrazyElevator.Managers
             travelDirection = reboundVelocity >= 0f ? 1 : -1;
             travelVelocity = reboundVelocity;
             collisionRecoilTimer = knockedFromStop ? .62f : .48f;
+            RetargetNpcAfterCollision();
             notice = knockedFromStop
                 ? (IsNpc ? "KNOCKED OFF THE FLOOR!" : "KNOCKED OFF YOUR STOP — RECOVER!")
                 : (IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS");
+        }
+
+        void RetargetNpcAfterCollision()
+        {
+            if (!IsNpc || round == null) return;
+
+            // Never let the CPU immediately redock at the floor it was just
+            // knocked away from. That is especially visible when it was
+            // dropping passengers and its old destination is still current.
+            int direction = travelDirection >= 0 ? 1 : -1;
+            int target = round.Floor + direction * 2;
+            if (target < 0 || target >= ElevatorRound.Floors)
+            {
+                // A rebound at the top/bottom floor must turn the CPU back
+                // into the shaft instead of leaving it driving into a bound.
+                direction = -direction;
+                target = round.Floor + direction * 2;
+                travelDirection = direction;
+                travelVelocity = direction * Mathf.Abs(travelVelocity);
+            }
+            npcTargetFloor = Mathf.Clamp(target, 0, ElevatorRound.Floors - 1);
         }
 
         bool EnterMatchKnockbackTravel()
@@ -2040,6 +2066,11 @@ namespace CrazyElevator.Managers
             SelectRider(null);
             ClearHandymanRepair();
             ClearInteriorTransfers();
+            // A collision owns the stop transition. Do not leave a door hold,
+            // selected destination, or passenger-stop animation able to
+            // reopen/continue after the struck elevator is knocked away.
+            doorHoldSeconds = 0f;
+            selectedFloor = -1;
             if (!alreadyLeftFloor)
             {
                 travelFloor = round.Floor;
@@ -2053,6 +2084,7 @@ namespace CrazyElevator.Managers
             doors = 0f;
             SetDoors(0f);
             SetControlStatus("KNOCKED AWAY");
+            RefreshFloorButtons();
             return true;
         }
 
@@ -2114,6 +2146,14 @@ namespace CrazyElevator.Managers
         public void NpcDriveToStop()
         {
             if (phase != Phase.Moving || npcTargetFloor < 0) return;
+            if (npcTargetFloor == round.Floor)
+                RetargetNpcAfterCollision();
+            int targetDirection = npcTargetFloor > round.Floor ? 1 : -1;
+            if (targetDirection != travelDirection)
+            {
+                travelDirection = targetDirection;
+                travelVelocity = targetDirection * Mathf.Abs(travelVelocity);
+            }
             boostAxis = travelDirection;
             boostHeld = true;
             if (CanStopAtFloor && NearbyFloor == npcTargetFloor)

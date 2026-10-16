@@ -1706,13 +1706,10 @@ namespace CrazyElevator.Managers
                 bool destinationPersistent = rider.Boarded && rider.Destination == round.Floor
                     && (phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing);
                 bool babyPersistent = rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby);
-                bool madAlert = temporaryAlert && rider.Remaining <= 0;
-
                 // MAD is already rendered as the passenger's single 2D
-                // callout icon. Do not also spawn the world-space speech icon
-                // on the same rider, which creates two angry faces stacked
-                // above one passenger.
-                if (madAlert)
+                // callout icon. Never create a second world-space callout
+                // for a rider whose patience has run out.
+                if (rider.Boarded && rider.Remaining <= 0)
                 {
                     bubble.Hide();
                     continue;

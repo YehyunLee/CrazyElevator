@@ -341,7 +341,10 @@ namespace CrazyElevator.Match
             float direction = Mathf.Sign(candidate - before);
             if (direction == 0f) direction = Mathf.Sign(velocity);
             if (direction == 0) return candidate;
-            float otherFloor = other.CurrentFloor;
+            // Opening/boarding cars are in the cabin view, but their physical
+            // collision position is the docked passenger floor, not a stale
+            // travel interpolation value.
+            float otherFloor = other.CollisionFloor;
             bool approaching = direction > 0 ? before <= otherFloor : before >= otherFloor;
             if (!approaching) return candidate;
 
@@ -375,7 +378,8 @@ namespace CrazyElevator.Match
         bool CarsOverlap(Game first, Game second)
         {
             if (first == null || second == null || !HorizontallyOverlaps(first, second)) return false;
-            float verticalDistance = Mathf.Abs(first.CurrentFloor - second.CurrentFloor) * Game.ShaftFloorHeight;
+            float verticalDistance = Mathf.Abs(first.CollisionFloor - second.CollisionFloor)
+                * Game.ShaftFloorHeight;
             float combinedHalfHeights = first.ExteriorCollisionHalfSize.y
                 + second.ExteriorCollisionHalfSize.y + collisionPadding;
             return verticalDistance <= combinedHalfHeights;
