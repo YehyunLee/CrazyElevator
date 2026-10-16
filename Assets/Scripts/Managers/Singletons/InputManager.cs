@@ -14,6 +14,7 @@ namespace CrazyElevator.Managers
         static readonly int[] joinedGamepadIds = { -1, -1 };
         static int keyboardMouseSeat = -1;
         static bool keyboardModeSession;
+        readonly bool[] tutorialInputLocks = new bool[2];
         enum InputSource { None, Gamepad, KeyboardMouse }
         InputSource menuInputSource;
         Gamepad menuGamepad;
@@ -98,6 +99,23 @@ namespace CrazyElevator.Managers
         }
 
         public void SetView(GameView view) => ActiveView = view;
+
+        public bool IsTutorialInputLocked(int seat)
+            => seat >= 0 && seat < tutorialInputLocks.Length && tutorialInputLocks[seat];
+
+        public void LockTutorialInput(int seat)
+        {
+            if (seat < 0 || seat >= tutorialInputLocks.Length) return;
+            tutorialInputLocks[seat] = true;
+            if (seat == 0) ClearLegacyInput();
+        }
+
+        public void ClearTutorialInputLocks()
+        {
+            for (int i = 0; i < tutorialInputLocks.Length; i++)
+                tutorialInputLocks[i] = false;
+            ClearLegacyInput();
+        }
 
         public bool HasController(int seat)
             => seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0;
@@ -348,6 +366,8 @@ namespace CrazyElevator.Managers
         // Player 1 uses WASD and Player 2 uses the arrow keys.
         public SeatInput ReadForSeat(int seat, bool splitKeyboard)
         {
+            if (IsTutorialInputLocked(seat)) return default;
+
             var keyboard = Keyboard.current;
             var pad = GamepadForSeat(seat);
             bool controllerAssigned = HasController(seat);
@@ -479,6 +499,11 @@ namespace CrazyElevator.Managers
                 if (seatZero.DeregisterPressed) DeregisterSeat(0);
                 else if (seatOne.DeregisterPressed) DeregisterSeat(1);
             }
+            if (IsTutorialInputLocked(0))
+            {
+                ClearLegacyInput();
+                return;
+            }
             var keyboard = Keyboard.current;
             var pad = GamepadForSeat(0);
             var mouse = Mouse.current;
@@ -567,6 +592,19 @@ namespace CrazyElevator.Managers
             if (kickout) OnKickout?.Invoke();
             if (closeDoors) OnCloseDoors?.Invoke();
             if (start) OnStart?.Invoke();
+        }
+
+        void ClearLegacyInput()
+        {
+            Move = Select = Vector2.zero;
+            MovePressed = SelectPressed = false;
+            ConfirmPressed = KickoutPressed = false;
+            PausePressed = OverlayPressed = false;
+            CloseDoorsPressed = false;
+            HoldDoorHeld = RepairHeld = BoostHeld = false;
+            MutePressed = StartPressed = false;
+            Pointer = Vector2.zero;
+            PointerPressed = PointerReleased = PointerHeld = false;
         }
     }
 }

@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using CrazyElevator.Shared;
 
 namespace CrazyElevator.Managers
@@ -88,6 +87,7 @@ namespace CrazyElevator.Managers
         {
             if (!tutorialOnLoad) return;
             tutorialOnLoad = false;
+            InputManager.Instance?.ClearTutorialInputLocks();
             tutorialActive = true;
             TutorialActive = true;
             IsOpen = false;
@@ -159,9 +159,7 @@ namespace CrazyElevator.Managers
                 ? inputManager.ReadForSeat(0, true) : default;
             InputManager.SeatInput secondInput = inputManager != null && tutorialActors[1] != null
                 ? inputManager.ReadForSeat(1, true) : default;
-            Keyboard keyboard = Keyboard.current;
-            if (input.PausePressed || secondInput.PausePressed
-                || keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            if (input.PausePressed || secondInput.PausePressed)
             {
                 ReturnToMainMenu();
                 return;
@@ -344,7 +342,8 @@ namespace CrazyElevator.Managers
                 tutorialCardMotionTimes[index] = TutorialCardTravelSeconds;
                 tutorialCompletionTimes[index] = 0f;
                 tutorialResumeActorOnCardSettled[index] = false;
-                PauseTutorialActor(index);
+                InputManager.Instance?.LockTutorialInput(tutorialActors[index] != null
+                    ? tutorialActors[index].Seat : index);
                 return;
             }
             tutorialCardMotions[index] = TutorialCardMotion.Exiting;
@@ -447,6 +446,7 @@ namespace CrazyElevator.Managers
             TutorialActive = false;
             tutorialFinalePhase = TutorialFinalePhase.None;
             showingControllerInstructions = false;
+            InputManager.Instance?.ClearTutorialInputLocks();
             for (int i = 0; i < tutorialActors.Length; i++)
             {
                 ResumeTutorialActor(i);

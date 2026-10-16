@@ -189,8 +189,16 @@ namespace CrazyElevator.Managers
             // Process the player's action before advancing door/travel animation.
             if (!IsNpc)
             {
-                UpdatePassengerSelection();
-                HandleInteriorController(dt);
+                bool tutorialInputLocked = MenuManager.TutorialActive
+                    && InputManager.Instance != null
+                    && InputManager.Instance.IsTutorialInputLocked(Seat);
+                if (tutorialInputLocked)
+                    SelectRider(null);
+                else
+                {
+                    UpdatePassengerSelection();
+                    HandleInteriorController(dt);
+                }
             }
             if (phase == Phase.Moving || phase == Phase.Docking) AdvanceBuildingTravel(dt);
             else

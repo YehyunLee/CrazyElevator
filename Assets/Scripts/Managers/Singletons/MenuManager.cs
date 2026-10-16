@@ -670,6 +670,7 @@ namespace CrazyElevator.Managers
             playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
+            InputManager.Instance?.ClearTutorialInputLocks();
             InputManager.Instance?.ResetRegistrations();
             SceneManager.LoadScene(SinglePlayerScene);
         }
