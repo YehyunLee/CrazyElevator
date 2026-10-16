@@ -128,7 +128,6 @@ namespace CrazyElevator.Managers
             bool tickWaiting = !IsNpc || Match == null || Match.player == null
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
             int waitingMisses = round.Tick(dt, phase == Phase.Boarding, tickWaiting);
-            UpdateThemeMusic();
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
@@ -171,6 +170,7 @@ namespace CrazyElevator.Managers
                     if (phaseTime >= .65f) { phase = Phase.Boarding; phaseTime = 0; destination = -1; }
                 }
             }
+            UpdateThemeMusic();
             SetDoors(doors);
             SyncFigures(dt);
             if (phase != Phase.Moving) AccumulateRust(dt);
@@ -1634,7 +1634,7 @@ namespace CrazyElevator.Managers
         void UpdateThemeMusic()
         {
             if (IsNpc || round == null || MusicManager.Instance == null) return;
-            WorldBand currentBand = BandForFloor(round.Floor);
+            WorldBand currentBand = BandForFloor(MovementFloor);
             if (!musicBandKnown)
             {
                 musicBand = currentBand;
@@ -1643,10 +1643,12 @@ namespace CrazyElevator.Managers
             }
             if (currentBand == musicBand) return;
 
-            // MusicManager keeps the current playback position when swapping
-            // to the candy track, so crossing worlds does not restart the song.
+            // Keep the current playback position when crossing world bands.
             AudioClip next = currentBand == WorldBand.Candy
-                ? MusicManager.Instance.ThemeAt(1) : groove;
+                ? MusicManager.Instance.ThemeAt(1)
+                : currentBand == WorldBand.Water
+                    ? MusicManager.Instance.ThemeAt(2)
+                    : groove;
             MusicManager.Instance.SetTheme(next);
             musicBand = currentBand;
         }

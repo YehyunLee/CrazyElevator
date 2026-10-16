@@ -1590,7 +1590,7 @@ MonoBehaviour:
   themes:
   - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
   - {fileID: 8300000, guid: b8eb1ee04d1cfe14aa06e1079fe53ec7, type: 3}
-  - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
+  - {fileID: 8300000, guid: aa5be66685c9bbe4d8d1eb69c4a659ce, type: 3}
   musicVolume: 0.25
 --- !u!1 &910000041
 GameObject:
