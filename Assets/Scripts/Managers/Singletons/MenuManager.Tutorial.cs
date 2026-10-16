@@ -391,7 +391,7 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0: return InputManager.TutorialInputMode.SelectPassenger;
-                case 1: return InputManager.TutorialInputMode.BoardPassengers;
+                case 1: return InputManager.TutorialInputMode.Free;
                 case 2: return InputManager.TutorialInputMode.CloseDoors;
                 case 3: return InputManager.TutorialInputMode.Move;
                 case 4: return InputManager.TutorialInputMode.Boost;
