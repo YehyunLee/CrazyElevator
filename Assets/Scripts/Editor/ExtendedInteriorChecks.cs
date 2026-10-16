@@ -536,8 +536,8 @@ public static class ExtendedInteriorChecks
         Require(rival.CurrentFloor > shoveStart + .4f,
             "The stopped elevator was not knocked visibly away from its floor.");
 
-        // The route remains aligned at integer floors, then visibly bends into
-        // depth at a junction. Choosing the highlighted track grants one burst.
+        // The route remains a straight vertical shaft. Choosing the highlighted
+        // express gate still grants one burst without changing the track path.
         match.StartMatch();
         phaseField.SetValue(player, moving);
         float junctionFloor = match.JunctionFloor(0);
@@ -547,16 +547,16 @@ public static class ExtendedInteriorChecks
         targetTracks[0] = match.ExpressTrack(0);
         Call(player, "LateUpdate");
         Require(!player.sceneView.exteriorCamera.orthographic
-            && Mathf.Abs(player.sceneView.exteriorCar.localPosition.x - match.ShaftX(player)) > 3f
-            && player.sceneView.exteriorCar.localPosition.z > 1f,
-            "The express junction did not create a perspective 3D route bend.");
+            && Mathf.Abs(player.sceneView.exteriorCar.localPosition.x - match.ShaftX(player)) < .001f
+            && Mathf.Abs(player.sceneView.exteriorCar.localPosition.z + .8f) < .001f,
+            "The generated elevator track is not straight and vertical.");
         float speedBeforeExpress = player.TravelVelocity;
         match.EvaluateJunction(player, junctionFloor - .01f, junctionFloor + .01f);
         Require(player.TravelVelocity > speedBeforeExpress && match.ExpressFlash(player) > 0f,
             "The highlighted express track did not grant its speed burst.");
         match.StartMatch();
         File.WriteAllText(Work + "/result.txt",
-            "PASS: Main creates two centred 1v1 tracks; front-on travel cameras, visible-car collision, sparks and stronger vertical bounce work; stopped boarding cars can be knocked away; 3D junction perspective and express boost work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+            "PASS: Main creates two centred vertical 1v1 tracks; travel cameras, visible-car collision, sparks and stronger vertical bounce work; stopped boarding cars can be knocked away; express boost works; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
