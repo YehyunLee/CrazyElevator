@@ -524,7 +524,11 @@ namespace CrazyElevator.Managers
                 {
                     cabinPositions[rider] = released;
                     RememberCabinTileRun(rider, released);
-                    if (!draggedWasBoarded) BeginHandymanRepair(rider);
+                    if (!draggedWasBoarded)
+                    {
+                        PlayPassengerBoardingVoice(rider);
+                        BeginHandymanRepair(rider);
+                    }
                     SelectRider(null);
                     SetControlStatus(draggedWasBoarded ? "REARRANGED" : "ON BOARD");
                     notice = draggedWasBoarded ? "Cabin rearranged." : "Passenger boarded. Choose another rider or close the doors.";

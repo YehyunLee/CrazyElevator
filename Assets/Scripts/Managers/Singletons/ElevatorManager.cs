@@ -144,7 +144,7 @@ namespace CrazyElevator.Managers
                 SelectRider(null);
                 ClearHandymanRepair();
                 ClearInteriorTransfers(); ClearKicks(); exiting.Clear();
-                Play(chime);
+                if (Match == null) PlayEndingDrum();
                 ResetCameraMotion();
                 session?.NotifyVictory();
                 return;
@@ -1017,6 +1017,7 @@ namespace CrazyElevator.Managers
             if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
                 if (!round.Board(rider)) return;
+                PlayPassengerBoardingVoice(rider);
                 cabinPositions[rider] = spot;
                 RememberCabinTileRun(rider, spot);
                 BeginPersonaBoard(rider, figure.localPosition, spot);
@@ -1589,6 +1590,9 @@ namespace CrazyElevator.Managers
     {
         [Header("Authored audio")]
         public AudioClip backgroundMusic;
+        public AudioClip endingDrumSfx;
+        public AudioClip clownTalkingSfx;
+        public AudioClip[] passengerTalkingSfx = System.Array.Empty<AudioClip>();
         public AudioClip happyDeliverySfx01;
         public AudioClip happyDeliverySfx02;
         public AudioClip angryDeliverySfx01;
@@ -1651,6 +1655,20 @@ namespace CrazyElevator.Managers
                     : groove;
             MusicManager.Instance.SetTheme(next);
             musicBand = currentBand;
+        }
+
+        public void PlayEndingDrum() => SfxManager.Instance?.PlaySfx(endingDrumSfx);
+
+        void PlayPassengerBoardingVoice(Rider rider)
+        {
+            if (rider == null) return;
+            if (rider.Kind == "CLOWN" || rider.HasFeature(PassengerFeature.SpeedBoost))
+            {
+                SfxManager.Instance?.PlaySfx(clownTalkingSfx);
+                return;
+            }
+            if (passengerTalkingSfx == null || passengerTalkingSfx.Length == 0) return;
+            SfxManager.Instance?.PlaySfx(passengerTalkingSfx[Random.Range(0, passengerTalkingSfx.Length)]);
         }
 
         AudioClip Tone(float frequency, float seconds)
