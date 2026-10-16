@@ -647,8 +647,8 @@ namespace CrazyElevator.Match
                 GUI.contentColor = previousContent;
                 return;
             }
-            if (IsVisibleSeat(0)) DrawSeat(player, 0, Teal);
-            if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Coral);
+            if (IsVisibleSeat(0)) DrawSeat(player, 0, Coral);
+            if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Teal);
             if (SplitScreen) DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
@@ -728,6 +728,7 @@ namespace CrazyElevator.Match
         {
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
+            DrawPlayerScreenBorder(view, colour);
             int seconds = Mathf.CeilToInt(player.SecondsLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
             float barWidth = Mathf.Max(1f, Mathf.Min(view.width - 16f,
@@ -742,6 +743,18 @@ namespace CrazyElevator.Match
                 colour, "FLOOR", Mathf.RoundToInt(actor.CurrentFloor).ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
                 new Color32(112, 183, 255, 255), "TIME", clock);
+        }
+
+        void DrawPlayerScreenBorder(Rect view, Color playerColour)
+        {
+            const float thickness = 6f;
+            Color border = new Color(playerColour.r, playerColour.g, playerColour.b, .42f);
+
+            Fill(new Rect(view.x, view.y, view.width, thickness), border);
+            Fill(new Rect(view.x, view.yMax - thickness, view.width, thickness), border);
+            Fill(new Rect(view.x, view.y + thickness, thickness, Mathf.Max(0f, view.height - thickness * 2f)), border);
+            Fill(new Rect(view.xMax - thickness, view.y + thickness, thickness,
+                Mathf.Max(0f, view.height - thickness * 2f)), border);
         }
 
         void DrawSeatTile(Rect area, Color accent, string caption, string value)
