@@ -87,9 +87,11 @@ namespace CrazyElevator.Shared
         public float PeakTime;
         public float TimeLeft = Duration;
         public float Elapsed => Duration - TimeLeft;
-        public int PassengerOfferLimit => Elapsed < 30f ? 2
+        int TimeBasedPassengerOfferLimit => Elapsed < 30f ? 2
             : Elapsed < 70f ? 3
             : Elapsed < 110f ? 4 : 5;
+        public int PassengerOfferLimit => PassengerData.ThemeAtFloor(Floor) == PassengerTheme.Office
+            ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
         bool RefillPassengerQueue;
         bool OwnsPassengerPoolClock = true;
         // Scene variants can opt out of the prototype's consolation points for
@@ -221,7 +223,16 @@ namespace CrazyElevator.Shared
                 || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
             p.BoardedBySeat = Seat;
-            if (RefillPassengerQueue) Riders.Add(CreateReplacement(p));
+            if (RefillPassengerQueue)
+            {
+                // A shared duel queue must stay stocked for both elevators.
+                // The solo queue uses the short walk-in delay, but delaying a
+                // duel replacement lets one player consume the entire visible
+                // offer before the other player can board anything.
+                Rider replacement = CreateReplacement(p);
+                replacement.SpawnDelay = 0f;
+                Riders.Add(replacement);
+            }
             return true;
         }
 

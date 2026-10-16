@@ -28,6 +28,7 @@ namespace CrazyElevator.Managers
             new HashSet<string>(), new HashSet<string>()
         };
         readonly Queue<EncounterCard> encounterCards = new Queue<EncounterCard>();
+        readonly Dictionary<string, Texture2D> passengerIconTextures = new Dictionary<string, Texture2D>();
         EncounterCard activeEncounterCard;
         float encounterCardTime;
         int encounterConfirmationConsumedFrame = -1;
@@ -40,6 +41,7 @@ namespace CrazyElevator.Managers
         RenderTexture encounterPreviewTexture;
         GameObject encounterPreviewModel;
         EncounterCard renderedEncounterCard;
+        Texture2D gameplayKeyIconTexture;
 
         sealed class EncounterCard
         {
@@ -53,6 +55,7 @@ namespace CrazyElevator.Managers
             public bool IsWorldDiscovery;
             public WorldBand World;
             public string PassengerKind;
+            public PassengerFeature Features;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -141,6 +144,18 @@ namespace CrazyElevator.Managers
                 Mathf.Max(1f, outer.width - border * 2f),
                 Mathf.Max(1f, outer.height - border * 2f)), UiBlack);
         }
+        void GameplayControlPanel(Rect r, Color accent, bool pressed)
+        {
+            const float border = 3f;
+            Rect outer = new Rect(
+                Mathf.Round(r.x), Mathf.Round(r.y),
+                Mathf.Max(1f, Mathf.Round(r.width)), Mathf.Max(1f, Mathf.Round(r.height)));
+            Panel(outer, accent);
+            Panel(new Rect(
+                outer.x + border, outer.y + border,
+                Mathf.Max(1f, outer.width - border * 2f),
+                Mathf.Max(1f, outer.height - border * 2f)), pressed ? accent : Ink);
+        }
         // Use the body style unless a custom style is supplied.
         void Label(Rect r, string text, GUIStyle style = null)
         {
@@ -200,13 +215,14 @@ namespace CrazyElevator.Managers
 
         void DiscoverWorld(WorldBand world)
         {
-            if (IsNpc) return;
+            if (IsNpc || MenuManager.TutorialActive) return;
             QueueWorldDiscoveryCard(world);
         }
 
         void QueueWorldDiscoveryCard(WorldBand world)
         {
-            if (IsNpc || !encounteredWorlds.Add(world) || completedWorldTutorials[Seat].Contains(world)) return;
+            if (IsNpc || MenuManager.TutorialActive || !encounteredWorlds.Add(world)
+                || completedWorldTutorials[Seat].Contains(world)) return;
             string titleText;
             string description;
             string badge;
@@ -214,19 +230,19 @@ namespace CrazyElevator.Managers
             switch (world)
             {
                 case WorldBand.Candy:
-                    titleText = "CANDY DIMENSION";
+                    titleText = "CANDY MULTIVERSE";
                     description = "Bigger groups and louder problems start appearing here.";
                     badge = "02";
                     accent = new Color32(236, 118, 188, 255);
                     break;
                 case WorldBand.Water:
-                    titleText = "UNDERWATER DIMENSION";
+                    titleText = "UNDERWATER MULTIVERSE";
                     description = "Rust slows the elevator. A handyman keeps it moving.";
                     badge = "03";
                     accent = new Color32(48, 196, 210, 255);
                     break;
                 default:
-                    titleText = "OFFICE DIMENSION";
+                    titleText = "OFFICE MULTIVERSE";
                     description = "Start simple. Match each passenger to the correct floor.";
                     badge = "01";
                     accent = new Color32(98, 132, 178, 255);
@@ -234,7 +250,7 @@ namespace CrazyElevator.Managers
             }
             EnqueueEncounterCard(new EncounterCard
             {
-                Kicker = "NEW DIMENSION",
+                Kicker = "NEW MULTIVERSE",
                 Title = titleText,
                 Description = description,
                 IsWorldDiscovery = true,
@@ -254,7 +270,7 @@ namespace CrazyElevator.Managers
 
         void QueuePassengerDiscoveryCard(Rider rider)
         {
-            if (IsNpc || rider == null || string.IsNullOrEmpty(rider.Kind)
+            if (IsNpc || MenuManager.TutorialActive || rider == null || string.IsNullOrEmpty(rider.Kind)
                 || !encounteredPassengerKinds.Add(rider.Kind)
                 || completedPassengerTutorials[Seat].Contains(rider.Kind)) return;
             string titleText = rider.Name.ToUpperInvariant();
@@ -298,6 +314,7 @@ namespace CrazyElevator.Managers
                 Title = titleText,
                 Description = description,
                 PassengerKind = rider.Kind,
+                Features = PassengerFeatures(rider),
                 Badge = string.IsNullOrEmpty(rider.Badge) ? "?" : rider.Badge,
                 Accent = Palette[Mathf.Abs(rider.Color) % Palette.Length],
                 PreviewSource = FindPassengerPreviewSource(rider),
@@ -512,7 +529,7 @@ namespace CrazyElevator.Managers
 
         void EnqueueEncounterCard(EncounterCard card)
         {
-            if (card == null) return;
+            if (card == null || MenuManager.TutorialActive) return;
             if (activeEncounterCard == null)
             {
                 ActivateEncounterCard(card);
@@ -552,12 +569,22 @@ namespace CrazyElevator.Managers
                 ActivateEncounterCard(encounterCards.Dequeue());
         }
 
+        public void SuppressEncounterCards()
+        {
+            encounterCards.Clear();
+            activeEncounterCard = null;
+            encounterCardTime = 0f;
+            ClearEncounterPreviewModel();
+        }
+
         void DrawEncounterCard(float viewWidth, float viewHeight)
         {
-            if (activeEncounterCard == null || Event.current.type != EventType.Repaint) return;
+            if (MenuManager.TutorialActive || activeEncounterCard == null
+                || Event.current.type != EventType.Repaint) return;
             bool compact = Match != null;
             float width = Mathf.Min(compact ? 520f : 760f, viewWidth - (compact ? 20f : 48f));
-            float height = compact ? 132f : 154f;
+            // Leave enough footer room for the enlarged confirmation keycap.
+            float height = compact ? 164f : 154f;
             float targetX = (viewWidth - width) * .5f;
             float enter = EaseOut(Mathf.Clamp01(encounterCardTime / .24f));
             float x = Mathf.Lerp(viewWidth + 24f, targetX, enter);
@@ -578,8 +605,19 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                encounterBadge.normal.textColor = activeEncounterCard.Accent;
-                GUI.Label(preview, activeEncounterCard.Badge, encounterBadge);
+                if (string.IsNullOrEmpty(activeEncounterCard.PassengerKind))
+                {
+                    encounterBadge.normal.textColor = activeEncounterCard.Accent;
+                    GUI.Label(preview, activeEncounterCard.Badge, encounterBadge);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(activeEncounterCard.PassengerKind))
+            {
+                const float iconSize = 62f;
+                DrawPassengerBadgeIcon(new Rect(preview.xMax - iconSize - 10f,
+                    preview.y + 10f, iconSize, iconSize), PassengerIconKind(activeEncounterCard),
+                    activeEncounterCard.Accent);
             }
 
             int oldTitleSize = encounterTitle.fontSize;
@@ -598,11 +636,13 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(contentX, card.y + (compact ? 25f : 27f), contentWidth,
                 compact ? 40f : 52f), activeEncounterCard.Title, encounterTitle);
             GUI.Label(new Rect(contentX, card.y + (compact ? 68f : 82f), contentWidth,
-                compact ? 28f : 36f), activeEncounterCard.Description, encounterBody);
-            string confirmPrompt = Match == null ? "PRESS A / C TO CONTINUE"
-                : Seat == 0 ? "P1: PRESS A / C" : "P2: PRESS A / PERIOD";
-            GUI.Label(new Rect(contentX, card.y + card.height - 28f, contentWidth, 24f),
-                confirmPrompt, encounterPrompt);
+                compact ? 40f : 36f), activeEncounterCard.Description, encounterBody);
+            const float promptSize = 52f;
+            Rect prompt = new Rect(contentX, card.y + card.height - promptSize, promptSize, promptSize);
+            DrawGameplayKeyHint(prompt, GameplayConfirmKey);
+            GUI.Label(new Rect(prompt.x + promptSize + 12f, prompt.y + 12f,
+                contentWidth - promptSize - 12f, 28f),
+                "CONTINUE", encounterPrompt);
             encounterTitle.fontSize = oldTitleSize;
             encounterBody.fontSize = oldBodySize;
             encounterBadge.fontSize = oldBadgeSize;
@@ -613,7 +653,13 @@ namespace CrazyElevator.Managers
         {
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
-            if (round == null || eye == null || Match != null || MenuManager.IsOpen) return;
+            if (round == null || eye == null || MenuManager.IsOpen) return;
+            if (phase == Phase.Countdown)
+            {
+                if (Match == null || !IsNpc) DrawNoTutorialCountdown();
+                return;
+            }
+            if (Match != null || MenuManager.FullScreenOverlayActive) return;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             GUI.enabled = true;
@@ -643,6 +689,7 @@ namespace CrazyElevator.Managers
                 GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, Vector3.one * scale);
                 IntroOverlay();
                 GUI.matrix = Matrix4x4.identity;
+                DrawSessionFade(sessionFadeAlpha);
                 return;
             }
             if (phase == Phase.Results || paused)
@@ -681,6 +728,42 @@ namespace CrazyElevator.Managers
                 DrawDeliveryPopups(Screen.width, Screen.height);
                 DrawEncounterCard(Screen.width, Screen.height);
             }
+            DrawSessionFade(sessionFadeAlpha);
+        }
+
+        void DrawSessionFade(float alpha)
+        {
+            if (alpha <= .001f) return;
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, Mathf.Clamp01(alpha));
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        void DrawNoTutorialCountdown()
+        {
+            GameTypography.ApplyToSkin(GUI.skin);
+            Styles();
+            int previousDepth = GUI.depth;
+            GUI.depth = -1000;
+            Panel(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
+            string countdown = countdownTime < 3f
+                ? (3 - Mathf.FloorToInt(countdownTime)).ToString()
+                : "START";
+            int previousSize = title.fontSize;
+            TextAnchor previousAlignment = title.alignment;
+            Color previousTextColor = title.normal.textColor;
+            title.fontSize = countdown == "START"
+                ? Mathf.Clamp(Mathf.RoundToInt(Screen.width * .07f), 64, 118)
+                : Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
+            title.alignment = TextAnchor.MiddleCenter;
+            title.normal.textColor = Cream;
+            GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
+                countdown, title);
+            title.fontSize = previousSize;
+            title.alignment = previousAlignment;
+            title.normal.textColor = previousTextColor;
+            GUI.depth = previousDepth;
         }
 
         // Match HUD is drawn by ElevatorMatch so the solo UI remains unchanged.
@@ -891,19 +974,46 @@ namespace CrazyElevator.Managers
                 {
                     Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
                     OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
+
+                    // Keep the confirm action beside the selected passenger so
+                    // it remains visible even when the lower HUD is covered by
+                    // the travel/door controls.
+                    if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    {
+                        float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
+                        float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
+                        Rect hint = new Rect(hintX, hintY, 42f, 42f);
+                        DrawGameplayKeyHint(hint, GameplayConfirmKey);
+                        Color previousHintText = calloutText.normal.textColor;
+                        calloutText.normal.textColor = UiWhite;
+                        GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
+                            rider.Boarded ? "KICK" : "BOARD", calloutText);
+                        calloutText.normal.textColor = previousHintText;
+                    }
                 }
 
                 if (rider != speaker) continue;
+                bool mad = rider.Boarded && rider.Remaining <= 0;
                 string message = PassengerCalloutText(rider);
-                if (string.IsNullOrEmpty(message)) continue;
-                float width = Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
-                const float quoteHeight = 28f;
+                if (!mad && string.IsNullOrEmpty(message)) continue;
+                float width = mad ? 64f
+                    : Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
+                float quoteHeight = mad ? 64f : 28f;
                 float quoteX = headX;
                 Rect quote = new Rect(Mathf.Clamp(quoteX - width * .5f, 12f, viewWidth - width - 12f),
                     (selected ? arrow.y : headY - 4f) - quoteHeight - 3f, width, quoteHeight);
-                SpeechBubblePanel(quote, accent);
-                GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
-                    message, calloutText);
+                if (mad)
+                {
+                    // MAD uses the simple standalone angry face. It should
+                    // read as a passenger mood icon, not as a boxed message.
+                    DrawPassengerAngryIcon(quote);
+                }
+                else
+                {
+                    SpeechBubblePanel(quote, accent);
+                    GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
+                        message, calloutText);
+                }
             }
         }
 
@@ -960,6 +1070,70 @@ namespace CrazyElevator.Managers
             return null;
         }
 
+        void DrawPassengerBadgeIcon(Rect rect, string kind, Color accent)
+        {
+            if (string.IsNullOrEmpty(kind)) return;
+            string key = kind + ColorUtility.ToHtmlStringRGBA(accent);
+            if (!passengerIconTextures.TryGetValue(key, out Texture2D texture) || texture == null)
+            {
+                texture = PassengerIconLibrary.CreatePassengerBadge(kind, accent, UiBlack, UiWhite);
+                passengerIconTextures[key] = texture;
+            }
+
+            Color previous = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit, true);
+            GUI.color = previous;
+        }
+
+        void DrawPassengerAngryIcon(Rect rect)
+        {
+            const string kind = "MAD_FACE";
+            string key = kind + ColorUtility.ToHtmlStringRGBA(Coral);
+            if (!passengerIconTextures.TryGetValue(key, out Texture2D texture) || texture == null)
+            {
+                texture = PassengerIconLibrary.CreateAngryFace(Coral, UiBlack);
+                passengerIconTextures[key] = texture;
+            }
+
+            Color previous = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit, true);
+            GUI.color = previous;
+        }
+
+        static PassengerFeature PassengerFeatures(Rider rider)
+        {
+            if (rider == null) return PassengerFeature.None;
+            PassengerFeature features = PassengerFeature.None;
+            PassengerFeature[] all =
+            {
+                PassengerFeature.SlowArrival, PassengerFeature.HoldDoorBonus,
+                PassengerFeature.MultiSpace, PassengerFeature.UrgencySpeech,
+                PassengerFeature.ClearsRust, PassengerFeature.GroupParty,
+                PassengerFeature.SpeedBoost, PassengerFeature.SpeedSlow,
+                PassengerFeature.CryingBaby, PassengerFeature.CalmsBaby
+            };
+            foreach (PassengerFeature feature in all)
+                if (rider.HasFeature(feature)) features |= feature;
+            return features;
+        }
+
+        static string PassengerIconKind(EncounterCard card)
+        {
+            if (card == null) return string.Empty;
+            if ((card.Features & PassengerFeature.SpeedBoost) != 0) return "SPEEDBOOST";
+            if ((card.Features & PassengerFeature.ClearsRust) != 0) return "HANDYMAN";
+            if ((card.Features & PassengerFeature.CryingBaby) != 0) return "PREGNANT";
+            if ((card.Features & PassengerFeature.HoldDoorBonus) != 0) return "BOSS";
+            if ((card.Features & (PassengerFeature.SpeedSlow | PassengerFeature.SlowArrival)) != 0)
+                return "ELDERLY";
+            if ((card.Features & PassengerFeature.UrgencySpeech) != 0) return "INTERVIEW";
+            if ((card.Features & (PassengerFeature.GroupParty | PassengerFeature.MultiSpace)) != 0)
+                return "GROUP";
+            return card.PassengerKind;
+        }
+
         // Same gameplay can be driven with buttons when a keyboard/controller is unavailable.
         void GetMouseControlRects(out Rect up, out Rect down, out Rect stop,
             out Rect close, out Rect hold, out Rect repair)
@@ -996,15 +1170,19 @@ namespace CrazyElevator.Managers
         {
             if (!extendedInterior || IsNpc) return;
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var hold, out var repair);
-            DrawMouseControl(up, "HOLD  ↑  UP", Teal);
-            DrawMouseControl(down, "HOLD  ↓  DOWN", Teal);
-            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold);
-            DrawMouseControl(close, "CLOSE & TRAVEL", Coral);
-            DrawMouseControl(hold, "HOLD DOOR", Teal);
-            DrawMouseControl(repair, "HOLD TO REPAIR", Gold);
+            DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
+            DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
+            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
+                GameplayConfirmKey);
+            DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
+            bool kickoutSelected = HasSelectedBoardedPassenger;
+            DrawMouseControl(hold, kickoutSelected ? "KICK OUT" : "HOLD DOOR",
+                kickoutSelected ? Coral : Teal,
+                kickoutSelected ? GameplayKickoutKey : GameplayHoldKey);
+            DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
         }
 
-        void DrawMouseControl(Rect rect, string text, Color accent)
+        void DrawMouseControl(Rect rect, string text, Color accent, string key)
         {
             if (rect.width <= 0) return;
             var mouse = Mouse.current;
@@ -1017,12 +1195,120 @@ namespace CrazyElevator.Managers
                 cursor.y -= view.y;
             }
             bool pressed = mouse != null && mouse.leftButton.isPressed && rect.Contains(cursor);
-            AngularPanel(rect, accent);
-            if (pressed) Panel(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), accent);
+            GameplayControlPanel(rect, accent, pressed);
             Color previous = buttonStyle.normal.textColor;
-            buttonStyle.normal.textColor = pressed ? UiBlack : UiWhite;
-            Label(rect, text, buttonStyle);
+            int previousFontSize = buttonStyle.fontSize;
+            TextAnchor previousAlignment = buttonStyle.alignment;
+            bool previousWordWrap = buttonStyle.wordWrap;
+            TextClipping previousClipping = buttonStyle.clipping;
+            buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .34f), 14, 20);
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            buttonStyle.wordWrap = false;
+            buttonStyle.clipping = TextClipping.Clip;
+            Rect labelRect = rect;
+            if (!string.IsNullOrEmpty(key))
+            {
+                float keySize = Mathf.Min(rect.height - 12f, 44f);
+                const float keyInset = 12f;
+                const float keyGap = 12f;
+                float maxLabelWidth = Mathf.Max(1f,
+                    rect.width - keyInset - keySize - keyGap - 8f);
+                while (buttonStyle.fontSize > 12 &&
+                       buttonStyle.CalcSize(new GUIContent(text)).x > maxLabelWidth)
+                {
+                    buttonStyle.fontSize--;
+                }
+                Rect hint = new Rect(rect.x + keyInset,
+                    rect.y + (rect.height - keySize) * .5f,
+                    keySize, keySize);
+                DrawGameplayKeyHint(hint, key, accent, pressed);
+                labelRect = new Rect(hint.xMax + keyGap, rect.y,
+                    maxLabelWidth, rect.height);
+            }
+            buttonStyle.normal.textColor = UiWhite;
+            GUI.Label(labelRect, text, buttonStyle);
+            buttonStyle.fontSize = previousFontSize;
+            buttonStyle.alignment = previousAlignment;
+            buttonStyle.wordWrap = previousWordWrap;
+            buttonStyle.clipping = previousClipping;
             buttonStyle.normal.textColor = previous;
+        }
+
+        bool GameplayUsesKeyboard => MenuManager.KeyboardHintsEnabled;
+        string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
+        string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
+        string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
+        string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";
+        string GameplayHoldKey => GameplayUsesKeyboard ? (Seat == 1 ? "RALT" : "H") : "B";
+        string GameplayKickoutKey => GameplayUsesKeyboard ? "I" : "B";
+        string GameplayRepairKey => GameplayUsesKeyboard ? "R" : "RB";
+
+        void DrawGameplayKeyHint(Rect rect, string key)
+        {
+            DrawGameplayKeyHint(rect, key, Teal);
+        }
+
+        void DrawGameplayKeyHint(Rect rect, string key, Color accent)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+
+            DrawGameplayKeyIcon(rect, key, accent);
+        }
+
+        void DrawGameplayKeyHint(Rect rect, string key, Color accent, bool pressed)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+
+            DrawGameplayKeyIcon(rect, key, accent);
+        }
+
+        void DrawGameplayKeyIcon(Rect rect, string key, Color accent)
+        {
+            if (gameplayKeyIconTexture == null)
+                gameplayKeyIconTexture = CreateGameplayKeyIcon();
+
+            Color previousGuiColor = GUI.color;
+            GUI.color = accent;
+            GUI.DrawTexture(rect, gameplayKeyIconTexture);
+            GUI.color = previousGuiColor;
+
+            int previousFontSize = buttonStyle.fontSize;
+            TextAnchor previousAlignment = buttonStyle.alignment;
+            Color previousTextColor = buttonStyle.normal.textColor;
+            buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .42f), 11, 20);
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            buttonStyle.normal.textColor = UiWhite;
+            GUI.Label(rect, key, buttonStyle);
+            buttonStyle.fontSize = previousFontSize;
+            buttonStyle.alignment = previousAlignment;
+            buttonStyle.normal.textColor = previousTextColor;
+        }
+
+        static Texture2D CreateGameplayKeyIcon()
+        {
+            const int size = 64;
+            const float radius = 29f;
+            const float ring = 3f;
+            var pixels = new Color32[size * size];
+            Vector2 center = new Vector2(size * .5f, size * .5f);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(new Vector2(x + .5f, y + .5f), center);
+                float edge = Mathf.Clamp01(radius + 1f - distance);
+                bool inside = distance <= radius;
+                bool outline = inside && distance >= radius - ring;
+                byte alpha = (byte)(edge * 255f);
+                pixels[y * size + x] = outline
+                    ? new Color32(255, 255, 255, alpha)
+                    : inside ? new Color32(0, 0, 0, (byte)(alpha * .78f))
+                    : new Color32(255, 255, 255, 0);
+            }
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         void DrawHudTile(Rect area, Color color, string caption, string value)

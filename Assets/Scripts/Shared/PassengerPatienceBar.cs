@@ -15,7 +15,6 @@ namespace CrazyElevator.Shared
 
         Camera viewCamera;
         Transform greenFill, redFill;
-        TextMesh madLabel;
         Material sharedMaterial;
         Vector3 anchorLocalPosition;
         float cameraOffset;
@@ -47,7 +46,6 @@ namespace CrazyElevator.Shared
             float redFraction = 1f - DisplayedPatience;
             SetSegment(greenFill, DisplayedPatience, -width * .5f, true);
             SetSegment(redFill, redFraction, width * .5f, false);
-            madLabel.gameObject.SetActive(isMad);
         }
 
         void LateUpdate()
@@ -69,11 +67,6 @@ namespace CrazyElevator.Shared
                 transform.localScale = Vector3.one * distanceScale;
             }
 
-            if (madLabel != null && mad)
-            {
-                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 9f) * .08f;
-                madLabel.transform.localScale = Vector3.one * pulse;
-            }
         }
 
         void SetSegment(Transform segment, float fraction, float edge, bool anchoredLeft)
@@ -111,17 +104,6 @@ namespace CrazyElevator.Shared
             SetColor(greenRenderer, patientColor);
             SetColor(redRenderer, impatientColor);
 
-            GameObject labelObject = new GameObject("MAD label");
-            labelObject.transform.SetParent(transform, false);
-            labelObject.transform.localPosition = new Vector3(0, .075f, -.04f);
-            madLabel = labelObject.AddComponent<TextMesh>();
-            madLabel.text = "MAD!";
-            madLabel.fontSize = 64;
-            madLabel.characterSize = .009f;
-            madLabel.anchor = TextAnchor.LowerCenter;
-            madLabel.alignment = TextAlignment.Center;
-            madLabel.color = impatientColor;
-            GameTypography.Apply(madLabel, true);
         }
 
         Renderer CreatePart(string partName, Vector3 position, Vector3 scale, out Transform part)
@@ -152,5 +134,6 @@ namespace CrazyElevator.Shared
             properties.SetColor("_Color", color);
             renderer.SetPropertyBlock(properties);
         }
+
     }
 }

@@ -15,6 +15,11 @@ namespace CrazyElevator.Shared
 
         Camera viewCamera;
         TextMesh label;
+        SpriteRenderer icon;
+        Sprite iconSprite;
+        Texture2D iconTexture;
+        string iconKind;
+        string iconColor;
         Transform tailOutlinePart, tailPart;
         Material sharedMaterial;
         bool built;
@@ -33,6 +38,33 @@ namespace CrazyElevator.Shared
         {
             BuildVisuals();
             label.text = Wrap(message, 14);
+            label.gameObject.SetActive(true);
+            icon.gameObject.SetActive(false);
+            gameObject.SetActive(true);
+        }
+
+        public void ShowIcon(string kind, Color accent)
+        {
+            BuildVisuals();
+            string colorKey = ColorUtility.ToHtmlStringRGBA(accent);
+            if (iconSprite == null || iconKind != kind || iconColor != colorKey)
+            {
+                if (iconSprite != null) Destroy(iconSprite);
+                if (iconTexture != null) Destroy(iconTexture);
+                iconTexture = string.Equals(kind, "MAD", System.StringComparison.OrdinalIgnoreCase)
+                    ? PassengerIconLibrary.CreateAngryFace(accent, outlineColor)
+                    : PassengerIconLibrary.CreatePassengerBadge(kind, accent, outlineColor, bubbleColor);
+                iconSprite = Sprite.Create(iconTexture,
+                    new Rect(0, 0, iconTexture.width, iconTexture.height),
+                    new Vector2(.5f, .5f), iconTexture.width);
+                iconSprite.name = "Passenger speech icon";
+                iconKind = kind;
+                iconColor = colorKey;
+            }
+
+            label.gameObject.SetActive(false);
+            icon.sprite = iconSprite;
+            icon.gameObject.SetActive(true);
             gameObject.SetActive(true);
         }
 
@@ -102,6 +134,20 @@ namespace CrazyElevator.Shared
             label.alignment = TextAlignment.Center;
             label.color = textColor;
             GameTypography.Apply(label, true);
+
+            GameObject iconObject = new GameObject("Icon");
+            iconObject.transform.SetParent(transform, false);
+            iconObject.transform.localPosition = new Vector3(0, 0, -.05f);
+            iconObject.transform.localScale = Vector3.one * .24f;
+            icon = iconObject.AddComponent<SpriteRenderer>();
+            icon.sortingOrder = 1;
+            iconObject.SetActive(false);
+        }
+
+        void OnDestroy()
+        {
+            if (iconSprite != null) Destroy(iconSprite);
+            if (iconTexture != null) Destroy(iconTexture);
         }
 
         Renderer CreatePart(string partName, Vector3 position, Vector3 scale)

@@ -14,9 +14,20 @@ namespace CrazyElevator.Managers
 
         public bool IsPaused => paused;
         public float DoorsOpenPercent => doors;
+        public float SessionFadeAlpha => sessionFadeAlpha;
         public float TravelVelocity => travelVelocity;
+        public bool TravelInputActive => Mathf.Abs(boostAxis) > .25f;
+        public bool BoostActive => boostHeld && TravelInputActive;
+        public int TravelStartCount => travelStartCount;
+        public int FloorStopCount => floorStopCount;
         public int DiscreteFloor => round != null ? round.Floor : 0;
         public int MaxCapacity => ElevatorRound.Capacity;
+        public bool HasSelectedPassenger => selectedRider != null;
+        public int PassengerExitCount => passengerExitCount;
+        public int KickoutCount => kickoutCount;
+        public float DoorHoldSeconds => doorHoldSeconds;
+        public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
+        public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
         public AudioClip DingClip => ding;
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;
@@ -84,7 +95,17 @@ namespace CrazyElevator.Managers
         {
             if (phase != Phase.Moving) return;
             boostAxis = Mathf.Abs(axis) > .25f ? Mathf.Clamp(axis, -1f, 1f) : 0f;
-            if (boostAxis != 0) travelDirection = boostAxis > 0 ? 1 : -1;
+            if (boostAxis != 0)
+            {
+                int requestedDirection = boostAxis > 0 ? 1 : -1;
+                if (requestedDirection != travelDirection
+                    && travelVelocity * requestedDirection < 0f
+                    && collisionRecoilTimer <= 0f)
+                {
+                    travelVelocity = requestedDirection * CruiseSpeed;
+                }
+                travelDirection = requestedDirection;
+            }
             boostHeld = boost && boostAxis != 0;
         }
 
@@ -98,6 +119,7 @@ namespace CrazyElevator.Managers
         public void KickoutSelectedPublic()
         {
             if (!CanSelect(selectedRider) || !selectedRider.Boarded) return;
+            kickoutCount++;
             ConfirmPassenger();
         }
 
