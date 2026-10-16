@@ -162,6 +162,33 @@ public static class ExtendedInteriorChecks
         Require(player.Riders.Count == rival.Riders.Count
             && ReferenceEquals(player.Riders[0], rival.Riders[0]),
             "Both elevators must use the same rider objects.");
+
+        // A duel must replenish the shared queue immediately. Otherwise the
+        // first car can consume the only two floor-zero offers before the
+        // second car gets a chance to board.
+        var fairnessPlayer = new Round();
+        var fairnessRival = new Round();
+        fairnessRival.SharePassengerPoolWith(fairnessPlayer, 1);
+        SharedRider first = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
+        SharedRider second = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "INTERVIEW");
+        Require(fairnessPlayer.Board(first) && fairnessPlayer.Board(second),
+            "The first elevator could not board the initial floor-zero offers.");
+        SharedRider third = fairnessPlayer.Riders.Find(r => r.Origin == 0
+            && !r.Boarded && !r.Resolved && r.Kind == "COURIER");
+        Require(third != null && fairnessPlayer.Board(third),
+            "The shared queue did not replenish after the first elevator boarded three.");
+        for (int i = 0; i < 2; i++)
+        {
+            SharedRider available = fairnessRival.Riders.Find(r => r.Origin == 0
+                && !r.Boarded && !r.Resolved && r.Kind != "ELDERLY");
+            Require(available != null && fairnessRival.Board(available),
+                "The second elevator could not claim its own shared-queue passenger.");
+        }
+        int fairnessPlayerLoad = fairnessPlayer.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 0).Count;
+        int fairnessRivalLoad = fairnessRival.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 1).Count;
+        Require(fairnessPlayerLoad == 3 && fairnessRivalLoad == 2,
+            "Shared passenger replenishment did not preserve both players' loads.");
+
         Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
             && player.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
             "Candy-world passengers must wait only on candy floors.");

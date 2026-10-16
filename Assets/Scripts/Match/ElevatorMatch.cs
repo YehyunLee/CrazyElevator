@@ -32,6 +32,7 @@ namespace CrazyElevator.Match
         bool humanPlayer;
         public bool Finished => Running && player != null && Rival != null
             && player.ShiftFinished && Rival.ShiftFinished;
+        public int CollisionCount => collisionCount;
         ElevatorScene rivalView;
         Transform rivalShaft;
         readonly Transform[] soloRails = new Transform[2];
@@ -39,6 +40,7 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        int collisionCount;
         static readonly float[] JunctionFloorPositions = { 2.5f, 5.5f, 8.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
@@ -197,6 +199,7 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            collisionCount = 0;
             int firstExpressTrack = Random.Range(0, 2);
             expressTrack[0] = firstExpressTrack;
             expressTrack[1] = 1 - firstExpressTrack;
@@ -386,6 +389,7 @@ namespace CrazyElevator.Match
             if (collisionCooldown > 0f) return;
             collisionCooldown = .48f;
             collisionFlash = .72f;
+            collisionCount++;
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
@@ -535,6 +539,7 @@ namespace CrazyElevator.Match
         void OnGUI()
         {
             if (player == null || Rival == null) return;
+            if (MenuManager.FullScreenOverlayActive) return;
             var previousMatrix = GUI.matrix;
             var previousColour = GUI.color;
             var previousContent = GUI.contentColor;
@@ -546,6 +551,7 @@ namespace CrazyElevator.Match
             if (player.IntroPlaying)
             {
                 player.DrawMatchIntroGUI();
+                DrawSessionFade(player.SessionFadeAlpha);
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -556,10 +562,20 @@ namespace CrazyElevator.Match
             DrawSplitDivider();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
-            else if (Paused) DrawPauseOverlay();
+            else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
+            DrawSessionFade(player.SessionFadeAlpha);
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;
+        }
+
+        void DrawSessionFade(float alpha)
+        {
+            if (alpha <= .001f) return;
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, Mathf.Clamp01(alpha));
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         void MatchStyles()
@@ -628,17 +644,12 @@ namespace CrazyElevator.Match
             var bar = new Rect(view.x + 8f, view.y + 8f, barWidth, 58f);
             Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            float tileWidth = bar.width / 5f;
+            float tileWidth = bar.width / 3f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                actor.IsNpc ? "CPU" : seat == 0 ? "PLAYER 1" : "PLAYER 2",
-                Mathf.RoundToInt(actor.CurrentFloor) + "  T" + TrackNumber(actor));
+                actor.IsNpc ? "CPU" : "PLAYER", (seat + 1).ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
-                new Color32(255, 205, 82, 255), "LOAD", actor.PassengerLoad + "/" + actor.MaxCapacity);
+                colour, "FLOOR", Mathf.RoundToInt(actor.CurrentFloor).ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
-                Teal, "SCORE", Running ? "???" : "—");
-            DrawSeatTile(new Rect(bar.x + tileWidth * 3f, bar.y, tileWidth, bar.height),
-                Coral, "HAPPY", actor.HappyDeliveries.ToString());
-            DrawSeatTile(new Rect(bar.x + tileWidth * 4f, bar.y, tileWidth, bar.height),
                 new Color32(112, 183, 255, 255), "TIME", clock);
         }
 

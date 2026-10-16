@@ -14,9 +14,20 @@ namespace CrazyElevator.Managers
 
         public bool IsPaused => paused;
         public float DoorsOpenPercent => doors;
+        public float SessionFadeAlpha => sessionFadeAlpha;
         public float TravelVelocity => travelVelocity;
+        public bool TravelInputActive => Mathf.Abs(boostAxis) > .25f;
+        public bool BoostActive => boostHeld && TravelInputActive;
+        public int TravelStartCount => travelStartCount;
+        public int FloorStopCount => floorStopCount;
         public int DiscreteFloor => round != null ? round.Floor : 0;
         public int MaxCapacity => ElevatorRound.Capacity;
+        public bool HasSelectedPassenger => selectedRider != null;
+        public int PassengerExitCount => passengerExitCount;
+        public int KickoutCount => kickoutCount;
+        public float DoorHoldSeconds => doorHoldSeconds;
+        public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
+        public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
         public AudioClip DingClip => ding;
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;
@@ -108,6 +119,7 @@ namespace CrazyElevator.Managers
         public void KickoutSelectedPublic()
         {
             if (!CanSelect(selectedRider) || !selectedRider.Boarded) return;
+            kickoutCount++;
             ConfirmPassenger();
         }
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using CrazyElevator.Managers;
 
 namespace CrazyElevator.Match
 {
@@ -23,6 +24,9 @@ namespace CrazyElevator.Match
 
         void Update()
         {
+            // Tutorial mode owns the match until the player has completed it.
+            // Keep the CPU from boarding, travelling, or making decisions early.
+            if (MenuManager.TutorialActive) return;
             if (game == null || game.Match == null || !game.Match.Running
                 || game.Match.Paused || game.ShiftFinished) return;
             if (game.Traveling)

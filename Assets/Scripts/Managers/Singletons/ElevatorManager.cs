@@ -56,10 +56,15 @@ namespace CrazyElevator.Managers
         };
         const float IntroRevealStart = 3.05f;
         const float IntroRevealDuration = 4.2f;
+        const float SessionFadeInSeconds = .7f;
         ElevatorRound round;
         Phase phase;
         float phaseTime, introTime, doors = 1;
+        float sessionFadeAlpha;
         bool paused, stampPlayed;
+        int passengerExitCount, kickoutCount;
+        int travelStartCount, floorStopCount;
+        float doorHoldSeconds;
         string notice = "Welcome aboard. Your shift starts when you are ready.";
 
         // Bind editable scene objects, then start audio and a fresh round.
@@ -75,6 +80,7 @@ namespace CrazyElevator.Managers
             InitializeAudio();
             phase = Phase.Intro;
             introTime = 0;
+            sessionFadeAlpha = 1f;
             doors = 0;
             SetDoors(doors);
             SyncFigures(0);
@@ -84,9 +90,11 @@ namespace CrazyElevator.Managers
         void Update()
         {
             if (MenuManager.IsOpen) return;
+            sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
+                Time.unscaledDeltaTime / SessionFadeInSeconds);
             if (Match != null && !Match.Running && phase != Phase.Intro) return;
             if (Match != null && Match.Paused) return;
-            if (activeEncounterCard != null && SeatControls.ConfirmPressed)
+            if (!MenuManager.TutorialActive && activeEncounterCard != null && SeatControls.ConfirmPressed)
             {
                 AdvanceEncounterCardAfterConfirmation();
                 encounterConfirmationConsumedFrame = Time.frameCount;
@@ -109,6 +117,9 @@ namespace CrazyElevator.Managers
                 if (introTime >= IntroRevealStart + IntroRevealDuration + .15f) { phase = Phase.Boarding; introTime = 0; SetDoors(1); }
                 return;
             }
+            // The CPU's intro may finish behind the tutorial, but its shift
+            // must not consume time or passengers until the tutorial ends.
+            if (IsNpc && MenuManager.TutorialActive) return;
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
             if (IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
@@ -127,7 +138,8 @@ namespace CrazyElevator.Managers
             // should lose patience only once per frame.
             bool tickWaiting = !IsNpc || Match == null || Match.player == null
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
-            int waitingMisses = round.Tick(dt, phase == Phase.Boarding, tickWaiting);
+            int waitingMisses = MenuManager.TutorialActive
+                ? 0 : round.Tick(dt, phase == Phase.Boarding, tickWaiting);
             UpdateThemeMusic();
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
@@ -139,7 +151,7 @@ namespace CrazyElevator.Managers
             elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
             // End before accepting another drop-off, even if an exit animation
             // is still running. The score is locked when the clock reaches zero.
-            if (round.Finished)
+            if (!MenuManager.TutorialActive && round.Finished)
             {
                 phase = Phase.Results;
                 SelectRider(null);
@@ -205,12 +217,16 @@ namespace CrazyElevator.Managers
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
+            sessionFadeAlpha = 1f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
             SetFloorDisplayText("0");
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             ResetEncounterCards();
+            passengerExitCount = kickoutCount = 0;
+            travelStartCount = floorStopCount = 0;
+            doorHoldSeconds = 0;
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
@@ -315,6 +331,7 @@ namespace CrazyElevator.Managers
         void CloseAndTravel()
         {
             if (phase != Phase.Boarding) return;
+            travelStartCount++;
             SelectRider(null);
             travelFloor = round.Floor;
             if (round.Floor == 0) travelDirection = 1;
@@ -338,6 +355,7 @@ namespace CrazyElevator.Managers
         void RequestFloorStop()
         {
             if (!CanStopAtFloor) { notice = "Between floors. Confirm when the floor marker turns green."; return; }
+            floorStopCount++;
             destination = NearbyFloor; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
             phase = Phase.Docking; phaseTime = 0;
@@ -984,9 +1002,18 @@ namespace CrazyElevator.Managers
                 return;
             }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
-            bool hold = input.HoldDoorHeld
-                || mouse != null && mouse.leftButton.isPressed && mouseHold.Contains(mouseGui);
-            if (hold) { round.HoldDoor(dt); notice = "Holding the door for passengers."; }
+            if (HasSelectedBoardedPassenger && mouse != null
+                && mouse.leftButton.wasPressedThisFrame && mouseHold.Contains(mouseGui))
+            { KickoutSelectedPublic(); return; }
+            bool hold = !HasSelectedBoardedPassenger && (input.HoldDoorHeld
+                || mouse != null && mouse.leftButton.isPressed && mouseHold.Contains(mouseGui));
+
+            if (hold)
+            {
+                round.HoldDoor(dt);
+                doorHoldSeconds += dt;
+                notice = "Holding the door for passengers.";
+            }
             bool repair = input.RepairHeld
                 || mouse != null && mouse.leftButton.isPressed && mouseRepair.Contains(mouseGui);
             if (!FriendlyInterior && repairedFor <= 0 && repair)
@@ -1856,6 +1883,10 @@ namespace CrazyElevator.Managers
             if (stamp) Destroy(stamp);
             if (kickWhoosh) Destroy(kickWhoosh);
             if (generatedBabyCry) Destroy(generatedBabyCry);
+            if (gameplayKeyIconTexture) Destroy(gameplayKeyIconTexture);
+            foreach (var icon in passengerIconTextures.Values)
+                if (icon != null) Destroy(icon);
+            passengerIconTextures.Clear();
         }
     }
 }
@@ -2015,7 +2046,7 @@ namespace CrazyElevator.Managers
         // NPC uses the same passenger placement, scoring, and kick animation.
         public bool NpcDeliver()
         {
-            if (!IsBoarding) return false;
+            if (!IsBoarding || round == null) return false;
             foreach (Rider rider in round.Riders)
             {
                 if (!round.Owns(rider) || rider.Destination != round.Floor) continue;
@@ -2029,7 +2060,7 @@ namespace CrazyElevator.Managers
 
         public bool NpcBoard()
         {
-            if (!IsBoarding) return false;
+            if (!IsBoarding || round == null) return false;
             SyncFigures(0);
             foreach (Rider rider in round.Riders)
             {
@@ -2046,7 +2077,7 @@ namespace CrazyElevator.Managers
         // Pick the nearest useful destination, or a floor with waiting riders.
         public void NpcChooseFloor()
         {
-            if (!IsBoarding) return;
+            if (!IsBoarding || round == null) return;
             int target = FindNpcTarget();
             if (target < 0 || target == round.Floor) target = (round.Floor + 1) % ElevatorRound.Floors;
             npcTargetFloor = target;
@@ -2069,6 +2100,7 @@ namespace CrazyElevator.Managers
 
         int FindNpcTarget()
         {
+            if (round == null) return -1;
             int best = -1;
             int bestDistance = int.MaxValue;
             foreach (Rider rider in round.Riders)

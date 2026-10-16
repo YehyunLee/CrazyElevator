@@ -506,6 +506,7 @@ namespace CrazyElevator.Managers
                 cabinPositions.Remove(rider);
                 cabinTileRuns.Remove(rider);
                 SelectRider(null);
+                kickoutCount++;
                 QueueRiderExit(rider, released);
                 SelectAfterOffboarding(rider, movedRun, released);
                 return;
@@ -887,6 +888,7 @@ namespace CrazyElevator.Managers
             int scoreBefore = round.Score;
             OffboardResult result = round.Offboard(rider);
             if (result == OffboardResult.None) return;
+            passengerExitCount++;
             if (rider == repairingHandyman) ClearHandymanRepair();
             exitStarts[rider] = start; exiting[rider] = 0;
             BeginKick(rider, figure, start, result, round.Score - scoreBefore);
@@ -918,6 +920,9 @@ namespace CrazyElevator.Managers
             public bool Gentle, WrongFloor;
             public Transform[] Puffs;
             public TextMesh Feedback;
+            public SpriteRenderer FeedbackIcon;
+            public Sprite FeedbackSprite;
+            public Texture2D FeedbackTexture;
         }
 
         sealed class DeliveryPopup
@@ -951,16 +956,41 @@ namespace CrazyElevator.Managers
             }
             string caption = result == OffboardResult.WrongFloor ? "WRONG FLOOR"
                 : result == OffboardResult.Happy ? "DELIVERED!"
-                : points == 0 ? "MAD - NO POINTS" : "LATE DELIVERY";
+                : points == 0 ? "NO POINTS" : "LATE DELIVERY";
             // Correct-delivery points now live in the crisp 2D reward popup.
             // Keep only status on the moving 3D rider; wrong-floor penalties
             // remain attached to the mistake so the consequence is obvious.
-            string worldFeedback = result == OffboardResult.WrongFloor
-                ? caption + "\n" + points : caption;
-            kick.Feedback = Sign(worldFeedback,
-                start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
+            if (result != OffboardResult.WrongFloor && points == 0)
+            {
+                kick.FeedbackIcon = CreateKickFeedbackIcon(start + Vector3.up * 2.25f,
+                    Coral, out kick.FeedbackTexture, out kick.FeedbackSprite);
+            }
+            else
+            {
+                string worldFeedback = result == OffboardResult.WrongFloor
+                    ? caption + "\n" + points : caption;
+                kick.Feedback = Sign(worldFeedback,
+                    start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
+            }
             RegisterDeliveryPopup(start, result, points);
             kicks[rider] = kick;
+        }
+
+        SpriteRenderer CreateKickFeedbackIcon(Vector3 position, Color accent,
+            out Texture2D texture, out Sprite sprite)
+        {
+            texture = PassengerIconLibrary.CreateAngryFace(accent, Ink);
+            sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                new Vector2(.5f, .5f), texture.width);
+            sprite.name = "MAD delivery icon sprite";
+            GameObject iconObject = new GameObject("MAD delivery icon");
+            iconObject.transform.SetParent(stage, false);
+            iconObject.transform.localPosition = position;
+            iconObject.transform.localScale = Vector3.one * .48f;
+            SpriteRenderer renderer = iconObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = 3;
+            return renderer;
         }
 
         // The combo celebrates quick correct drop-offs without changing the score.
@@ -1043,13 +1073,27 @@ namespace CrazyElevator.Managers
                 figure.localRotation = Quaternion.Euler(0, 180, 0);
                 AnimateKickPuffs(kick, landing);
             }
-            // Keep the score readable instead of rotating it with the passenger.
-            kick.Feedback.transform.localPosition = Vector3.Lerp(kick.Start, kick.Target, .6f)
+            // Keep the score/icon readable instead of rotating it with the passenger.
+            Vector3 feedbackPosition = Vector3.Lerp(kick.Start, kick.Target, .6f)
                 + Vector3.up * (2.2f + t * .55f);
-            kick.Feedback.transform.rotation = Quaternion.LookRotation(kick.Feedback.transform.position - eye.transform.position);
-            Color color = kick.Feedback.color;
-            color.a = 1 - Mathf.Clamp01((t - .8f) / .2f);
-            kick.Feedback.color = color;
+            if (kick.Feedback != null)
+            {
+                kick.Feedback.transform.localPosition = feedbackPosition;
+                kick.Feedback.transform.rotation = Quaternion.LookRotation(
+                    kick.Feedback.transform.position - eye.transform.position);
+                Color color = kick.Feedback.color;
+                color.a = 1 - Mathf.Clamp01((t - .8f) / .2f);
+                kick.Feedback.color = color;
+            }
+            else if (kick.FeedbackIcon != null)
+            {
+                kick.FeedbackIcon.transform.localPosition = feedbackPosition;
+                kick.FeedbackIcon.transform.rotation = Quaternion.LookRotation(
+                    kick.FeedbackIcon.transform.position - eye.transform.position);
+                Color color = kick.FeedbackIcon.color;
+                color.a = 1 - Mathf.Clamp01((t - .8f) / .2f);
+                kick.FeedbackIcon.color = color;
+            }
         }
 
         // Landing puffs make the ejection readable without camera shake.
@@ -1072,7 +1116,10 @@ namespace CrazyElevator.Managers
         {
             if (!kicks.TryGetValue(rider, out var kick)) return;
             foreach (var puff in kick.Puffs) Destroy(puff.gameObject);
-            Destroy(kick.Feedback.gameObject);
+            if (kick.Feedback != null) Destroy(kick.Feedback.gameObject);
+            if (kick.FeedbackIcon != null) Destroy(kick.FeedbackIcon.gameObject);
+            if (kick.FeedbackSprite != null) Destroy(kick.FeedbackSprite);
+            if (kick.FeedbackTexture != null) Destroy(kick.FeedbackTexture);
             if (figures.TryGetValue(rider, out var figure)) figure.localScale = kick.Scale;
             kicks.Remove(rider);
             if (persona) persona.RestHands();
@@ -1659,6 +1706,7 @@ namespace CrazyElevator.Managers
                 bool destinationPersistent = rider.Boarded && rider.Destination == round.Floor
                     && (phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing);
                 bool babyPersistent = rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby);
+                bool madAlert = temporaryAlert && rider.Remaining <= 0;
 
                 string message = temporaryAlert ? rider.Remaining <= 0 ? "I'M MAD!" : "PLEASE HURRY!"
                     : missedPersistent ? "MISSED MY FLOOR!"
@@ -1668,7 +1716,10 @@ namespace CrazyElevator.Managers
                     : null;
                 if (string.IsNullOrEmpty(message)) { bubble.Hide(); continue; }
                 PositionSpeechBubble(rider, bubble);
-                bubble.Show(message);
+                if (madAlert)
+                    bubble.ShowIcon("MAD", Coral);
+                else
+                    bubble.Show(message);
             }
         }
 
