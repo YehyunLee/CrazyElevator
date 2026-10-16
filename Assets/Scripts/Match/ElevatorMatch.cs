@@ -424,22 +424,32 @@ namespace CrazyElevator.Match
             collisionCooldown = .48f;
             collisionFlash = .72f;
             collisionCount++;
+            // A player waiting at the tutorial handoff remains a collision
+            // target, but the collision must not move that player's elevator.
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
-                first?.ApplyMatchBounce(collisionSlowSeconds, -verticalDirection * rebound);
-                second?.ApplyMatchBounce(collisionSlowSeconds, verticalDirection * rebound);
+                if (!TutorialInputLocked(first))
+                    first?.ApplyMatchBounce(collisionSlowSeconds, -verticalDirection * rebound);
+                if (!TutorialInputLocked(second))
+                    second?.ApplyMatchBounce(collisionSlowSeconds, verticalDirection * rebound);
             }
             else
             {
                 // A lane-change bump still jolts both cars, but does not reverse their vertical travel.
-                first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
-                second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                if (!TutorialInputLocked(first))
+                    first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                if (!TutorialInputLocked(second))
+                    second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
             }
             if (first != null && second != null)
                 EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
         }
+
+        static bool TutorialInputLocked(Game actor)
+            => actor != null && InputManager.Instance != null
+                && InputManager.Instance.IsTutorialInputLocked(actor.Seat);
 
         ParticleSystem CreateCollisionParticles(Transform parent)
         {
