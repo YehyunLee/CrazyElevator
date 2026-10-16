@@ -72,6 +72,18 @@ namespace CrazyElevator.Managers
         int ActiveTutorialStepCount => tutorialActors[1] != null
             ? DuelTutorialStepCount : SoloTutorialStepCount;
 
+        bool TutorialWaitingPanelActive
+        {
+            get
+            {
+                if (!tutorialActive) return false;
+                for (int i = 0; i < tutorialActors.Length; i++)
+                    if (tutorialActors[i] != null && tutorialSteps[i] >= ActiveTutorialStepCount)
+                        return true;
+                return false;
+            }
+        }
+
         void InitializeTutorialOnLoad()
         {
             if (!tutorialOnLoad) return;
@@ -322,10 +334,22 @@ namespace CrazyElevator.Managers
         {
             tutorialNextSteps[index] = nextStep;
             tutorialResumeActorOnCardSettled[index] = resumeWhenSettled;
+            if (nextStep >= ActiveTutorialStepCount)
+            {
+                // The waiting state is a handoff, not another tutorial card.
+                // Settle it immediately so the completed player's message
+                // cannot get trapped between the exit and enter animations.
+                tutorialSteps[index] = nextStep;
+                tutorialCardMotions[index] = TutorialCardMotion.Settled;
+                tutorialCardMotionTimes[index] = TutorialCardTravelSeconds;
+                tutorialCompletionTimes[index] = 0f;
+                tutorialResumeActorOnCardSettled[index] = false;
+                PauseTutorialActor(index);
+                return;
+            }
             tutorialCardMotions[index] = TutorialCardMotion.Exiting;
             tutorialCardMotionTimes[index] = 0f;
             if (nextStep == 0) tutorialPracticeTimes[index] = 0f;
-            if (nextStep >= ActiveTutorialStepCount) tutorialCompletionTimes[index] = 0f;
             PauseTutorialActor(index);
         }
 
@@ -693,14 +717,14 @@ namespace CrazyElevator.Managers
             cardTitle.normal.textColor = Cream;
             body.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, .92f);
             caption.normal.textColor = accent;
-            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .055f), 32, 44);
+            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .045f), 24, 36);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .027f), 18, 25);
             cardTitle.alignment = TextAnchor.MiddleCenter;
             body.alignment = TextAnchor.MiddleCenter;
-            cardTitle.wordWrap = true;
+            cardTitle.wordWrap = false;
             GUI.Label(new Rect(x + 24f, y + 18f, width - 48f, 26f),
                 waitingForOtherPlayer ? "WAITING" : "TUTORIAL COMPLETE", caption);
-            GUI.Label(new Rect(x + 24f, y + 50f, width - 48f, 70f),
+            GUI.Label(new Rect(x + 24f, y + 50f, width - 48f, 48f),
                 waitingForOtherPlayer ? "WAITING FOR OTHER DRIVER." : "GET READY.", cardTitle);
             GUI.Label(new Rect(x + 24f, y + 126f, width - 48f, 36f),
                 waitingForOtherPlayer ? "YOUR TUTORIAL IS COMPLETE." : "SHIFT STARTING SOON.", body);

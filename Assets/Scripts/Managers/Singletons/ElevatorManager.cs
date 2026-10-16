@@ -14,7 +14,7 @@ namespace CrazyElevator.Managers
         [Header("Editable scene objects")]
         public ElevatorScene sceneView;
         // The phase controls input, animation, and whether the round clock runs.
-        enum Phase { Intro, Boarding, Closing, Closed, Moving, Docking, Opening, Results }
+        enum Phase { Intro, Countdown, Boarding, Closing, Closed, Moving, Docking, Opening, Results }
         static readonly Color Ink = new Color32(43, 48, 78, 255);
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
@@ -59,7 +59,7 @@ namespace CrazyElevator.Managers
         const float SessionFadeInSeconds = .7f;
         ElevatorRound round;
         Phase phase;
-        float phaseTime, introTime, doors = 1;
+        float phaseTime, introTime, countdownTime, doors = 1;
         float sessionFadeAlpha;
         bool paused, stampPlayed;
         int passengerExitCount, kickoutCount;
@@ -92,7 +92,9 @@ namespace CrazyElevator.Managers
             if (MenuManager.IsOpen) return;
             sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
                 Time.unscaledDeltaTime / SessionFadeInSeconds);
-            if (Match != null && !Match.Running && phase != Phase.Intro) return;
+            // Countdown must keep advancing before the duel marks itself Running.
+            if (Match != null && !Match.Running
+                && phase != Phase.Intro && phase != Phase.Countdown) return;
             if (Match != null && Match.Paused) return;
             if (!MenuManager.TutorialActive && activeEncounterCard != null && SeatControls.ConfirmPressed)
             {
@@ -114,7 +116,30 @@ namespace CrazyElevator.Managers
                 if (!stampPlayed && introTime >= 1.12f) { stampPlayed = true; Play(stamp); }
                 float opening = Mathf.Clamp01((introTime - IntroRevealStart) / IntroRevealDuration);
                 SetDoors(EaseOut(opening));
-                if (introTime >= IntroRevealStart + IntroRevealDuration + .15f) { phase = Phase.Boarding; introTime = 0; SetDoors(1); }
+                if (introTime >= IntroRevealStart + IntroRevealDuration + .15f)
+                {
+                    introTime = 0;
+                    SetDoors(1);
+                    if (MenuManager.TutorialModeEnabled)
+                        phase = Phase.Boarding;
+                    else
+                    {
+                        phase = Phase.Countdown;
+                        countdownTime = 0f;
+                    }
+                }
+                return;
+            }
+            if (phase == Phase.Countdown)
+            {
+                countdownTime += Time.unscaledDeltaTime;
+                if (countdownTime >= 4f)
+                {
+                    countdownTime = 0f;
+                    phase = Phase.Boarding;
+                    phaseTime = 0f;
+                    SetDoors(1f);
+                }
                 return;
             }
             // The CPU's intro may finish behind the tutorial, but its shift
@@ -1903,6 +1928,7 @@ namespace CrazyElevator.Managers
         public int Seat { get; private set; }
         public bool IsNpc { get; private set; }
         public bool IntroPlaying => phase == Phase.Intro;
+        public bool CountdownPlaying => phase == Phase.Countdown;
         public bool ShiftFinished => round != null && round.Finished;
         public int Points => round != null ? round.Score : 0;
         public int PassengerLoad => round != null ? round.Load : 0;

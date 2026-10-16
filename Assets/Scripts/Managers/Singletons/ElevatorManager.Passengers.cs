@@ -1708,6 +1708,16 @@ namespace CrazyElevator.Managers
                 bool babyPersistent = rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby);
                 bool madAlert = temporaryAlert && rider.Remaining <= 0;
 
+                // MAD is already rendered as the passenger's single 2D
+                // callout icon. Do not also spawn the world-space speech icon
+                // on the same rider, which creates two angry faces stacked
+                // above one passenger.
+                if (madAlert)
+                {
+                    bubble.Hide();
+                    continue;
+                }
+
                 string message = temporaryAlert ? rider.Remaining <= 0 ? "I'M MAD!" : "PLEASE HURRY!"
                     : missedPersistent ? "MISSED MY FLOOR!"
                     : destinationPersistent ? "MY STOP!"
@@ -1716,10 +1726,7 @@ namespace CrazyElevator.Managers
                     : null;
                 if (string.IsNullOrEmpty(message)) { bubble.Hide(); continue; }
                 PositionSpeechBubble(rider, bubble);
-                if (madAlert)
-                    bubble.ShowIcon("MAD", Coral);
-                else
-                    bubble.Show(message);
+                bubble.Show(message);
             }
         }
 

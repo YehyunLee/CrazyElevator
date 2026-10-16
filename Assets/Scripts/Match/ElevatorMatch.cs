@@ -144,7 +144,16 @@ namespace CrazyElevator.Match
             float rivalTrackBefore = trackPosition[1];
             trackPosition[0] = Mathf.MoveTowards(trackPosition[0], targetTrack[0], switchSpeed * dt);
             trackPosition[1] = Mathf.MoveTowards(trackPosition[1], targetTrack[1], switchSpeed * dt);
-            if (Running && !Paused && CarsOverlap(player, Rival))
+            // Do not spend the collision cooldown while both cars are merely
+            // sharing a floor during their boarding/door transition. The
+            // impact must be caused by a car that is actually travelling;
+            // the other car may still be boarding and is a valid target.
+            bool playerTravelling = player.MovingInShaft
+                && Mathf.Abs(player.TravelVelocity) > .05f;
+            bool rivalTravelling = Rival != null && Rival.MovingInShaft
+                && Mathf.Abs(Rival.TravelVelocity) > .05f;
+            if (Running && !Paused && (playerTravelling || rivalTravelling)
+                && CarsOverlap(player, Rival))
             {
                 bool playerWasSwitching = !Mathf.Approximately(playerTrackBefore, targetTrack[0]);
                 bool rivalWasSwitching = !Mathf.Approximately(rivalTrackBefore, targetTrack[1]);
@@ -169,7 +178,8 @@ namespace CrazyElevator.Match
             if (Finished && resultRevealStartedAt < 0f)
                 resultRevealStartedAt = Time.unscaledTime;
 
-            if (player.IntroPlaying || MenuManager.IsOpen) return;
+            if (player.IntroPlaying || player.CountdownPlaying
+                || Rival.CountdownPlaying || MenuManager.IsOpen) return;
             var input = InputManager.Instance;
             if (input == null) return;
 
@@ -324,7 +334,12 @@ namespace CrazyElevator.Match
             Game other = Other(actor);
             if (other == null || !HorizontallyOverlaps(actor, other)) return candidate;
 
+            // At a shaft boundary the clamped candidate can equal `before`
+            // even though the car is still pushing toward the other car.
+            // Keep the signed velocity so a stopped boarding elevator at that
+            // floor can still be rammed and knocked away.
             float direction = Mathf.Sign(candidate - before);
+            if (direction == 0f) direction = Mathf.Sign(velocity);
             if (direction == 0) return candidate;
             float otherFloor = other.CurrentFloor;
             bool approaching = direction > 0 ? before <= otherFloor : before >= otherFloor;
@@ -372,9 +387,9 @@ namespace CrazyElevator.Match
         void TriggerCollision(Game first, Game second)
         {
             float direction = 0f;
-            if (first != null && first.MovingInShaft && Mathf.Abs(first.TravelVelocity) > .05f)
+            if (first != null && Mathf.Abs(first.TravelVelocity) > .05f)
                 direction = Mathf.Sign(first.TravelVelocity);
-            else if (second != null && second.MovingInShaft && Mathf.Abs(second.TravelVelocity) > .05f)
+            else if (second != null && Mathf.Abs(second.TravelVelocity) > .05f)
                 direction = -Mathf.Sign(second.TravelVelocity);
             float closingSpeed = first != null && second != null
                 ? Mathf.Abs(first.TravelVelocity - second.TravelVelocity) : 0f;
@@ -539,6 +554,7 @@ namespace CrazyElevator.Match
         void OnGUI()
         {
             if (player == null || Rival == null) return;
+            if (player.CountdownPlaying || Rival.CountdownPlaying) return;
             if (MenuManager.FullScreenOverlayActive) return;
             var previousMatrix = GUI.matrix;
             var previousColour = GUI.color;

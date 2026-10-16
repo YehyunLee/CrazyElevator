@@ -120,10 +120,22 @@ namespace CrazyElevator.Managers
         public static bool IsOpen { get; private set; }
         public static bool PauseOpen => pauseOpen;
         public static MenuManager Current { get; private set; }
-        public static bool FullScreenOverlayActive => Current != null
-            && (Current.showingControllerInstructions
-                || Current.tutorialActive
-                    && Current.tutorialFinalePhase != TutorialFinalePhase.None);
+        public static bool FullScreenOverlayActive
+        {
+            get
+            {
+                // Scene reloads can briefly leave Current pointing at the
+                // destroyed menu object while its replacement is already
+                // drawing. Resolve the live scene object as a fallback so
+                // the split HUD cannot paint over a full-screen takeover.
+                MenuManager menu = FindAnyObjectByType<MenuManager>();
+                if (menu == null) menu = Current;
+                return menu != null
+                    && (menu.showingControllerInstructions
+                        || menu.tutorialActive
+                            && menu.tutorialFinalePhase != TutorialFinalePhase.None);
+            }
+        }
         // Survives Main reloads after the player picks a mode (LoadScene).
         static bool sessionReady;
 
@@ -684,11 +696,14 @@ namespace CrazyElevator.Managers
                     DrawMenuFade();
                     return;
                 }
+                int previousDepth = GUI.depth;
+                GUI.depth = -1000;
                 if (tutorialFinalePhase != TutorialFinalePhase.None)
                     DrawTutorialFinale();
                 else
                     DrawTutorialOverlay();
-                DrawMenuFade();
+                GUI.depth = previousDepth;
+                if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();

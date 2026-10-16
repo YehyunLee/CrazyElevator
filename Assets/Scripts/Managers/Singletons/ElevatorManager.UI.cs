@@ -653,7 +653,13 @@ namespace CrazyElevator.Managers
         {
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
-            if (round == null || eye == null || Match != null || MenuManager.IsOpen) return;
+            if (round == null || eye == null || MenuManager.IsOpen) return;
+            if (phase == Phase.Countdown)
+            {
+                if (Match == null || !IsNpc) DrawNoTutorialCountdown();
+                return;
+            }
+            if (Match != null || MenuManager.FullScreenOverlayActive) return;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
             GUI.enabled = true;
@@ -732,6 +738,32 @@ namespace CrazyElevator.Managers
             GUI.color = new Color(0f, 0f, 0f, Mathf.Clamp01(alpha));
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        void DrawNoTutorialCountdown()
+        {
+            GameTypography.ApplyToSkin(GUI.skin);
+            Styles();
+            int previousDepth = GUI.depth;
+            GUI.depth = -1000;
+            Panel(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
+            string countdown = countdownTime < 3f
+                ? (3 - Mathf.FloorToInt(countdownTime)).ToString()
+                : "START";
+            int previousSize = title.fontSize;
+            TextAnchor previousAlignment = title.alignment;
+            Color previousTextColor = title.normal.textColor;
+            title.fontSize = countdown == "START"
+                ? Mathf.Clamp(Mathf.RoundToInt(Screen.width * .07f), 64, 118)
+                : Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
+            title.alignment = TextAnchor.MiddleCenter;
+            title.normal.textColor = Cream;
+            GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
+                countdown, title);
+            title.fontSize = previousSize;
+            title.alignment = previousAlignment;
+            title.normal.textColor = previousTextColor;
+            GUI.depth = previousDepth;
         }
 
         // Match HUD is drawn by ElevatorMatch so the solo UI remains unchanged.
