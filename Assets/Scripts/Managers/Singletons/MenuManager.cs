@@ -22,8 +22,7 @@ namespace CrazyElevator.Managers
         static readonly Color CpuReadyColour = new Color32(145, 150, 160, 255);
         static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
-        [SerializeField] Texture2D controllerPassengerInstructions;
-        [SerializeField] Texture2D controllerElevatorInstructions;
+        [SerializeField] Texture2D controllerInstructions;
         const float ArtWidth = 1700f;
         const float ArtHeight = 1082f;
         const float TransitionSeconds = 1.1f;
@@ -241,12 +240,14 @@ namespace CrazyElevator.Managers
                     MoveLobbyCursor(ref playerTwoCursor, playerTwoInput.Move, ref playerTwoCursorHeld, 1);
             }
 
-            // Once the selected sides are ready, Enter should start from
-            // anywhere in the lobby instead of requiring a precise cursor stop
-            // on the small Start tile.
+            // Start only from the START tile. In particular, Player 2's
+            // period/slash input is also exposed as StartPressed for title
+            // navigation, but it must still confirm the currently selected
+            // lobby control first (for example, CPU -> PLAYER 2).
             if (choosingMode && transition >= TransitionSeconds
                 && AllPlayersReady
-                && (playerOneInput.StartPressed || playerTwoInput.StartPressed))
+                && ((playerOneInput.StartPressed && playerOneCursor == 4)
+                    || (playerTwoInput.StartPressed && playerTwoCursor == 4)))
             {
                 StartSelectedMode();
                 return;
@@ -329,7 +330,6 @@ namespace CrazyElevator.Managers
             }
             if (cursor == 1)
             {
-                if (!InputManager.Instance.HasLobbyInput(1)) return;
                 playerTwoSelected = !playerTwoSelected;
                 playerTwoReady = !playerTwoSelected;
                 if (playerTwoSelected)
@@ -504,27 +504,20 @@ namespace CrazyElevator.Managers
 
         void DrawControllerInstructions()
         {
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
+            Panel(new Rect(0, 0, Screen.width, Screen.height), Color.black);
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
                 new Vector3(scale, scale, 1));
             GUI.Label(new Rect(100, 34, 1500, 82), "CONTROLLER CONTROLS", title);
-            GUI.Label(new Rect(48, 126, 790, 42), "PASSENGERS", caption);
-            GUI.Label(new Rect(862, 126, 790, 42), "ELEVATOR", caption);
-            Rect passengerImage = new Rect(48, 176, 790, 590);
-            Rect elevatorImage = new Rect(862, 176, 790, 590);
-            Panel(passengerImage, Cream);
-            Panel(elevatorImage, Cream);
-            if (controllerPassengerInstructions != null)
-                GUI.DrawTexture(passengerImage, controllerPassengerInstructions, ScaleMode.ScaleToFit);
-            if (controllerElevatorInstructions != null)
-                GUI.DrawTexture(elevatorImage, controllerElevatorInstructions, ScaleMode.ScaleToFit);
-            Rect startButton = new Rect(610, 820, 480, 76);
+            Rect controllerImage = new Rect(0, 112, ArtWidth, 826);
+            if (controllerInstructions != null)
+                GUI.DrawTexture(controllerImage, controllerInstructions, ScaleMode.ScaleToFit);
+            Rect startButton = new Rect(610, 952, 480, 76);
             Panel(startButton, Teal);
             if (GUI.Button(startButton, "START SHIFT", cardTitle))
                 DismissControllerInstructions();
-            GUI.Label(new Rect(400, 912, 900, 38), "PRESS START OR CONFIRM TO BEGIN", caption);
+            GUI.Label(new Rect(400, 1038, 900, 38), "PRESS START OR CONFIRM TO BEGIN", caption);
             GUI.matrix = Matrix4x4.identity;
         }
 
@@ -736,6 +729,7 @@ namespace CrazyElevator.Managers
             }
             DrawTintedTexture(rect, texture, Teal);
             DrawLabel(rect, label, menuLabelText, Ink);
+            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
         }
 
         void EnsureLabelTexture(MenuLabelShape shape, ref Texture2D texture, ref int shapeHash)
@@ -758,6 +752,7 @@ namespace CrazyElevator.Managers
             DrawSelectionFrame(rect, playerOneHovering, playerTwoHovering);
             Panel(rect, fill);
             DrawLabel(rect, label, readyLabelText, textColour);
+            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
         }
 
         void DrawActionButton(Rect rect, string label, Color fill, Color textColour,
@@ -766,6 +761,25 @@ namespace CrazyElevator.Managers
             DrawSelectionFrame(rect, playerOneHovering, playerTwoHovering);
             Panel(rect, fill);
             DrawLabel(rect, label, menuLabelText, textColour);
+            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
+        }
+
+        void DrawSelectionArrows(Rect rect, bool playerOneHovering, bool playerTwoHovering)
+        {
+            const float arrowWidth = 52f;
+            const float arrowGap = 8f;
+            if (playerOneHovering)
+            {
+                DrawChoiceArrow(new Rect(rect.x - arrowWidth - arrowGap, rect.y,
+                    arrowWidth, rect.height), true, PlayerOneColour,
+                    ref leftChoiceArrowTexture);
+            }
+            if (playerTwoHovering)
+            {
+                DrawChoiceArrow(new Rect(rect.xMax + arrowGap, rect.y,
+                    arrowWidth, rect.height), false, PlayerTwoColour,
+                    ref rightChoiceArrowTexture);
+            }
         }
 
         static void DrawSelectionFrame(Rect rect, bool playerOneHovering, bool playerTwoHovering)
@@ -863,13 +877,17 @@ namespace CrazyElevator.Managers
         {
             const int width = 128, height = 64;
             var pixels = new Color32[width * height];
-            Vector2 left = new Vector2(7, 55), right = new Vector2(121, 55), tip = new Vector2(64, 7);
+            // Texture rows start at the bottom, so these points render as a
+            // right-facing chevron in the GUI: >
+            Vector2 leftTop = new Vector2(7, 7), leftBottom = new Vector2(7, 57),
+                tip = new Vector2(121, 32);
             for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
                 Vector2 point = new Vector2(x + .5f, y + .5f);
-                float distance = Mathf.Min(DistanceToSegment(point, left, right),
-                    Mathf.Min(DistanceToSegment(point, right, tip), DistanceToSegment(point, tip, left)));
+                float distance = Mathf.Min(DistanceToSegment(point, leftTop, leftBottom),
+                    Mathf.Min(DistanceToSegment(point, leftBottom, tip),
+                        DistanceToSegment(point, tip, leftTop)));
                 byte alpha = (byte)(Mathf.Clamp01(3f - distance) * 255);
                 pixels[y * width + x] = new Color32(5, 220, 197, alpha);
             }
@@ -880,10 +898,13 @@ namespace CrazyElevator.Managers
             return texture;
         }
 
-        void DrawChoiceArrow(Rect hitArea, bool pointsRight, ref Texture2D texture)
+        void DrawChoiceArrow(Rect hitArea, bool pointsRight, Color colour, ref Texture2D texture)
         {
             if (texture == null) texture = CreateChoiceArrow(pointsRight);
+            Color previous = GUI.color;
+            GUI.color = colour;
             GUI.DrawTexture(new Rect(hitArea.center.x - 13, hitArea.center.y - 16, 26, 32), texture);
+            GUI.color = previous;
         }
 
         static Texture2D CreateChoiceArrow(bool pointsRight)
@@ -904,7 +925,7 @@ namespace CrazyElevator.Managers
                     float a = Cross(tip, top, point), b = Cross(top, bottom, point), c = Cross(bottom, tip, point);
                     if (!((a < 0 || b < 0 || c < 0) && (a > 0 || b > 0 || c > 0))) covered++;
                 }
-                pixels[y * width + x] = new Color32(5, 220, 197, (byte)(covered * 255 / 4));
+                pixels[y * width + x] = new Color32(255, 255, 255, (byte)(covered * 255 / 4));
             }
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
             { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };

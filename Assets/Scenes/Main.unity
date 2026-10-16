@@ -1637,8 +1637,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.MenuManager
   menuArtwork: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
-  controllerPassengerInstructions: {fileID: 2800000, guid: d5b9831ca3e2408686c5fe5c4210d418, type: 3}
-  controllerElevatorInstructions: {fileID: 2800000, guid: 9242da6ce5664be08df1a9f623df47c8, type: 3}
+  controllerInstructions: {fileID: 2800000, guid: 559a3286dac74179894e4e458f441042, type: 3}
   titleButtons: {fileID: 910001005}
   playerOneLabel:
     topLeft: {x: 0.02, y: 0.02}
