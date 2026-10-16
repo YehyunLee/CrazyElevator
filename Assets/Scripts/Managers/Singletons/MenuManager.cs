@@ -19,7 +19,6 @@ namespace CrazyElevator.Managers
         static readonly Color PlayerOneColour = new Color32(255, 80, 80, 255);
         static readonly Color PlayerTwoColour = new Color32(80, 145, 255, 255);
         static readonly Color LobbySurface = new Color32(55, 59, 68, 255);
-        static readonly Color LobbyFrame = new Color32(31, 35, 43, 255);
         static readonly Color CpuReadyColour = new Color32(145, 150, 160, 255);
         static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
@@ -735,11 +734,6 @@ namespace CrazyElevator.Managers
                 DrawTintedTexture(Expand(rect, 5f), texture,
                     playerOneHovering ? PlayerOneColour : PlayerTwoColour);
             }
-            else
-            {
-                DrawTintedTexture(Expand(rect, 3f), texture, LobbyFrame);
-            }
-
             DrawTintedTexture(rect, texture, Teal);
             DrawLabel(rect, label, menuLabelText, Ink);
         }
@@ -778,14 +772,13 @@ namespace CrazyElevator.Managers
         {
             if (playerOneHovering && playerTwoHovering)
             {
-                Panel(Expand(rect, 13f), PlayerOneColour);
-                Panel(Expand(rect, 8f), PlayerTwoColour);
+                Panel(Expand(rect, 10f), PlayerOneColour);
+                Panel(Expand(rect, 5f), PlayerTwoColour);
             }
             else if (playerOneHovering || playerTwoHovering)
             {
-                Panel(Expand(rect, 8f), playerOneHovering ? PlayerOneColour : PlayerTwoColour);
+                Panel(Expand(rect, 5f), playerOneHovering ? PlayerOneColour : PlayerTwoColour);
             }
-            Panel(Expand(rect, 3f), LobbyFrame);
         }
 
         static void DrawLabel(Rect rect, string label, GUIStyle style, Color colour)
