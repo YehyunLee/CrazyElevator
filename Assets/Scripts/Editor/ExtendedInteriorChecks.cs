@@ -346,8 +346,9 @@ public static class ExtendedInteriorChecks
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
         Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - centre) < .001f
-            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) < .001f,
-            "The solo elevator or travel camera is off the building centre.");
+            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) > 4f
+            && !game.sceneView.exteriorCamera.orthographic,
+            "Solo travel must keep the car centred while the perspective camera observes it diagonally.");
         var shaft = game.sceneView.exteriorCar.parent;
         foreach (int floor in new[] { 1, 11 })
         {
@@ -383,7 +384,8 @@ public static class ExtendedInteriorChecks
         Call(game, "BeginBuildingTravel");
         Set(game, "travelFloor", 1f);
         Call(game, "LateUpdate");
-        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.y - 8f) < .02f,
+        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.y
+            - (Game.ShaftFloorHeight + 1.4f)) < .02f,
             "The traveling elevator does not line up with the taller first floor.");
         Call(game, "RequestFloorStop");
         Call(game, "AdvanceBuildingTravel", .5f);
@@ -392,7 +394,7 @@ public static class ExtendedInteriorChecks
             && game.PassengerLoad == 0 && round.Delivered == 1,
             "Solo travel or delivery changed.");
         File.WriteAllText(Work + "/result.txt",
-            "PASS: solo shaft and camera centred; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
+            "PASS: solo car centred with a diagonal perspective camera; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
@@ -486,9 +488,48 @@ public static class ExtendedInteriorChecks
         Require(contact < 4.4f && player.TravelVelocity < 0f && rival.TravelVelocity > 0f
             && (float)Get(player, "collisionRecoilTimer") > 0f,
             "Vertical contact must separate both moving cars with a short rebound.");
+
+        // Stopping to handle passengers cannot make a car collision-proof.
+        // A moving rival should knock it back into shaft travel and visibly
+        // displace it away from the floor.
+        match.StartMatch();
+        trackPositions[1] = trackPositions[0];
+        phaseField.SetValue(player, moving);
+        var stoppedRound = (Round)Get(rival, "round");
+        stoppedRound.Floor = 4;
+        Set(player, "travelFloor", 3.4f); Set(player, "travelVelocity", 1.8f);
+        Set(player, "travelDirection", 1);
+        float ramVelocity = 1.8f;
+        match.ConstrainTravel(player, 3.4f, 3.9f, ref ramVelocity);
+        float shoveStart = rival.CurrentFloor;
+        Require(rival.MovingInShaft && rival.TravelVelocity > 0f
+            && (float)Get(rival, "collisionRecoilTimer") >= .6f,
+            "A boarding elevator remained protected from an incoming collision.");
+        Call(rival, "AdvanceBuildingTravel", .45f);
+        Require(rival.CurrentFloor > shoveStart + .4f,
+            "The stopped elevator was not knocked visibly away from its floor.");
+
+        // The route remains aligned at integer floors, then visibly bends into
+        // depth at a junction. Choosing the highlighted track grants one burst.
+        match.StartMatch();
+        phaseField.SetValue(player, moving);
+        float junctionFloor = match.JunctionFloor(0);
+        Set(player, "travelFloor", junctionFloor);
+        Set(player, "travelVelocity", 1f);
+        var targetTracks = (int[])matchType.GetField("targetTrack", Flags).GetValue(match);
+        targetTracks[0] = match.ExpressTrack(0);
+        Call(player, "LateUpdate");
+        Require(!player.sceneView.exteriorCamera.orthographic
+            && Mathf.Abs(player.sceneView.exteriorCar.localPosition.x - match.ShaftX(player)) > 3f
+            && player.sceneView.exteriorCar.localPosition.z > 1f,
+            "The express junction did not create a perspective 3D route bend.");
+        float speedBeforeExpress = player.TravelVelocity;
+        match.EvaluateJunction(player, junctionFloor - .01f, junctionFloor + .01f);
+        Require(player.TravelVelocity > speedBeforeExpress && match.ExpressFlash(player) > 0f,
+            "The highlighted express track did not grant its speed burst.");
         match.StartMatch();
         File.WriteAllText(Work + "/result.txt",
-            "PASS: Main creates two centred 1v1 tracks; visible-car collision, sparks and vertical bounce work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
+            "PASS: Main creates two centred 1v1 tracks; visible-car collision, sparks and stronger vertical bounce work; stopped boarding cars can be knocked away; 3D junction perspective and express boost work; both cars share rider identities; boarding is exclusive; loads and queues remain car-specific; match reset restores a fresh shared pool.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
@@ -885,21 +926,23 @@ public static class ExtendedInteriorChecks
             round.Floor = 0;
             Call(game, "CloseAndTravel"); Call(game, "BeginBuildingTravel"); Set(game, "travelFloor", 2f);
             float cruise = (float)Property(game, "CruiseSpeed");
-            Input(game, pad, new GamepadState { leftStick = Vector2.up }.WithButton(GamepadButton.LeftShoulder));
-            Call(game, "AdvanceBuildingTravel", .4f); float first = (float)Get(game, "travelVelocity");
-            Call(game, "AdvanceBuildingTravel", .4f); float second = (float)Get(game, "travelVelocity");
+            Require(Mathf.Abs((float)Get(game, "travelVelocity") - cruise) < .001f,
+                "The elevator must depart immediately at normal cruise speed.");
+            game.SetTravelInput(1f, true);
+            Call(game, "AdvanceBuildingTravel", .15f); float first = (float)Get(game, "travelVelocity");
+            Call(game, "AdvanceBuildingTravel", .15f); float second = (float)Get(game, "travelVelocity");
             Require(first > cruise && second > first, "Boost must accumulate velocity over time.");
-            Call(game, "AdvanceBuildingTravel", .8f);
+            Call(game, "AdvanceBuildingTravel", 1.5f);
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - game.maximumTravelSpeed) < .002f, "Boost speed cap failed.");
-            Input(game, pad, new GamepadState()); float fast = (float)Get(game, "travelVelocity");
+            game.SetTravelInput(0f, false); float fast = (float)Get(game, "travelVelocity");
             Call(game, "AdvanceBuildingTravel", .15f);
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - fast) < .001f, "Boost momentum disappeared on release.");
-            Set(game, "travelFloor", 3f); Set(game, "travelVelocity", 1.5f);
-            Input(game, pad, new GamepadState { leftStick = Vector2.down }.WithButton(GamepadButton.LeftShoulder));
+            Set(game, "travelFloor", 3f); Set(game, "travelVelocity", 1.5f); Set(game, "travelDirection", 1);
+            game.SetTravelInput(-1f, true);
+            float reversed = (float)Get(game, "travelVelocity");
+            Require(reversed <= -cruise + .001f, "Opposite input must immediately reverse at normal cruise speed.");
             Call(game, "AdvanceBuildingTravel", .2f);
-            Require((float)Get(game, "travelVelocity") > 0 && (float)Get(game, "travelVelocity") < 1.5f, "Opposite boost should first brake, not instantly flip velocity.");
-            Call(game, "AdvanceBuildingTravel", 1.5f);
-            Require((float)Get(game, "travelVelocity") < 0, "Sustained opposite boost did not reverse.");
+            Require((float)Get(game, "travelVelocity") < reversed, "Boost must accelerate after the immediate reversal.");
             Set(game, "travelFloor", 2f); Set(game, "travelVelocity", cruise); Set(game, "travelDirection", 1);
             Input(game, pad, new GamepadState { leftStick = Vector2.right }.WithButton(GamepadButton.LeftShoulder));
             Call(game, "AdvanceBuildingTravel", .2f);
@@ -962,7 +1005,7 @@ public static class ExtendedInteriorChecks
                 "Handyman protection remained after unloading.");
             Call(game, "Restart");
             CheckGrandmaSpeedStack(game, (Round)Get(game, "round"));
-            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; opposite-direction braking/reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
+            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; sharp opposite-direction reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
         }
         finally
         {

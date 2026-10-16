@@ -23,8 +23,8 @@ namespace CrazyElevator.Match
         [Range(0f, .75f)] public float collisionPadding = .15f;
         [FormerlySerializedAs("collisionSpeedRetained")]
         [Tooltip("How much of the closing speed becomes a short rebound after a vertical hit.")]
-        [Range(.15f, .75f)] public float collisionBounceStrength = .28f;
-        [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.15f;
+        [Range(.15f, 1.1f)] public float collisionBounceStrength = .55f;
+        [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.35f;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
@@ -39,6 +39,10 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        static readonly float[] JunctionFloorPositions = { 2.5f, 5.5f, 8.5f };
+        readonly int[] expressTrack = { 0, 1, 0 };
+        readonly int[] usedJunctionMask = { 0, 0 };
+        readonly float[] expressFlash = { 0f, 0f };
         const float ResultRevealInputAt = 5.7f;
         float resultRevealStartedAt = -1f;
         AudioClip collisionClip;
@@ -131,6 +135,8 @@ namespace CrazyElevator.Match
             float dt = Time.unscaledDeltaTime;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
+            expressFlash[0] = Mathf.Max(0f, expressFlash[0] - dt);
+            expressFlash[1] = Mathf.Max(0f, expressFlash[1] - dt);
             float switchSpeed = 1f / Mathf.Max(.05f, trackSwitchSeconds);
             float playerTrackBefore = trackPosition[0];
             float rivalTrackBefore = trackPosition[1];
@@ -145,6 +151,17 @@ namespace CrazyElevator.Match
                 if (playerWasSwitching) targetTrack[0] = playerTrackBefore < .5f ? 0 : 1;
                 if (rivalWasSwitching) targetTrack[1] = rivalTrackBefore < .5f ? 0 : 1;
                 TriggerCollision(player, Rival);
+            }
+
+            // The CPU reads the same visible junction sign as a player and
+            // moves toward the express track shortly before reaching it.
+            if (Running && !Paused && Rival != null && Rival.IsNpc
+                && TryGetUpcomingJunction(Rival, out int npcJunction, out float npcDistance)
+                && npcDistance < 1.15f)
+            {
+                int desired = expressTrack[npcJunction];
+                int current = targetTrack[SeatOf(Rival)];
+                if (desired != current) RequestTrack(Rival, desired > current ? 1 : -1);
             }
 
             if (Finished && resultRevealStartedAt < 0f)
@@ -180,6 +197,12 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            int firstExpressTrack = Random.Range(0, 2);
+            expressTrack[0] = firstExpressTrack;
+            expressTrack[1] = 1 - firstExpressTrack;
+            expressTrack[2] = Random.Range(0, 2);
+            usedJunctionMask[0] = usedJunctionMask[1] = 0;
+            expressFlash[0] = expressFlash[1] = 0f;
             player.StartMatchShift();
             Rival.StartMatchShift(player);
             Rival.GetComponent<NpcElevator>()?.ResetDecisions();
@@ -230,6 +253,54 @@ namespace CrazyElevator.Match
         }
 
         public int TrackNumber(Game actor) => targetTrack[SeatOf(actor)] + 1;
+
+        public int JunctionCount => JunctionFloorPositions.Length;
+        public int JunctionSignature => expressTrack[0] | expressTrack[1] << 1 | expressTrack[2] << 2;
+        public float JunctionFloor(int index) => JunctionFloorPositions[Mathf.Clamp(index, 0, JunctionFloorPositions.Length - 1)];
+        public int ExpressTrack(int index) => expressTrack[Mathf.Clamp(index, 0, expressTrack.Length - 1)];
+        public float ExpressFlash(Game actor) => expressFlash[SeatOf(actor)];
+
+        public bool TryGetUpcomingJunction(Game actor, out int junction, out float distance)
+        {
+            junction = -1;
+            distance = float.MaxValue;
+            if (!Running || actor == null || !actor.MovingInShaft) return false;
+            float direction = Mathf.Sign(actor.TravelVelocity);
+            if (Mathf.Abs(direction) < .5f) return false;
+            int seat = SeatOf(actor);
+            for (int i = 0; i < JunctionFloorPositions.Length; i++)
+            {
+                if ((usedJunctionMask[seat] & 1 << i) != 0) continue;
+                float delta = JunctionFloorPositions[i] - actor.CurrentFloor;
+                if (delta * direction <= 0f) continue;
+                float candidate = Mathf.Abs(delta);
+                if (candidate >= distance || candidate > 1.6f) continue;
+                junction = i;
+                distance = candidate;
+            }
+            return junction >= 0;
+        }
+
+        // Crossing the highlighted lane gives a readable reward without
+        // punishing the safe route. Each junction can trigger once per car.
+        public void EvaluateJunction(Game actor, float before, float after)
+        {
+            if (!Running || actor == null || Mathf.Approximately(before, after)) return;
+            int seat = SeatOf(actor);
+            bool movingUp = after > before;
+            for (int i = 0; i < JunctionFloorPositions.Length; i++)
+            {
+                int bit = 1 << i;
+                if ((usedJunctionMask[seat] & bit) != 0) continue;
+                float gate = JunctionFloorPositions[i];
+                bool crossed = movingUp ? before < gate && after >= gate : before > gate && after <= gate;
+                if (!crossed) continue;
+                usedJunctionMask[seat] |= bit;
+                if (targetTrack[seat] != expressTrack[i]) continue;
+                actor.ApplyExpressJunction();
+                expressFlash[seat] = 1.15f;
+            }
+        }
 
         public void RequestTrack(Game actor, int direction)
         {
@@ -292,8 +363,20 @@ namespace CrazyElevator.Match
             return verticalDistance <= combinedHalfHeights;
         }
 
-        // Keep the two-argument entry point used by our match Play Mode check.
-        void TriggerCollision(Game first, Game second) => PlayCollision(first, second, 0f, 0f);
+        // A lane-change impact can also knock a stopped car away from its
+        // floor. Use the moving car's direction so boarding is not a safe
+        // shield against a collision.
+        void TriggerCollision(Game first, Game second)
+        {
+            float direction = 0f;
+            if (first != null && first.MovingInShaft && Mathf.Abs(first.TravelVelocity) > .05f)
+                direction = Mathf.Sign(first.TravelVelocity);
+            else if (second != null && second.MovingInShaft && Mathf.Abs(second.TravelVelocity) > .05f)
+                direction = -Mathf.Sign(second.TravelVelocity);
+            float closingSpeed = first != null && second != null
+                ? Mathf.Abs(first.TravelVelocity - second.TravelVelocity) : 0f;
+            PlayCollision(first, second, direction, closingSpeed);
+        }
 
         void TriggerVerticalCollision(Game first, Game second, float direction, float closingSpeed)
             => PlayCollision(first, second, direction, closingSpeed);
@@ -301,11 +384,11 @@ namespace CrazyElevator.Match
         void PlayCollision(Game first, Game second, float verticalDirection, float closingSpeed)
         {
             if (collisionCooldown > 0f) return;
-            collisionCooldown = .55f;
-            collisionFlash = .62f;
+            collisionCooldown = .48f;
+            collisionFlash = .72f;
             if (verticalDirection != 0f)
             {
-                float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, .65f, 1.6f);
+                float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
                 first?.ApplyMatchBounce(collisionSlowSeconds, -verticalDirection * rebound);
                 second?.ApplyMatchBounce(collisionSlowSeconds, verticalDirection * rebound);
             }
