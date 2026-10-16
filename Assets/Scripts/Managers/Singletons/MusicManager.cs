@@ -53,8 +53,8 @@ namespace CrazyElevator.Managers
             music.clip = clip;
             if (wasPlaying)
             {
-                music.Play();
                 music.time = Mathf.Clamp01(normalizedPosition) * clip.length;
+                music.Play();
             }
             music.mute = muted;
         }

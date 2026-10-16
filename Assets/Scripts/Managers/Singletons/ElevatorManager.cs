@@ -165,7 +165,6 @@ namespace CrazyElevator.Managers
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
             int waitingMisses = MenuManager.TutorialActive
                 ? 0 : round.Tick(dt, phase == Phase.Boarding, tickWaiting);
-            UpdateThemeMusic();
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
@@ -182,7 +181,7 @@ namespace CrazyElevator.Managers
                 SelectRider(null);
                 ClearHandymanRepair();
                 ClearInteriorTransfers(); ClearKicks(); exiting.Clear();
-                Play(chime);
+                if (Match == null) PlayEndingDrum();
                 ResetCameraMotion();
                 session?.NotifyVictory();
                 return;
@@ -208,6 +207,7 @@ namespace CrazyElevator.Managers
                     if (phaseTime >= .65f) { phase = Phase.Boarding; phaseTime = 0; destination = -1; }
                 }
             }
+            UpdateThemeMusic();
             SetDoors(doors);
             SyncFigures(dt);
             if (phase != Phase.Moving) AccumulateRust(dt);
@@ -1068,6 +1068,7 @@ namespace CrazyElevator.Managers
             if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
                 if (!round.Board(rider)) return;
+                PlayPassengerBoardingVoice(rider);
                 cabinPositions[rider] = spot;
                 RememberCabinTileRun(rider, spot);
                 BeginPersonaBoard(rider, figure.localPosition, spot);
@@ -1642,6 +1643,9 @@ namespace CrazyElevator.Managers
     {
         [Header("Authored audio")]
         public AudioClip backgroundMusic;
+        public AudioClip endingDrumSfx;
+        public AudioClip clownTalkingSfx;
+        public AudioClip[] passengerTalkingSfx = System.Array.Empty<AudioClip>();
         public AudioClip happyDeliverySfx01;
         public AudioClip happyDeliverySfx02;
         public AudioClip angryDeliverySfx01;
@@ -1687,7 +1691,7 @@ namespace CrazyElevator.Managers
         void UpdateThemeMusic()
         {
             if (IsNpc || round == null || MusicManager.Instance == null) return;
-            WorldBand currentBand = BandForFloor(round.Floor);
+            WorldBand currentBand = BandForFloor(MovementFloor);
             if (!musicBandKnown)
             {
                 musicBand = currentBand;
@@ -1696,12 +1700,28 @@ namespace CrazyElevator.Managers
             }
             if (currentBand == musicBand) return;
 
-            // MusicManager keeps the current playback position when swapping
-            // to the candy track, so crossing worlds does not restart the song.
+            // Keep the current playback position when crossing world bands.
             AudioClip next = currentBand == WorldBand.Candy
-                ? MusicManager.Instance.ThemeAt(1) : groove;
+                ? MusicManager.Instance.ThemeAt(1)
+                : currentBand == WorldBand.Water
+                    ? MusicManager.Instance.ThemeAt(2)
+                    : groove;
             MusicManager.Instance.SetTheme(next);
             musicBand = currentBand;
+        }
+
+        public void PlayEndingDrum() => SfxManager.Instance?.PlaySfx(endingDrumSfx);
+
+        void PlayPassengerBoardingVoice(Rider rider)
+        {
+            if (rider == null) return;
+            if (rider.Kind == "CLOWN" || rider.HasFeature(PassengerFeature.SpeedBoost))
+            {
+                SfxManager.Instance?.PlaySfx(clownTalkingSfx);
+                return;
+            }
+            if (passengerTalkingSfx == null || passengerTalkingSfx.Length == 0) return;
+            SfxManager.Instance?.PlaySfx(passengerTalkingSfx[Random.Range(0, passengerTalkingSfx.Length)]);
         }
 
         AudioClip Tone(float frequency, float seconds)

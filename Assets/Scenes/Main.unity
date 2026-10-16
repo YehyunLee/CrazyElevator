@@ -1095,6 +1095,17 @@ MonoBehaviour:
   cabinTravelShake: 0.022
   shaftTravelShake: 0.1
   backgroundMusic: {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
+  endingDrumSfx: {fileID: 8300000, guid: bc9d7d59400698f4a8feff0430902ab4, type: 3}
+  clownTalkingSfx: {fileID: 8300000, guid: 5225a321c34e383449b2a968e71532e7, type: 3}
+  passengerTalkingSfx:
+  - {fileID: 8300000, guid: 534db0ed5967daf48aa9301025b73363, type: 3}
+  - {fileID: 8300000, guid: d18acc17c057c714e9be6348c831384c, type: 3}
+  - {fileID: 8300000, guid: fa99f50ee62eaff4d971ff4ad70f41e5, type: 3}
+  - {fileID: 8300000, guid: 8f0f56173b209e2419476bebc7854f08, type: 3}
+  - {fileID: 8300000, guid: 19c9f24105a64e6489cfa0692aa021ff, type: 3}
+  - {fileID: 8300000, guid: a6b0496ea21504e4898f4ad910e2bf96, type: 3}
+  - {fileID: 8300000, guid: bf7103e1580132846972ad95b4ce74c0, type: 3}
+  - {fileID: 8300000, guid: bd5b6f805e5fbd341bdde9e292da84db, type: 3}
   happyDeliverySfx01: {fileID: 8300000, guid: 48edc122732bc478b8d5e178340c1827, type: 3}
   happyDeliverySfx02: {fileID: 8300000, guid: e159ebea8950242c7b06914c49405831, type: 3}
   angryDeliverySfx01: {fileID: 8300000, guid: 669c8828220614ef69841631f7784acc, type: 3}
@@ -1590,7 +1601,7 @@ MonoBehaviour:
   themes:
   - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
   - {fileID: 8300000, guid: b8eb1ee04d1cfe14aa06e1079fe53ec7, type: 3}
-  - {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
+  - {fileID: 8300000, guid: aa5be66685c9bbe4d8d1eb69c4a659ce, type: 3}
   musicVolume: 0.25
 --- !u!1 &910000041
 GameObject:

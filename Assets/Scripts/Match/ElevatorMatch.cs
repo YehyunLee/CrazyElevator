@@ -179,7 +179,10 @@ namespace CrazyElevator.Match
             }
 
             if (Finished && resultRevealStartedAt < 0f)
+            {
                 resultRevealStartedAt = Time.unscaledTime;
+                player.PlayEndingDrum();
+            }
 
             if (player.IntroPlaying || player.CountdownPlaying
                 || Rival.CountdownPlaying || MenuManager.IsOpen) return;
