@@ -25,7 +25,6 @@ namespace CrazyElevator.Managers
         public bool HasSelectedPassenger => selectedRider != null;
         public int PassengerExitCount => passengerExitCount;
         public int KickoutCount => kickoutCount;
-        public float DoorHoldSeconds => doorHoldSeconds;
         public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
         public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
         public AudioClip DingClip => ding;

@@ -12,7 +12,6 @@ namespace CrazyElevator.Shared
     {
         None = 0,
         SlowArrival = 1 << 0,
-        HoldDoorBonus = 1 << 1,
         MultiSpace = 1 << 2,
         UrgencySpeech = 1 << 3,
         ClearsRust = 1 << 4,
@@ -45,7 +44,6 @@ namespace CrazyElevator.Shared
         [Min(5f)] public float patience = 60f;
         public float arrivalDelay;
         public int bonus;
-        public float holdRequired;
         public PassengerFeature features = PassengerFeature.None;
 
         [Header("Prefab")]
@@ -78,7 +76,6 @@ namespace CrazyElevator.Shared
                 Remaining = patience,
                 Arrival = arrivalDelay,
                 Bonus = bonus,
-                HoldRequired = holdRequired,
                 Data = this
             };
         }

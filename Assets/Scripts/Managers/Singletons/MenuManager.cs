@@ -769,7 +769,6 @@ namespace CrazyElevator.Managers
             DrawKeyboardHint(new Rect(210, 180, 380, 96), "W A S D", "MOVE");
             DrawKeyboardHint(new Rect(660, 180, 380, 96), "C", "SELECT PASSENGER");
             DrawKeyboardHint(new Rect(1110, 180, 380, 96), "E", "CLOSE DOORS");
-            DrawKeyboardHint(new Rect(210, 330, 380, 96), "H", "HOLD DOORS");
             DrawKeyboardHint(new Rect(660, 330, 380, 96), "R", "REPAIR");
             DrawKeyboardHint(new Rect(1110, 330, 380, 96), "SHIFT", "SPEED BOOST");
             DrawKeyboardHint(new Rect(435, 510, 830, 104), "Y / TAB", "PASSENGER LIST");

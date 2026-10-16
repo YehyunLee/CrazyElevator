@@ -16,19 +16,19 @@ namespace CrazyElevator.EditorTools
             var catalog = LoadOrCreateCatalog(folder + "/PassengerCatalog.asset");
             catalog.types = new[]
             {
-                Make(folder, "Courier", "Remy", "COURIER", "BOX", "Two spaces. Quick stop!", 0, 2, 34, 0, 30, 0,
+                Make(folder, "Courier", "Remy", "COURIER", "BOX", "Two spaces. Quick stop!", 0, 2, 34, 0, 30,
                     PassengerFeature.MultiSpace, PassengerTheme.Office),
-                Make(folder, "Pregnant", "Mina & Baby", "PREGNANT", "BABY", "WAAAH! Keep the baby calm.", 1, 2, 42, 0, 70, 0,
+                Make(folder, "Pregnant", "Mina & Baby", "PREGNANT", "BABY", "WAAAH! Keep the baby calm.", 1, 2, 42, 0, 70,
                     PassengerFeature.MultiSpace | PassengerFeature.CryingBaby, PassengerTheme.Candy),
-                Make(folder, "Interview", "Jules", "INTERVIEW", "!", "My interview starts soon!", 2, 1, 13, 0, 120, 0,
+                Make(folder, "Interview", "Jules", "INTERVIEW", "!", "My interview starts soon!", 2, 1, 13, 0, 120,
                     PassengerFeature.UrgencySpeech, PassengerTheme.Office),
-                Make(folder, "Boss", "Morgan", "BOSS", "B", "Hold OPEN for my bonus.", 3, 1, 30, 0, 140, 1.25f,
-                    PassengerFeature.HoldDoorBonus, PassengerTheme.Candy),
-                Make(folder, "Elderly", "Eli", "ELDERLY", "SLOW", "Please wait for me...", 4, 1, 58, ElevatorRound.ElderlyArrivalSeconds, 175, 0,
+                Make(folder, "Boss", "Morgan", "BOSS", "B", "Deliver me on time for my bonus.", 3, 1, 30, 0, 140,
+                    PassengerFeature.None, PassengerTheme.Candy),
+                Make(folder, "Elderly", "Eli", "ELDERLY", "SLOW", "Please wait for me...", 4, 1, 58, ElevatorRound.ElderlyArrivalSeconds, 175,
                     PassengerFeature.SlowArrival | PassengerFeature.SpeedSlow | PassengerFeature.CalmsBaby),
-                Make(folder, "Group", "The Trio", "GROUP", "3X", "All three or none!", 5, 3, 32, 0, 130, 0,
+                Make(folder, "Group", "The Trio", "GROUP", "3X", "All three or none!", 5, 3, 32, 0, 130,
                     PassengerFeature.MultiSpace | PassengerFeature.GroupParty | PassengerFeature.SpeedBoost, PassengerTheme.Candy),
-                Make(folder, "Handyman", "Casey", "HANDYMAN", "FIX", "Rust-free while I'm aboard!", 4, 1, 80, 0, 110, 0,
+                Make(folder, "Handyman", "Casey", "HANDYMAN", "FIX", "Rust-free while I'm aboard!", 4, 1, 80, 0, 110,
                     PassengerFeature.ClearsRust, PassengerTheme.Underwater)
             };
             EditorUtility.SetDirty(catalog);
@@ -39,7 +39,7 @@ namespace CrazyElevator.EditorTools
         }
 
         static PassengerData Make(string folder, string file, string name, string kind, string badge, string request,
-            int color, int space, float patience, float arrival, int bonus, float hold,
+            int color, int space, float patience, float arrival, int bonus,
             PassengerFeature features, PassengerTheme theme = PassengerTheme.Any)
         {
             string path = folder + "/PassengerData_" + file + ".asset";
@@ -58,7 +58,6 @@ namespace CrazyElevator.EditorTools
             asset.patience = patience;
             asset.arrivalDelay = arrival;
             asset.bonus = bonus;
-            asset.holdRequired = hold;
             asset.features = features;
             asset.theme = theme;
             EditorUtility.SetDirty(asset);

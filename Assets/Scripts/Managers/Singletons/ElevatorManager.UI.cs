@@ -197,7 +197,7 @@ namespace CrazyElevator.Managers
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
             if (p.Kind == "PREGNANT") return "Baby cries • 2 spaces";
             if (p.Kind == "INTERVIEW") return "Very urgent";
-            if (p.Kind == "BOSS") return "Hold OPEN bonus";
+            if (p.Kind == "BOSS") return "Premium delivery bonus.";
             if (p.Kind == "ELDERLY") return "Slow • big bonus";
             return "3 spaces together";
         }
@@ -287,7 +287,7 @@ namespace CrazyElevator.Managers
                     break;
                 case "BOSS":
                     titleText = "THE BOSS";
-                    description = "Hold the door open to earn an extra bonus.";
+                    description = "Deliver the boss on time to earn an extra bonus.";
                     break;
                 case "GROUP":
                     titleText = "THE TRIO";
@@ -704,7 +704,7 @@ namespace CrazyElevator.Managers
                 // The remaining time contracts symmetrically toward the centre,
                 // echoing the physical elevator doors closing from both sides.
                 float fill = phase == Phase.Opening ? 1f : phase == Phase.Boarding
-                    ? 1f - Mathf.Clamp01(phaseTime / DoorHoldDurationAtCurrentFloor()) : 0f;
+                    ? 1f - Mathf.Clamp01(phaseTime / BoardingDurationAtCurrentFloor()) : 0f;
                 float margin = Mathf.Clamp(Screen.width * .025f, 24f, 36f);
                 float width = Screen.width - margin * 2f;
                 Panel(new Rect(margin, 18f, width, 12f), new Color(Ink.r, Ink.g, Ink.b, .55f));
@@ -1132,7 +1132,7 @@ namespace CrazyElevator.Managers
             PassengerFeature features = PassengerFeature.None;
             PassengerFeature[] all =
             {
-                PassengerFeature.SlowArrival, PassengerFeature.HoldDoorBonus,
+                PassengerFeature.SlowArrival,
                 PassengerFeature.MultiSpace, PassengerFeature.UrgencySpeech,
                 PassengerFeature.ClearsRust, PassengerFeature.GroupParty,
                 PassengerFeature.SpeedBoost, PassengerFeature.SpeedSlow,
@@ -1149,7 +1149,6 @@ namespace CrazyElevator.Managers
             if ((card.Features & PassengerFeature.SpeedBoost) != 0) return "SPEEDBOOST";
             if ((card.Features & PassengerFeature.ClearsRust) != 0) return "HANDYMAN";
             if ((card.Features & PassengerFeature.CryingBaby) != 0) return "PREGNANT";
-            if ((card.Features & PassengerFeature.HoldDoorBonus) != 0) return "BOSS";
             if ((card.Features & (PassengerFeature.SpeedSlow | PassengerFeature.SlowArrival)) != 0)
                 return "ELDERLY";
             if ((card.Features & PassengerFeature.UrgencySpeech) != 0) return "INTERVIEW";
@@ -1160,9 +1159,9 @@ namespace CrazyElevator.Managers
 
         // Same gameplay can be driven with buttons when a keyboard/controller is unavailable.
         void GetMouseControlRects(out Rect up, out Rect down, out Rect stop,
-            out Rect close, out Rect hold, out Rect repair)
+            out Rect close, out Rect kickout, out Rect repair)
         {
-            up = down = stop = close = hold = repair = new Rect();
+            up = down = stop = close = kickout = repair = new Rect();
             if (!extendedInterior || paused) return;
             bool split = Match != null && Match.SplitScreen;
             float width = split
@@ -1182,27 +1181,30 @@ namespace CrazyElevator.Managers
             else if (phase == Phase.Boarding)
             {
                 bool showRepair = !FriendlyInterior && repairedFor <= 0 && !HasHandyman;
-                int rows = showRepair ? 3 : 2;
+                bool showKickout = HasSelectedBoardedPassenger;
+                int rows = 1 + (showKickout ? 1 : 0) + (showRepair ? 1 : 0);
                 float y = ViewHeight - margin - height * rows - gap * (rows - 1);
                 close = new Rect(x, y, width, height);
-                hold = new Rect(x, y + height + gap, width, height);
-                if (showRepair) repair = new Rect(x, y + (height + gap) * 2, width, height);
+                int row = 1;
+                if (showKickout)
+                {
+                    kickout = new Rect(x, y + (height + gap) * row, width, height);
+                    row++;
+                }
+                if (showRepair) repair = new Rect(x, y + (height + gap) * row, width, height);
             }
         }
 
         void DrawMouseControls()
         {
             if (!extendedInterior || IsNpc) return;
-            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var hold, out var repair);
+            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
             DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
                 GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
-            bool kickoutSelected = HasSelectedBoardedPassenger;
-            DrawMouseControl(hold, kickoutSelected ? "KICK OUT" : "HOLD DOOR",
-                kickoutSelected ? Coral : Teal,
-                kickoutSelected ? GameplayKickoutKey : GameplayHoldKey);
+            DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
             DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
         }
 
@@ -1263,7 +1265,6 @@ namespace CrazyElevator.Managers
         string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
         string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
         string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";
-        string GameplayHoldKey => GameplayUsesKeyboard ? (Seat == 1 ? "RALT" : "H") : "B";
         string GameplayKickoutKey => GameplayUsesKeyboard ? "I" : "B";
         string GameplayRepairKey => GameplayUsesKeyboard ? "R" : "RB";
 

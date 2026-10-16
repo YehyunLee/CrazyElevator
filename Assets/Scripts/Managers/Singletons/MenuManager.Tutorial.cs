@@ -515,7 +515,7 @@ namespace CrazyElevator.Managers
                 {
                     case 0: return "STICK";
                     case 2: return "Y";
-                    case 3: return "D-PAD";
+                    case 3: return "STICK";
                     case 4: return "BOOST";
                     case 5: return "A";
                     case 7: return "A";
@@ -576,7 +576,7 @@ namespace CrazyElevator.Managers
                 case 1: return "BOARD 2 PASSENGERS.";
                 case 2: return "CLOSE THE DOORS.";
                 case 3: return "HOLD UP OR DOWN.";
-                case 4: return "HOLD SHIFT + UP/DOWN.";
+                case 4: return "HOLD BUMPERS (LB + RB) + MOVE.";
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0
@@ -584,7 +584,7 @@ namespace CrazyElevator.Managers
                         : "STOP AT PASSENGER FLOOR.";
                 case 6: return "HELP A PASSENGER OUT.";
                 case 7:
-                    return "SELECT. SEND THEM OUT.";
+                    return "KICK A PASSENGER OUT.";
                 default: return "START YOUR SHIFT.";
             }
         }

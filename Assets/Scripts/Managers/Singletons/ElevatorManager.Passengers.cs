@@ -425,9 +425,9 @@ namespace CrazyElevator.Managers
                 guiCursor.x -= view.x;
                 guiCursor.y -= view.y;
             }
-            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var hold, out var repair);
+            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             return up.Contains(guiCursor) || down.Contains(guiCursor) || stop.Contains(guiCursor)
-                || close.Contains(guiCursor) || hold.Contains(guiCursor) || repair.Contains(guiCursor);
+                || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor);
         }
 
         // Preserve the rider's grab point so dragging feels direct and stable.
@@ -1579,9 +1579,8 @@ namespace CrazyElevator.Managers
             if (p.Boarded && p.Remaining <= 0) return "\"I'm MAD! No points now.\"";
             if (p.Boarded && p.Destination == round.Floor && phase == Phase.Boarding) return "\"My stop! Select me and confirm.\"";
             if (p.Boarded && !string.IsNullOrEmpty(p.Status)) return "\"" + p.Status + "\"";
-            if (p.Boarded && p.HoldRequired > 0 && !p.HoldSatisfied) return "\"Hold B / H!\"";
             if (p.Boarded) return IsComplaining(p) ? "\"Please hurry!\"" : "\"Floor " + p.Destination.ToString() + "\"";
-            return "\"" + (p.Kind == "BOSS" ? "Hold B / H for my bonus." : p.Request) + "\"";
+            return "\"" + p.Request + "\"";
         }
 
         // Warn when mood drops or patience gets low.
@@ -1773,7 +1772,7 @@ namespace CrazyElevator.Managers
         {
             if (rider.Kind == "COURIER") return "BOX DELIVERY!";
             if (rider.Kind == "HANDYMAN") return "NEED A FIX?";
-            if (rider.Kind == "BOSS") return "HOLD THE DOOR!";
+            if (rider.Kind == "BOSS") return "MAKE IT QUICK!";
             if (rider.Kind == "GROUP") return "ALL TOGETHER!";
             if (rider.Kind == "PREGNANT") return "BABY ON BOARD!";
             if (rider.Kind == "ELDERLY") return "I CAN CALM BABIES!";

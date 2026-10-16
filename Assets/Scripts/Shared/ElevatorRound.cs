@@ -24,7 +24,6 @@ namespace CrazyElevator.Shared
             switch (feature)
             {
                 case PassengerFeature.SlowArrival: return Arrival > 0 || Kind == "ELDERLY";
-                case PassengerFeature.HoldDoorBonus: return HoldRequired > 0 || Kind == "BOSS";
                 case PassengerFeature.MultiSpace: return Space > 1;
                 case PassengerFeature.UrgencySpeech: return Kind == "INTERVIEW";
                 case PassengerFeature.ClearsRust: return Kind == "HANDYMAN";
@@ -43,7 +42,7 @@ namespace CrazyElevator.Shared
         public int Space;
         public int Bonus;
 
-        // Patience and the boss's existing hold-door request.
+        // Patience and mood.
         // 2 = happy, 1 = reduced mood, 0 = unhappy.
         public int Mood = 2;
         public float Patience;
@@ -51,8 +50,6 @@ namespace CrazyElevator.Shared
         public float Remaining;
         // Seconds until a slow waiting rider reaches the door.
         public float Arrival;
-        public float HoldRequired;
-        public float HoldProgress;
 
         public bool Boarded;
         // A shared passenger pool still needs to know which car holds a rider.
@@ -61,7 +58,6 @@ namespace CrazyElevator.Shared
         public float SpawnDelay;
         // Resolved riders cannot board or score again.
         public bool Resolved;
-        public bool HoldSatisfied => HoldRequired <= 0 || HoldProgress >= HoldRequired;
     }
 
     public enum OffboardResult { None, Happy, Late, WrongFloor }
@@ -155,7 +151,7 @@ namespace CrazyElevator.Shared
                 if (world == PassengerTheme.Office)
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
                 if (world == PassengerTheme.Candy)
-                    Add("Morgan", "BOSS", "Hold OPEN for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140, 1.25f);
+                    Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
@@ -164,11 +160,11 @@ namespace CrazyElevator.Shared
 
         // Store a passenger with fresh patience.
         void Add(string name, string kind, string request, string badge, int from, int to, int space,
-            float patience, float arrival, int color, int bonus, float holdRequired = 0)
+            float patience, float arrival, int color, int bonus)
         {
             Riders.Add(new Rider { Name = name, Kind = kind, Request = request, Origin = from,
                 Destination = to, Space = space, Patience = patience, Remaining = patience, Arrival = arrival,
-                Color = color, Badge = badge, Bonus = bonus, HoldRequired = holdRequired });
+                Color = color, Badge = badge, Bonus = bonus });
         }
 
         // Special passengers may request any other floor, including a floor in
@@ -254,8 +250,7 @@ namespace CrazyElevator.Shared
                     Patience = previous.Patience,
                     Remaining = previous.Patience,
                     Arrival = previous.Kind == "ELDERLY" ? ElderlyArrivalSeconds : 0,
-                    Bonus = previous.Bonus,
-                    HoldRequired = previous.HoldRequired
+                    Bonus = previous.Bonus
                 };
             replacement.SpawnDelay = 1f;
             return replacement;
@@ -324,18 +319,6 @@ namespace CrazyElevator.Shared
             if (Finished || !Owns(p)) return false;
             p.Boarded = false; p.BoardedBySeat = -1; p.Resolved = true;
             TurnedAway++; Score -= 40; return true;
-        }
-
-        // Accumulate the boss bonus while OPEN is held.
-        public void HoldDoor(float dt)
-        {
-            if (dt <= 0) return;
-            foreach (var p in Riders)
-            {
-                if (!Owns(p) || p.HoldRequired <= 0 || p.HoldSatisfied) continue;
-                p.HoldProgress = Math.Min(p.HoldRequired, p.HoldProgress + dt);
-                if (p.HoldSatisfied) p.Status = "Boss bonus ready!";
-            }
         }
 
         // Called only when the car truly leaves, so reopening a closing door
@@ -431,7 +414,7 @@ namespace CrazyElevator.Shared
             if (onTime && p.Mood > 0)
             {
                 Happy++;
-                if (p.HoldSatisfied) reward += p.Bonus;
+                reward += p.Bonus;
             }
             Score += reward;
             p.Status = onTime && p.Mood > 0 ? "Made it!" : "Finally...";

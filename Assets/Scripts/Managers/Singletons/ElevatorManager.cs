@@ -64,7 +64,6 @@ namespace CrazyElevator.Managers
         bool paused, stampPlayed;
         int passengerExitCount, kickoutCount;
         int travelStartCount, floorStopCount;
-        float doorHoldSeconds;
         string notice = "Welcome aboard. Your shift starts when you are ready.";
 
         // Bind editable scene objects, then start audio and a fresh round.
@@ -259,7 +258,6 @@ namespace CrazyElevator.Managers
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
             travelStartCount = floorStopCount = 0;
-            doorHoldSeconds = 0;
             RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
@@ -619,7 +617,7 @@ namespace CrazyElevator.Managers
         }
 
         // Higher floors give less boarding time.
-        float DoorHoldDurationAtCurrentFloor()
+        float BoardingDurationAtCurrentFloor()
         {
             if (round == null || ElevatorRound.Floors <= 1) return LowestFloorDoorTime;
             float floorProgress = Mathf.Clamp01(round.Floor / (float)(ElevatorRound.Floors - 1));
@@ -1003,7 +1001,7 @@ namespace CrazyElevator.Managers
                 mouseGui.y -= view.y;
             }
             GetMouseControlRects(out var mouseUp, out var mouseDown, out var mouseStop,
-                out var mouseClose, out var mouseHold, out var mouseRepair);
+                out var mouseClose, out var mouseKickout, out var mouseRepair);
             bool confirm = input.ConfirmPressed && encounterConfirmationConsumedFrame != Time.frameCount;
             if (phase == Phase.Moving)
             {
@@ -1038,17 +1036,8 @@ namespace CrazyElevator.Managers
             }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
             if (HasSelectedBoardedPassenger && mouse != null
-                && mouse.leftButton.wasPressedThisFrame && mouseHold.Contains(mouseGui))
+                && mouse.leftButton.wasPressedThisFrame && mouseKickout.Contains(mouseGui))
             { KickoutSelectedPublic(); return; }
-            bool hold = !HasSelectedBoardedPassenger && (input.HoldDoorHeld
-                || mouse != null && mouse.leftButton.isPressed && mouseHold.Contains(mouseGui));
-
-            if (hold)
-            {
-                round.HoldDoor(dt);
-                doorHoldSeconds += dt;
-                notice = "Holding the door for passengers.";
-            }
             bool repair = input.RepairHeld
                 || mouse != null && mouse.leftButton.isPressed && mouseRepair.Contains(mouseGui);
             if (!FriendlyInterior && repairedFor <= 0 && repair)
@@ -1340,8 +1329,7 @@ namespace CrazyElevator.Managers
                             Remaining = template.Patience,
                             Arrival = template.Kind == "ELDERLY"
                                 ? ElevatorRound.ElderlyArrivalSeconds : template.Arrival,
-                            Bonus = template.Bonus,
-                            HoldRequired = template.HoldRequired
+                            Bonus = template.Bonus
                         };
                     targetRound.Riders.Add(copy);
                     floorRiders.Add(copy);
@@ -2108,10 +2096,9 @@ namespace CrazyElevator.Managers
             SelectRider(null);
             ClearHandymanRepair();
             ClearInteriorTransfers();
-            // A collision owns the stop transition. Do not leave a door hold,
-            // selected destination, or passenger-stop animation able to
+            // A collision owns the stop transition. Do not leave a selected
+            // destination or passenger-stop animation able to
             // reopen/continue after the struck elevator is knocked away.
-            doorHoldSeconds = 0f;
             selectedFloor = -1;
             if (!alreadyLeftFloor)
             {

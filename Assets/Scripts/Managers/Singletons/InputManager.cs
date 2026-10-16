@@ -46,7 +46,6 @@ namespace CrazyElevator.Managers
         public bool PausePressed { get; private set; }
         public bool OverlayPressed { get; private set; }
         public bool CloseDoorsPressed { get; private set; }
-        public bool HoldDoorHeld { get; private set; }
         public bool RepairHeld { get; private set; }
         public bool BoostHeld { get; private set; }
         public bool MutePressed { get; private set; }
@@ -70,7 +69,6 @@ namespace CrazyElevator.Managers
             public bool PausePressed;
             public bool OverlayPressed;
             public bool CloseDoorsPressed;
-            public bool HoldDoorHeld;
             public bool RepairHeld;
             public bool BoostHeld;
             public bool MutePressed;
@@ -478,10 +476,6 @@ namespace CrazyElevator.Managers
                 : keyboardAvailable && keyboard.eKey.wasPressedThisFrame
                     || pad != null && pad.buttonNorth.wasPressedThisFrame
                         && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
-            bool hold = playerTwoKeyboard
-                ? keyboardAvailable && keyboard.rightAltKey.isPressed
-                : keyboardAvailable && keyboard.hKey.isPressed
-                    || pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger;
             bool repair = playerTwoKeyboard
                 ? false
                 : keyboardAvailable && keyboard.rKey.isPressed
@@ -512,7 +506,6 @@ namespace CrazyElevator.Managers
                 PausePressed = pause,
                 OverlayPressed = overlay,
                 CloseDoorsPressed = closeDoors,
-                HoldDoorHeld = hold,
                 RepairHeld = repair,
                 BoostHeld = boost,
                 MutePressed = mute,
@@ -639,8 +632,6 @@ namespace CrazyElevator.Managers
             bool closeDoors = (keyboard != null && keyboard.eKey.wasPressedThisFrame)
                 || pad != null && pad.buttonNorth.wasPressedThisFrame
                 && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
-            bool hold = (keyboard != null && keyboard.hKey.isPressed)
-                || (pad != null && pad.buttonEast.isPressed && ActiveView != GameView.Passenger);
             bool repair = (keyboard != null && keyboard.rKey.isPressed)
                 || (pad != null && pad.rightShoulder.isPressed);
             bool boost = (keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed))
@@ -657,7 +648,6 @@ namespace CrazyElevator.Managers
             PausePressed = pause;
             OverlayPressed = overlay;
             CloseDoorsPressed = closeDoors;
-            HoldDoorHeld = hold;
             RepairHeld = repair;
             BoostHeld = boost;
             MutePressed = mute;
@@ -701,7 +691,7 @@ namespace CrazyElevator.Managers
             ConfirmPressed = KickoutPressed = false;
             PausePressed = OverlayPressed = false;
             CloseDoorsPressed = false;
-            HoldDoorHeld = RepairHeld = BoostHeld = false;
+            RepairHeld = BoostHeld = false;
             MutePressed = StartPressed = false;
             Pointer = Vector2.zero;
             PointerPressed = PointerReleased = PointerHeld = false;

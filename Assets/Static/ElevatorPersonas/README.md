@@ -13,7 +13,6 @@ World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**.
 | Set travel direction outside | Stick / D-pad up or down / W / S or up/down arrows |
 | Build speed in that direction | Hold left shoulder (L / LB) + up/down / hold Shift + W / S or up/down arrows |
 | Stop at a nearby floor | Bottom face button / E or Space |
-| Hold door for rider bonus | Hold right face button / hold H |
 | Repair underwater mechanism | Hold RB for 2 seconds / hold R for 2 seconds |
 | Pause / resume | Start / Escape |
 
