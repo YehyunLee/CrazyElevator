@@ -103,7 +103,7 @@ namespace CrazyElevator.Managers
             => seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0;
 
         public bool HasInput(int seat)
-            => HasController(seat) || keyboardMouseSeat == seat;
+            => HasController(seat) || keyboardMouseSeat == seat || ExistingPlayerInput(seat) != null;
 
         // A single keyboard can drive both duel elevators: Player 1 uses WASD
         // and Player 2 uses the arrow keys. It is not a second joined device,
@@ -144,10 +144,24 @@ namespace CrazyElevator.Managers
         PlayerInput JoinGamepad(PlayerInputManager manager, int seat, Gamepad gamepad)
         {
             if (manager == null || gamepad == null) return null;
+            var existing = ExistingPlayerInput(seat);
+            if (existing != null)
+            {
+                RegisterPlayerInput(existing);
+                return existing;
+            }
             manager.EnableJoining();
             var playerInput = manager.JoinPlayer(seat, -1, "Gamepad", gamepad);
             manager.DisableJoining();
             return playerInput;
+        }
+
+        static PlayerInput ExistingPlayerInput(int seat)
+        {
+            foreach (var player in PlayerInput.all)
+                if (player != null && player.playerIndex == seat)
+                    return player;
+            return null;
         }
 
         void RegisterKeyboardMouse(int requestedSeat)
@@ -158,6 +172,12 @@ namespace CrazyElevator.Managers
             if (seat < 0) return;
             var manager = GetComponent<PlayerInputManager>();
             if (manager == null) return;
+            var existing = ExistingPlayerInput(seat);
+            if (existing != null)
+            {
+                RegisterPlayerInput(existing);
+                return;
+            }
             manager.EnableJoining();
             var playerInput = manager.JoinPlayer(seat, -1, "Keyboard&Mouse", Keyboard.current, Mouse.current);
             manager.DisableJoining();
@@ -176,8 +196,15 @@ namespace CrazyElevator.Managers
                 || keyboard.aKey.wasPressedThisFrame
                 || keyboard.sKey.wasPressedThisFrame
                 || keyboard.dKey.wasPressedThisFrame
+                || keyboard.upArrowKey.wasPressedThisFrame
+                || keyboard.downArrowKey.wasPressedThisFrame
+                || keyboard.leftArrowKey.wasPressedThisFrame
+                || keyboard.rightArrowKey.wasPressedThisFrame
                 || keyboard.cKey.wasPressedThisFrame
-                || keyboard.eKey.wasPressedThisFrame)
+                || keyboard.eKey.wasPressedThisFrame
+                || keyboard.periodKey.wasPressedThisFrame
+                || keyboard.slashKey.wasPressedThisFrame
+                || keyboard.enterKey.wasPressedThisFrame)
                 || mouse != null && (mouse.leftButton.wasPressedThisFrame
                     || mouse.rightButton.wasPressedThisFrame);
         }
@@ -272,6 +299,7 @@ namespace CrazyElevator.Managers
             int seat = playerInput.playerIndex;
             if (seat < 0 || seat >= joinedGamepadIds.Length) return;
 
+            bool keyboardAssigned = false;
             foreach (var device in playerInput.devices)
             {
                 if (device is Gamepad gamepad)
@@ -281,6 +309,14 @@ namespace CrazyElevator.Managers
                     OnControllerJoined?.Invoke(seat);
                     return;
                 }
+                if (device is Keyboard || device is Mouse)
+                    keyboardAssigned = true;
+            }
+            if (keyboardAssigned)
+            {
+                keyboardMouseSeat = seat;
+                if (seat == 0) keyboardModeSession = true;
+                OnControllerJoined?.Invoke(seat);
             }
         }
 
@@ -306,7 +342,11 @@ namespace CrazyElevator.Managers
             var pad = GamepadForSeat(seat);
             bool controllerAssigned = HasController(seat);
             bool keyboardAssigned = keyboardMouseSeat == seat;
-            bool splitKeyboardActive = splitKeyboard && keyboardModeSession;
+            // The lobby must always listen for the split keyboard once it is
+            // open. This also covers the frame where the source detector has
+            // not yet promoted the keyboard session.
+            bool splitKeyboardActive = splitKeyboard
+                && (keyboardModeSession || ActiveView == GameView.Menu);
             bool inputAssigned = controllerAssigned || keyboardAssigned;
             bool virtualPlayerTwoKeyboard = seat == 1 && splitKeyboardActive && !inputAssigned;
             bool playerTwoKeyboard = seat == 1 && splitKeyboard
@@ -337,7 +377,9 @@ namespace CrazyElevator.Managers
 
             Vector2 stick = pad == null ? Vector2.zero : pad.leftStick.ReadValue() + pad.dpad.ReadValue();
             Vector2 navigation = stick + keys;
-            bool playerTwoConfirm = keyboardAvailable && keyboard.periodKey.wasPressedThisFrame;
+            bool playerTwoConfirm = keyboardAvailable
+                && (keyboard.periodKey.wasPressedThisFrame
+                    || ActiveView == GameView.Menu && keyboard.slashKey.wasPressedThisFrame);
             bool confirm = playerTwoKeyboard
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame

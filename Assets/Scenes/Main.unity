@@ -1650,11 +1650,6 @@ MonoBehaviour:
     topRight: {x: 0.98, y: 0.02}
     bottomRight: {x: 0.98, y: 1}
     bottomLeft: {x: 0.02, y: 0.94}
-  startLabel:
-    topLeft: {x: 0.02, y: 0}
-    topRight: {x: 0.98, y: 0}
-    bottomRight: {x: 0.98, y: 1}
-    bottomLeft: {x: 0.02, y: 1}
   playerOneButton:
     serializedVersion: 2
     x: 535
@@ -1669,10 +1664,10 @@ MonoBehaviour:
     height: 72
   startButton:
     serializedVersion: 2
-    x: 715
+    x: 720
     y: 930
-    width: 270
-    height: 80
+    width: 260
+    height: 72
 --- !u!1 &910001000
 GameObject:
   m_ObjectHideFlags: 0
