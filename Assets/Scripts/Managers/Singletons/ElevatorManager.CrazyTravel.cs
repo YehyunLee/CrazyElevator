@@ -434,7 +434,136 @@ namespace CrazyElevator.Managers
             exteriorCamera.transform.rotation = Quaternion.LookRotation(
                 targetWorld - exteriorCamera.transform.position, world.up);
             exteriorCamera.orthographic = false;
-            exteriorCamera.fieldOfView = Mathf.Lerp(61f, 55f, routeBoostPulse);
+            UpdateSpeedFx(dt);
+            // The view widens as the car speeds up, so going fast reads at a glance.
+            exteriorCamera.fieldOfView = Mathf.Lerp(61f + SpeedFovWiden * speedFx, 55f, routeBoostPulse);
+        }
+
+        // ---------- Speed feedback ----------
+        // 0 at cruising speed, 1 at the speed limit. Drives the FOV, speed lines and car trail.
+        const float SpeedFovWiden = 10f;
+        float speedFx;
+        Renderer[] exteriorCarRenderers;
+
+        void UpdateSpeedFx(float dt)
+        {
+            float target = phase == Phase.Moving && !paused
+                ? Mathf.InverseLerp(CruiseSpeed * 1.08f, SpeedLimit, RouteSpeed) : 0f;
+            speedFx = Mathf.MoveTowards(speedFx, target, dt * (target > speedFx ? 3f : 1.6f));
+        }
+
+        static float Hash01(int n) => Mathf.Repeat(Mathf.Sin(n * 12.9898f) * 43758.5453f, 1f);
+
+        void DrawSpeedLines()
+        {
+            if (phase != Phase.Moving || speedFx <= .02f) return;
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
+            float size = Mathf.Max(1f, view.height / 900f);
+            bool sideways = railRiding;
+            int direction = sideways ? (railVelocity >= 0f ? 1 : -1) : (travelVelocity >= 0f ? 1 : -1);
+            DrawSpeedEdgeTint(view, sideways);
+            DrawSpeedStreaks(view, size, sideways, direction);
+            DrawCarTrail(view, size, sideways, direction);
+        }
+
+        // The world's colour creeps in from the edges the car is racing along.
+        void DrawSpeedEdgeTint(Rect view, bool sideways)
+        {
+            Color tint = WorldAccent(NearbyFloor);
+            tint.a = .08f * speedFx;
+            for (int band = 1; band <= 3; band++)
+            {
+                float depth = band * .045f;
+                if (sideways)
+                {
+                    Panel(new Rect(view.x, view.y, view.width, view.height * depth), tint);
+                    Panel(new Rect(view.x, view.yMax - view.height * depth, view.width, view.height * depth), tint);
+                }
+                else
+                {
+                    Panel(new Rect(view.x, view.y, view.width * depth, view.height), tint);
+                    Panel(new Rect(view.xMax - view.width * depth, view.y, view.width * depth, view.height), tint);
+                }
+            }
+        }
+
+        // Wind streaks in the outer bands stream past opposite to the motion.
+        void DrawSpeedStreaks(Rect view, float size, bool sideways, int direction)
+        {
+            int count = Mathf.RoundToInt(Mathf.Lerp(6f, 24f, speedFx));
+            float clock = Time.unscaledTime * Mathf.Lerp(1.1f, 3.4f, speedFx);
+            for (int i = 0; i < count; i++)
+            {
+                float lane = Hash01(i * 7 + 1);
+                float band = lane < .5f ? lane * .56f : .72f + (lane - .5f) * .56f;
+                float length = Mathf.Lerp(50f, 200f, speedFx) * Mathf.Lerp(.6f, 1.2f, Hash01(i * 3 + 2)) * size;
+                float t = Mathf.Repeat(Hash01(i * 13 + 5) + clock * Mathf.Lerp(.8f, 1.3f, lane), 1f);
+                Color streak = new Color(1f, 1f, 1f,
+                    speedFx * Mathf.Lerp(.2f, .55f, Hash01(i * 11 + 4)) * Mathf.Sin(t * Mathf.PI));
+                Rect line;
+                if (sideways)
+                {
+                    float travel = view.width + length;
+                    float x = direction > 0 ? view.xMax - t * travel : view.x - length + t * travel;
+                    line = new Rect(x, view.y + band * view.height, length, 3f * size);
+                }
+                else
+                {
+                    float travel = view.height + length;
+                    float y = direction > 0 ? view.y - length + t * travel : view.yMax - t * travel;
+                    line = new Rect(view.x + band * view.width, y, 3f * size, length);
+                }
+                ClippedPanel(line, view, streak);
+            }
+        }
+
+        // A few streaks trail off the back of the car itself.
+        void DrawCarTrail(Rect view, float size, bool sideways, int direction)
+        {
+            if (!TryGetCarScreenRect(out Rect car)) return;
+            float length = Mathf.Lerp(30f, 150f, speedFx) * size;
+            for (int i = 0; i < 4; i++)
+            {
+                float across = (i + .5f) / 4f;
+                float flicker = Mathf.Lerp(.65f, 1f, Hash01(i * 5 + Mathf.FloorToInt(Time.unscaledTime * 18f)));
+                float trail = length * flicker;
+                Color streak = new Color(Gold.r, Gold.g, Gold.b, .55f * speedFx);
+                Rect line = sideways
+                    ? new Rect(direction > 0 ? car.x - trail : car.xMax, car.y + across * car.height, trail, 4f * size)
+                    : new Rect(car.x + across * car.width, direction > 0 ? car.yMax : car.y - trail, 4f * size, trail);
+                ClippedPanel(line, view, streak);
+            }
+        }
+
+        bool TryGetCarScreenRect(out Rect rect)
+        {
+            rect = default;
+            if (exteriorCar == null || exteriorCamera == null) return false;
+            if (exteriorCarRenderers == null || exteriorCarRenderers.Length == 0)
+                exteriorCarRenderers = exteriorCar.GetComponentsInChildren<Renderer>();
+            bool any = false;
+            Bounds bounds = default;
+            foreach (Renderer part in exteriorCarRenderers)
+            {
+                if (part == null || !part.enabled || !part.gameObject.activeInHierarchy) continue;
+                if (!any) { bounds = part.bounds; any = true; }
+                else bounds.Encapsulate(part.bounds);
+            }
+            if (!any) return false;
+            Vector3 low = exteriorCamera.WorldToScreenPoint(bounds.min);
+            Vector3 high = exteriorCamera.WorldToScreenPoint(bounds.max);
+            if (low.z <= 0f || high.z <= 0f) return false;
+            rect = Rect.MinMaxRect(Mathf.Min(low.x, high.x), Screen.height - Mathf.Max(low.y, high.y),
+                Mathf.Max(low.x, high.x), Screen.height - Mathf.Min(low.y, high.y));
+            return true;
+        }
+
+        // Split-screen streaks must not spill into the other player's half.
+        void ClippedPanel(Rect rect, Rect view, Color colour)
+        {
+            Rect clipped = Rect.MinMaxRect(Mathf.Max(rect.xMin, view.xMin), Mathf.Max(rect.yMin, view.yMin),
+                Mathf.Min(rect.xMax, view.xMax), Mathf.Min(rect.yMax, view.yMax));
+            if (clipped.width > 0f && clipped.height > 0f) Panel(clipped, colour);
         }
 
         void EnsureCrazyRouteMap()

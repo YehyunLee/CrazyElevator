@@ -55,6 +55,9 @@ namespace CrazyElevator.Managers
         readonly float[] tutorialCardMotionTimes = new float[2];
         readonly float[] tutorialPracticeTimes = new float[2];
         readonly float[] tutorialCompletionTimes = new float[2];
+        // How long the current step's card has been fully on screen.
+        readonly float[] tutorialStepSettledTimes = new float[2];
+        const float TutorialInfoCardSeconds = 1.8f;
         readonly bool[] tutorialResumeActorOnCardSettled = new bool[2];
         readonly int[] tutorialExitBaseline = new int[2];
         readonly int[] tutorialTravelStartBaseline = new int[2];
@@ -251,6 +254,7 @@ namespace CrazyElevator.Managers
                     continue;
                 }
 
+                tutorialStepSettledTimes[i] += Time.unscaledDeltaTime;
                 if (TutorialStepCompletedForActor(i, step))
                     CompleteTutorialStep(i);
             }
@@ -313,9 +317,15 @@ namespace CrazyElevator.Managers
                             : TutorialHasPassengerAtCurrentFloor(actor)))
                         tutorialStopCompleted[index] = true;
                     return tutorialStopCompleted[index];
+                // Drop-offs are automatic: this card just explains it once a rider has left.
                 case 6:
+                    return tutorialStepSettledTimes[index] >= TutorialInfoCardSeconds
+                        && !TutorialHasPassengerAtCurrentFloor(actor);
+                // If everyone aboard got off at that floor there is nobody to kick; move on.
                 case 7:
-                    return actor.PassengerExitCount > tutorialExitBaseline[index];
+                    return actor.PassengerExitCount > tutorialExitBaseline[index]
+                        || actor.CurrentPassengers.Count == 0
+                            && tutorialStepSettledTimes[index] >= TutorialInfoCardSeconds;
                 default:
                     return false;
             }
@@ -333,7 +343,9 @@ namespace CrazyElevator.Managers
             tutorialStopCompleted[index] = false;
             if (nextStep == 1)
                 tutorialTargetFloor[index] = actor.SelectedPassengerDestination;
-            if (nextStep == 2 && tutorialTargetFloor[index] < 0)
+            // The stop target must belong to someone actually aboard, so they get off there.
+            if (nextStep == 2 && (tutorialTargetFloor[index] < 0
+                    || !TutorialHasPassengerFor(actor, tutorialTargetFloor[index])))
                 tutorialTargetFloor[index] = FindTutorialPassengerFloor(actor);
             if (nextStep == 7)
                 tutorialExitBaseline[index] = actor.PassengerExitCount;
@@ -376,6 +388,7 @@ namespace CrazyElevator.Managers
         void BeginTutorialCardTransition(int index, int nextStep, bool resumeWhenSettled)
         {
             tutorialNextSteps[index] = nextStep;
+            tutorialStepSettledTimes[index] = 0f;
             tutorialResumeActorOnCardSettled[index] = resumeWhenSettled;
             InputManager.TutorialInputMode inputMode = TutorialInputModeForStep(nextStep);
             InputManager.Instance?.SetTutorialInputMode(tutorialActors[index] != null
@@ -411,7 +424,7 @@ namespace CrazyElevator.Managers
                 case 3: return InputManager.TutorialInputMode.Move;
                 case 4: return InputManager.TutorialInputMode.Boost;
                 case 5: return InputManager.TutorialInputMode.Stop;
-                case 6: return InputManager.TutorialInputMode.HelpPassenger;
+                case 6: return InputManager.TutorialInputMode.SelectPassenger;
                 case 7: return InputManager.TutorialInputMode.Kickout;
                 default: return InputManager.TutorialInputMode.Free;
             }
@@ -519,6 +532,7 @@ namespace CrazyElevator.Managers
 
         string TutorialKey(int step, int seat)
         {
+            if (step == 6) return "AUTO";
             if (!KeyboardHintsEnabled)
             {
                 switch (step)
@@ -571,7 +585,7 @@ namespace CrazyElevator.Managers
                 case 3: return "MOVE";
                 case 4: return "SPEED BOOST";
                 case 5: return "STOP";
-                case 6: return "OFFBOARD";
+                case 6: return "DROP-OFF";
                 case 7: return "KICK OUT";
                 default: return "CORE CONTROLS LEARNED";
             }
@@ -592,7 +606,7 @@ namespace CrazyElevator.Managers
                     return targetFloor >= 0
                         ? "STOP AT FLOOR " + targetFloor + "."
                         : "STOP AT PASSENGER FLOOR.";
-                case 6: return "HELP A PASSENGER OUT.";
+                case 6: return "RIDERS GET OFF BY THEMSELVES.";
                 case 7:
                     return "KICK A PASSENGER OUT.";
                 default: return "START YOUR SHIFT.";

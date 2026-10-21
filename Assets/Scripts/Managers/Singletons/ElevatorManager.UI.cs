@@ -1231,7 +1231,7 @@ namespace CrazyElevator.Managers
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
-            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
+            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + GlideStopFloor() : "STOP", Gold,
                 GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);

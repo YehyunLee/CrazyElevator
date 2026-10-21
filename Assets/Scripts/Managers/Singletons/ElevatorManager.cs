@@ -225,6 +225,7 @@ namespace CrazyElevator.Managers
                     doors = Mathf.Clamp01(phaseTime / .65f);
                     if (phaseTime >= .65f) { phase = Phase.Boarding; phaseTime = 0; destination = -1; }
                 }
+                else if (phase == Phase.Boarding) TickAutoDropOff(dt);
             }
             UpdateThemeMusic();
             SetDoors(doors);
@@ -361,7 +362,10 @@ namespace CrazyElevator.Managers
         [Min(.1f)] public float boostAcceleration = 1.1f;
         [Min(.2f)] public float maximumTravelSpeed = 2.4f;
         [Range(.1f, .4f)] public float stopWindow = .24f;
-        float travelFloor, dockingStart;
+        float travelFloor, dockingStart, dockingSeconds = .45f;
+        // Riders for this floor walk out on their own, one after another.
+        const float AutoDropOffSpacing = .3f;
+        float autoDropOffWait;
         int travelDirection = 1;
         float travelVelocity, boostAxis;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
@@ -384,6 +388,8 @@ namespace CrazyElevator.Managers
         void CloseAndTravel()
         {
             if (phase != Phase.Boarding) return;
+            // Nobody rides past their own floor: send any remaining riders out first.
+            while (DropOffNextRider(true)) { }
             travelStartCount++;
             SelectRider(null);
             travelFloor = round.Floor;
@@ -406,17 +412,38 @@ namespace CrazyElevator.Managers
             phase = Phase.Moving; phaseTime = 0; destination = -1;
             notice = "Cruising. Hold Shift / shoulder / trigger with up/down for extra speed. Confirm near a floor to stop.";
         }
+        // Stop works anywhere: close to a floor it docks there, otherwise the car
+        // glides on into the next floor ahead (staying on its side track).
+        int GlideStopFloor()
+        {
+            if (railRiding || Mathf.Abs(travelFloor - NearbyFloor) <= stopWindow) return NearbyFloor;
+            int ahead = travelVelocity > .05f ? Mathf.CeilToInt(travelFloor)
+                : travelVelocity < -.05f ? Mathf.FloorToInt(travelFloor) : NearbyFloor;
+            float bottom = 0f, top = MaxTravelFloor;
+            if (TryGetVerticalTrack(RouteLateralX, travelFloor, out _, out float trackBottom, out float trackTop))
+            {
+                bottom = trackBottom;
+                top = Mathf.Min(top, trackTop);
+            }
+            if (ahead < bottom || ahead > top) ahead = NearbyFloor;
+            return Mathf.Clamp(ahead, Mathf.CeilToInt(bottom), Mathf.FloorToInt(top));
+        }
+
         void RequestFloorStop()
         {
-            if (!CanStopAtFloor) { notice = "Between floors. Confirm when the floor marker turns green."; return; }
-            if (!MenuManager.TutorialAllowsStopAt(this, NearbyFloor))
+            if (phase != Phase.Moving) return;
+            int target = GlideStopFloor();
+            if (!MenuManager.TutorialAllowsStopAt(this, target))
             {
                 notice = "Not this floor. Keep going.";
                 Play(buzz);
                 return;
             }
             floorStopCount++;
-            destination = NearbyFloor; dockingStart = travelFloor;
+            // Ease out from the current speed so the car visibly brakes into the floor.
+            float distance = Mathf.Abs(target - travelFloor);
+            dockingSeconds = Mathf.Clamp(2f * distance / Mathf.Max(.6f, RouteSpeed), .35f, 1f);
+            destination = target; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
             phase = Phase.Docking; phaseTime = 0;
             notice = "Stopping at floor " + destination + "."; Play(click);
@@ -427,17 +454,19 @@ namespace CrazyElevator.Managers
             if (phase == Phase.Docking)
             {
                 phaseTime += dt;
-                travelFloor = Mathf.Lerp(dockingStart, destination, Mathf.SmoothStep(0, 1, phaseTime / .45f));
-                if (phaseTime >= .45f)
+                float glide = Mathf.Clamp01(phaseTime / dockingSeconds);
+                travelFloor = Mathf.Lerp(dockingStart, destination, 1f - (1f - glide) * (1f - glide));
+                if (phaseTime >= dockingSeconds)
                 {
                     travelFloor = destination;
                     int waiting = round.Arrive(destination);
                     DiscoverWorld(BandForFloor(destination));
                     SetFloorDisplayText(destination.ToString());
                     phase = Phase.Opening; phaseTime = 0;
+                    autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Select a passenger and press C to help them out." : "Select a waiting passenger and press C to welcome them.";
+                    notice = waiting > 0 ? "Riders for this floor are getting off." : "Select a waiting passenger and press C to welcome them.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -1173,7 +1202,7 @@ namespace CrazyElevator.Managers
                     : OnFloorRail ? (railVelocity >= 0 ? "GOING RIGHT" : "GOING LEFT") + "  /  FLOOR " + railFloor
                     : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + travelFloor.ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), CanStopAtFloor ? "STOP READY - FLOOR " + NearbyFloor + "  /  click STOP or press C" : "Hold UP / DOWN or W / S or left joystick   |   Click STOP near a floor", body);
+                Label(new Rect(24, 84, 500, 28), phase == Phase.Moving ? "Press C to stop at floor " + GlideStopFloor() : "Hold UP / DOWN or W / S or left joystick", body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 bool accelerating = OnFloorRail ? railBoost : boostHeld && boostAxis != 0;
                 Label(new Rect(24, 137, 525, 24), RouteSpeed.ToString("0.00") + " floors/s  |  " + (accelerating ? "ACCELERATING" : "COASTING"), body);
@@ -1576,21 +1605,24 @@ namespace CrazyElevator.Managers
         void DrawTravelView()
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
+            DrawSpeedLines();
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
-            int floor = NearbyFloor;
+            // While moving, the marker shows the floor a stop press would glide into.
+            bool moving = phase == Phase.Moving;
+            int floor = moving ? GlideStopFloor() : NearbyFloor;
             Vector3 markerLocal = CrazyTravelLocalPosition(RouteLateralX, floor);
             Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(markerLocal));
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
             float x = point.x, y = Screen.height - point.y;
-            Color accent = CanStopAtFloor ? Teal : WorldAccent(floor);
+            Color accent = moving ? Teal : WorldAccent(floor);
             Panel(new Rect(x - 70 * size, y + 44 * size, 140 * size, 3 * size), accent);
             var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
             Panel(new Rect(x - 78 * size, y + 49 * size, 156 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
             Label(new Rect(x - 76 * size, y + 50 * size, 152 * size, 26 * size),
-                CanStopAtFloor ? "F" + floor + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
+                moving ? "F" + floor + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
         }
 
         void DrawCabinPreviewFrame()
@@ -2167,17 +2199,29 @@ namespace CrazyElevator.Managers
             Play(chime, .95f);
         }
 
-        // NPC uses the same passenger placement, scoring, and kick animation.
-        public bool NpcDeliver()
+        // Player and NPC share the same drop-off: placement, scoring and exit animation.
+        public bool NpcDeliver() => DropOffNextRider();
+
+        void TickAutoDropOff(float dt)
         {
-            if (!IsBoarding || round == null) return false;
+            autoDropOffWait -= dt;
+            if (autoDropOffWait > 0f) return;
+            if (DropOffNextRider()) autoDropOffWait = AutoDropOffSpacing;
+        }
+
+        // Returns false when nobody (else) can get off here. Closing the doors forces
+        // the rest out even while an exit animation is still playing.
+        bool DropOffNextRider(bool force = false)
+        {
+            if (round == null || (force ? phase != Phase.Boarding : !IsBoarding)) return false;
             foreach (Rider rider in round.Riders)
             {
-                if (!round.Owns(rider) || rider.Destination != round.Floor) continue;
+                if (!round.Owns(rider) || rider.Destination != round.Floor || rider == draggedRider) continue;
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
+                if (selectedRider == rider) SelectRider(null);
                 cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
                 QueueRiderExit(rider, figure.localPosition);
-                return true;
+                return !round.Owns(rider);
             }
             return false;
         }
