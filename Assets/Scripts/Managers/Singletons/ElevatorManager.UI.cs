@@ -1007,17 +1007,35 @@ namespace CrazyElevator.Managers
                     // Keep the confirm action beside the selected passenger so
                     // it remains visible even when the lower HUD is covered by
                     // the travel/door controls.
-                    if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    if (rider == draggedRider && controllerPickupActive && phase == Phase.Boarding)
                     {
-                        float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
+                        const float actionLayoutWidth = 146f;
+                        float hintX = Mathf.Clamp(x + 24f, 8f,
+                            Mathf.Max(8f, viewWidth - actionLayoutWidth));
                         float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
-                        Rect hint = new Rect(hintX, hintY, 42f, 42f);
-                        DrawGameplayKeyHint(hint, rider.Boarded ? GameplayConfirmKey : GameplayPickupKey);
-                        Color previousHintText = calloutText.normal.textColor;
-                        calloutText.normal.textColor = UiWhite;
-                        GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
-                            rider.Boarded ? "KICK" : "PICK UP", calloutText);
-                        calloutText.normal.textColor = previousHintText;
+                        DrawPassengerActionHint(new Rect(hintX, hintY, 42f, 42f),
+                            GameplayPickupKey, "DROP OFF");
+                    }
+                    else if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    {
+                        const float actionLayoutWidth = 284f;
+                        float hintX = Mathf.Clamp(x + 24f, 8f,
+                            Mathf.Max(8f, viewWidth - actionLayoutWidth));
+                        float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
+                        if (rider.Boarded)
+                        {
+                            DrawPassengerActionHint(new Rect(hintX, hintY, 42f, 42f),
+                                GameplayConfirmKey, "KICK");
+                        }
+                        else
+                        {
+                            // A is the quick, direct board action. X starts the
+                            // carry flow so the player can choose a grid tile.
+                            DrawPassengerActionHint(new Rect(hintX, hintY, 42f, 42f),
+                                GameplayPickupKey, "PICK UP");
+                            DrawPassengerActionHint(new Rect(hintX + 146f, hintY, 42f, 42f),
+                                GameplayConfirmKey, "QUICK-PICK");
+                        }
                     }
                 }
 
@@ -1056,6 +1074,15 @@ namespace CrazyElevator.Managers
                         message, calloutText);
                 }
             }
+        }
+
+        void DrawPassengerActionHint(Rect hint, string key, string label)
+        {
+            DrawGameplayKeyHint(hint, key);
+            Color previousHintText = calloutText.normal.textColor;
+            calloutText.normal.textColor = UiWhite;
+            GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 96f, 30f), label, calloutText);
+            calloutText.normal.textColor = previousHintText;
         }
 
         string PassengerVisualCue(Rider rider, bool selected)
@@ -1189,9 +1216,10 @@ namespace CrazyElevator.Managers
 
         // Same gameplay can be driven with buttons when a keyboard/controller is unavailable.
         void GetMouseControlRects(out Rect up, out Rect down, out Rect stop,
-            out Rect close, out Rect kickout, out Rect repair)
+            out Rect close, out Rect kickout, out Rect repair,
+            out Rect pickup, out Rect quickPickup)
         {
-            up = down = stop = close = kickout = repair = new Rect();
+            up = down = stop = close = kickout = repair = pickup = quickPickup = new Rect();
             if (!extendedInterior || paused) return;
             bool split = Match != null && Match.SplitScreen;
             float width = split
@@ -1212,10 +1240,14 @@ namespace CrazyElevator.Managers
             {
                 bool showRepair = !FriendlyInterior && repairedFor <= 0 && !HasHandyman;
                 bool showKickout = HasSelectedBoardedPassenger;
-                int rows = 1 + (showKickout ? 1 : 0) + (showRepair ? 1 : 0);
+                // Keep the three controller passenger actions visible together:
+                // Y closes/travels, X starts carry-and-place, and A quick-picks.
+                int rows = 3 + (showKickout ? 1 : 0) + (showRepair ? 1 : 0);
                 float y = ViewHeight - margin - height * rows - gap * (rows - 1);
                 close = new Rect(x, y, width, height);
-                int row = 1;
+                pickup = new Rect(x, y + (height + gap), width, height);
+                quickPickup = new Rect(x, y + (height + gap) * 2, width, height);
+                int row = 3;
                 if (showKickout)
                 {
                     kickout = new Rect(x, y + (height + gap) * row, width, height);
@@ -1228,12 +1260,15 @@ namespace CrazyElevator.Managers
         void DrawMouseControls()
         {
             if (!extendedInterior || IsNpc) return;
-            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
+            GetMouseControlRects(out var up, out var down, out var stop, out var close,
+                out var kickout, out var repair, out var pickup, out var quickPickup);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
             DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
                 GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
+            DrawMouseControl(pickup, "PICK UP", Coral, GameplayPickupKey);
+            DrawMouseControl(quickPickup, "QUICK-PICK", Teal, GameplayConfirmKey);
             DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
             DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
         }

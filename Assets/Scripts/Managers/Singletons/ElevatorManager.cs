@@ -1038,7 +1038,8 @@ namespace CrazyElevator.Managers
                 mouseGui.y -= view.y;
             }
             GetMouseControlRects(out var mouseUp, out var mouseDown, out var mouseStop,
-                out var mouseClose, out var mouseKickout, out var mouseRepair);
+                out var mouseClose, out var mouseKickout, out var mouseRepair,
+                out var mousePickup, out var mouseQuickPickup);
             bool confirm = input.ConfirmPressed && encounterConfirmationConsumedFrame != Time.frameCount;
             if (phase == Phase.Moving)
             {
@@ -1059,6 +1060,18 @@ namespace CrazyElevator.Managers
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
             if (input.CloseDoorsPressed) { CloseAndTravel(); return; }
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && mousePickup.Contains(mouseGui))
+            {
+                if (selectedRider != null && !selectedRider.Boarded)
+                    BeginControllerPassengerPickup(selectedRider);
+                return;
+            }
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseQuickPickup.Contains(mouseGui))
+            {
+                if (selectedRider != null && !selectedRider.Boarded)
+                    ConfirmPassenger();
+                return;
+            }
             if (confirm)
             {
                 if (draggedRider != null) return;
@@ -1183,7 +1196,8 @@ namespace CrazyElevator.Managers
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
                 Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
-                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders, or " + GameplayPickupKey + "-pick up and place", small);
+                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders, "
+                    + GameplayConfirmKey + " quick-pick, or " + GameplayPickupKey + " pick up and place", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
@@ -1197,13 +1211,15 @@ namespace CrazyElevator.Managers
             }
             else if (selectedRider == null)
             {
-                prompt = "BOARD / KICK   ·   " + GameplayPickupKey + " PICK UP   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
+                prompt = "BOARD / KICK   ·   " + GameplayPickupKey + " PICK UP   ·   "
+                    + GameplayConfirmKey + " QUICK-PICK   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
             }
             else
             {
                 prompt = selectedRider.Name + " → F" + selectedRider.Destination
                     + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
-                        : "   ·   BOARD   ·   " + GameplayPickupKey + " PICK UP   ·   DRAG IN");
+                    : "   ·   BOARD / " + GameplayConfirmKey + " QUICK-PICK   ·   "
+                        + GameplayPickupKey + " PICK UP   ·   DRAG IN");
             }
             // C (or the seat-specific equivalent) confirms the highlighted
             // passenger, boards waiting riders, and unloads boarded riders.

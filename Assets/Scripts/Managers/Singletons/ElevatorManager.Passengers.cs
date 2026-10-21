@@ -473,6 +473,12 @@ namespace CrazyElevator.Managers
         {
             Rider rider = draggedRider;
             if (rider == null) return;
+
+            // The authored cabin is viewed from the opposite side of its
+            // local X axis, so convert stick X into the player's visible grid
+            // direction before changing columns. Y already matches the grid.
+            direction.x = -direction.x;
+            direction.y = -direction.y;
             if (!controllerHeldInCabin)
             {
                 if (!round.HasCapacityFor(rider))
@@ -485,19 +491,14 @@ namespace CrazyElevator.Managers
                 int row = direction.y > 0 ? CabinRows - 1 : 0;
                 int start = direction.x < 0 ? 0
                     : direction.x > 0 ? CabinColumns - width : (CabinColumns - width) / 2;
-                Vector3 desired = CabinTileCenter(row, start, width);
-                if (!TryCabinTilePlacement(rider, desired, false, out Vector3 placement))
-                {
-                    SetControlStatus("NO SPACE HERE");
-                    return;
-                }
 
                 controllerHeldInCabin = true;
-                FindNearestCabinTileRun(rider, placement, out row, out start);
                 controllerHeldRun = new Vector2Int(start, row);
+                Vector3 placement = CabinTileCenter(row, start, width);
                 figure.localPosition = placement;
-                SetPassengerGridPreview(rider, placement, true);
-                SetSelectionTint(BoardingValid);
+                bool placementClear = CabinPlacementClear(rider, placement);
+                SetPassengerGridPreview(rider, placement, placementClear);
+                SetSelectionTint(placementClear ? BoardingValid : BoardingInvalid);
                 SetControlStatus("MOVE TO TILE  " + GameplayPickupKey + " TO DROP");
                 return;
             }
@@ -523,19 +524,15 @@ namespace CrazyElevator.Managers
             else if (direction.x < 0) nextStart = Mathf.Max(0, nextStart - 1);
             else if (direction.x > 0) nextStart = Mathf.Min(CabinColumns - widthHeld, nextStart + 1);
 
-            Vector3 desiredNext = CabinTileCenter(nextRow, nextStart, widthHeld);
-            if (!TryCabinTilePlacement(rider, desiredNext, true, out Vector3 nextPlacement))
-            {
-                SetControlStatus("NO SPACE HERE");
-                Play(buzz);
-                return;
-            }
-
-            FindNearestCabinTileRun(rider, nextPlacement, out nextRow, out nextStart);
+            // The carry cursor is allowed to pass over occupied cells. Only
+            // the final X drop is space-checked, so an occupied middle column
+            // no longer traps a passenger on the side where they started.
+            Vector3 nextPlacement = CabinTileCenter(nextRow, nextStart, widthHeld);
             controllerHeldRun = new Vector2Int(nextStart, nextRow);
             figure.localPosition = nextPlacement;
-            SetPassengerGridPreview(rider, nextPlacement, true);
-            SetSelectionTint(BoardingValid);
+            bool nextPlacementClear = CabinPlacementClear(rider, nextPlacement);
+            SetPassengerGridPreview(rider, nextPlacement, nextPlacementClear);
+            SetSelectionTint(nextPlacementClear ? BoardingValid : BoardingInvalid);
         }
 
         void FinishControllerPassengerPickup(Transform figure)
@@ -589,9 +586,11 @@ namespace CrazyElevator.Managers
                 guiCursor.x -= view.x;
                 guiCursor.y -= view.y;
             }
-            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
+            GetMouseControlRects(out var up, out var down, out var stop, out var close,
+                out var kickout, out var repair, out var pickup, out var quickPickup);
             return up.Contains(guiCursor) || down.Contains(guiCursor) || stop.Contains(guiCursor)
-                || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor);
+                || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor)
+                || pickup.Contains(guiCursor) || quickPickup.Contains(guiCursor);
         }
 
         // Preserve the rider's grab point so dragging feels direct and stable.
