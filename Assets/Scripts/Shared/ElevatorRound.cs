@@ -162,35 +162,46 @@ namespace CrazyElevator.Shared
             {
                 PassengerTheme world = PassengerData.ThemeAtFloor(f);
                 if (world == PassengerTheme.Office)
-                    Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, (f + 1) % Floors, 2, 34, 0, 0, 30);
+                    Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, 2, 34, 0, 0, 30);
                 if (world == PassengerTheme.Candy)
-                    Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, (f + 2) % Floors, 2, 42, 0, 1, 70);
+                    Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, 2, 42, 0, 1, 70);
                 if (world == PassengerTheme.Office)
-                    Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, (f + 3) % Floors, 1, 13, 0, 2, 120);
+                    Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, 1, 13, 0, 2, 120);
                 if (world == PassengerTheme.Candy)
-                    Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, RandomDestination(f), 1, 30, 0, 3, 140);
-                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, (f + 2) % Floors, 1, 58, ElderlyArrivalSeconds, 4, 175);
+                    Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
+                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
-                    Add("The Trio", "GROUP", "All three or none!", "3X", f, (f + 1) % Floors, 3, 32, 0, 5, 130);
+                    Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
             }
         }
 
         // Store a passenger with fresh patience.
-        void Add(string name, string kind, string request, string badge, int from, int to, int space,
+        void Add(string name, string kind, string request, string badge, int from, int space,
             float patience, float arrival, int color, int bonus)
         {
             Riders.Add(new Rider { Name = name, Kind = kind, Request = request, Origin = from,
-                Destination = to, Space = space, Patience = patience, Remaining = patience, Arrival = arrival,
+                Destination = DestinationFor(kind, from), Space = space, Patience = patience, Remaining = patience, Arrival = arrival,
                 Color = color, Badge = badge, Bonus = bonus });
         }
 
         // Special passengers may request any other floor, including a floor in
         // their own world. Skipping the origin prevents a zero-distance trip.
         public static int RandomDestination(int origin)
+            => RandomDestination(origin, Floors - 1);
+
+        static int RandomDestination(int origin, int highestFloor)
         {
-            if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
-            int choice = DestinationRandom.Next(Floors - 1);
+            ValidateDestinationRange(origin, highestFloor);
+            int choice = DestinationRandom.Next(highestFloor);
             return choice >= origin ? choice + 1 : choice;
+        }
+
+        static void ValidateDestinationRange(int origin, int highestFloor)
+        {
+            if (highestFloor < 1 || highestFloor >= Floors)
+                throw new ArgumentOutOfRangeException(nameof(highestFloor));
+            if (origin < 0 || origin > highestFloor)
+                throw new ArgumentOutOfRangeException(nameof(origin));
         }
 
         // The match creates one set of riders, then gives its rival round those
@@ -249,9 +260,9 @@ namespace CrazyElevator.Shared
             return true;
         }
 
-        static Rider CreateReplacement(Rider previous)
+        Rider CreateReplacement(Rider previous)
         {
-            int destination = DestinationFor(previous.Kind, previous.Origin);
+            int destination = DestinationFor(previous.Kind, previous.Origin, Math.Max(MaxUnlockedFloor, previous.Origin));
             Rider replacement = previous.Data != null
                 ? previous.Data.CreateRider(previous.Origin, destination)
                 : new Rider
@@ -275,10 +286,28 @@ namespace CrazyElevator.Shared
 
         public static int DestinationFor(string kind, int origin)
         {
-            if (kind == "BOSS" || kind == "HANDYMAN") return RandomDestination(origin);
-            if (kind == "ELDERLY" || kind == "PREGNANT") return (origin + 2) % Floors;
-            if (kind == "INTERVIEW") return (origin + 3) % Floors;
-            return (origin + 1) % Floors;
+            if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
+            // Initial rosters must be deliverable when their world first opens.
+            int worldCeiling = (origin / FloorsPerDimension + 1) * FloorsPerDimension - 1;
+            return DestinationFor(kind, origin, worldCeiling);
+        }
+
+        public static int DestinationFor(string kind, int origin, int highestFloor)
+        {
+            ValidateDestinationRange(origin, highestFloor);
+            if (kind == "BOSS" || kind == "HANDYMAN") return RandomDestination(origin, highestFloor);
+
+            // Ignore the elevator's direction: either side is equally likely.
+            // At the building edges, choose the side that has floors available.
+            bool goingUp = origin == 0 || origin < highestFloor && DestinationRandom.Next(2) == 0;
+            int available = goingUp ? highestFloor - origin : origin;
+            // Most rides are 1–3 floors, with occasional 4–6-floor detours.
+            // Interview passengers keep short trips to suit their tight patience.
+            int reach = Math.Min(available, kind == "INTERVIEW" ? 3 : 6);
+            bool longerTrip = reach > 3 && DestinationRandom.Next(4) == 0;
+            int distance = longerTrip ? DestinationRandom.Next(4, reach + 1)
+                : DestinationRandom.Next(1, Math.Min(3, reach) + 1);
+            return origin + (goingUp ? distance : -distance);
         }
 
         // Begin with the two straightforward office riders. New mechanics are
