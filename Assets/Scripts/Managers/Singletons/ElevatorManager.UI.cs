@@ -943,8 +943,8 @@ namespace CrazyElevator.Managers
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
         }
 
-        // Destination plaques sit at passengers' feet, leaving the space above
-        // their heads for a clear selection arrow and occasional dialogue.
+        // Waiting destinations draw above heads in screen space so cabin
+        // passengers cannot obscure the pickup information.
         void DrawPassengerCallouts()
         {
             if (BuildingView) return;
@@ -980,17 +980,20 @@ namespace CrazyElevator.Managers
                 Color accent = Palette[rider.Color % Palette.Length];
                 bool selected = rider == selectedRider || rider == draggedRider;
 
-                // Extended cabin view uses the perspective-matched 3D floor
-                // marker. Keep the old screen badge only for legacy layouts.
-                if (!extendedInterior)
+                // Keep onboard floor markers, and give waiting passengers a
+                // large overhead badge above the selection arrow.
+                if (!rider.Boarded && !rider.Resolved && round.IsOffered(rider))
                 {
-                    Rect badge = new Rect(x - 18f, footY - 2f, 36f, 30f);
+                    Rect badge = new Rect(headX - 26f, Mathf.Max(8f, headY - 74f), 52f, 42f);
                     Color badgeBorder = selected
                         ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
-                        : new Color32(145, 153, 166, 255);
-                    FramedPanel(badge, badgeBorder, 2f);
+                        : Teal;
+                    FramedPanel(badge, badgeBorder, 3f);
+                    int previousNumberSize = calloutNumber.fontSize;
+                    calloutNumber.fontSize = 32;
                     OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
                         rider.Destination.ToString(), calloutNumber);
+                    calloutNumber.fontSize = previousNumberSize;
                 }
 
                 // The selection arrow belongs above the passenger, not above

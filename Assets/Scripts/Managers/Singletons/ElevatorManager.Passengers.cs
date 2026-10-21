@@ -1574,14 +1574,16 @@ namespace CrazyElevator.Managers
                 }
                 if (destinationTags.TryGetValue(p, out var destinationTag))
                 {
-                    bool useScreenCallout = extendedInterior;
-                    destinationTag.gameObject.SetActive(!useScreenCallout && !isExiting && !departing);
+                    // Show the overhead destination only until pickup. Onboard
+                    // passengers keep their cabin floor marker instead.
+                    bool waitingForPickup = !p.Boarded && !p.Resolved && round.IsOffered(p);
+                    destinationTag.gameObject.SetActive(!extendedInterior && waitingForPickup && !isExiting && !departing);
                     destinationTag.text = p.Destination.ToString();
                     // Keep the actionable number a single, dark high-contrast
                     // color. Mood is already communicated by the patience bar
                     // and speech bubble, so it should not reduce legibility.
                     destinationTag.color = Ink;
-                    destinationTag.transform.position = PassengerDestinationAnchor(p, figure);
+                    destinationTag.transform.position = figure.position + Vector3.up * 2.65f;
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
                 UpdateFloorMarker(p, figure, isExiting || departing);
