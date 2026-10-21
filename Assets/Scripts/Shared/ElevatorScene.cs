@@ -30,5 +30,9 @@ namespace CrazyElevator.Shared
 
         [Header("Passenger art (one prefab per kind)")]
         public PassengerView[] passengers;
+
+        [Header("Shaft hazards (moved by ElevatorManager.Hazards)")]
+        public GameObject tornado;
+        public GameObject monster;
     }
 }

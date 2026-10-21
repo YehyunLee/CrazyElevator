@@ -134,7 +134,7 @@ namespace CrazyElevator.Managers
         Quaternion CrazyTravelLocalRotation(float logicalFloor, float collisionKick)
         {
             return exteriorCarHomeRotation * Quaternion.Euler(
-                0f, 0f, collisionKick * (Seat == 0 ? -4.5f : 4.5f));
+                0f, CarSpinDegrees, collisionKick * (Seat == 0 ? -4.5f : 4.5f));
         }
 
         void ResetRouteLateral()

@@ -294,7 +294,7 @@ namespace CrazyElevator.Managers
                 || rider == repairingHandyman || !figures.TryGetValue(rider, out var figure)
                 || figure == null || !figure.gameObject.activeInHierarchy) return false;
             if (round.Owns(rider)) return true;
-            return !rider.Boarded && rider.Origin == round.Floor && rider.Arrival <= 0
+            return round.WaitsHere(rider) && rider.Arrival <= 0
                 && round.IsOffered(rider)
                 && (draggedRider == rider || PassengerFigureInView(figure));
         }
@@ -631,7 +631,7 @@ namespace CrazyElevator.Managers
             int columns = OfficeInterior ? OfficeQueueX.Length : int.MaxValue;
             foreach (Rider rider in round.Riders)
             {
-                if (rider.Boarded || rider.Resolved || rider.Origin != round.Floor) continue;
+                if (!round.WaitsHere(rider)) continue;
                 slots[rider] = new Vector2Int(
                     columns == int.MaxValue ? slot : slot % columns,
                     columns == int.MaxValue ? 0 : slot / columns);
@@ -1268,7 +1268,7 @@ namespace CrazyElevator.Managers
 
             marker.Root.position = PassengerFloorMarkerAnchor(rider, figure);
             marker.Root.localRotation = Quaternion.identity;
-            marker.Label.text = rider.Destination.ToString();
+            marker.Label.text = DestinationTag(rider);
             bool selected = rider == selectedRider || rider == draggedRider;
             Color borderColor = selected
                 ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
@@ -1398,7 +1398,7 @@ namespace CrazyElevator.Managers
             foreach (var other in round.Riders)
             {
                 if (other == p) break;
-                if (p.Boarded ? round.Owns(other) : !other.Boarded && !other.Resolved && other.Origin == round.Floor) slot++;
+                if (p.Boarded ? round.Owns(other) : round.WaitsHere(other)) slot++;
             }
             if (p.Boarded)
             {
@@ -1502,11 +1502,11 @@ namespace CrazyElevator.Managers
                 bool hasFigure = figures.TryGetValue(p, out var figure);
                 if (Match != null && hasFigure && figure.gameObject.activeInHierarchy
                     && hallVisible && p.Boarded && !p.Resolved && p.BoardedBySeat != Seat
-                    && p.Origin == round.Floor && !sharedPickupDepartures.ContainsKey(p))
+                    && p.Origin == round.Floor && p.OriginStop == round.Stop && !sharedPickupDepartures.ContainsKey(p))
                     BeginSharedPickupDeparture(p, figure);
                 bool departing = sharedPickupDepartures.ContainsKey(p);
                 bool visible = departing || isExiting || !p.Resolved && (round.Owns(p)
-                    || !p.Boarded && p.Origin == round.Floor && hallVisible && round.IsOffered(p));
+                    || hallVisible && round.IsOffered(p));
                 if (visible && !departing && !isExiting && !p.Boarded && round.IsOffered(p))
                     DiscoverPassenger(p);
                 if (!hasFigure)
@@ -1578,7 +1578,7 @@ namespace CrazyElevator.Managers
                     // passengers keep their cabin floor marker instead.
                     bool waitingForPickup = !p.Boarded && !p.Resolved && round.IsOffered(p);
                     destinationTag.gameObject.SetActive(!extendedInterior && waitingForPickup && !isExiting && !departing);
-                    destinationTag.text = p.Destination.ToString();
+                    destinationTag.text = DestinationTag(p);
                     // Keep the actionable number a single, dark high-contrast
                     // color. Mood is already communicated by the patience bar
                     // and speech bubble, so it should not reduce legibility.
@@ -1605,9 +1605,9 @@ namespace CrazyElevator.Managers
             if (p.Kind == "HANDYMAN") return p.Boarded ? "\"Full power! I've got the gears covered.\"" : "\"Take me aboard to clear all rust!\"";
             if (exiting.ContainsKey(p)) return "\"" + (string.IsNullOrEmpty(p.Status) ? "Made it!" : p.Status) + "\"";
             if (p.Boarded && p.Remaining <= 0) return "\"I'm MAD! No points now.\"";
-            if (p.Boarded && p.Destination == round.Floor && phase == Phase.Boarding) return "\"My stop! Select me and confirm.\"";
+            if (p.Boarded && round.AtDestination(p) && phase == Phase.Boarding) return "\"My stop!\"";
             if (p.Boarded && !string.IsNullOrEmpty(p.Status)) return "\"" + p.Status + "\"";
-            if (p.Boarded) return IsComplaining(p) ? "\"Please hurry!\"" : "\"Floor " + p.Destination.ToString() + "\"";
+            if (p.Boarded) return IsComplaining(p) ? "\"Please hurry!\"" : "\"Floor " + DestinationTag(p) + "\"";
             return "\"" + p.Request + "\"";
         }
 
@@ -1744,7 +1744,7 @@ namespace CrazyElevator.Managers
                     && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     missedDestination.Add(rider);
                 bool missedPersistent = rider.Boarded && missedDestination.Contains(rider);
-                bool destinationPersistent = rider.Boarded && rider.Destination == round.Floor
+                bool destinationPersistent = rider.Boarded && round.AtDestination(rider)
                     && (phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing);
                 bool babyPersistent = rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby);
                 // MAD is already rendered as the passenger's single 2D
@@ -1772,7 +1772,7 @@ namespace CrazyElevator.Managers
         {
             return rider != null && !rider.Resolved && !exiting.ContainsKey(rider)
                 && figures.TryGetValue(rider, out Transform figure) && figure.gameObject.activeInHierarchy
-                && (round.Owns(rider) || !rider.Boarded && rider.Origin == round.Floor && round.IsOffered(rider));
+                && (round.Owns(rider) || round.IsOffered(rider));
         }
 
         static bool CanSpeakWhileWaiting(Rider rider)
@@ -1804,7 +1804,7 @@ namespace CrazyElevator.Managers
             if (rider.Kind == "GROUP") return "ALL TOGETHER!";
             if (rider.Kind == "PREGNANT") return "BABY ON BOARD!";
             if (rider.Kind == "ELDERLY") return "I CAN CALM BABIES!";
-            return "FLOOR " + rider.Destination;
+            return "FLOOR " + DestinationTag(rider);
         }
 
         void ClearSpeechBubbles()

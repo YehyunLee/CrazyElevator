@@ -960,7 +960,7 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in visible)
                 if (rider.Boarded && (rider.HasFeature(PassengerFeature.CryingBaby)
                     || rider.Remaining <= rider.Patience * .25f
-                    || rider.Destination == round.Floor || !string.IsNullOrEmpty(rider.Status)))
+                    || round.AtDestination(rider) || !string.IsNullOrEmpty(rider.Status)))
                 { speaker = rider; break; }
             if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
 
@@ -992,7 +992,7 @@ namespace CrazyElevator.Managers
                     int previousNumberSize = calloutNumber.fontSize;
                     calloutNumber.fontSize = 32;
                     OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
-                        rider.Destination.ToString(), calloutNumber);
+                        DestinationTag(rider), calloutNumber);
                     calloutNumber.fontSize = previousNumberSize;
                 }
 
@@ -1105,7 +1105,7 @@ namespace CrazyElevator.Managers
                 }
                 occupiedBadges.Add(badge);
                 FramedPanel(badge, new Color32(145, 153, 166, 255), 2f);
-                OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
+                OutlinedLabel(badge, DestinationTag(rider), calloutNumber);
             }
 
             calloutNumber.fontSize = previousSize;
@@ -1117,7 +1117,7 @@ namespace CrazyElevator.Managers
             if (rider.Boarded && !string.IsNullOrEmpty(rider.Status)
                 && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return "MISSED MY FLOOR!";
-            if (rider.Boarded && rider.Destination == round.Floor) return "MY STOP!";
+            if (rider.Boarded && round.AtDestination(rider)) return "MY STOP!";
             if (rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby))
                 return round.BabyCalmedByGrandma ? "CALM! PATIENCE x0.5" : "WAAAH! PATIENCE x1.6";
             if (rider.Boarded && rider.Remaining <= rider.Patience * .25f) return "PLEASE HURRY!";

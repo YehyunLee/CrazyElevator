@@ -1549,8 +1549,9 @@ namespace CrazyElevator.Managers
             {
                 if (rider == null || rider.Resolved) continue;
                 bool inCar = onboard.Contains(rider);
-                if (!inCar && (rider.Boarded || rider.Origin != overlayGame.DiscreteFloor)) continue;
-                string line = rider.Name + "  →  F" + rider.Destination + (inCar ? "  [IN]" : "  [WAIT]");
+                if (!inCar && (rider.Boarded || rider.Origin != overlayGame.DiscreteFloor
+                    || rider.OriginStop != overlayGame.DiscreteStop)) continue;
+                string line = rider.Name + "  →  F" + ElevatorManager.DestinationTag(rider) + (inCar ? "  [IN]" : "  [WAIT]");
                 GUI.Label(new Rect(card.x + 14, y, card.width - 28, 22), line, body);
                 y += 22;
                 if (y > card.yMax - 28) break;

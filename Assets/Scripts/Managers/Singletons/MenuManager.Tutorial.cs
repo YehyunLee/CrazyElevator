@@ -157,6 +157,7 @@ namespace CrazyElevator.Managers
                 tutorialCompletionTimes[i] = 0f;
                 tutorialResumeActorOnCardSettled[i] = false;
                 actor?.SuppressEncounterCards();
+                actor?.SetTutorialStops(true);
                 tutorialExitBaseline[i] = actor != null ? actor.PassengerExitCount : 0;
                 tutorialTravelStartBaseline[i] = actor != null ? actor.TravelStartCount : 0;
                 tutorialFloorStopBaseline[i] = actor != null ? actor.FloorStopCount : 0;
@@ -524,6 +525,7 @@ namespace CrazyElevator.Managers
             for (int i = 0; i < tutorialActors.Length; i++)
             {
                 ResumeTutorialActor(i);
+                tutorialActors[i]?.SetTutorialStops(false);
             }
             ResumeTutorialGame();
             menuFadeAlpha = 1f;

@@ -168,10 +168,14 @@ namespace CrazyElevator.Managers
             collisionSlowTimer = Mathf.Max(0f, collisionSlowTimer - dt);
             collisionRecoilTimer = Mathf.Max(0f, collisionRecoilTimer - dt);
             collisionImpact = Mathf.Max(0f, collisionImpact - dt * 1.8f);
+            TickHazardTimers(dt);
+            UpdateShaftHazards(dt);
+            UpdateShaftCrowd(dt);
             // Both cars may stop at one floor, but its shared waiting queue
             // should lose patience only once per frame.
             bool tickWaiting = !IsNpc || Match == null || Match.player == null
-                || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor;
+                || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor
+                || Match.player.DiscreteStop != round.Stop;
             int waitingMisses = MenuManager.TutorialActive
                 ? 0 : round.Tick(dt, phase == Phase.Boarding, tickWaiting);
             if (Match == null && !IsNpc && !MenuManager.TutorialActive
@@ -180,7 +184,8 @@ namespace CrazyElevator.Managers
             if (waitingMisses > 0 && Match != null)
             {
                 ElevatorManager other = IsNpc ? Match.player : Match.Rival;
-                if (other != null && other.AtStop && other.DiscreteFloor == round.Floor)
+                if (other != null && other.AtStop && other.DiscreteFloor == round.Floor
+                    && other.DiscreteStop == round.Stop)
                     other.round.AddWaitingMisses(waitingMisses);
             }
             elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
@@ -255,6 +260,7 @@ namespace CrazyElevator.Managers
                 if (marker != null && marker.Root) Destroy(marker.Root.gameObject);
             floorMarkers.Clear();
             foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear(); idleBobOffsets.Clear();
+            ClearShaftCrowd();
             passengerEffects.Clear();
             bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); cabinTileRuns.Clear(); exiting.Clear(); exitStarts.Clear();
             sharedPickupDepartures.Clear(); riderHits.Clear();
@@ -440,13 +446,15 @@ namespace CrazyElevator.Managers
                 return;
             }
             floorStopCount++;
-            // Ease out from the current speed so the car visibly brakes into the floor.
+            // Ease out from the current speed so the car visibly brakes into the floor
+            // and slides sideways onto the nearest stop.
             float distance = Mathf.Abs(target - travelFloor);
             dockingSeconds = Mathf.Clamp(2f * distance / Mathf.Max(.6f, RouteSpeed), .35f, 1f);
+            BeginStopLineUp();
             destination = target; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
             phase = Phase.Docking; phaseTime = 0;
-            notice = "Stopping at floor " + destination + "."; Play(click);
+            notice = "Stopping at " + StopTag(destination, dockingStop) + "."; Play(click);
         }
         void AdvanceBuildingTravel(float dt)
         {
@@ -455,18 +463,21 @@ namespace CrazyElevator.Managers
             {
                 phaseTime += dt;
                 float glide = Mathf.Clamp01(phaseTime / dockingSeconds);
-                travelFloor = Mathf.Lerp(dockingStart, destination, 1f - (1f - glide) * (1f - glide));
+                float eased = 1f - (1f - glide) * (1f - glide);
+                travelFloor = Mathf.Lerp(dockingStart, destination, eased);
+                LineUpWithStop(eased);
                 if (phaseTime >= dockingSeconds)
                 {
                     travelFloor = destination;
-                    int waiting = round.Arrive(destination);
+                    LineUpWithStop(1f);
+                    int waiting = round.Arrive(destination, dockingStop);
                     DiscoverWorld(BandForFloor(destination));
                     SetFloorDisplayText(destination.ToString());
                     phase = Phase.Opening; phaseTime = 0;
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Riders for this floor are getting off." : "Select a waiting passenger and press C to welcome them.";
+                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Select a waiting passenger and press C to welcome them.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -478,6 +489,7 @@ namespace CrazyElevator.Managers
             float step = dt / steps;
             for (int i = 0; i < steps; i++) AdvanceTravelStep(step);
             EndRouteFrame(dt);
+            CheckHazardHits();
             SetFloorDisplayText(NearbyFloor.ToString());
         }
 
@@ -503,13 +515,16 @@ namespace CrazyElevator.Managers
             if (travelFloor <= 0 && travelVelocity < 0 || travelFloor >= MaxTravelFloor && travelVelocity > 0) travelVelocity = 0;
             int motionDirection = travelFloor >= before ? 1 : -1;
             // A skipped floor counts only after leaving its stopping window; docking there never incurs a missed-stop penalty.
+            // Only riders whose stop is on this track complain.
+            int passingStop = StopOnTrack(RouteLateralX);
             for (int floor = 0; floor < ElevatorRound.Floors; floor++)
             {
                 float edge = floor + motionDirection * stopWindow;
                 bool crossed = motionDirection > 0 ? before <= edge && travelFloor > edge : before >= edge && travelFloor < edge;
-                if (!crossed || !passedFloors.Add(floor)) continue;
-                int dockedFloor = round.Floor;
-                round.Floor = floor; round.LeaveFloor(); round.Floor = dockedFloor;
+                if (!crossed || !passedFloors.Add(floor) || passingStop < 0) continue;
+                int dockedFloor = round.Floor, dockedStop = round.Stop;
+                round.Floor = floor; round.Stop = passingStop; round.LeaveFloor();
+                round.Floor = dockedFloor; round.Stop = dockedStop;
             }
             if (!railRiding && Mathf.Approximately(before, travelFloor))
                 notice = "End of track. Press A/D to take this floor's rail, confirm to stop, or reverse.";
@@ -645,7 +660,7 @@ namespace CrazyElevator.Managers
             var riderStops = new List<int>();
             foreach (var rider in round.Riders)
             {
-                if (!round.Owns(rider) || rider.Destination == round.Floor) continue;
+                if (!round.Owns(rider) || round.AtDestination(rider)) continue;
                 if (!riderStops.Contains(rider.Destination)) riderStops.Add(rider.Destination);
             }
             if (riderStops.Count > 0)
@@ -1230,7 +1245,7 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                prompt = selectedRider.Name + " → F" + selectedRider.Destination
+                prompt = selectedRider.Name + " → F" + DestinationTag(selectedRider)
                     + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
                         : "   ·   BOARD   ·   DRAG IN");
             }
@@ -1348,6 +1363,9 @@ namespace CrazyElevator.Managers
                 result.Riders.Insert(first < 0 ? result.Riders.Count : Mathf.Min(first + 2, result.Riders.Count), fixer);
             }
             ExpandProgressionRoster(result);
+            result.StopOpen = StopReachable;
+            result.CenterStopsOnly = MenuManager.TutorialActive;
+            result.AssignStops();
             float patienceScale = Mathf.Max(1f, patienceDurationMultiplier);
             foreach (var rider in result.Riders)
             {
@@ -1606,12 +1624,14 @@ namespace CrazyElevator.Managers
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
             DrawSpeedLines();
+            DrawDestinationBeacons();
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
-            // While moving, the marker shows the floor a stop press would glide into.
+            // While moving, the marker shows the stop a stop press would glide into.
             bool moving = phase == Phase.Moving;
             int floor = moving ? GlideStopFloor() : NearbyFloor;
+            string side = moving ? StopSide(NearestStop(RouteLateralX)) : "";
             Vector3 markerLocal = CrazyTravelLocalPosition(RouteLateralX, floor);
             Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(markerLocal));
             if (point.z <= 0) return;
@@ -1620,9 +1640,9 @@ namespace CrazyElevator.Managers
             Color accent = moving ? Teal : WorldAccent(floor);
             Panel(new Rect(x - 70 * size, y + 44 * size, 140 * size, 3 * size), accent);
             var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
-            Panel(new Rect(x - 78 * size, y + 49 * size, 156 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
-            Label(new Rect(x - 76 * size, y + 50 * size, 152 * size, 26 * size),
-                moving ? "F" + floor + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
+            Panel(new Rect(x - 98 * size, y + 49 * size, 196 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
+            Label(new Rect(x - 96 * size, y + 50 * size, 192 * size, 26 * size),
+                moving ? "F" + floor + side + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
         }
 
         void DrawCabinPreviewFrame()
@@ -2152,6 +2172,7 @@ namespace CrazyElevator.Managers
                 travelVelocity = direction * Mathf.Abs(travelVelocity);
             }
             npcTargetFloor = Mathf.Clamp(target, 0, ElevatorRound.Floors - 1);
+            npcTargetStop = ElevatorRound.CenterStop;
         }
 
         bool EnterMatchKnockbackTravel()
@@ -2216,7 +2237,7 @@ namespace CrazyElevator.Managers
             if (round == null || (force ? phase != Phase.Boarding : !IsBoarding)) return false;
             foreach (Rider rider in round.Riders)
             {
-                if (!round.Owns(rider) || rider.Destination != round.Floor || rider == draggedRider) continue;
+                if (!round.Owns(rider) || !round.AtDestination(rider) || rider == draggedRider) continue;
                 if (!figures.TryGetValue(rider, out Transform figure)) continue;
                 if (selectedRider == rider) SelectRider(null);
                 cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
@@ -2240,63 +2261,6 @@ namespace CrazyElevator.Managers
                 return rider.Boarded;
             }
             return false;
-        }
-
-        // Pick the nearest useful destination, or a floor with waiting riders.
-        public void NpcChooseFloor()
-        {
-            if (!IsBoarding || round == null) return;
-            int target = FindNpcTarget();
-            if (target < 0 || target == round.Floor)
-                target = round.Floor < MaxTravelFloor ? round.Floor + 1 : Mathf.Max(0, round.Floor - 1);
-            target = Mathf.Clamp(target, 0, MaxTravelFloor);
-            npcTargetFloor = target;
-            travelDirection = target > round.Floor ? 1 : -1;
-            CloseAndTravel();
-        }
-
-        public void NpcDriveToStop()
-        {
-            if (phase != Phase.Moving || round == null || npcTargetFloor < 0) return;
-            if (npcTargetFloor == round.Floor)
-                RetargetNpcAfterCollision();
-            int targetDirection = npcTargetFloor > round.Floor ? 1 : -1;
-            if (targetDirection != travelDirection)
-            {
-                travelDirection = targetDirection;
-                travelVelocity = targetDirection * Mathf.Abs(travelVelocity);
-            }
-            boostAxis = travelDirection;
-            boostHeld = true;
-            if (CanStopAtFloor && NearbyFloor == npcTargetFloor)
-            {
-                boostAxis = 0;
-                boostHeld = false;
-                RequestFloorStop();
-            }
-        }
-
-        int FindNpcTarget()
-        {
-            if (round == null) return -1;
-            int best = -1;
-            int bestDistance = int.MaxValue;
-            foreach (Rider rider in round.Riders)
-            {
-                if (rider.Resolved) continue;
-                if (rider.Boarded && !round.Owns(rider)) continue;
-                int floor = rider.Boarded ? rider.Destination : rider.Origin;
-                if (floor > MaxTravelFloor) continue;
-                if (!rider.Boarded && !round.IsOffered(rider) && rider.Arrival > 0) continue;
-                int distance = Mathf.Abs(floor - round.Floor);
-                if (distance == 0) continue;
-                if (distance < bestDistance)
-                {
-                    best = floor;
-                    bestDistance = distance;
-                }
-            }
-            return best;
         }
     }
 }

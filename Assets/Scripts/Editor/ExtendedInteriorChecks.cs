@@ -20,7 +20,19 @@ public static class ExtendedInteriorChecks
     const string Scene = "Assets/Scenes/Main.unity";
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
-    static object Get(Game game, string name) => typeof(Game).GetField(name, Flags).GetValue(game);
+    static object Get(Game game, string name)
+    {
+        object value = typeof(Game).GetField(name, Flags).GetValue(game);
+        // These checks cover the shaft-stop rules only: riders wait at the centre stop
+        // and shaft hazards stay out of the way.
+        if (value is Round round && !round.CenterStopsOnly)
+        {
+            round.CenterStopsOnly = true;
+            round.AssignStops();
+            Set(game, "hazardCooldown", 9999f);
+        }
+        return value;
+    }
     static void Set(Game game, string name, object value) => typeof(Game).GetField(name, Flags).SetValue(game, value);
     static void Call(Game game, string name, params object[] args) => typeof(Game).GetMethod(name, Flags).Invoke(game, args);
     static void Require(bool value, string message) { if (!value) throw new Exception(message); }

@@ -37,8 +37,11 @@ namespace CrazyElevator.Shared
         }
 
         // Route, occupied space, and existing delivery bonus.
+        // A stop is where on the floor the rider waits / wants to go (ElevatorRound.CenterStop = the shafts).
         public int Origin;
         public int Destination;
+        public int OriginStop = ElevatorRound.CenterStop;
+        public int DestinationStop = ElevatorRound.CenterStop;
         public int Space;
         public int Bonus;
 
@@ -86,6 +89,21 @@ namespace CrazyElevator.Shared
         public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
+        // Each floor has five stops, left to right. The car is parked at Stop on Floor.
+        public const int Stops = 5;
+        public const int CenterStop = 2;
+        public int Stop = CenterStop;
+        // The scene decides which stops a car can reach on each floor (floor, stop).
+        public Func<int, int, bool> StopOpen;
+        // The tutorial keeps every rider at the shafts.
+        public bool CenterStopsOnly;
+        // Office stays near the shafts; later worlds spread riders across the whole floor.
+        static readonly int[][] StopWeights =
+        {
+            new[] { 0, 2, 3, 2, 0 },
+            new[] { 1, 2, 2, 2, 1 },
+            new[] { 2, 2, 1, 2, 2 }
+        };
         public float PeakTime;
         public float TimeLeft = Duration;
         public float Elapsed => Duration - TimeLeft;
@@ -93,7 +111,8 @@ namespace CrazyElevator.Shared
         int TimeBasedPassengerOfferLimit => Elapsed < 30f ? 2
             : Elapsed < 70f ? 3
             : Elapsed < 110f ? 4 : 5;
-        public int PassengerOfferLimit => PassengerData.ThemeAtFloor(Floor) == PassengerTheme.Office
+        public int PassengerOfferLimit => OfferLimitAt(Floor);
+        int OfferLimitAt(int floor) => PassengerData.ThemeAtFloor(floor) == PassengerTheme.Office
             ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
         bool RefillPassengerQueue;
         bool OwnsPassengerPoolClock = true;
@@ -280,8 +299,47 @@ namespace CrazyElevator.Shared
                     Arrival = previous.Kind == "ELDERLY" ? ElderlyArrivalSeconds : 0,
                     Bonus = previous.Bonus
                 };
+            replacement.OriginStop = previous.OriginStop;
+            replacement.DestinationStop = PickStop(destination);
             replacement.SpawnDelay = 1f;
             return replacement;
+        }
+
+        // ---------- Stops ----------
+        public bool WaitsHere(Rider p) => p != null && !p.Boarded && !p.Resolved
+            && p.Origin == Floor && p.OriginStop == Stop;
+        public bool AtDestination(Rider p) => p != null && p.Destination == Floor && p.DestinationStop == Stop;
+
+        public int PickStop(int floor)
+        {
+            if (CenterStopsOnly) return CenterStop;
+            int[] weights = StopWeights[Math.Max(0, Math.Min(Dimensions - 1, floor / FloorsPerDimension))];
+            int total = 0;
+            for (int stop = 0; stop < Stops; stop++)
+                if (StopIsOpen(floor, stop)) total += weights[stop];
+            if (total <= 0) return CenterStop;
+            int roll = DestinationRandom.Next(total);
+            for (int stop = 0; stop < Stops; stop++)
+            {
+                if (!StopIsOpen(floor, stop)) continue;
+                roll -= weights[stop];
+                if (roll < 0) return stop;
+            }
+            return CenterStop;
+        }
+
+        bool StopIsOpen(int floor, int stop) => stop == CenterStop || StopOpen == null || StopOpen(floor, stop);
+
+        // Riders already aboard keep their stops; everyone else is (re)placed.
+        // keepFloor leaves the queue the car is looking at in place.
+        public void AssignStops(int keepFloor = -1)
+        {
+            foreach (var rider in Riders)
+            {
+                if (rider.Resolved || rider.Boarded || rider.Origin == keepFloor) continue;
+                rider.OriginStop = PickStop(rider.Origin);
+                rider.DestinationStop = PickStop(rider.Destination);
+            }
         }
 
         public static int DestinationFor(string kind, int origin)
@@ -321,13 +379,13 @@ namespace CrazyElevator.Shared
                 case "INTERVIEW":
                     return true;
                 case "ELDERLY":
-                    return Elapsed >= 30f || Floor >= FloorsPerDimension * 2;
+                    return Elapsed >= 30f || rider.Origin >= FloorsPerDimension * 2;
                 case "PREGNANT":
-                    return Elapsed >= 30f || Floor >= FloorsPerDimension;
+                    return Elapsed >= 30f || rider.Origin >= FloorsPerDimension;
                 case "BOSS":
                     return Elapsed >= 70f;
                 case "HANDYMAN":
-                    return Elapsed >= 90f || Floor >= FloorsPerDimension * 2;
+                    return Elapsed >= 90f || rider.Origin >= FloorsPerDimension * 2;
                 case "GROUP":
                     return Elapsed >= 110f;
                 default:
@@ -338,22 +396,25 @@ namespace CrazyElevator.Shared
         // Skip a waiting passenger with the existing penalty.
         public bool Reject(Rider p)
         {
-            if (Finished || p.Resolved || p.Boarded || p.Origin != Floor || !IsOffered(p)) return false;
+            if (Finished || !WaitsHere(p) || !IsOffered(p)) return false;
             p.Resolved = true; TurnedAway++; Score -= 15; return true;
         }
 
         // Offer a progressively larger queue, filtering out passenger mechanics
         // that have not reached their introduction point yet.
-        public bool IsOffered(Rider candidate)
+        public bool IsOffered(Rider candidate) => WaitsHere(candidate) && IsQueuedAtStop(candidate);
+
+        // Same queue rule for any stop in the building (the shaft view shows these riders).
+        public bool IsQueuedAtStop(Rider candidate)
         {
             if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
-                || candidate.Origin != Floor || !IsPassengerTypeUnlocked(candidate)) return false;
+                || !IsPassengerTypeUnlocked(candidate)) return false;
             int offered = 0;
             foreach (var p in Riders)
             {
-                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != Floor
-                    || !IsPassengerTypeUnlocked(p)) continue;
-                if (p == candidate) return offered < PassengerOfferLimit;
+                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != candidate.Origin
+                    || p.OriginStop != candidate.OriginStop || !IsPassengerTypeUnlocked(p)) continue;
+                if (p == candidate) return offered < OfferLimitAt(candidate.Origin);
                 offered++;
             }
             return false;
@@ -375,7 +436,7 @@ namespace CrazyElevator.Shared
             int missedHere = 0;
             foreach (var p in Riders)
             {
-                if (!Owns(p) || p.Destination != Floor) continue;
+                if (!Owns(p) || !AtDestination(p)) continue;
                 p.Mood = Math.Max(0, p.Mood - 1);
                 p.Status = "You passed my floor!";
                 Score -= 35; missedHere++;
@@ -400,7 +461,7 @@ namespace CrazyElevator.Shared
             {
                 if (p.Resolved) continue;
                 if (Owns(p)) p.Remaining = Math.Max(0, p.Remaining - dt * cabinPatienceMultiplier);
-                else if (!p.Boarded && tickWaiting && stopped && p.Origin == Floor && IsOffered(p))
+                else if (!p.Boarded && tickWaiting && stopped && IsOffered(p))
                 {
                     float waiting = dt;
                     if (p.Arrival > 0) { waiting = Math.Max(0, dt - p.Arrival); p.Arrival = Math.Max(0, p.Arrival - dt); }
@@ -424,10 +485,11 @@ namespace CrazyElevator.Shared
         // Arrival only opens the doors. Delivery is deliberately manual: the
         // player must drag each onboard party out to deliver them.
         // Change floors; delivery remains manual.
-        public int Arrive(int floor)
+        public int Arrive(int floor, int stop = CenterStop)
         {
             if (floor < 0 || floor >= Floors) throw new ArgumentOutOfRangeException(nameof(floor));
             Floor = floor;
+            Stop = Math.Max(0, Math.Min(Stops - 1, stop));
             if (floor > PeakFloor)
             {
                 PeakFloor = floor;
@@ -436,7 +498,7 @@ namespace CrazyElevator.Shared
             int waitingToExit = 0;
             foreach (var p in Riders)
             {
-                if (Owns(p) && p.Destination == floor) waitingToExit++;
+                if (Owns(p) && AtDestination(p)) waitingToExit++;
             }
             return waitingToExit;
         }
@@ -446,7 +508,7 @@ namespace CrazyElevator.Shared
         {
             if (Finished || !Owns(p)) return OffboardResult.None;
             p.Boarded = false; p.BoardedBySeat = -1; p.Resolved = true; Delivered++;
-            if (p.Destination != Floor)
+            if (!AtDestination(p))
             {
                 p.Mood = 0; p.Status = "Wrong floor!"; Score -= 60;
                 return OffboardResult.WrongFloor;

@@ -21,6 +21,7 @@ namespace CrazyElevator.Managers
         public int TravelStartCount => travelStartCount;
         public int FloorStopCount => floorStopCount;
         public int DiscreteFloor => round != null ? round.Floor : 0;
+        public int DiscreteStop => round != null ? round.Stop : ElevatorRound.CenterStop;
         public int MaxCapacity => ElevatorRound.Capacity;
         public bool HasSelectedPassenger => selectedRider != null;
         public int PassengerExitCount => passengerExitCount;
@@ -53,7 +54,7 @@ namespace CrazyElevator.Managers
                 if (round == null) return System.Array.Empty<Rider>();
                 var waiting = new List<Rider>();
                 foreach (var rider in round.Riders)
-                    if (!rider.Boarded && !rider.Resolved && rider.Origin == round.Floor && round.IsOffered(rider))
+                    if (round.IsOffered(rider))
                         waiting.Add(rider);
                 return waiting;
             }
