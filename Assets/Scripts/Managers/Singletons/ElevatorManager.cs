@@ -487,7 +487,11 @@ namespace CrazyElevator.Managers
             // Small integration steps make acceleration independent of frame rate and respect world boundaries.
             int steps = Mathf.Max(1, Mathf.CeilToInt(dt * 120));
             float step = dt / steps;
-            for (int i = 0; i < steps; i++) AdvanceTravelStep(step);
+            for (int i = 0; i < steps; i++)
+            {
+                AdvanceTravelStep(step);
+                if (AutoStopAtDestination()) break;
+            }
             EndRouteFrame(dt);
             CheckHazardHits();
             SetFloorDisplayText(NearbyFloor.ToString());

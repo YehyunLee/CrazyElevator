@@ -23,13 +23,14 @@ public static class ExtendedInteriorChecks
     static object Get(Game game, string name)
     {
         object value = typeof(Game).GetField(name, Flags).GetValue(game);
-        // These checks cover the shaft-stop rules only: riders wait at the centre stop
-        // and shaft hazards stay out of the way.
+        // These checks cover the shaft-stop rules only: riders wait at the centre stop,
+        // shaft hazards stay out of the way, and stops are pressed manually.
         if (value is Round round && !round.CenterStopsOnly)
         {
             round.CenterStopsOnly = true;
             round.AssignStops();
             Set(game, "hazardCooldown", 9999f);
+            Set(game, "autoStopAtDestinations", false);
         }
         return value;
     }

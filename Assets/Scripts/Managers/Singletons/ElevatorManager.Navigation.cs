@@ -90,6 +90,28 @@ namespace CrazyElevator.Managers
             railVelocity = 0f;
         }
 
+        // Reaching an onboard rider's floor and stop docks there by itself; the doors then open as usual.
+        // The tutorial keeps the manual stop so its STOP card still teaches the button.
+        [SerializeField, Tooltip("Dock automatically on reaching an onboard rider's floor and stop.")]
+        bool autoStopAtDestinations = true;
+
+        bool AutoStopAtDestination()
+        {
+            if (!autoStopAtDestinations || phase != Phase.Moving || MenuManager.TutorialActive) return false;
+            int floor = NearbyFloor;
+            if (Mathf.Abs(travelFloor - floor) > stopWindow) return false;
+            int stop = StopOnTrack(RouteLateralX);
+            if (stop < 0 || floor == round.Floor && stop == round.Stop) return false;
+            foreach (Rider rider in round.Riders)
+                if (round.Owns(rider) && !exiting.ContainsKey(rider)
+                    && rider.Destination == floor && rider.DestinationStop == stop)
+                {
+                    RequestFloorStop();
+                    return phase == Phase.Docking;
+                }
+            return false;
+        }
+
         void LineUpWithStop(float progress)
         {
             routeLateralX = Mathf.Lerp(dockingStartX, dockingTargetX, progress);
