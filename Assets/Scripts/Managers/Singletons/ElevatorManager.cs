@@ -1742,6 +1742,7 @@ namespace CrazyElevator.Managers
         }
 
         public void PlayEndingDrum() => SfxManager.Instance?.PlaySfx(endingDrumSfx);
+        public void PlayClick() => Play(click);
 
         void PlayPassengerBoardingVoice(Rider rider)
         {

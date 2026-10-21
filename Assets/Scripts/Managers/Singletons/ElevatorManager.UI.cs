@@ -430,32 +430,7 @@ namespace CrazyElevator.Managers
             encounterPreviewModel.transform.localRotation = Quaternion.identity;
             encounterPreviewModel.transform.localScale = Vector3.one;
             encounterPreviewModel.SetActive(true);
-
-            PassengerView passenger = encounterPreviewModel.GetComponentInChildren<PassengerView>(true);
-            if (passenger != null && passenger.jackets != null)
-                foreach (Renderer jacket in passenger.jackets)
-                    if (jacket != null) jacket.sharedMaterial = Mat(card.Accent);
-
-            foreach (Transform child in encounterPreviewModel.GetComponentsInChildren<Transform>(true))
-            {
-                child.gameObject.layer = EncounterPreviewLayer;
-                child.gameObject.hideFlags = HideFlags.HideAndDontSave;
-            }
-            foreach (MonoBehaviour behaviour in encounterPreviewModel.GetComponentsInChildren<MonoBehaviour>(true))
-                behaviour.enabled = false;
-            foreach (Collider collider in encounterPreviewModel.GetComponentsInChildren<Collider>(true))
-                collider.enabled = false;
-            foreach (AudioSource source in encounterPreviewModel.GetComponentsInChildren<AudioSource>(true))
-                source.enabled = false;
-            foreach (Camera nestedCamera in encounterPreviewModel.GetComponentsInChildren<Camera>(true))
-                nestedCamera.enabled = false;
-            foreach (Light nestedLight in encounterPreviewModel.GetComponentsInChildren<Light>(true))
-                nestedLight.enabled = false;
-            foreach (TextMesh textMesh in encounterPreviewModel.GetComponentsInChildren<TextMesh>(true))
-            {
-                Renderer textRenderer = textMesh.GetComponent<Renderer>();
-                if (textRenderer != null) textRenderer.enabled = false;
-            }
+            MakeStillPreviewModel(encounterPreviewModel, card.Accent);
 
             if (!TryGetEncounterPreviewBounds(encounterPreviewModel, out Bounds bounds))
             {
@@ -498,6 +473,36 @@ namespace CrazyElevator.Managers
             renderedEncounterCard = card;
         }
 
+        // A preview copy only renders: no scripts, clicks, sound, labels, or own cameras.
+        void MakeStillPreviewModel(GameObject model, Color accent)
+        {
+            PassengerView passenger = model.GetComponentInChildren<PassengerView>(true);
+            if (passenger != null && passenger.jackets != null)
+                foreach (Renderer jacket in passenger.jackets)
+                    if (jacket != null) jacket.sharedMaterial = Mat(accent);
+
+            foreach (Transform child in model.GetComponentsInChildren<Transform>(true))
+            {
+                child.gameObject.layer = EncounterPreviewLayer;
+                child.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            foreach (MonoBehaviour behaviour in model.GetComponentsInChildren<MonoBehaviour>(true))
+                behaviour.enabled = false;
+            foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
+            foreach (AudioSource source in model.GetComponentsInChildren<AudioSource>(true))
+                source.enabled = false;
+            foreach (Camera nestedCamera in model.GetComponentsInChildren<Camera>(true))
+                nestedCamera.enabled = false;
+            foreach (Light nestedLight in model.GetComponentsInChildren<Light>(true))
+                nestedLight.enabled = false;
+            foreach (TextMesh textMesh in model.GetComponentsInChildren<TextMesh>(true))
+            {
+                Renderer textRenderer = textMesh.GetComponent<Renderer>();
+                if (textRenderer != null) textRenderer.enabled = false;
+            }
+        }
+
         bool TryGetEncounterPreviewBounds(GameObject model, out Bounds bounds)
         {
             bounds = default;
@@ -527,6 +532,7 @@ namespace CrazyElevator.Managers
         void ReleaseEncounterPreview()
         {
             ClearEncounterPreviewModel();
+            ReleaseDimensionLineup();
             if (encounterPreviewCamera != null) encounterPreviewCamera.targetTexture = null;
             if (encounterPreviewTexture != null)
             {
