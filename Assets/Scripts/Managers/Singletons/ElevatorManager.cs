@@ -1307,7 +1307,7 @@ namespace CrazyElevator.Managers
             {
                 int first = result.Riders.FindIndex(rider => rider.Origin == floor);
                 PassengerData handyman = passengerCatalog != null ? passengerCatalog.FindKind("HANDYMAN") : null;
-                int destination = ElevatorRound.RandomDestination(floor);
+                int destination = ElevatorRound.DestinationFor("HANDYMAN", floor);
                 Rider fixer = handyman != null
                     ? handyman.CreateRider(floor, destination)
                     : new Rider

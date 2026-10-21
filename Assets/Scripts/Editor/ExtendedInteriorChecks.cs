@@ -154,6 +154,141 @@ public static class ExtendedInteriorChecks
         Directory.CreateDirectory(Work); File.WriteAllText(Work + "/request.txt", "repair-checks");
     }
 
+    [MenuItem("Tools/Crazy Elevator/Check Destination Rules")]
+    public static void CheckDestinationRules()
+    {
+        string[] kinds = { "COURIER", "INTERVIEW", "ELDERLY", "PREGNANT", "GROUP", "BOSS", "HANDYMAN" };
+        foreach (string kind in kinds)
+            for (int origin = 0; origin < Round.Floors; origin++)
+            {
+                int ceiling = (origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
+                for (int sample = 0; sample < 256; sample++)
+                {
+                    int destination = Round.DestinationFor(kind, origin);
+                    int distance = Math.Abs(destination - origin);
+                    Require(destination >= 0 && destination <= ceiling && distance > 0,
+                        kind + " requested its origin or a floor in a locked world.");
+                    if (kind == "INTERVIEW")
+                        Require(distance <= 3, "An interview passenger received an excessively long trip.");
+                    else if (kind != "BOSS" && kind != "HANDYMAN")
+                        Require(distance <= 6, "A regular passenger received an excessively long trip.");
+                }
+            }
+
+        // Large samples and broad bounds check the play balance without relying
+        // on a particular random seed or an exact sequence of destinations.
+        foreach (string kind in new[] { "COURIER", "INTERVIEW", "ELDERLY", "PREGNANT", "GROUP" })
+            foreach (int origin in new[] { 3, 11, 19 })
+            {
+                int up = 0, down = 0, shortTrips = 0;
+                var lengths = new HashSet<int>();
+                const int samples = 2048;
+                for (int sample = 0; sample < samples; sample++)
+                {
+                    int destination = Round.DestinationFor(kind, origin);
+                    int distance = Math.Abs(destination - origin);
+                    if (destination > origin) up++; else down++;
+                    if (distance <= 3) shortTrips++;
+                    lengths.Add(distance);
+                }
+                Require(up > samples * .35f && down > samples * .35f && lengths.Count >= 3,
+                    kind + " did not offer varied trips in both directions at floor " + origin + ".");
+                Require(shortTrips > samples * .65f,
+                    "Most " + kind + " requests should be short enough to combine into a route.");
+                if (kind != "INTERVIEW")
+                    Require(shortTrips < samples * .97f,
+                        kind + " never offered the occasional longer trip.");
+            }
+
+        foreach (Action invalid in new Action[]
+        {
+            () => Round.DestinationFor("COURIER", -1),
+            () => Round.DestinationFor("COURIER", Round.Floors),
+            () => Round.DestinationFor("COURIER", 0, 0),
+            () => Round.DestinationFor("COURIER", 0, Round.Floors),
+            () => Round.DestinationFor("COURIER", -1, 7),
+            () => Round.DestinationFor("COURIER", 8, 7)
+        })
+        {
+            bool rejected = false;
+            try { invalid(); }
+            catch (ArgumentOutOfRangeException) { rejected = true; }
+            Require(rejected, "Destination generation accepted an invalid floor range.");
+        }
+
+        bool reachedNewWorld = false;
+        for (int sample = 0; sample < 512; sample++)
+        {
+            int destination = Round.DestinationFor("COURIER", 7, 15);
+            Require(destination >= 0 && destination <= 15 && destination != 7,
+                "A live request exceeded its unlocked ceiling.");
+            reachedNewWorld |= destination > 7;
+            int special = Round.RandomDestination(12);
+            Require(special >= 0 && special < Round.Floors && special != 12,
+                "Unrestricted special requests must remain valid.");
+        }
+        Require(reachedNewWorld, "Live requests never reached the newly opened world.");
+
+        bool defaultUp = false, defaultDown = false;
+        for (int sample = 0; sample < 32; sample++)
+            foreach (SharedRider rider in new Round().Riders)
+                if (rider.Origin == 3 && rider.Kind != "BOSS" && rider.Kind != "HANDYMAN")
+                {
+                    defaultUp |= rider.Destination > rider.Origin;
+                    defaultDown |= rider.Destination < rider.Origin;
+                }
+        Require(defaultUp && defaultDown, "The default roster still uses fixed upward routes.");
+
+        var catalog = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerCatalog>();
+        var type = ScriptableObject.CreateInstance<CrazyElevator.Shared.PassengerData>();
+        try
+        {
+            type.kind = "COURIER";
+            catalog.types = new[] { type };
+            foreach (SharedRider rider in Round.FromCatalog(catalog).Riders)
+            {
+                int ceiling = (rider.Origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
+                Require(rider.Destination >= 0 && rider.Destination <= ceiling && rider.Destination != rider.Origin,
+                    "A catalog passenger received an invalid or locked destination.");
+            }
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(type);
+            UnityEngine.Object.DestroyImmediate(catalog);
+        }
+
+        var player = new Round { Floor = 3 };
+        player.Riders.Clear();
+        var upward = new SharedRider { Kind = "COURIER", Origin = 3, Destination = 5,
+            Space = 1, Patience = 40f, Remaining = 40f };
+        var downward = new SharedRider { Kind = "INTERVIEW", Origin = 3, Destination = 1,
+            Space = 1, Patience = 40f, Remaining = 40f };
+        player.Riders.Add(upward);
+        player.Riders.Add(downward);
+        var rival = new Round { Floor = 3 };
+        rival.SharePassengerPoolWith(player, 1);
+        Require(player.Board(upward) && !rival.Board(upward) && rival.Board(downward),
+            "Mixed-direction requests did not preserve exclusive shared boarding.");
+        Require(player.Riders.Count == 4 && ReferenceEquals(player.Riders, rival.Riders),
+            "Shared boarding did not replenish the same passenger pool.");
+        foreach (SharedRider replacement in player.Riders)
+            if (!replacement.Boarded)
+                Require(replacement.Destination >= 0 && replacement.Destination <= 7
+                    && replacement.Destination != replacement.Origin,
+                    "A shared replacement requested a locked or zero-distance trip.");
+        player.Arrive(upward.Destination);
+        rival.Arrive(downward.Destination);
+        Require(player.Offboard(upward) == CrazyElevator.Shared.OffboardResult.Happy
+            && rival.Offboard(downward) == CrazyElevator.Shared.OffboardResult.Happy
+            && player.Delivered == 1 && rival.Delivered == 1 && player.Load == 0 && rival.Load == 0,
+            "Upward and downward deliveries did not score independently.");
+        Require(Round.Duration == 180f && Round.MaxUnlockedFloorAt(0f) == 7
+            && Round.MaxUnlockedFloorAt(40f) == 15 && Round.MaxUnlockedFloorAt(110f) == 23,
+            "Random routes changed the three-minute shift or world progression.");
+        Debug.Log("PASS: valid randomized destinations, balanced up/down requests, mostly short trips, catalog/default/shared generation, deliveries in both directions, and unchanged world progression.");
+    }
+
     [MenuItem("Tools/Crazy Elevator/Check Shared Passenger Rules")]
     public static void CheckSharedPassengerRules()
     {
