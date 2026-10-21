@@ -866,7 +866,7 @@ namespace CrazyElevator.Match
                 names = new[] { "MOM + BABY", "THE BOSS", "THE TRIO" };
                 lines = new[]
                 {
-                    "Crying drains everyone's patience.",
+                    "Crying drains patience. Grandma calms the baby.",
                     "On-time delivery pays a bonus.",
                     "Three spaces. Speeds the elevator up."
                 };
