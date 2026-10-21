@@ -477,7 +477,9 @@ namespace CrazyElevator.Managers
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Select a waiting passenger and press C to welcome them.";
+                    notice = waiting > 0 ? "Riders for this stop are getting off."
+                        : AutoBoarding ? "Waiting passengers hop in by themselves."
+                        : "Select a waiting passenger and press C to welcome them.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -2227,11 +2229,31 @@ namespace CrazyElevator.Managers
         // Player and NPC share the same drop-off: placement, scoring and exit animation.
         public bool NpcDeliver() => DropOffNextRider();
 
+        // Riders for this stop get off first, then the waiting riders hop in one by one.
         void TickAutoDropOff(float dt)
         {
             autoDropOffWait -= dt;
             if (autoDropOffWait > 0f) return;
-            if (DropOffNextRider()) autoDropOffWait = AutoDropOffSpacing;
+            if (DropOffNextRider() || AutoBoardNextRider()) autoDropOffWait = AutoDropOffSpacing;
+        }
+
+        [SerializeField, Tooltip("Waiting riders board by themselves while the doors are open (players only; the CPU paces itself).")]
+        bool autoBoardWaiting = true;
+
+        bool AutoBoarding => autoBoardWaiting && !IsNpc && !MenuManager.TutorialActive;
+
+        bool AutoBoardNextRider()
+        {
+            if (!AutoBoarding || round == null || draggedRider != null) return false;
+            foreach (Rider rider in round.Riders)
+            {
+                if (rider.Boarded || !round.IsOffered(rider) || rider.Arrival > 0
+                    || !CanSelect(rider) || !HasBoardingSpace(rider)) continue;
+                if (selectedRider == rider) SelectRider(null);
+                BoardPassengerWithPersona(rider);
+                return rider.Boarded;
+            }
+            return false;
         }
 
         // Returns false when nobody (else) can get off here. Closing the doors forces

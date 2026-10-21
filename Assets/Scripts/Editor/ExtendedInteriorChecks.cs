@@ -31,6 +31,7 @@ public static class ExtendedInteriorChecks
             round.AssignStops();
             Set(game, "hazardCooldown", 9999f);
             Set(game, "autoStopAtDestinations", false);
+            Set(game, "autoBoardWaiting", false);
         }
         return value;
     }
