@@ -42,6 +42,7 @@ namespace CrazyElevator.Managers
         public bool MovePressed { get; private set; }
         public bool SelectPressed { get; private set; }
         public bool ConfirmPressed { get; private set; }
+        public bool PickupPressed { get; private set; }
         public bool KickoutPressed { get; private set; }
         public bool PausePressed { get; private set; }
         public bool OverlayPressed { get; private set; }
@@ -65,6 +66,7 @@ namespace CrazyElevator.Managers
             public bool MovePressed;
             public bool SelectPressed;
             public bool ConfirmPressed;
+            public bool PickupPressed;
             public bool KickoutPressed;
             public bool PausePressed;
             public bool OverlayPressed;
@@ -258,6 +260,7 @@ namespace CrazyElevator.Managers
                 || keyboard.leftArrowKey.wasPressedThisFrame
                 || keyboard.rightArrowKey.wasPressedThisFrame
                 || keyboard.cKey.wasPressedThisFrame
+                || keyboard.xKey.wasPressedThisFrame
                 || keyboard.eKey.wasPressedThisFrame
                 || keyboard.periodKey.wasPressedThisFrame
                 || keyboard.slashKey.wasPressedThisFrame
@@ -283,6 +286,7 @@ namespace CrazyElevator.Managers
                 if (pad.leftStick.ReadValue().magnitude >= .2f
                     || pad.dpad.ReadValue().magnitude >= .2f
                     || pad.buttonSouth.wasPressedThisFrame
+                    || pad.buttonWest.wasPressedThisFrame
                     || pad.startButton.wasPressedThisFrame)
                     return pad;
             return null;
@@ -465,6 +469,9 @@ namespace CrazyElevator.Managers
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
+            bool pickup = !playerTwoKeyboard
+                && (keyboardAvailable && keyboard.xKey.wasPressedThisFrame
+                    || pad != null && pad.buttonWest.wasPressedThisFrame);
             bool kickout = playerTwoKeyboard
                 ? false
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
@@ -505,6 +512,7 @@ namespace CrazyElevator.Managers
                 MovePressed = navigation.magnitude >= .55f,
                 SelectPressed = navigation.magnitude >= .55f,
                 ConfirmPressed = confirm,
+                PickupPressed = pickup,
                 KickoutPressed = kickout,
                 PausePressed = pause,
                 OverlayPressed = overlay,
@@ -543,6 +551,7 @@ namespace CrazyElevator.Managers
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool confirm = input.ConfirmPressed;
+            bool pickup = input.PickupPressed;
             bool closeDoors = input.CloseDoorsPressed;
             input = default;
             input.PausePressed = pause;
@@ -563,6 +572,7 @@ namespace CrazyElevator.Managers
                     input.Select = select;
                     input.SelectPressed = select.magnitude >= .55f;
                     input.ConfirmPressed = confirm;
+                    input.PickupPressed = pickup;
                     break;
                 case TutorialInputMode.CloseDoors:
                     input.CloseDoorsPressed = closeDoors;
@@ -656,6 +666,8 @@ namespace CrazyElevator.Managers
                         && (ActiveView == GameView.Menu || ActiveView == GameView.Pause))));
 
             ConfirmPressed = confirm;
+            PickupPressed = keyboard != null && keyboard.xKey.wasPressedThisFrame
+                || pad != null && pad.buttonWest.wasPressedThisFrame;
             KickoutPressed = kickout;
             PausePressed = pause;
             OverlayPressed = overlay;
@@ -701,6 +713,7 @@ namespace CrazyElevator.Managers
             Move = Select = Vector2.zero;
             MovePressed = SelectPressed = false;
             ConfirmPressed = KickoutPressed = false;
+            PickupPressed = false;
             PausePressed = OverlayPressed = false;
             CloseDoorsPressed = false;
             RepairHeld = BoostHeld = false;

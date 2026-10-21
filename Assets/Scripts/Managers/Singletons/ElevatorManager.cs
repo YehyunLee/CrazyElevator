@@ -271,7 +271,7 @@ namespace CrazyElevator.Managers
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
             travelStartCount = floorStopCount = 0;
-            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
+            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C to board, or X to pick up and place a waiting passenger.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
 
@@ -1183,7 +1183,7 @@ namespace CrazyElevator.Managers
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
                 Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
-                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders to board, move, or eject", small);
+                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders, or X-pick up and place", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
@@ -1197,13 +1197,13 @@ namespace CrazyElevator.Managers
             }
             else if (selectedRider == null)
             {
-                prompt = "BOARD / KICK   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
+                prompt = "BOARD / KICK   ·   X PICK UP   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
             }
             else
             {
                 prompt = selectedRider.Name + " → F" + selectedRider.Destination
                     + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
-                        : "   ·   BOARD   ·   DRAG IN");
+                        : "   ·   BOARD   ·   X PICK UP   ·   DRAG IN");
             }
             // C (or the seat-specific equivalent) confirms the highlighted
             // passenger, boards waiting riders, and unloads boarded riders.

@@ -39,6 +39,9 @@ namespace CrazyElevator.Managers
         Vector2 dragScreenStart;
         float dragPlaneLocalY;
         bool draggedWasBoarded, dragKickReady;
+        bool controllerPickupActive, controllerHeldInCabin;
+        Vector2Int controllerHeldRun;
+        Vector2 controllerPlacementDirection;
         Vector2 lastMousePosition, lastSelectionDirection;
         bool controllerSelection;
         float PartyRadius(Rider rider) => rider.Space >= 3 ? .72f : rider.Space == 2 ? .52f : .34f;
@@ -356,6 +359,11 @@ namespace CrazyElevator.Managers
             if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
             Mouse mouse = MenuManager.TutorialActive ? null : Mouse.current;
             InputManager.SeatInput input = SeatControls;
+            if (draggedRider != null && controllerPickupActive)
+            {
+                UpdateControllerPassengerPickup(input);
+                return;
+            }
             if (draggedRider != null)
             {
                 Vector2 cursor = mouse != null ? mouse.position.ReadValue() : lastMousePosition;
@@ -382,6 +390,11 @@ namespace CrazyElevator.Managers
                 }
             }
             if (!CanSelect(selectedRider)) SelectRider(null);
+            if (input.PickupPressed && selectedRider != null && !selectedRider.Boarded)
+            {
+                BeginControllerPassengerPickup(selectedRider);
+                return;
+            }
             Vector2 navigation = input.Select;
             bool navigationActive = navigation.magnitude >= .55f;
             // Keyboard/controller selection wins immediately, even if the
@@ -414,6 +427,157 @@ namespace CrazyElevator.Managers
             if (direction != Vector2.zero && direction != lastSelectionDirection)
             { controllerSelection = true; SelectInDirection(direction); }
             lastSelectionDirection = direction;
+        }
+
+        void BeginControllerPassengerPickup(Rider rider)
+        {
+            if (rider == null || rider.Boarded || !CanSelect(rider)
+                || !figures.TryGetValue(rider, out var figure)) return;
+
+            SelectRider(rider);
+            draggedRider = rider;
+            controllerPickupActive = true;
+            controllerHeldInCabin = false;
+            controllerHeldRun = default;
+            controllerPlacementDirection = Vector2.zero;
+            draggedWasBoarded = false;
+            dragKickReady = false;
+            dragStart = figure.localPosition;
+            dragOriginalScale = figure.localScale;
+            dragOriginalRotation = figure.localRotation;
+            SetPassengerGridPreview(rider, Vector3.zero, false);
+            SetControlStatus("MOVE TO PLACE  X TO DROP");
+            notice = "Holding " + rider.Name + ". Move toward a cabin tile, or press X to return them to the queue.";
+        }
+
+        void UpdateControllerPassengerPickup(InputManager.SeatInput input)
+        {
+            if (draggedRider == null || !figures.TryGetValue(draggedRider, out var figure))
+            {
+                CancelPassengerDrag();
+                return;
+            }
+
+            Vector2 direction = input.Select.magnitude < .55f ? Vector2.zero
+                : Mathf.Abs(input.Select.x) > Mathf.Abs(input.Select.y)
+                    ? new Vector2(Mathf.Sign(input.Select.x), 0)
+                    : new Vector2(0, Mathf.Sign(input.Select.y));
+            if (direction != Vector2.zero && direction != controllerPlacementDirection)
+                MoveControllerPassenger(direction, figure);
+            controllerPlacementDirection = direction;
+
+            if (input.PickupPressed) FinishControllerPassengerPickup(figure);
+        }
+
+        void MoveControllerPassenger(Vector2 direction, Transform figure)
+        {
+            Rider rider = draggedRider;
+            if (rider == null) return;
+            if (!controllerHeldInCabin)
+            {
+                if (!round.HasCapacityFor(rider))
+                {
+                    SetControlStatus("OVERLOADED");
+                    return;
+                }
+
+                int width = Mathf.Clamp(rider.Space, 1, CabinColumns);
+                int row = direction.y > 0 ? CabinRows - 1 : 0;
+                int start = direction.x < 0 ? 0
+                    : direction.x > 0 ? CabinColumns - width : (CabinColumns - width) / 2;
+                Vector3 desired = CabinTileCenter(row, start, width);
+                if (!TryCabinTilePlacement(rider, desired, false, out Vector3 placement))
+                {
+                    SetControlStatus("NO SPACE HERE");
+                    return;
+                }
+
+                controllerHeldInCabin = true;
+                FindNearestCabinTileRun(rider, placement, out row, out start);
+                controllerHeldRun = new Vector2Int(start, row);
+                figure.localPosition = placement;
+                SetPassengerGridPreview(rider, placement, true);
+                SetSelectionTint(BoardingValid);
+                SetControlStatus("MOVE TO TILE  X TO DROP");
+                return;
+            }
+
+            int nextRow = controllerHeldRun.y;
+            int nextStart = controllerHeldRun.x;
+            int widthHeld = Mathf.Clamp(rider.Space, 1, CabinColumns);
+            if (direction.y < 0)
+            {
+                if (nextRow == 0)
+                {
+                    controllerHeldInCabin = false;
+                    controllerHeldRun = default;
+                    figure.localPosition = dragStart;
+                    SetPassengerGridPreview(rider, Vector3.zero, false);
+                    SetSelectionTint(HasBoardingSpace(rider) ? BoardingValid : BoardingInvalid);
+                    SetControlStatus("MOVE TO PLACE  X TO RETURN");
+                    return;
+                }
+                nextRow--;
+            }
+            else if (direction.y > 0) nextRow = Mathf.Min(CabinRows - 1, nextRow + 1);
+            else if (direction.x < 0) nextStart = Mathf.Max(0, nextStart - 1);
+            else if (direction.x > 0) nextStart = Mathf.Min(CabinColumns - widthHeld, nextStart + 1);
+
+            Vector3 desiredNext = CabinTileCenter(nextRow, nextStart, widthHeld);
+            if (!TryCabinTilePlacement(rider, desiredNext, true, out Vector3 nextPlacement))
+            {
+                SetControlStatus("NO SPACE HERE");
+                Play(buzz);
+                return;
+            }
+
+            FindNearestCabinTileRun(rider, nextPlacement, out nextRow, out nextStart);
+            controllerHeldRun = new Vector2Int(nextStart, nextRow);
+            figure.localPosition = nextPlacement;
+            SetPassengerGridPreview(rider, nextPlacement, true);
+            SetSelectionTint(BoardingValid);
+        }
+
+        void FinishControllerPassengerPickup(Transform figure)
+        {
+            Rider rider = draggedRider;
+            if (rider == null) return;
+            if (!controllerHeldInCabin)
+            {
+                figure.localPosition = dragStart;
+                CancelPassengerDrag();
+                SelectRider(rider);
+                SetControlStatus("WAITING");
+                notice = rider.Name + " is back in the waiting queue.";
+                return;
+            }
+
+            Vector3 released = figure.localPosition;
+            if (!IsInsideCabin(rider, released) || !CabinPlacementClear(rider, released)
+                || !round.HasCapacityFor(rider))
+            {
+                SetControlStatus("NO SPACE HERE");
+                notice = "Move to an open cabin tile, or move back to the queue before pressing X.";
+                Play(buzz);
+                return;
+            }
+
+            Dictionary<Rider, Vector2Int> waitingSlots = CaptureWaitingSelectionSlots();
+            waitingSlots.TryGetValue(rider, out Vector2Int movedSlot);
+            if (!round.Board(rider)) return;
+            cabinPositions[rider] = released;
+            RememberCabinTileRun(rider, released);
+            BeginPersonaBoard(rider, figure.localPosition, released);
+            PlayPassengerBoardingVoice(rider);
+            notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
+            Play(click);
+            draggedRider = null;
+            controllerPickupActive = false;
+            controllerHeldInCabin = false;
+            controllerPlacementDirection = Vector2.zero;
+            SetPassengerGridPreview(null, Vector3.zero, false);
+            SelectAfterBoarding(rider, movedSlot, waitingSlots);
+            SetControlStatus("ON BOARD");
         }
 
         bool IsOverMouseControl(Vector2 screenCursor)
@@ -561,6 +725,10 @@ namespace CrazyElevator.Managers
                 figure.localRotation = dragOriginalRotation;
             }
             draggedRider = null;
+            controllerPickupActive = false;
+            controllerHeldInCabin = false;
+            controllerHeldRun = default;
+            controllerPlacementDirection = Vector2.zero;
             dragKickReady = false;
             SetPassengerGridPreview(null, Vector3.zero, false);
         }

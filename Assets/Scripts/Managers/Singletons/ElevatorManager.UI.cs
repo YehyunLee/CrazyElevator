@@ -1012,11 +1012,11 @@ namespace CrazyElevator.Managers
                         float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
                         float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
                         Rect hint = new Rect(hintX, hintY, 42f, 42f);
-                        DrawGameplayKeyHint(hint, GameplayConfirmKey);
+                        DrawGameplayKeyHint(hint, rider.Boarded ? GameplayConfirmKey : GameplayPickupKey);
                         Color previousHintText = calloutText.normal.textColor;
                         calloutText.normal.textColor = UiWhite;
                         GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
-                            rider.Boarded ? "KICK" : "BOARD", calloutText);
+                            rider.Boarded ? "KICK" : "PICK UP", calloutText);
                         calloutText.normal.textColor = previousHintText;
                     }
                 }
@@ -1292,6 +1292,7 @@ namespace CrazyElevator.Managers
 
         bool GameplayUsesKeyboard => MenuManager.KeyboardHintsEnabled;
         string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
+        string GameplayPickupKey => "X";
         string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
         string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
         string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";
