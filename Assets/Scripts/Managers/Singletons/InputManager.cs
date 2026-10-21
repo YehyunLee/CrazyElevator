@@ -538,7 +538,9 @@ namespace CrazyElevator.Managers
 
             bool pause = input.PausePressed;
             Vector2 select = controllerAssigned ? leftStick : keyboardMove;
-            Vector2 move = input.Move;
+            // Travel steps teach up/down only; a slightly diagonal stick must not
+            // turn the car onto a floor rail or switch duel lanes.
+            Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool confirm = input.ConfirmPressed;
             bool closeDoors = input.CloseDoorsPressed;
@@ -558,6 +560,8 @@ namespace CrazyElevator.Managers
                         input.KickoutPressed = confirm;
                     break;
                 case TutorialInputMode.BoardPassengers:
+                    input.Select = select;
+                    input.SelectPressed = select.magnitude >= .55f;
                     input.ConfirmPressed = confirm;
                     break;
                 case TutorialInputMode.CloseDoors:
@@ -573,7 +577,11 @@ namespace CrazyElevator.Managers
                     input.MovePressed = move.magnitude >= .55f;
                     input.BoostHeld = boost;
                     if (mode == TutorialInputMode.Stop)
+                    {
                         input.ConfirmPressed = confirm;
+                        // Lets a car that is somehow parked at the wrong floor leave again.
+                        input.CloseDoorsPressed = closeDoors;
+                    }
                     break;
             }
         }

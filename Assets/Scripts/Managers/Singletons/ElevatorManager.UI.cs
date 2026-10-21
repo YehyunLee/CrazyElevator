@@ -718,7 +718,8 @@ namespace CrazyElevator.Managers
                 DrawSessionFade(sessionFadeAlpha);
                 return;
             }
-            if (phase == Phase.Results || paused)
+            // The tutorial holds the car behind its cards; that is not the pause menu.
+            if (phase == Phase.Results || paused && !MenuManager.TutorialActive)
             {
                 scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
                 offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 1000 * scale) / 2;
@@ -739,7 +740,7 @@ namespace CrazyElevator.Managers
                 Panel(new Rect(Screen.width * .5f - 1f, 16f, 2f, 16f), Cream);
             }
             GUI.matrix = Matrix4x4.identity;
-            if (phase != Phase.Results && !paused)
+            if (phase != Phase.Results && (!paused || MenuManager.TutorialActive))
             {
                 DrawTravelView();
                 float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;

@@ -144,6 +144,8 @@ namespace CrazyElevator.Managers
 
             var input = InputManager.Instance;
             if (input == null) return;
+            // The tutorial owns Esc (exit) and must not open a hidden pause or overlay.
+            if (MenuManager.TutorialActive) return;
 
             if (input.PausePressed)
             {

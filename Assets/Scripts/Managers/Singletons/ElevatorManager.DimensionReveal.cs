@@ -141,10 +141,10 @@ namespace CrazyElevator.Managers
         readonly Transform[] dimensionLineupSlots = new Transform[LineupSlots];
         readonly bool[] dimensionLineupFilled = new bool[LineupSlots];
 
-        // Same order as the reveal rows. Rust / repair rows have no passenger.
+        // Same order as the reveal rows.
         static string[] DimensionPassengerKinds(WorldBand world) => world == WorldBand.Candy
             ? new[] { "PREGNANT", "BOSS", "GROUP" }
-            : new[] { "HANDYMAN", null, null };
+            : new[] { "HANDYMAN", "RUST", "REPAIR" };
 
         void PrepareDimensionLineup(WorldBand world)
         {
@@ -152,12 +152,11 @@ namespace CrazyElevator.Managers
             if (IsNpc || sceneView == null || sceneView.passengers == null) return;
             string[] kinds = DimensionPassengerKinds(world);
             bool any = false;
+            EnsureDimensionLineup();
             for (int i = 0; i < LineupSlots; i++)
             {
-                GameObject source = FindPassengerTemplate(kinds[i]);
-                if (source == null) continue;
-                EnsureDimensionLineup();
-                GameObject model = Instantiate(source, dimensionLineupSlots[i], false);
+                GameObject model = InstantiateLineupModel(kinds[i], dimensionLineupSlots[i]);
+                if (model == null) continue;
                 model.name = kinds[i] + " reveal preview";
                 model.SetActive(true);
                 MakeStillPreviewModel(model, Palette[(i + 2) % Palette.Length]);
@@ -171,6 +170,29 @@ namespace CrazyElevator.Managers
             Color row = Color.Lerp(Ink, accent, .22f);
             dimensionLineupCamera.backgroundColor = new Color(row.r, row.g, row.b, 0f);
             dimensionLineupCamera.enabled = any;
+        }
+
+        // Rust and repair have no passenger, so they show the authored starfish gauge and shovel.
+        GameObject InstantiateLineupModel(string kind, Transform slot)
+        {
+            if (kind == "RUST")
+            {
+                if (impairmentGaugePrefab == null) return null;
+                StarfishImpairmentView gauge = Instantiate(impairmentGaugePrefab, slot, false);
+                gauge.SetSeverity(3);
+                // The starfish faces +Z (toward the cabin camera); the lineup camera looks from -Z.
+                gauge.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                return gauge.gameObject;
+            }
+            if (kind == "REPAIR")
+            {
+                if (handymanShovelPrefab == null) return null;
+                Transform shovel = Instantiate(handymanShovelPrefab, slot, false);
+                shovel.localRotation = Quaternion.Euler(0f, 0f, -25f);
+                return shovel.gameObject;
+            }
+            GameObject source = FindPassengerTemplate(kind);
+            return source != null ? Instantiate(source, slot, false) : null;
         }
 
         GameObject FindPassengerTemplate(string kind)
@@ -313,7 +335,7 @@ namespace CrazyElevator.Managers
             if (DimensionRevealTexture != null)
             {
                 Rect image = new Rect(card.x + 22f, card.y + 18f,
-                    card.width - 44f, card.height * .37f);
+                    card.width - 44f, card.height * .29f);
                 Color old = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, contentAlpha);
                 GUI.DrawTexture(image, DimensionRevealTexture, ScaleMode.ScaleToFit, true);
@@ -326,7 +348,7 @@ namespace CrazyElevator.Managers
             title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .04f, 30f, 54f));
             title.alignment = TextAnchor.MiddleCenter;
             title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .46f,
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .36f,
                 card.width - 48f, 52f), world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER", title);
 
             string[] names;
@@ -352,13 +374,13 @@ namespace CrazyElevator.Managers
                 };
             }
 
-            float rowTop = card.y + card.height * .57f;
+            float rowTop = card.y + card.height * .47f;
             float rowWidth = (card.width - 72f) / 3f;
             int nameSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .02f, 16f, 26f));
             int lineSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .014f, 13f, 18f));
             for (int i = 0; i < 3; i++)
             {
-                Rect row = new Rect(card.x + 24f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .38f);
+                Rect row = new Rect(card.x + 24f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .40f);
                 Panel(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
                 title.fontSize = nameSize;
                 title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
@@ -374,7 +396,8 @@ namespace CrazyElevator.Managers
                 title.fontSize = nameSize;
                 title.normal.textColor = new Color(Gold.r, Gold.g, Gold.b,
                     contentAlpha * DimensionPromptAlpha(dimensionRevealTime));
-                GUI.Label(new Rect(card.x, card.yMax + 10f, card.width, 36f), "PRESS C / A TO CONTINUE", title);
+                GUI.Label(new Rect(card.x, rowTop + card.height * .40f + 4f, card.width,
+                    card.yMax - rowTop - card.height * .40f - 8f), "PRESS C / A TO CONTINUE", title);
             }
 
             title.fontSize = oldSize;

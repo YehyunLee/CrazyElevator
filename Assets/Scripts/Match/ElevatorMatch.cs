@@ -843,7 +843,7 @@ namespace CrazyElevator.Match
             if (preview != null)
             {
                 Rect image = new Rect(card.x + 26f, card.y + 18f,
-                    card.width - 52f, card.height * .37f);
+                    card.width - 52f, card.height * .29f);
                 Color previous = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, contentAlpha);
                 GUI.DrawTexture(image, preview, ScaleMode.ScaleToFit, true);
@@ -856,7 +856,7 @@ namespace CrazyElevator.Match
             heading.alignment = TextAnchor.MiddleCenter;
             heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .04f, 32f, 58f));
             heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .45f,
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .35f,
                 card.width - 48f, 56f), world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER", heading);
 
             string[] names;
@@ -882,7 +882,7 @@ namespace CrazyElevator.Match
                 };
             }
 
-            float rowTop = card.y + card.height * .56f;
+            float rowTop = card.y + card.height * .46f;
             float rowWidth = (card.width - 80f) / 3f;
             int nameSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .02f, 18f, 28f));
             Color previousBody = text.normal.textColor;
@@ -904,7 +904,9 @@ namespace CrazyElevator.Match
                 player?.DrawDimensionPassenger(new Rect(row.x, row.y + 120f, row.width, row.height - 124f),
                     i, contentAlpha);
             }
-            DrawDimensionRevealPrompt(card, nameSize, contentAlpha);
+            float rowBottom = rowTop + card.height * .40f;
+            DrawDimensionRevealPrompt(new Rect(card.x, rowBottom + 4f, card.width, card.yMax - rowBottom - 8f),
+                nameSize, contentAlpha);
 
             heading.fontSize = previousHeadingSize;
             heading.normal.textColor = previousText;
@@ -915,13 +917,12 @@ namespace CrazyElevator.Match
             text.wordWrap = previousWrap;
         }
 
-        void DrawDimensionRevealPrompt(Rect card, int size, float contentAlpha)
+        void DrawDimensionRevealPrompt(Rect line, int size, float contentAlpha)
         {
             if (dimensionRevealExitTime >= 0f) return;
             float blink = Game.DimensionPromptAlpha(dimensionRevealTime);
             if (blink <= 0f) return;
             heading.fontSize = size;
-            Rect line = new Rect(card.x, card.yMax + 8f, card.width, 34f);
             if (SplitScreen)
             {
                 Rect left = new Rect(line.x, line.y, line.width * .5f, line.height);

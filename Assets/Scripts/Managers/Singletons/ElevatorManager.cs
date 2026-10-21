@@ -409,6 +409,12 @@ namespace CrazyElevator.Managers
         void RequestFloorStop()
         {
             if (!CanStopAtFloor) { notice = "Between floors. Confirm when the floor marker turns green."; return; }
+            if (!MenuManager.TutorialAllowsStopAt(this, NearbyFloor))
+            {
+                notice = "Not this floor. Keep going.";
+                Play(buzz);
+                return;
+            }
             floorStopCount++;
             destination = NearbyFloor; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
