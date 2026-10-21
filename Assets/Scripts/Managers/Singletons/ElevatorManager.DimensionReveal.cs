@@ -306,7 +306,7 @@ namespace CrazyElevator.Managers
             for (int index = 1; index < ElevatorRound.Dimensions; index++)
             {
                 if (dimensionRevealed[index]
-                    || round.Elapsed < ElevatorRound.DimensionUnlockInterval * index) continue;
+                    || round.Elapsed < ElevatorRound.DimensionUnlockAt(index)) continue;
                 BeginDimensionReveal(index);
                 return true;
             }

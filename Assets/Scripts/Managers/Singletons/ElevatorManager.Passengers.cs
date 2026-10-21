@@ -1462,9 +1462,33 @@ namespace CrazyElevator.Managers
             figure.gameObject.SetActive(false);
         }
 
+        // Wii-style idle bounce and waddle so standing riders never look frozen.
+        const float IdleBobHeight = .045f;
+        const float IdleBobSpeed = 4.2f;
+        const float IdleWaddleDegrees = 2.5f;
+        readonly Dictionary<Rider, float> idleBobOffsets = new Dictionary<Rider, float>();
+        float idleBobClock;
+
+        float IdleBobPhase(Rider rider) => (rider.GetHashCode() & 1023) * (Mathf.PI * 2f / 1024f);
+
+        // Each rider keeps its own rhythm; the offset from the last frame is taken
+        // back out first so the bounce never fights the walk toward the slot.
+        void MoveIdleFigure(Rider rider, Transform figure, Vector3 target, float facing, float dt)
+        {
+            idleBobOffsets.TryGetValue(rider, out float lastBob);
+            Vector3 rest = figure.localPosition - Vector3.up * lastBob;
+            rest = Vector3.MoveTowards(rest, target, dt * 5);
+            float wave = Mathf.Sin(idleBobClock * IdleBobSpeed + IdleBobPhase(rider));
+            float bob = IdleBobHeight * wave * wave;
+            figure.localPosition = rest + Vector3.up * bob;
+            figure.localRotation = Quaternion.Euler(0, facing, wave * IdleWaddleDegrees);
+            idleBobOffsets[rider] = bob;
+        }
+
         // Match visible models to passenger state.
         void SyncFigures(float dt)
         {
+            idleBobClock += dt;
             var completedExits = new List<Rider>();
             foreach (var p in round.Riders)
             {
@@ -1493,10 +1517,12 @@ namespace CrazyElevator.Managers
                 figure.gameObject.SetActive(visible);
                 if (!visible)
                 {
+                    idleBobOffsets.Remove(p);
                     UpdateFloorMarker(p, figure, true);
                     continue;
                 }
 
+                bool idle = false;
                 if (departing)
                 {
                     AnimateSharedPickupDeparture(p, figure, dt);
@@ -1520,15 +1546,15 @@ namespace CrazyElevator.Managers
                     if (p != draggedRider && !AnimatePersonaBoard(p, figure, dt)
                         && !AnimateHandymanRepair(p, figure, dt))
                     {
-                        var target = RiderPosition(p);
-                        figure.localPosition = Vector3.MoveTowards(figure.localPosition, target, dt * 5);
                         // Mom keeps facing the player so the carried baby and
                         // crying/calming effects remain readable after boarding.
                         float facing = p.HasFeature(PassengerFeature.CryingBaby) ? 180f
                             : p.Boarded ? 0f : 180f;
-                        figure.localRotation = Quaternion.Euler(0, facing, 0);
+                        MoveIdleFigure(p, figure, RiderPosition(p), facing, dt);
+                        idle = true;
                     }
                 }
+                if (!idle) idleBobOffsets.Remove(p);
                 if (bubbles.TryGetValue(p, out var bubble))
                 {
                     if (passengerSpeechBubblePrefab != null)

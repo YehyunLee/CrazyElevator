@@ -75,7 +75,10 @@ namespace CrazyElevator.Shared
         public const int FloorsPerDimension = Floors / Dimensions;
         public const int Capacity = 9;
         public const float Duration = 180f;
-        public const float DimensionUnlockInterval = 60f;
+        // Seconds into the shift when candy (1) and underwater (2) open.
+        static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f };
+        public static float DimensionUnlockAt(int dimension)
+            => DimensionUnlockSeconds[Math.Max(0, Math.Min(Dimensions - 1, dimension))];
         public const float ElderlyArrivalSeconds = 1.5f;
         public const float CryingPatienceMultiplier = 1.6f;
         public const float CalmPatienceMultiplier = .5f;
@@ -114,13 +117,13 @@ namespace CrazyElevator.Shared
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
 
-        // The first minute is deliberately office-only. Candy and underwater
-        // become available as match-wide interludes at 1:00 and 2:00.
+        // A short office-only warm-up, then candy and underwater open as
+        // match-wide interludes at 0:40 and 1:50.
         public static int MaxUnlockedFloorAt(float elapsed)
         {
             int unlockedDimensions = 1;
-            if (elapsed >= DimensionUnlockInterval) unlockedDimensions++;
-            if (elapsed >= DimensionUnlockInterval * 2f) unlockedDimensions++;
+            if (elapsed >= DimensionUnlockAt(1)) unlockedDimensions++;
+            if (elapsed >= DimensionUnlockAt(2)) unlockedDimensions++;
             return Math.Min(Floors - 1, unlockedDimensions * FloorsPerDimension - 1);
         }
 

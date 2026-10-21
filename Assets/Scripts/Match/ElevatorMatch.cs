@@ -260,7 +260,7 @@ namespace CrazyElevator.Match
             for (int index = 1; index < ElevatorRound.Dimensions; index++)
             {
                 if (dimensionRevealShown[index]
-                    || elapsed < ElevatorRound.DimensionUnlockInterval * index) continue;
+                    || elapsed < ElevatorRound.DimensionUnlockAt(index)) continue;
                 dimensionRevealShown[index] = true;
                 dimensionRevealIndex = index;
                 dimensionRevealTime = 0f;

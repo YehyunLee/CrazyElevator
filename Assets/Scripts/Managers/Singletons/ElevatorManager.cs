@@ -253,7 +253,7 @@ namespace CrazyElevator.Managers
             foreach (var marker in floorMarkers.Values)
                 if (marker != null && marker.Root) Destroy(marker.Root.gameObject);
             floorMarkers.Clear();
-            foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear();
+            foreach (var f in figures.Values) Destroy(f.gameObject); figures.Clear(); idleBobOffsets.Clear();
             passengerEffects.Clear();
             bubbles.Clear(); destinationTags.Clear(); cabinPositions.Clear(); cabinTileRuns.Clear(); exiting.Clear(); exitStarts.Clear();
             sharedPickupDepartures.Clear(); riderHits.Clear();
