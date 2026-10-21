@@ -70,9 +70,12 @@ namespace CrazyElevator.Shared
     // Pure game rules; independent of scene objects and frame rate.
     public sealed class ElevatorRound
     {
-        public const int Floors = 12;
+        public const int Floors = 24;
+        public const int Dimensions = 3;
+        public const int FloorsPerDimension = Floors / Dimensions;
         public const int Capacity = 9;
         public const float Duration = 180f;
+        public const float DimensionUnlockInterval = 60f;
         public const float ElderlyArrivalSeconds = 1.5f;
         public const float CryingPatienceMultiplier = 1.6f;
         public const float CalmPatienceMultiplier = .5f;
@@ -83,6 +86,7 @@ namespace CrazyElevator.Shared
         public float PeakTime;
         public float TimeLeft = Duration;
         public float Elapsed => Duration - TimeLeft;
+        public int MaxUnlockedFloor => MaxUnlockedFloorAt(Elapsed);
         int TimeBasedPassengerOfferLimit => Elapsed < 30f ? 2
             : Elapsed < 70f ? 3
             : Elapsed < 110f ? 4 : 5;
@@ -109,6 +113,16 @@ namespace CrazyElevator.Shared
         // Every round lasts three minutes. Reaching the top or clearing all
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
+
+        // The first minute is deliberately office-only. Candy and underwater
+        // become available as match-wide interludes at 1:00 and 2:00.
+        public static int MaxUnlockedFloorAt(float elapsed)
+        {
+            int unlockedDimensions = 1;
+            if (elapsed >= DimensionUnlockInterval) unlockedDimensions++;
+            if (elapsed >= DimensionUnlockInterval * 2f) unlockedDimensions++;
+            return Math.Min(Floors - 1, unlockedDimensions * FloorsPerDimension - 1);
+        }
 
         // Seed the built-in roster only in the worlds that match each character.
         public ElevatorRound()
@@ -275,13 +289,13 @@ namespace CrazyElevator.Shared
                 case "INTERVIEW":
                     return true;
                 case "ELDERLY":
-                    return Elapsed >= 30f || Floor >= 8;
+                    return Elapsed >= 30f || Floor >= FloorsPerDimension * 2;
                 case "PREGNANT":
-                    return Elapsed >= 30f || Floor >= 4;
+                    return Elapsed >= 30f || Floor >= FloorsPerDimension;
                 case "BOSS":
                     return Elapsed >= 70f;
                 case "HANDYMAN":
-                    return Elapsed >= 90f || Floor >= 8;
+                    return Elapsed >= 90f || Floor >= FloorsPerDimension * 2;
                 case "GROUP":
                     return Elapsed >= 110f;
                 default:

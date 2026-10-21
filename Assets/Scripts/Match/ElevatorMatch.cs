@@ -44,7 +44,7 @@ namespace CrazyElevator.Match
         float collisionCooldown;
         float collisionFlash;
         int collisionCount;
-        static readonly float[] JunctionFloorPositions = { 2.5f, 5.5f, 8.5f };
+        static readonly float[] JunctionFloorPositions = { 5.5f, 12.5f, 19.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
         readonly float[] expressFlash = { 0f, 0f };
@@ -53,6 +53,11 @@ namespace CrazyElevator.Match
         AudioClip collisionClip;
         ParticleSystem collisionParticles;
         Material collisionParticleMaterial;
+        bool dimensionRevealActive;
+        int dimensionRevealIndex = -1;
+        float dimensionRevealTime;
+        readonly bool[] dimensionRevealShown = new bool[ElevatorRound.Dimensions];
+        public bool DimensionRevealActive => dimensionRevealActive;
 
         void Awake()
         {
@@ -136,8 +141,14 @@ namespace CrazyElevator.Match
 
         void Update()
         {
-            if (!enabled || player == null || Paused) return;
+            if (!enabled || player == null) return;
             float dt = Time.unscaledDeltaTime;
+            if (dimensionRevealActive)
+            {
+                UpdateDimensionReveal(dt);
+                return;
+            }
+            if (Paused) return;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
             expressFlash[0] = Mathf.Max(0f, expressFlash[0] - dt);
@@ -201,6 +212,7 @@ namespace CrazyElevator.Match
                 StartMatch();
                 return;
             }
+            TryBeginDimensionReveal();
             if (Finished && ResultRevealTime >= ResultRevealInputAt)
             {
                 InputManager.SeatInput playerOne = input.ReadForSeat(0, true);
@@ -216,6 +228,10 @@ namespace CrazyElevator.Match
         public void StartMatch()
         {
             Paused = false;
+            dimensionRevealActive = false;
+            dimensionRevealIndex = -1;
+            dimensionRevealTime = 0f;
+            for (int i = 0; i < dimensionRevealShown.Length; i++) dimensionRevealShown[i] = false;
             resultRevealStartedAt = -1f;
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
@@ -232,6 +248,35 @@ namespace CrazyElevator.Match
             Rival.GetComponent<NpcElevator>()?.ResetDecisions();
             Running = true;
             Paused = false;
+        }
+
+        void TryBeginDimensionReveal()
+        {
+            if (!Running || player == null || dimensionRevealActive) return;
+            float elapsed = ElevatorRound.Duration - player.SecondsLeft;
+            for (int index = 1; index < ElevatorRound.Dimensions; index++)
+            {
+                if (dimensionRevealShown[index]
+                    || elapsed < ElevatorRound.DimensionUnlockInterval * index) continue;
+                dimensionRevealShown[index] = true;
+                dimensionRevealIndex = index;
+                dimensionRevealTime = 0f;
+                dimensionRevealActive = true;
+                player.BeginDimensionReveal(index);
+                Rival?.BeginDimensionReveal(index);
+                return;
+            }
+        }
+
+        void UpdateDimensionReveal(float dt)
+        {
+            dimensionRevealTime += Mathf.Max(0f, dt);
+            if (dimensionRevealTime < Game.DimensionRevealSeconds) return;
+            player.FinishDimensionReveal();
+            Rival?.FinishDimensionReveal();
+            dimensionRevealActive = false;
+            dimensionRevealIndex = -1;
+            dimensionRevealTime = 0f;
         }
 
         float ResultRevealTime => resultRevealStartedAt < 0f
@@ -279,10 +324,28 @@ namespace CrazyElevator.Match
         // Both duel tracks straddle the authored solo shaft at equal distances.
         public float ShaftX(int seat) => ShaftCenterX + (seat - .5f) * shaftSpacing;
 
-        public float ShaftX(Game actor)
+        // Lane blend used while switching vertical shafts (not ground-track travel).
+        public float LaneX(Game actor)
         {
             int seat = SeatOf(actor);
             return ShaftX(0) + Mathf.SmoothStep(0f, 1f, trackPosition[seat]) * shaftSpacing;
+        }
+
+        public float ShaftX(Game actor)
+        {
+            if (actor == null) return ShaftCenterX;
+            // Cars own continuous lateral position so ground tracks can move
+            // horizontally instead of only flipping between two vertical lanes.
+            return actor.RouteLateralX;
+        }
+
+        public void SyncTrackFromLateral(Game actor, float lateralX)
+        {
+            if (actor == null) return;
+            int seat = SeatOf(actor);
+            int nearest = Mathf.Abs(lateralX - ShaftX(0)) <= Mathf.Abs(lateralX - ShaftX(1)) ? 0 : 1;
+            targetTrack[seat] = nearest;
+            trackPosition[seat] = nearest;
         }
 
         public int TrackNumber(Game actor) => targetTrack[SeatOf(actor)] + 1;
@@ -330,6 +393,7 @@ namespace CrazyElevator.Match
                 if (!crossed) continue;
                 usedJunctionMask[seat] |= bit;
                 if (targetTrack[seat] != expressTrack[i]) continue;
+                // Teleports are the visible gates on the floor rails (ElevatorManager.TeleportGates).
                 actor.ApplyExpressJunction();
                 expressFlash[seat] = 1.15f;
             }
@@ -647,6 +711,14 @@ namespace CrazyElevator.Match
                 GUI.contentColor = previousContent;
                 return;
             }
+            if (dimensionRevealActive)
+            {
+                DrawDimensionReveal();
+                GUI.matrix = previousMatrix;
+                GUI.color = previousColour;
+                GUI.contentColor = previousContent;
+                return;
+            }
             if (IsVisibleSeat(0)) DrawSeat(player, 0, Coral);
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Teal);
             if (SplitScreen) DrawSplitDivider();
@@ -709,6 +781,101 @@ namespace CrazyElevator.Match
             GUI.color = colour;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        void DrawDimensionReveal()
+        {
+            float time = dimensionRevealTime;
+            float fadeIn = Reveal01(time / .85f);
+            float fadeOut = Reveal01((Game.DimensionRevealSeconds - time) / .85f);
+            float contentAlpha = Mathf.Min(fadeIn, fadeOut);
+            Fill(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
+            if (contentAlpha <= .001f) return;
+
+            WorldBand world = Game.DimensionWorld(dimensionRevealIndex);
+            Color accent = world == WorldBand.Candy ? new Color32(236, 118, 188, 255)
+                : new Color32(48, 196, 210, 255);
+            float width = Mathf.Min(Screen.width - 72f, 1120f);
+            float height = Mathf.Min(Screen.height - 96f, 720f);
+            Rect card = new Rect((Screen.width - width) * .5f,
+                (Screen.height - height) * .5f, width, height);
+            Fill(new Rect(card.x + 12f, card.y + 14f, card.width, card.height),
+                new Color(0f, 0f, 0f, .42f * contentAlpha));
+            Fill(card, new Color(Ink.r, Ink.g, Ink.b, contentAlpha));
+            Fill(new Rect(card.x, card.y, card.width, 6f),
+                new Color(accent.r, accent.g, accent.b, contentAlpha));
+
+            Texture preview = player != null ? player.DimensionRevealTexture : null;
+            if (preview != null)
+            {
+                Rect image = new Rect(card.x + 26f, card.y + 18f,
+                    card.width - 52f, card.height * .42f);
+                Color previous = GUI.color;
+                GUI.color = new Color(1f, 1f, 1f, contentAlpha);
+                GUI.DrawTexture(image, preview, ScaleMode.ScaleToFit, true);
+                GUI.color = previous;
+            }
+
+            Color previousText = heading.normal.textColor;
+            int previousHeadingSize = heading.fontSize;
+            TextAnchor previousAlign = heading.alignment;
+            heading.alignment = TextAnchor.MiddleCenter;
+            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .04f, 32f, 58f));
+            heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .50f,
+                card.width - 48f, 56f), world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER", heading);
+
+            string[] names;
+            string[] lines;
+            if (world == WorldBand.Candy)
+            {
+                names = new[] { "MOM + BABY", "THE BOSS", "THE TRIO" };
+                lines = new[]
+                {
+                    "Crying drains everyone's patience.",
+                    "On-time delivery pays a bonus.",
+                    "Three spaces. Speeds the elevator up."
+                };
+            }
+            else
+            {
+                names = new[] { "HANDYMAN", "RUST", "REPAIR" };
+                lines = new[]
+                {
+                    "Clears rust while aboard.",
+                    "Slows the elevator over time.",
+                    "Hold to patch it back up."
+                };
+            }
+
+            float rowTop = card.y + card.height * .62f;
+            float rowWidth = (card.width - 80f) / 3f;
+            int nameSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .02f, 18f, 28f));
+            Color previousBody = text.normal.textColor;
+            TextAnchor previousBodyAlign = text.alignment;
+            int previousBodySize = text.fontSize;
+            bool previousWrap = text.wordWrap;
+            text.alignment = TextAnchor.UpperCenter;
+            text.wordWrap = true;
+            for (int i = 0; i < 3; i++)
+            {
+                Rect row = new Rect(card.x + 28f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .30f);
+                Fill(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
+                heading.fontSize = nameSize;
+                heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
+                GUI.Label(new Rect(row.x + 8f, row.y + 12f, row.width - 16f, 34f), names[i], heading);
+                text.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .014f, 14f, 20f));
+                text.normal.textColor = new Color(1f, 1f, 1f, .9f * contentAlpha);
+                GUI.Label(new Rect(row.x + 12f, row.y + 50f, row.width - 24f, row.height - 62f), lines[i], text);
+            }
+
+            heading.fontSize = previousHeadingSize;
+            heading.normal.textColor = previousText;
+            heading.alignment = previousAlign;
+            text.fontSize = previousBodySize;
+            text.normal.textColor = previousBody;
+            text.alignment = previousBodyAlign;
+            text.wordWrap = previousWrap;
         }
 
         void DrawSplitDivider()
