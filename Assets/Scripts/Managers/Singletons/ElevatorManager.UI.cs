@@ -1292,7 +1292,7 @@ namespace CrazyElevator.Managers
 
         bool GameplayUsesKeyboard => MenuManager.KeyboardHintsEnabled;
         string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
-        string GameplayPickupKey => "X";
+        string GameplayPickupKey => GameplayUsesKeyboard ? (Seat == 1 ? "'" : "X") : "X";
         string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
         string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
         string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";

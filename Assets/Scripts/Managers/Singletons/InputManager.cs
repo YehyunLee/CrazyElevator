@@ -58,7 +58,7 @@ namespace CrazyElevator.Managers
 
         // Split-screen keyboard input is read per seat so Player 2 can play
         // without stealing Player 1's WASD/actions. Player 1 uses WASD + V/E;
-        // Player 2 uses arrows + period/slash.
+        // Player 2 uses arrows + period/slash/apostrophe.
         public struct SeatInput
         {
             public Vector2 Move;
@@ -264,6 +264,7 @@ namespace CrazyElevator.Managers
                 || keyboard.eKey.wasPressedThisFrame
                 || keyboard.periodKey.wasPressedThisFrame
                 || keyboard.slashKey.wasPressedThisFrame
+                || keyboard.quoteKey.wasPressedThisFrame
                 || keyboard.enterKey.wasPressedThisFrame
                 || keyboard.spaceKey.wasPressedThisFrame)
                 || mouse != null && (mouse.leftButton.wasPressedThisFrame
@@ -469,9 +470,10 @@ namespace CrazyElevator.Managers
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
-            bool pickup = !playerTwoKeyboard
-                && (keyboardAvailable && keyboard.xKey.wasPressedThisFrame
-                    || pad != null && pad.buttonWest.wasPressedThisFrame);
+            bool pickup = playerTwoKeyboard
+                ? keyboardAvailable && keyboard.quoteKey.wasPressedThisFrame
+                : keyboardAvailable && keyboard.xKey.wasPressedThisFrame
+                    || pad != null && pad.buttonWest.wasPressedThisFrame;
             bool kickout = playerTwoKeyboard
                 ? false
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame

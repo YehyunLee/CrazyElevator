@@ -446,8 +446,8 @@ namespace CrazyElevator.Managers
             dragOriginalScale = figure.localScale;
             dragOriginalRotation = figure.localRotation;
             SetPassengerGridPreview(rider, Vector3.zero, false);
-            SetControlStatus("MOVE TO PLACE  X TO DROP");
-            notice = "Holding " + rider.Name + ". Move toward a cabin tile, or press X to return them to the queue.";
+            SetControlStatus("MOVE TO PLACE  " + GameplayPickupKey + " TO DROP");
+            notice = "Holding " + rider.Name + ". Move toward a cabin tile, or press " + GameplayPickupKey + " to return them to the queue.";
         }
 
         void UpdateControllerPassengerPickup(InputManager.SeatInput input)
@@ -498,7 +498,7 @@ namespace CrazyElevator.Managers
                 figure.localPosition = placement;
                 SetPassengerGridPreview(rider, placement, true);
                 SetSelectionTint(BoardingValid);
-                SetControlStatus("MOVE TO TILE  X TO DROP");
+                SetControlStatus("MOVE TO TILE  " + GameplayPickupKey + " TO DROP");
                 return;
             }
 
@@ -514,7 +514,7 @@ namespace CrazyElevator.Managers
                     figure.localPosition = dragStart;
                     SetPassengerGridPreview(rider, Vector3.zero, false);
                     SetSelectionTint(HasBoardingSpace(rider) ? BoardingValid : BoardingInvalid);
-                    SetControlStatus("MOVE TO PLACE  X TO RETURN");
+                    SetControlStatus("MOVE TO PLACE  " + GameplayPickupKey + " TO RETURN");
                     return;
                 }
                 nextRow--;
@@ -557,7 +557,7 @@ namespace CrazyElevator.Managers
                 || !round.HasCapacityFor(rider))
             {
                 SetControlStatus("NO SPACE HERE");
-                notice = "Move to an open cabin tile, or move back to the queue before pressing X.";
+                notice = "Move to an open cabin tile, or move back to the queue before pressing " + GameplayPickupKey + ".";
                 Play(buzz);
                 return;
             }

@@ -8,7 +8,7 @@ World order outside the cabin: **0–7 office, 8–15 candy, 16–23 underwater*
 | --- | --- |
 | Start / continue menus | Bottom face button or Start / Enter |
 | Highlight a passenger inside | Left stick or D-pad / hover mouse, or WASD / arrow keys |
-| Pick up / place a waiting passenger | X / X (move between cabin tiles with the stick or directional keys) |
+| Pick up / place a waiting passenger | X / X; split-keyboard Player 2 uses ' (move between cabin tiles with the stick or directional keys) |
 | Board / unload the highlighted passenger | Bottom face button / E or Space |
 | Close doors and begin travel | Top face button / C |
 | Set travel direction outside | Stick / D-pad up or down / W / S or up/down arrows |
@@ -17,7 +17,7 @@ World order outside the cabin: **0–7 office, 8–15 candy, 16–23 underwater*
 | Repair underwater mechanism | Hold RB for 2 seconds / hold R for 2 seconds |
 | Pause / resume | Start / Escape |
 
-Inside, hovering highlights one passenger in green if there is room or red if there is not. Moving the stick changes the highlighted passenger by screen direction; release between selections. Press C to board or unload the selected passenger, or C with nobody selected to close the doors. Press X on a highlighted waiting passenger to pick them up, move between cabin tiles with the stick, and press X again to place them. Moving back out through the front row restores the original waiting spot, and the passenger remains in the waiting queue until a cabin drop succeeds. You can also drag passengers into free cabin spaces, rearrange them, or drag them clearly through the doorway to kick them out.
+Inside, hovering highlights one passenger in green if there is room or red if there is not. Moving the stick changes the highlighted passenger by screen direction; release between selections. Press C to board or unload the selected passenger, or C with nobody selected to close the doors. Press X on a highlighted waiting passenger to pick them up; split-keyboard Player 2 uses the apostrophe key (') instead. Move between cabin tiles with the stick, then press the same pickup key again to place the passenger. Moving back out through the front row restores the original waiting spot, and the passenger remains in the waiting queue until a cabin drop succeeds. You can also drag passengers into free cabin spaces, rearrange them, or drag them clearly through the doorway to kick them out.
 
 Correct drop-offs show the points earned in a short screen-space burst. Deliver another passenger correctly within 3.5 seconds to build the visible **QUICK COMBO** streak; the streak is celebratory only and does not multiply the existing score. Wrong-floor and zero-point drop-offs reset it.
 
