@@ -116,6 +116,11 @@ namespace CrazyElevator.Shared
             ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
         bool RefillPassengerQueue;
         bool OwnsPassengerPoolClock = true;
+        // People already taken this visit, plus a quieter cap after a drop-off.
+        // Stops the same landing from restocking the moment you load or unload.
+        int visitBoarded;
+        int visitOfferCap = -1;
+        int pullCeiling = FloorsPerDimension - 1;
         // Scene variants can opt out of the prototype's consolation points for
         // passengers whose patience has completely expired.
         public bool LateDeliveriesScore = true;
@@ -211,8 +216,11 @@ namespace CrazyElevator.Shared
         static int RandomDestination(int origin, int highestFloor)
         {
             ValidateDestinationRange(origin, highestFloor);
-            int choice = DestinationRandom.Next(highestFloor);
-            return choice >= origin ? choice + 1 : choice;
+            if (origin <= 0) return DestinationRandom.Next(1, highestFloor + 1);
+            if (origin >= highestFloor) return DestinationRandom.Next(origin);
+            if (DestinationRandom.Next(100) < 70)
+                return DestinationRandom.Next(origin + 1, highestFloor + 1);
+            return DestinationRandom.Next(origin);
         }
 
         static void ValidateDestinationRange(int origin, int highestFloor)
@@ -266,12 +274,11 @@ namespace CrazyElevator.Shared
                 || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
             p.BoardedBySeat = Seat;
+            visitBoarded++;
             if (RefillPassengerQueue)
             {
-                // A shared duel queue must stay stocked for both elevators.
-                // The solo queue uses the short walk-in delay, but delaying a
-                // duel replacement lets one player consume the entire visible
-                // offer before the other player can board anything.
+                // Keep the shared 1v1 pool stocked for the other car. This car
+                // will not see them at this landing until it leaves and returns.
                 Rider replacement = CreateReplacement(p);
                 replacement.SpawnDelay = 0f;
                 Riders.Add(replacement);
@@ -355,17 +362,39 @@ namespace CrazyElevator.Shared
             ValidateDestinationRange(origin, highestFloor);
             if (kind == "BOSS" || kind == "HANDYMAN") return RandomDestination(origin, highestFloor);
 
-            // Ignore the elevator's direction: either side is equally likely.
-            // At the building edges, choose the side that has floors available.
-            bool goingUp = origin == 0 || origin < highestFloor && DestinationRandom.Next(2) == 0;
-            int available = goingUp ? highestFloor - origin : origin;
-            // Most rides are 1–3 floors, with occasional 4–6-floor detours.
-            // Interview passengers keep short trips to suit their tight patience.
-            int reach = Math.Min(available, kind == "INTERVIEW" ? 3 : 6);
-            bool longerTrip = reach > 3 && DestinationRandom.Next(4) == 0;
-            int distance = longerTrip ? DestinationRandom.Next(4, reach + 1)
-                : DestinationRandom.Next(1, Math.Min(3, reach) + 1);
+            int upRoom = highestFloor - origin;
+            int downRoom = origin;
+            bool goingUp = upRoom > 0 && (downRoom <= 0
+                || DestinationRandom.Next(100) < UpwardChance(origin, highestFloor));
+            int available = goingUp ? upRoom : downRoom;
+            // Interview stays short. When a later world is open, regular riders
+            // may take a longer hop so the shift climbs instead of looping.
+            bool laterWorldOpen = highestFloor / FloorsPerDimension > origin / FloorsPerDimension;
+            int maxTrip = kind == "INTERVIEW" ? 3 : laterWorldOpen ? 8 : 6;
+            int reach = Math.Min(available, maxTrip);
+            int worldTop = (origin / FloorsPerDimension + 1) * FloorsPerDimension - 1;
+            int distance;
+            int minCross = worldTop + 1 - origin;
+            if (goingUp && laterWorldOpen && minCross >= 1 && minCross <= reach
+                && DestinationRandom.Next(100) < 70)
+                distance = DestinationRandom.Next(minCross, reach + 1);
+            else
+                distance = TripLength(reach, kind);
             return origin + (goingUp ? distance : -distance);
+        }
+
+        // Most trips climb. Near the top of a world, almost everyone asks for the next one.
+        static int UpwardChance(int origin, int highestFloor)
+        {
+            int worldTop = (origin / FloorsPerDimension + 1) * FloorsPerDimension - 1;
+            return highestFloor > worldTop && origin >= worldTop - 1 ? 90 : 75;
+        }
+
+        static int TripLength(int reach, string kind)
+        {
+            bool longerTrip = kind != "INTERVIEW" && reach > 3 && DestinationRandom.Next(4) == 0;
+            return longerTrip ? DestinationRandom.Next(4, reach + 1)
+                : DestinationRandom.Next(1, Math.Min(3, reach) + 1);
         }
 
         // Begin with the two straightforward office riders. New mechanics are
@@ -410,11 +439,17 @@ namespace CrazyElevator.Shared
             if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
                 || !IsPassengerTypeUnlocked(candidate)) return false;
             int offered = 0;
+            int limit = OfferLimitAt(candidate.Origin);
+            if (candidate.Origin == Floor && candidate.OriginStop == Stop)
+            {
+                if (visitOfferCap >= 0) limit = Math.Min(limit, visitOfferCap);
+                limit -= visitBoarded;
+            }
             foreach (var p in Riders)
             {
                 if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != candidate.Origin
                     || p.OriginStop != candidate.OriginStop || !IsPassengerTypeUnlocked(p)) continue;
-                if (p == candidate) return offered < OfferLimitAt(candidate.Origin);
+                if (p == candidate) return offered < limit;
                 offered++;
             }
             return false;
@@ -451,6 +486,7 @@ namespace CrazyElevator.Shared
             // A large frame must not simulate past the deadline.
             dt = Math.Min(dt, TimeLeft);
             TimeLeft = Math.Max(0, TimeLeft - dt);
+            PullRidersTowardNewFloors();
             if (RefillPassengerQueue && OwnsPassengerPoolClock)
                 foreach (var rider in Riders)
                     if (!rider.Resolved && rider.SpawnDelay > 0)
@@ -500,7 +536,36 @@ namespace CrazyElevator.Shared
             {
                 if (Owns(p) && AtDestination(p)) waitingToExit++;
             }
+            BeginStopVisit(waitingToExit);
             return waitingToExit;
+        }
+
+        // A drop-off landing stays mostly empty. Pickup landings still show a
+        // normal queue, then freeze once those riders are aboard.
+        void BeginStopVisit(int dropOffs)
+        {
+            visitBoarded = 0;
+            if (dropOffs <= 0) { visitOfferCap = -1; return; }
+            int roll = DestinationRandom.Next(10);
+            visitOfferCap = roll == 0 ? 2 : roll < 4 ? 1 : 0;
+        }
+
+        // When candy or water opens, waiting riders in the old worlds start
+        // asking for the new floors so the car is pulled upward.
+        void PullRidersTowardNewFloors()
+        {
+            int ceiling = MaxUnlockedFloor;
+            if (ceiling <= pullCeiling) return;
+            int previousCeiling = pullCeiling;
+            pullCeiling = ceiling;
+            foreach (var rider in Riders)
+            {
+                if (rider.Resolved || rider.Boarded || rider.Origin >= ceiling) continue;
+                if (rider.Destination > previousCeiling) continue;
+                if (DestinationRandom.Next(5) == 0) continue;
+                rider.Destination = DestinationFor(rider.Kind, rider.Origin, ceiling);
+                rider.DestinationStop = PickStop(rider.Destination);
+            }
         }
 
         // Resolve a delivery and calculate its reward or penalty.

@@ -205,9 +205,9 @@ public static class ExtendedInteriorChecks
                     if (distance <= 3) shortTrips++;
                     lengths.Add(distance);
                 }
-                Require(up > samples * .35f && down > samples * .35f && lengths.Count >= 3,
-                    kind + " did not offer varied trips in both directions at floor " + origin + ".");
-                Require(shortTrips > samples * .65f,
+                Require(up > samples * .55f && down > samples * .08f && lengths.Count >= 3,
+                    kind + " did not mostly climb, with the occasional downward trip, at floor " + origin + ".");
+                Require(shortTrips > samples * .55f,
                     "Most " + kind + " requests should be short enough to combine into a route.");
                 if (kind != "INTERVIEW")
                     Require(shortTrips < samples * .97f,
@@ -300,7 +300,7 @@ public static class ExtendedInteriorChecks
         Require(Round.Duration == 180f && Round.MaxUnlockedFloorAt(0f) == 7
             && Round.MaxUnlockedFloorAt(40f) == 15 && Round.MaxUnlockedFloorAt(110f) == 23,
             "Random routes changed the three-minute shift or world progression.");
-        Debug.Log("PASS: valid randomized destinations, balanced up/down requests, mostly short trips, catalog/default/shared generation, deliveries in both directions, and unchanged world progression.");
+        Debug.Log("PASS: valid randomized destinations, mostly upward requests, mostly short trips, catalog/default/shared generation, deliveries in both directions, and unchanged world progression.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Shared Passenger Rules")]
@@ -313,9 +313,8 @@ public static class ExtendedInteriorChecks
             && ReferenceEquals(player.Riders[0], rival.Riders[0]),
             "Both elevators must use the same rider objects.");
 
-        // A duel must replenish the shared queue immediately. Otherwise the
-        // first car can consume the only two floor-zero offers before the
-        // second car gets a chance to board.
+        // A duel still restocks the shared pool for the other car, but the
+        // landing that just loaded does not immediately offer the replacements.
         var fairnessPlayer = new Round();
         var fairnessRival = new Round();
         fairnessRival.SharePassengerPoolWith(fairnessPlayer, 1);
@@ -325,18 +324,19 @@ public static class ExtendedInteriorChecks
             "The first elevator could not board the initial floor-zero offers.");
         SharedRider third = fairnessPlayer.Riders.Find(r => r.Origin == 0
             && !r.Boarded && !r.Resolved && r.Kind == "COURIER");
-        Require(third != null && fairnessPlayer.Board(third),
-            "The shared queue did not replenish after the first elevator boarded three.");
+        Require(third != null, "The shared queue did not replenish after the first elevator boarded.");
+        Require(!fairnessPlayer.IsOffered(third),
+            "The same landing refilled for the car that just loaded.");
         for (int i = 0; i < 2; i++)
         {
             SharedRider available = fairnessRival.Riders.Find(r => r.Origin == 0
-                && !r.Boarded && !r.Resolved && r.Kind != "ELDERLY");
+                && !r.Boarded && !r.Resolved && r.Kind != "ELDERLY" && fairnessRival.IsOffered(r));
             Require(available != null && fairnessRival.Board(available),
                 "The second elevator could not claim its own shared-queue passenger.");
         }
         int fairnessPlayerLoad = fairnessPlayer.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 0).Count;
         int fairnessRivalLoad = fairnessRival.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 1).Count;
-        Require(fairnessPlayerLoad == 3 && fairnessRivalLoad == 2,
+        Require(fairnessPlayerLoad == 2 && fairnessRivalLoad == 2,
             "Shared passenger replenishment did not preserve both players' loads.");
 
         Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
