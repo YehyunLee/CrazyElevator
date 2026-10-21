@@ -7,11 +7,12 @@ using UnityEngine.Rendering;
 
 namespace CrazyElevator.EditorTools
 {
-    // Rebuilds the illustrated roly-poly passenger family as editable prefab art.
-    // This is Editor-only: gameplay instantiates the saved prefabs and never creates
-    // passenger geometry at runtime.
+    // Rebuilds passenger wrappers around the art-team models. Passenger types
+    // without a finished model still use the procedural fallback art below.
+    // Gameplay instantiates only the saved prefabs; no geometry is generated at runtime.
     public static class PassengerPrefabBuilder
     {
+        const string ArtistModelFolder = "Assets/Art/Passengers/Models";
         const string ResourcePrefabFolder = "Assets/Prefabs/Resources";
         const string PersonaFolder = "Assets/Static/ElevatorPersonas";
         const string ConceptPrefabFolder = PersonaFolder + "/Prefabs/PassengerConcepts";
@@ -55,31 +56,31 @@ namespace CrazyElevator.EditorTools
             EnsureFolder(MaterialFolder);
             materials.Clear();
 
-            // The two clean bases from the reference sheet are useful starting
-            // points for designers making more passengers in Prefab Mode.
-            Build("BASE-ROUND", ConceptPrefabFolder + "/Passenger-BASE-ROUND.prefab", BuildRoundBase, .48f);
-            Build("BASE-SQUARE", ConceptPrefabFolder + "/Passenger-BASE-SQUARE.prefab", BuildSquareBase, .48f);
+            // Active game kinds backed by final art-team FBX models.
+            BuildArtist("COURIER", ResourcePrefabFolder + "/Passenger-COURIER.prefab",
+                "SM_character_office_02.fbx", .5f, 2.05f);
+            BuildArtistWithBaby("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab",
+                "SM_character_cottoncandy_02.fbx", .52f, 2.18f, 2.32f, .55f);
+            BuildArtist("INTERVIEW", ResourcePrefabFolder + "/Passenger-INTERVIEW.prefab",
+                "SM_character_office_01.fbx", .5f, 2.05f);
+            BuildArtist("BOSS", ResourcePrefabFolder + "/Passenger-BOSS.prefab",
+                "SM_character_cottoncandy_01.fbx", .55f, 2.23f, 2.23f);
+            BuildArtist("ELDERLY", ResourcePrefabFolder + "/Passenger-ELDERLY.prefab",
+                "SM_character_granny.fbx", .53f, 2.10f, 2.10f);
+            BuildArtist("GROUP", ResourcePrefabFolder + "/Passenger-GROUP.prefab",
+                "SM_character_clown.fbx", .82f, 2.10f, 2.10f);
+            BuildArtist("HANDYMAN", PersonaFolder + "/Prefabs/Passenger-HANDYMAN.prefab",
+                "SM_character_underwater_01.fbx", .62f, 2.12f);
 
-            // Active game kinds. Their gameplay identities stay unchanged while
-            // their silhouettes and clothing follow the supplied character sheet.
-            Build("COURIER", ResourcePrefabFolder + "/Passenger-COURIER.prefab", BuildOfficeBadge, .5f);
-            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f, 2.32f, .55f);
-            Build("INTERVIEW", ResourcePrefabFolder + "/Passenger-INTERVIEW.prefab", BuildOfficeTie, .5f);
-            Build("BOSS", ResourcePrefabFolder + "/Passenger-BOSS.prefab", BuildCandyGentleman, .55f, 2.23f);
-            Build("ELDERLY", ResourcePrefabFolder + "/Passenger-ELDERLY.prefab", BuildGranny, .53f, 2.10f);
-            Build("GROUP", ResourcePrefabFolder + "/Passenger-GROUP.prefab", BuildClownTrio, .82f, 2.10f);
-            Build("HANDYMAN", PersonaFolder + "/Prefabs/Passenger-HANDYMAN.prefab", BuildAtlanteanMechanic, .62f);
-
-            // Standalone concept exports retain the two underwater ideas even
-            // though only the mechanic is currently wired into the round catalog.
-            Build("ATLANTEAN", ConceptPrefabFolder + "/Passenger-ATLANTEAN.prefab", BuildAtlantean, .6f);
-            Build("DOLPHIN", ConceptPrefabFolder + "/Passenger-DOLPHIN.prefab", BuildDolphinPassenger, .65f);
+            // The second underwater model is not yet assigned to a gameplay
+            // type, so it stays available as a concept prefab.
+            BuildArtist("ATLANTEAN", ConceptPrefabFolder + "/Passenger-ATLANTEAN.prefab",
+                "SM_character_underwater_02.fbx", .6f, 2.12f);
 
             BuildShowcase();
-            WirePassengerReferences();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("Rebuilt illustrated 3D passenger prefabs and refreshed ElevatorScene references.");
+            Debug.Log("Rebuilt art-team passenger prefabs. Procedural fallback passengers were left unchanged.");
         }
 
         [MenuItem("Tools/Crazy Elevator/Rebuild Mom and Baby Prefab")]
@@ -87,10 +88,11 @@ namespace CrazyElevator.EditorTools
         {
             EnsureFolder(MaterialFolder);
             materials.Clear();
-            Build("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab", BuildCandyParty, .52f, 2.32f, .55f);
+            BuildArtistWithBaby("PREGNANT", ResourcePrefabFolder + "/Passenger-PREGNANT.prefab",
+                "SM_character_cottoncandy_02.fbx", .52f, 2.18f, 2.32f, .55f);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("Rebuilt the separate Mom and Baby passenger prefab.");
+            Debug.Log("Rebuilt Mina with the art-team model and the procedural baby fallback.");
         }
 
         [MenuItem("Tools/Crazy Elevator/Apply Matte Storybook Style")]
@@ -220,6 +222,124 @@ namespace CrazyElevator.EditorTools
             PrefabUtility.SaveAsPrefabAsset(root, path, out success);
             UnityEngine.Object.DestroyImmediate(root);
             if (!success) throw new InvalidOperationException("Could not save passenger prefab: " + path);
+        }
+
+        static void BuildArtist(string kind, string path, string modelFile, float radius,
+            float targetHeight, float patienceBarHeight = 1.88f, float patienceBarCameraOffset = 0f)
+        {
+            string modelPath = ArtistModelFolder + "/" + modelFile;
+            GameObject modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            if (modelAsset == null)
+                throw new InvalidOperationException("Missing passenger model: " + modelPath);
+
+            var root = new GameObject("Passenger-" + kind);
+            var hit = root.AddComponent<CapsuleCollider>();
+            hit.radius = radius;
+            hit.height = 1.92f;
+            hit.center = new Vector3(0, .91f, 0);
+
+            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset);
+            model.name = "Artist model";
+            model.transform.SetParent(root.transform, false);
+            FitArtistModel(model.transform, targetHeight);
+
+            TextMesh speech = AddLabel(root.transform, "Speech bubble",
+                new Vector3(0, 2.42f, 0), "", .022f);
+            TextMesh destination = AddLabel(root.transform, "Destination badge",
+                new Vector3(0, 2.08f, 0), "1", .034f);
+            GameTypography.Apply(destination, true);
+
+            var view = root.AddComponent<PassengerView>();
+            view.kind = kind;
+            view.speech = speech;
+            view.destination = destination;
+            view.patienceBarHeight = patienceBarHeight;
+            view.patienceBarCameraOffset = patienceBarCameraOffset;
+            // Preserve the artist-authored palette instead of applying the
+            // procedural passenger colour variants at runtime.
+            view.jackets = Array.Empty<Renderer>();
+
+            bool success;
+            PrefabUtility.SaveAsPrefabAsset(root, path, out success);
+            UnityEngine.Object.DestroyImmediate(root);
+            if (!success) throw new InvalidOperationException("Could not save passenger prefab: " + path);
+        }
+
+        static void BuildArtistWithBaby(string kind, string path, string modelFile, float radius,
+            float targetHeight, float patienceBarHeight, float patienceBarCameraOffset)
+        {
+            string modelPath = ArtistModelFolder + "/" + modelFile;
+            GameObject modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            if (modelAsset == null)
+                throw new InvalidOperationException("Missing passenger model: " + modelPath);
+
+            var root = new GameObject("Passenger-" + kind);
+            var hit = root.AddComponent<CapsuleCollider>();
+            hit.radius = radius;
+            hit.height = 1.92f;
+            hit.center = new Vector3(0, .91f, 0);
+
+            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset);
+            model.name = "Artist model";
+            model.transform.SetParent(root.transform, false);
+            FitArtistModel(model.transform, targetHeight);
+            AddProceduralBaby(root.transform);
+
+            TextMesh speech = AddLabel(root.transform, "Speech bubble",
+                new Vector3(0, 2.42f, 0), "", .022f);
+            TextMesh destination = AddLabel(root.transform, "Destination badge",
+                new Vector3(0, 2.08f, 0), "1", .034f);
+            GameTypography.Apply(destination, true);
+
+            var view = root.AddComponent<PassengerView>();
+            view.kind = kind;
+            view.speech = speech;
+            view.destination = destination;
+            view.patienceBarHeight = patienceBarHeight;
+            view.patienceBarCameraOffset = patienceBarCameraOffset;
+            view.jackets = Array.Empty<Renderer>();
+
+            bool success;
+            PrefabUtility.SaveAsPrefabAsset(root, path, out success);
+            UnityEngine.Object.DestroyImmediate(root);
+            if (!success) throw new InvalidOperationException("Could not save passenger prefab: " + path);
+        }
+
+        static void AddProceduralBaby(Transform root)
+        {
+            var baby = new GameObject("Baby").transform;
+            baby.SetParent(root, false);
+            Sphere(baby, "Baby swaddle", V(0, .78f, -.50f), V(.42f, .56f, .24f), CandyBlue);
+            Cube(baby, "Baby blanket stripe", V(0, .78f, -.68f), V(.34f, .10f, .035f), CandyLilac, V(0, 0, -10));
+            Cube(baby, "Baby blanket fold", V(0, .61f, -.68f), V(.25f, .08f, .035f), White, V(0, 0, 12));
+            Sphere(baby, "Baby head", V(0, 1.17f, -.55f), V(.38f, .35f, .24f), SkinPink);
+            Sphere(baby, "Baby cap", V(0, 1.39f, -.54f), V(.35f, .18f, .22f), CandyLilac);
+            Sphere(baby, "Baby cap pom", V(.16f, 1.47f, -.56f), V(.10f, .10f, .07f), CandyPink);
+            Capsule(baby, "Baby left eye", V(-.10f, 1.19f, -.76f), V(.032f, .075f, .025f), Ink);
+            Capsule(baby, "Baby right eye", V(.10f, 1.19f, -.76f), V(.032f, .075f, .025f), Ink);
+            Sphere(baby, "Baby open mouth", V(0, 1.07f, -.77f), V(.085f, .10f, .035f), Maroon);
+            Sphere(baby, "Baby left cheek", V(-.18f, 1.10f, -.74f), V(.09f, .07f, .03f), CandyPink);
+            Sphere(baby, "Baby right cheek", V(.18f, 1.10f, -.74f), V(.09f, .07f, .03f), CandyPink);
+        }
+
+        static void FitArtistModel(Transform model, float targetHeight)
+        {
+            model.localPosition = Vector3.zero;
+            // Maya-authored characters face +Z while the existing elevator
+            // passenger camera reads -Z as forward.
+            model.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            model.localScale = Vector3.one;
+
+            Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+                throw new InvalidOperationException("Passenger model has no renderers: " + model.name);
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            float scale = targetHeight / Mathf.Max(.001f, bounds.size.y);
+            model.localScale = Vector3.one * scale;
+            model.localPosition = new Vector3(-bounds.center.x * scale,
+                -bounds.min.y * scale, -bounds.center.z * scale);
         }
 
         static void BuildRoundBase(Transform root, List<Renderer> accents)

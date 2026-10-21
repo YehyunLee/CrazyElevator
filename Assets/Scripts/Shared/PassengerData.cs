@@ -57,8 +57,12 @@ namespace CrazyElevator.Shared
             return theme == PassengerTheme.Any || theme == ThemeAtFloor(floor);
         }
 
-        public static PassengerTheme ThemeAtFloor(int floor) => floor < 4 ? PassengerTheme.Office
-            : floor < 8 ? PassengerTheme.Candy : PassengerTheme.Underwater;
+        public static PassengerTheme ThemeAtFloor(int floor)
+        {
+            int bandSize = Mathf.Max(1, ElevatorRound.Floors / ElevatorRound.Dimensions);
+            return floor < bandSize ? PassengerTheme.Office
+                : floor < bandSize * 2 ? PassengerTheme.Candy : PassengerTheme.Underwater;
+        }
 
         public Rider CreateRider(int origin, int destination)
         {

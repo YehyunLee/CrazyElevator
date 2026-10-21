@@ -10,13 +10,15 @@ namespace CrazyElevator.Managers
     {
         public static GameManager Instance { get; private set; }
 
-        public const int MaxNumberOfFloors = 12;
+        public const int MaxNumberOfFloors = ElevatorRound.Floors;
 
         public DimensionRange[] dimensions =
         {
-            new DimensionRange("office", 0, 3),
-            new DimensionRange("candyland", 4, 7),
-            new DimensionRange("underwater", 8, 11)
+            new DimensionRange("office", 0, ElevatorRound.FloorsPerDimension - 1),
+            new DimensionRange("candyland", ElevatorRound.FloorsPerDimension,
+                ElevatorRound.FloorsPerDimension * 2 - 1),
+            new DimensionRange("underwater", ElevatorRound.FloorsPerDimension * 2,
+                ElevatorRound.Floors - 1)
         };
 
         public ElevatorManager Player { get; private set; }
@@ -142,6 +144,8 @@ namespace CrazyElevator.Managers
 
             var input = InputManager.Instance;
             if (input == null) return;
+            // The tutorial owns Esc (exit) and must not open a hidden pause or overlay.
+            if (MenuManager.TutorialActive) return;
 
             if (input.PausePressed)
             {

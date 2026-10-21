@@ -13,8 +13,10 @@ namespace CrazyElevator.Shared
         public TextMesh[] gridDestinations;
         public Shader gridLabelShader;
         public TextMesh[] controlDisplays;
-        public Vector3 leftDoorClosed = new Vector3(-1.32f, 1.35f, .08f);
-        public Vector3 rightDoorClosed = new Vector3(1.32f, 1.35f, .08f);
+        // Doors fill the doorway (jambs at ±2.675, threshold top .13, header 2.95). The panels overlap
+        // at the centre, offset .02 in depth so the overlap doesn't z-fight.
+        public Vector3 leftDoorClosed = new Vector3(-1.335f, 1.54f, .08f);
+        public Vector3 rightDoorClosed = new Vector3(1.335f, 1.54f, .06f);
         public float doorTravel = 2.7f;
 
         [Header("Cameras and lights")]

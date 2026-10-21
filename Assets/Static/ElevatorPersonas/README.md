@@ -2,7 +2,7 @@
 
 Open `Assets/Scenes/Main.unity` and press Play. This scene supports both single-player and 1v1. Gameplay scripts are in `Assets/Scripts/Gameplay`, and the editable cabin/persona prefabs are in this folder.
 
-World order outside the cabin: **0–3 office, 4–7 candy, 8–11 underwater**. Tune `Candy Starts At Floor` / `Underwater Starts At Floor` on the player elevator. The cabin host stays friendly in office + candy (soft glove only in candy), and goes rusty underwater.
+World order outside the cabin: **0–7 office, 8–15 candy, 16–23 underwater**. Tune `Candy Starts At Floor` / `Underwater Starts At Floor` on the player elevator. The cabin host stays friendly in office + candy (soft glove only in candy), and goes rusty underwater.
 
 | Action | Controller / keyboard |
 | --- | --- |

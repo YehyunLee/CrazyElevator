@@ -33,8 +33,8 @@ namespace CrazyElevator.Managers
         float encounterCardTime;
         int encounterConfirmationConsumedFrame = -1;
         const int EncounterPreviewLayer = 30;
-        const int EncounterPreviewWidth = 384;
-        const int EncounterPreviewHeight = 256;
+        const int EncounterPreviewWidth = 640;
+        const int EncounterPreviewHeight = 360;
         Transform encounterPreviewStage;
         Transform encounterPreviewPivot;
         Camera encounterPreviewCamera;
@@ -210,13 +210,13 @@ namespace CrazyElevator.Managers
             activeEncounterCard = null;
             encounterCardTime = 0f;
             ClearEncounterPreviewModel();
-            DiscoverWorld(WorldBand.Office);
         }
 
         void DiscoverWorld(WorldBand world)
         {
-            if (IsNpc || MenuManager.TutorialActive) return;
-            QueueWorldDiscoveryCard(world);
+            // World / multiverse cards must only appear inside the timed
+            // dimension reveal interlude — never when docking at a new band.
+            _ = world;
         }
 
         void QueueWorldDiscoveryCard(WorldBand world)
@@ -270,56 +270,9 @@ namespace CrazyElevator.Managers
 
         void QueuePassengerDiscoveryCard(Rider rider)
         {
-            if (IsNpc || MenuManager.TutorialActive || rider == null || string.IsNullOrEmpty(rider.Kind)
-                || !encounteredPassengerKinds.Add(rider.Kind)
-                || completedPassengerTutorials[Seat].Contains(rider.Kind)) return;
-            string titleText = rider.Name.ToUpperInvariant();
-            string description;
-            switch (rider.Kind)
-            {
-                case "ELDERLY":
-                    titleText = "GRANDMA";
-                    description = "Moves slowly and reduces your elevator speed.";
-                    break;
-                case "PREGNANT":
-                    titleText = "MOM + BABY";
-                    description = "The crying baby drains every onboard passenger's patience faster.";
-                    break;
-                case "BOSS":
-                    titleText = "THE BOSS";
-                    description = "Deliver the boss on time to earn an extra bonus.";
-                    break;
-                case "GROUP":
-                    titleText = "THE TRIO";
-                    description = "Takes three spaces and boosts elevator speed.";
-                    break;
-                case "HANDYMAN":
-                    titleText = "HANDYMAN";
-                    description = "Prevents underwater rust from slowing the elevator.";
-                    break;
-                case "COURIER":
-                    description = "Takes two spaces and wants a quick one floor trip.";
-                    break;
-                case "INTERVIEW":
-                    description = "Very impatient. Deliver this passenger quickly.";
-                    break;
-                default:
-                    description = string.IsNullOrEmpty(rider.Request)
-                        ? "A new passenger has joined the queue." : rider.Request;
-                    break;
-            }
-            EnqueueEncounterCard(new EncounterCard
-            {
-                Kicker = "NEW PASSENGER",
-                Title = titleText,
-                Description = description,
-                PassengerKind = rider.Kind,
-                Features = PassengerFeatures(rider),
-                Badge = string.IsNullOrEmpty(rider.Badge) ? "?" : rider.Badge,
-                Accent = Palette[Mathf.Abs(rider.Color) % Palette.Length],
-                PreviewSource = FindPassengerPreviewSource(rider),
-                PreviewYaw = 0f
-            });
+            // Passenger types are introduced on the full-screen dimension reveal
+            // at each minute mark, not as a card when the shift or a world starts.
+            _ = rider;
         }
 
         GameObject FindPassengerPreviewSource(Rider rider)
@@ -336,6 +289,17 @@ namespace CrazyElevator.Managers
 
         GameObject FindWorldPreviewSource(WorldBand world)
         {
+            // Prefer the art-team FBX backgrounds shipped for dimension intros.
+            if (world == WorldBand.Candy)
+            {
+                GameObject art = Resources.Load<GameObject>("BG_candy_world");
+                if (art != null) return art;
+            }
+            else if (world == WorldBand.Water)
+            {
+                GameObject art = Resources.Load<GameObject>("BG_under_water");
+                if (art != null) return art;
+            }
             string wanted = world == WorldBand.Office ? "Office Band"
                 : world == WorldBand.Candy ? "Candy Band" : "Water Band";
             string featuredSection = world == WorldBand.Office ? "Office Floor 1"
@@ -358,6 +322,38 @@ namespace CrazyElevator.Managers
             }
             return null;
         }
+
+        // Dimension interludes use the same isolated 3D renderer as the old
+        // encounter cards, but the match HUD presents the texture on one
+        // unified screen instead of one card per player.
+        public void PrepareDimensionPreview(WorldBand world)
+        {
+            Color accent = world == WorldBand.Candy
+                ? new Color32(236, 118, 188, 255)
+                : world == WorldBand.Water
+                    ? new Color32(48, 196, 210, 255)
+                    : new Color32(98, 132, 178, 255);
+            GameObject source = FindWorldPreviewSource(world);
+            float yaw = world == WorldBand.Candy ? 18f : -20f;
+            // The art-team FBX dioramas face +Z (Maya front view) with single-sided
+            // planes; turn them toward the preview camera and keep only a slight angle.
+            if (source != null && source.name.StartsWith("BG_")) yaw = 180f + yaw * .4f;
+            EncounterCard card = new EncounterCard
+            {
+                Kicker = "NEW MULTIVERSE",
+                Title = world == WorldBand.Candy ? "COTTON CANDY" : world == WorldBand.Water ? "UNDERWATER" : "OFFICE",
+                Description = string.Empty,
+                Badge = string.Empty,
+                Accent = accent,
+                PreviewSource = source,
+                PreviewYaw = yaw,
+                IsWorldDiscovery = true,
+                World = world
+            };
+            PrepareEncounterPreview(card);
+        }
+
+        public Texture DimensionRevealTexture => encounterPreviewTexture;
 
         void EnsureEncounterPreview()
         {
@@ -434,37 +430,29 @@ namespace CrazyElevator.Managers
             encounterPreviewModel.transform.localRotation = Quaternion.identity;
             encounterPreviewModel.transform.localScale = Vector3.one;
             encounterPreviewModel.SetActive(true);
-
-            PassengerView passenger = encounterPreviewModel.GetComponentInChildren<PassengerView>(true);
-            if (passenger != null && passenger.jackets != null)
-                foreach (Renderer jacket in passenger.jackets)
-                    if (jacket != null) jacket.sharedMaterial = Mat(card.Accent);
-
-            foreach (Transform child in encounterPreviewModel.GetComponentsInChildren<Transform>(true))
-            {
-                child.gameObject.layer = EncounterPreviewLayer;
-                child.gameObject.hideFlags = HideFlags.HideAndDontSave;
-            }
-            foreach (MonoBehaviour behaviour in encounterPreviewModel.GetComponentsInChildren<MonoBehaviour>(true))
-                behaviour.enabled = false;
-            foreach (Collider collider in encounterPreviewModel.GetComponentsInChildren<Collider>(true))
-                collider.enabled = false;
-            foreach (AudioSource source in encounterPreviewModel.GetComponentsInChildren<AudioSource>(true))
-                source.enabled = false;
-            foreach (Camera nestedCamera in encounterPreviewModel.GetComponentsInChildren<Camera>(true))
-                nestedCamera.enabled = false;
-            foreach (Light nestedLight in encounterPreviewModel.GetComponentsInChildren<Light>(true))
-                nestedLight.enabled = false;
-            foreach (TextMesh textMesh in encounterPreviewModel.GetComponentsInChildren<TextMesh>(true))
-            {
-                Renderer textRenderer = textMesh.GetComponent<Renderer>();
-                if (textRenderer != null) textRenderer.enabled = false;
-            }
+            MakeStillPreviewModel(encounterPreviewModel, card.Accent);
 
             if (!TryGetEncounterPreviewBounds(encounterPreviewModel, out Bounds bounds))
             {
                 ClearEncounterPreviewModel();
                 return;
+            }
+
+            // World FBX sets are large environment meshes — shrink them so the
+            // dimension card shows the whole scene instead of a clipped corner.
+            if (card.IsWorldDiscovery)
+            {
+                float largest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+                if (largest > 6f)
+                {
+                    float scale = 5.2f / largest;
+                    encounterPreviewModel.transform.localScale = Vector3.one * scale;
+                    if (!TryGetEncounterPreviewBounds(encounterPreviewModel, out bounds))
+                    {
+                        ClearEncounterPreviewModel();
+                        return;
+                    }
+                }
             }
 
             Vector3 centerInPivot = encounterPreviewPivot.InverseTransformPoint(bounds.center);
@@ -483,6 +471,36 @@ namespace CrazyElevator.Managers
             encounterPreviewPivot.localRotation = Quaternion.Euler(0f, card.PreviewYaw, 0f);
             encounterPreviewCamera.enabled = true;
             renderedEncounterCard = card;
+        }
+
+        // A preview copy only renders: no scripts, clicks, sound, labels, or own cameras.
+        void MakeStillPreviewModel(GameObject model, Color accent)
+        {
+            PassengerView passenger = model.GetComponentInChildren<PassengerView>(true);
+            if (passenger != null && passenger.jackets != null)
+                foreach (Renderer jacket in passenger.jackets)
+                    if (jacket != null) jacket.sharedMaterial = Mat(accent);
+
+            foreach (Transform child in model.GetComponentsInChildren<Transform>(true))
+            {
+                child.gameObject.layer = EncounterPreviewLayer;
+                child.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            foreach (MonoBehaviour behaviour in model.GetComponentsInChildren<MonoBehaviour>(true))
+                behaviour.enabled = false;
+            foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
+            foreach (AudioSource source in model.GetComponentsInChildren<AudioSource>(true))
+                source.enabled = false;
+            foreach (Camera nestedCamera in model.GetComponentsInChildren<Camera>(true))
+                nestedCamera.enabled = false;
+            foreach (Light nestedLight in model.GetComponentsInChildren<Light>(true))
+                nestedLight.enabled = false;
+            foreach (TextMesh textMesh in model.GetComponentsInChildren<TextMesh>(true))
+            {
+                Renderer textRenderer = textMesh.GetComponent<Renderer>();
+                if (textRenderer != null) textRenderer.enabled = false;
+            }
         }
 
         bool TryGetEncounterPreviewBounds(GameObject model, out Bounds bounds)
@@ -514,6 +532,7 @@ namespace CrazyElevator.Managers
         void ReleaseEncounterPreview()
         {
             ClearEncounterPreviewModel();
+            ReleaseDimensionLineup();
             if (encounterPreviewCamera != null) encounterPreviewCamera.targetTexture = null;
             if (encounterPreviewTexture != null)
             {
@@ -659,6 +678,13 @@ namespace CrazyElevator.Managers
                 if (Match == null || !IsNpc) DrawNoTutorialCountdown();
                 return;
             }
+            if (dimensionRevealActive && Match == null)
+            {
+                GUI.matrix = Matrix4x4.identity;
+                DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height));
+                DrawSessionFade(sessionFadeAlpha);
+                return;
+            }
             if (Match != null || MenuManager.FullScreenOverlayActive) return;
             GUI.color = Color.white;
             GUI.contentColor = Color.white;
@@ -692,7 +718,8 @@ namespace CrazyElevator.Managers
                 DrawSessionFade(sessionFadeAlpha);
                 return;
             }
-            if (phase == Phase.Results || paused)
+            // The tutorial holds the car behind its cards; that is not the pause menu.
+            if (phase == Phase.Results || paused && !MenuManager.TutorialActive)
             {
                 scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
                 offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 1000 * scale) / 2;
@@ -713,7 +740,7 @@ namespace CrazyElevator.Managers
                 Panel(new Rect(Screen.width * .5f - 1f, 16f, 2f, 16f), Cream);
             }
             GUI.matrix = Matrix4x4.identity;
-            if (phase != Phase.Results && !paused)
+            if (phase != Phase.Results && (!paused || MenuManager.TutorialActive))
             {
                 DrawTravelView();
                 float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;

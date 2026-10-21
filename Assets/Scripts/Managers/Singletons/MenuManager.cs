@@ -503,10 +503,11 @@ namespace CrazyElevator.Managers
             choosingMode = true;
             playerOneReady = false;
             playerTwoReady = false;
-            playerTwoSelected = false;
+            // Local 1v1 is the default; the rival card can still be switched to CPU.
+            playerTwoSelected = true;
             playerOneHuman = true;
             playerOneCursor = 0;
-            playerTwoCursor = 1;
+            playerTwoCursor = 3;
             playerOneCursorHeld = false;
             playerTwoCursorHeld = false;
             lastPlayerTwoRegistered = false;

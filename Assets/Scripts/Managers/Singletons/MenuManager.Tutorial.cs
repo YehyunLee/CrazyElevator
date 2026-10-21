@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using CrazyElevator.Shared;
 
 namespace CrazyElevator.Managers
@@ -190,7 +191,10 @@ namespace CrazyElevator.Managers
                 ? inputManager.ReadForSeat(0, true) : default;
             InputManager.SeatInput secondInput = inputManager != null && tutorialActors[1] != null
                 ? inputManager.ReadForSeat(1, true) : default;
-            if (input.PausePressed || secondInput.PausePressed)
+            // Esc always exits, even when seat 0 plays on a controller and its
+            // seat input ignores the keyboard.
+            bool escape = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+            if (input.PausePressed || secondInput.PausePressed || escape)
             {
                 ReturnToMainMenu();
                 return;
@@ -278,31 +282,26 @@ namespace CrazyElevator.Managers
                     return actor.CurrentPassengers.Count >= 2;
                 case 2:
                     return actor.TravelStartCount > tutorialTravelStartBaseline[index];
+                // Move and boost progress adds up across presses instead of resetting,
+                // so letting go, reversing, or bumping the shaft end never loses it.
                 case 3:
                     if (tutorialMoveCompleted[index]) return true;
-                    if (actor.MovingInShaft && actor.TravelInputActive
-                        && Mathf.Abs(actor.TravelVelocity) > .05f)
+                    if (actor.MovingInShaft && actor.TravelInputActive)
                     {
                         tutorialMoveSeconds[index] += Time.unscaledDeltaTime;
                         tutorialMoveDistance[index] += Mathf.Abs(
                             actor.CurrentFloor - tutorialLastFloor[index]);
                     }
-                    else
-                    {
-                        tutorialMoveSeconds[index] = 0f;
-                        tutorialMoveDistance[index] = 0f;
-                    }
                     tutorialLastFloor[index] = actor.CurrentFloor;
-                    if (tutorialMoveSeconds[index] >= 1.15f
-                        && tutorialMoveDistance[index] >= .35f)
+                    if (tutorialMoveSeconds[index] >= .8f
+                        && tutorialMoveDistance[index] >= .25f)
                         tutorialMoveCompleted[index] = true;
                     return tutorialMoveCompleted[index];
                 case 4:
                     if (tutorialBoostCompleted[index]) return true;
                     if (actor.MovingInShaft && actor.BoostActive)
                         tutorialBoostSeconds[index] += Time.unscaledDeltaTime;
-                    else tutorialBoostSeconds[index] = 0f;
-                    if (tutorialBoostSeconds[index] >= .65f)
+                    if (tutorialBoostSeconds[index] >= .5f)
                         tutorialBoostCompleted[index] = true;
                     return tutorialBoostCompleted[index];
                 case 5:
@@ -344,11 +343,26 @@ namespace CrazyElevator.Managers
         }
 
         bool TutorialHasPassengerAtCurrentFloor(ElevatorManager actor)
+            => actor != null && TutorialHasPassengerFor(actor, actor.DiscreteFloor);
+
+        static bool TutorialHasPassengerFor(ElevatorManager actor, int floor)
         {
-            if (actor == null) return false;
             foreach (var rider in actor.CurrentPassengers)
-                if (rider.Destination == actor.DiscreteFloor) return true;
+                if (rider.Destination == floor) return true;
             return false;
+        }
+
+        // During the STOP step the car may only dock at the floor the card asks for.
+        public static bool TutorialAllowsStopAt(ElevatorManager actor, int floor)
+        {
+            MenuManager menu = Current;
+            InputManager input = InputManager.Instance;
+            if (menu == null || !menu.tutorialActive || actor == null || input == null) return true;
+            int index = System.Array.IndexOf(menu.tutorialActors, actor);
+            if (index < 0 || input.GetTutorialInputMode(actor.Seat) != InputManager.TutorialInputMode.Stop)
+                return true;
+            int target = menu.tutorialTargetFloor[index];
+            return target >= 0 ? floor == target : TutorialHasPassengerFor(actor, floor);
         }
 
         int FindTutorialPassengerFloor(ElevatorManager actor)
@@ -380,10 +394,11 @@ namespace CrazyElevator.Managers
                     ? tutorialActors[index].Seat : index);
                 return;
             }
+            // The car keeps running while the card swaps; the input mode above
+            // already limits the player to the next step's action.
             tutorialCardMotions[index] = TutorialCardMotion.Exiting;
             tutorialCardMotionTimes[index] = 0f;
             if (nextStep == 0) tutorialPracticeTimes[index] = 0f;
-            PauseTutorialActor(index);
         }
 
         InputManager.TutorialInputMode TutorialInputModeForStep(int step)
@@ -391,7 +406,7 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0: return InputManager.TutorialInputMode.SelectPassenger;
-                case 1: return InputManager.TutorialInputMode.Free;
+                case 1: return InputManager.TutorialInputMode.BoardPassengers;
                 case 2: return InputManager.TutorialInputMode.CloseDoors;
                 case 3: return InputManager.TutorialInputMode.Move;
                 case 4: return InputManager.TutorialInputMode.Boost;
@@ -421,11 +436,6 @@ namespace CrazyElevator.Managers
                 && tutorialSteps[index] < ActiveTutorialStepCount)
                 ResumeTutorialActor(index);
             tutorialResumeActorOnCardSettled[index] = false;
-        }
-
-        void PauseTutorialActor(int index)
-        {
-            tutorialActors[index]?.SetPausedPublic(true);
         }
 
         void ResumeTutorialActor(int index)
@@ -516,7 +526,7 @@ namespace CrazyElevator.Managers
                     case 0: return "STICK";
                     case 2: return "Y";
                     case 3: return "STICK";
-                    case 4: return "BOOST";
+                    case 4: return "LB/RB";
                     case 5: return "A";
                     case 7: return "A";
                     case 8: return "A/D";
@@ -576,7 +586,7 @@ namespace CrazyElevator.Managers
                 case 1: return "BOARD 2 PASSENGERS.";
                 case 2: return "CLOSE THE DOORS.";
                 case 3: return "HOLD UP OR DOWN.";
-                case 4: return "HOLD BUMPERS (LB + RB) + MOVE.";
+                case 4: return "HOLD IT + UP OR DOWN.";
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0

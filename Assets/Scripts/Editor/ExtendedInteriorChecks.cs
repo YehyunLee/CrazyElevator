@@ -67,14 +67,15 @@ public static class ExtendedInteriorChecks
             else if (action == "rust-inside" || action == "rust-outside")
             {
                 game.enabled = true; Call(game, "Restart");
-                ((Round)Get(game, "round")).Floor = 8;
+                int water = game.underwaterStartsAtFloor;
+                ((Round)Get(game, "round")).Floor = water;
                 Set(game, "rustExposure", game.secondsPerRustLevel * 2);
-                game.sceneView.floorDisplay.text = "8";
+                game.sceneView.floorDisplay.text = water.ToString();
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action == "rust-outside")
                 {
                     Call(game, "CloseAndTravel"); Call(game, "SetDoors", 0f); Call(game, "BeginBuildingTravel");
-                    Set(game, "travelFloor", 9.1f); Set(game, "travelVelocity", 0f);
+                    Set(game, "travelFloor", water + 1.1f); Set(game, "travelVelocity", 0f);
                 }
                 Call(game, "LateUpdate");
                 EditorApplication.isPaused = true;
@@ -705,15 +706,17 @@ public static class ExtendedInteriorChecks
             Require(round.Score == score && ((IDictionary)Get(game, "exiting")).Count == 0, "Unload scored twice or failed to finish.");
             Input(game, pad, new GamepadState()); Close(game);
             Call(game, "AdvanceBuildingTravel", 100f);
-            Require((float)Get(game, "travelFloor") == 11 && Get(game, "phase").ToString() == "Moving", "Top boundary opened automatically or exceeded the shaft.");
+            Require((float)Get(game, "travelFloor") == Round.Floors - 1 && Get(game, "phase").ToString() == "Moving", "Top boundary opened automatically or exceeded the shaft.");
             Input(game, pad, new GamepadState { leftStick = Vector2.down });
-            TravelTo(game, 8.1f); Call(game, "RequestFloorStop"); FinishDock(game);
-            Require(round.Floor == 8 && rig.waterBackdrop.activeSelf, "Upper floor did not become underwater.");
+            float waterFloor = game.underwaterStartsAtFloor + .1f;
+            TravelTo(game, waterFloor); Call(game, "RequestFloorStop"); FinishDock(game);
+            Require(round.Floor == game.underwaterStartsAtFloor && rig.waterBackdrop.activeSelf, "Upper floor did not become underwater.");
             for (int i = 0; i < 4; i++) Input(game, pad, new GamepadState().WithButton(GamepadButton.RightShoulder), .5f);
             Require((float)Get(game, "repairedFor") > 19, "Repair no longer works.");
             Input(game, pad, new GamepadState()); Close(game);
-            TravelTo(game, 7.1f); Call(game, "RequestFloorStop"); FinishDock(game);
-            Require(round.Floor == 7 && rig.candyBackdrop.activeSelf, "Lower floor did not restore candy.");
+            float candyFloor = game.candyStartsAtFloor + .1f;
+            TravelTo(game, candyFloor); Call(game, "RequestFloorStop"); FinishDock(game);
+            Require(round.Floor == game.candyStartsAtFloor && rig.candyBackdrop.activeSelf, "Lower floor did not restore candy.");
             Close(game); Call(game, "AdvanceBuildingTravel", 100f);
             Require((float)Get(game, "travelFloor") == 0 && Get(game, "phase").ToString() == "Moving", "Bottom boundary opened automatically or exceeded the shaft.");
             // A real mouse drag boards the rider at the released cabin position.
@@ -988,13 +991,14 @@ public static class ExtendedInteriorChecks
             for (int i = 0; i < 36; i++) Call(game, "AdvanceBuildingTravel", 1f / 60);
             Require(Mathf.Abs((float)Get(game, "travelFloor") - singlePosition) < .002f && Mathf.Abs((float)Get(game, "travelVelocity") - singleSpeed) < .002f,
                 "Boost behavior changed with frame rate.");
-            Set(game, "travelFloor", 8.1f); Set(game, "rustExposure", 0f);
+            float waterTravel = game.underwaterStartsAtFloor + .1f;
+            Set(game, "travelFloor", waterTravel); Set(game, "rustExposure", 0f);
             float waterCruise = (float)Property(game, "CruiseSpeed"), waterAcceleration = (float)Property(game, "CurrentAcceleration");
             Require(waterCruise < cruise && waterAcceleration < game.boostAcceleration, "Underwater must reduce default speed and acceleration.");
             Set(game, "travelVelocity", waterCruise); Call(game, "AdvanceBuildingTravel", .5f);
             Require((float)Get(game, "travelVelocity") - waterCruise < game.boostAcceleration * .5f, "Underwater boost grew as fast as candy boost.");
 
-            Phase(game, "Boarding"); round.Floor = 8; Set(game, "rustExposure", 0f); Call(game, "SyncFigures", 0f);
+            Phase(game, "Boarding"); round.Floor = game.underwaterStartsAtFloor; Set(game, "rustExposure", 0f); Call(game, "SyncFigures", 0f);
             Call(game, "UpdateInteriorPersona", 0f);
             var inside = (StarfishImpairmentView)Get(game, "interiorImpairment");
             var outside = (StarfishImpairmentView)Get(game, "exteriorImpairment");
@@ -1020,11 +1024,11 @@ public static class ExtendedInteriorChecks
                 && !(bool)Property(game, "HandymanRepairActive"),
                 "Completed handyman repair did not clear both impairment meters.");
             Phase(game, "Moving");
-            Set(game, "travelFloor", 8.1f); Set(game, "travelVelocity", protectedWaterCruise); Set(game, "boostHeld", true); Set(game, "boostAxis", 1f);
+            Set(game, "travelFloor", waterTravel); Set(game, "travelVelocity", protectedWaterCruise); Set(game, "boostHeld", true); Set(game, "boostAxis", 1f);
             float exposure = (float)Get(game, "rustExposure"); Call(game, "AdvanceBuildingTravel", .5f);
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - (protectedWaterCruise + game.boostAcceleration * .5f)) < .003f
                 && (float)Get(game, "rustExposure") == exposure, "Handyman protection did not restore acceleration or prevent rust growth.");
-            Set(game, "travelFloor", 8.1f); Call(game, "RequestFloorStop");
+            Set(game, "travelFloor", waterTravel); Call(game, "RequestFloorStop");
             Require((float)Get(game, "travelVelocity") == 0 && !(bool)Get(game, "boostHeld"), "Docking did not clear boost momentum.");
             Call(game, "AdvanceBuildingTravel", .5f); Phase(game, "Boarding");
             Call(game, "SelectRider", handyman); Call(game, "ConfirmPassenger"); Call(game, "UpdateInteriorPersona", 0f);
