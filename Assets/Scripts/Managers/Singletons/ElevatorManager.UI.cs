@@ -1228,6 +1228,7 @@ namespace CrazyElevator.Managers
         void DrawMouseControls()
         {
             if (!extendedInterior || IsNpc) return;
+            DrawBoardingDoorControls();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
@@ -1236,6 +1237,59 @@ namespace CrazyElevator.Managers
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
             DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
+        }
+
+        Rect BoardingDoorRect(int door)
+        {
+            float width = Mathf.Min(200f, (ViewWidth - 48f) / 3f);
+            return new Rect(16f + door * (width + 8f), compactTopHud ? 88f : 154f, width, 88f);
+        }
+
+        bool ReadDoorButtonClick(InputManager.SeatInput input)
+        {
+            if (!input.PointerPressed || phase != Phase.Boarding) return false;
+            Vector2 cursor = new Vector2(input.Pointer.x, Screen.height - input.Pointer.y);
+            if (Match != null)
+            {
+                Rect view = Match.ViewRect(Seat);
+                cursor -= view.position;
+            }
+            for (int door = 0; door < 3; door++)
+                if (BoardingDoorRect(door).Contains(cursor))
+                { OpenBoardingDoor((BoardingDoor)door); return true; }
+            return false;
+        }
+
+        void DrawBoardingDoorControls()
+        {
+            if (phase != Phase.Boarding) return;
+            for (int door = 0; door < 3; door++)
+            {
+                Rect rect = BoardingDoorRect(door);
+                Color accent = openBoardingDoor == door ? Teal : Gold;
+                GameplayControlPanel(rect, accent, selectedRider == null && (int)selectedBoardingDoor == door);
+                string name = ((BoardingDoor)door).ToString().ToUpperInvariant();
+                int count = 0;
+                foreach (Rider rider in round.Riders)
+                    if (round.IsOffered(rider) && (int)rider.PickupDoor == door) count++;
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 26f),
+                    name + (openBoardingDoor == door ? " OPEN" : " DOOR"), calloutText);
+                float x = rect.x + 8f;
+                foreach (Rider rider in round.Riders)
+                {
+                    if (!round.IsOffered(rider) || (int)rider.PickupDoor != door) continue;
+                    if (x + 26f > rect.xMax - 8f) break;
+                    DrawPassengerBadgeIcon(new Rect(x, rect.y + 31f, 26f, 26f),
+                        rider.Kind, Palette[rider.Color % Palette.Length]);
+                    x += 30f;
+                }
+                string key = GameplayUsesKeyboard
+                    ? Seat == 1 ? (door == 0 ? "LEFT" : door == 1 ? "UP" : "RIGHT")
+                        : (door == 0 ? "A" : door == 1 ? "W" : "D")
+                    : (door == 0 ? "LEFT" : door == 1 ? "UP" : "RIGHT");
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 58f, rect.width - 16f, 26f),
+                    key + " + " + GameplayConfirmKey + "  |  " + count + " waiting", calloutText);
+            }
         }
 
         void DrawMouseControl(Rect rect, string text, Color accent, string key)

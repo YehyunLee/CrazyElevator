@@ -49,7 +49,7 @@ namespace CrazyElevator.Managers
             ElevatorManager player = null;
             foreach (var elevator in FindObjectsByType<ElevatorManager>())
             {
-                if (elevator != null && !elevator.IsNpc) { player = elevator; break; }
+                if (elevator != null && elevator.Seat == 0) { player = elevator; break; }
             }
             BindPlayer(player);
             if (MenuManager.IsOpen) GoToView(GameView.Menu);
@@ -98,12 +98,15 @@ namespace CrazyElevator.Managers
         {
             if (Player == null) { GoToView(GameView.Menu); return; }
             if (Player.IsPaused) { GoToView(GameView.Pause); return; }
-            if (Player.TutorialPassengerViewActive)
+            var viewedPlayer = Player.IsNpc && Player.Match != null
+                && Player.Match.Rival != null && !Player.Match.Rival.IsNpc
+                ? Player.Match.Rival : Player;
+            if (viewedPlayer.TutorialPassengerViewActive)
             {
                 GoToView(GameView.Passenger);
                 return;
             }
-            GoToView(Player.Traveling ? GameView.ControlElevator : GameView.Passenger);
+            GoToView(viewedPlayer.Traveling ? GameView.ControlElevator : GameView.Passenger);
         }
 
         public void ResetRound()
@@ -131,7 +134,7 @@ namespace CrazyElevator.Managers
 
         void Update()
         {
-            if (Player == null || Player.IsNpc) return;
+            if (Player == null) return;
             if (MenuManager.IsOpen)
             {
                 GoToView(GameView.Menu);

@@ -506,6 +506,11 @@ MonoBehaviour:
   cabin: {fileID: 7307430517034683531}
   leftDoor: {fileID: 6073588209357253364}
   rightDoor: {fileID: 3806951894439134116}
+  leftSideDoor: {fileID: 940000000000000011}
+  rightSideDoor: {fileID: 940000000000000012}
+  leftSideDoorClosed: {x: -2.9, y: 1.5, z: 2.58}
+  rightSideDoorClosed: {x: 2.9, y: 1.5, z: 2.58}
+  sideDoorTravel: 3.2
   passingLights: {fileID: 4955884886241188088}
   floorDisplay: {fileID: 2955122831652903368}
   gridDestinations:
@@ -744,5 +749,15 @@ TextMesh:
 --- !u!102 &940000000000000010 stripped
 TextMesh:
   m_CorrespondingSourceObject: {fileID: 930000000000000103, guid: e8f4cc3b1df157fbaa48b984d6670fb4, type: 3}
+  m_PrefabInstance: {fileID: 3672296175483465992}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &940000000000000011 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8532270625220269812, guid: e8f4cc3b1df157fbaa48b984d6670fb4, type: 3}
+  m_PrefabInstance: {fileID: 3672296175483465992}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &940000000000000012 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5274861944240988769, guid: e8f4cc3b1df157fbaa48b984d6670fb4, type: 3}
   m_PrefabInstance: {fileID: 3672296175483465992}
   m_PrefabAsset: {fileID: 0}

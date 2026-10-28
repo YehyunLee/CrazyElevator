@@ -145,7 +145,9 @@ namespace CrazyElevator.Managers
         void CheckHazardHits()
         {
             if (phase != Phase.Moving || hazardCooldown > 0f || MenuManager.TutorialActive) return;
-            Vector2 car = new Vector2(RouteLateralX, travelFloor * ShaftFloorHeight + 1.4f);
+            Vector3 carPosition = CrazyTravelLocalPosition(RouteLateralX, travelFloor)
+                + CrazyTravelLocalRotation(travelFloor, 0f) * exteriorCollisionCenterOffset;
+            Vector2 car = new Vector2(carPosition.x, carPosition.y);
             Vector2 carHalf = exteriorCollisionHalfSize * .85f;
             foreach (ShaftHazard hazard in WorldOwner.hazards)
             {

@@ -77,7 +77,7 @@ namespace CrazyElevator.Managers
                 passengerManager = gameObject.AddComponent<PassengerManager>();
             }
             passengerManager.Bind(this);
-            if (GameManager.Instance != null && !IsNpc)
+            if (GameManager.Instance != null && Seat == 0)
                 GameManager.Instance.BindPlayer(this);
         }
 
@@ -111,9 +111,7 @@ namespace CrazyElevator.Managers
 
         public void OnboardSelectedPublic()
         {
-            if (!CanSelect(selectedRider)) return;
-            if (selectedRider.Boarded) return;
-            ConfirmPassenger();
+            OpenBoardingDoor(selectedBoardingDoor);
         }
 
         public void KickoutSelectedPublic()

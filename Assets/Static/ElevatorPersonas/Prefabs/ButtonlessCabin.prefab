@@ -1912,7 +1912,7 @@ GameObject:
   - component: {fileID: 2415376190725778274}
   - component: {fileID: 3577377790309689997}
   m_Layer: 0
-  m_Name: Right wall
+  m_Name: Sliding door Right side
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12489,7 +12489,7 @@ GameObject:
   - component: {fileID: 9016998184142184437}
   - component: {fileID: 6670124454063933474}
   m_Layer: 0
-  m_Name: Left wall
+  m_Name: Sliding door Left side
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -170,7 +170,7 @@ namespace CrazyElevator.Managers
                 DrawEdgePointer(view, size, spot, inFront, label, riders);
         }
 
-        const float BeaconDepth = CrowdDepth - .8f;
+        const float BeaconDepth = .7f;
 
         void DrawLandingHighlight(Rect view, float size, float x, float y, float halfWidth, string label, List<Rider> riders)
         {
@@ -351,29 +351,69 @@ namespace CrazyElevator.Managers
         sealed class CrowdFigure
         {
             public Transform Root;
-            public float X, Home, Wander, WanderTimer, Clock, Yaw = 180f, Leave = -1f;
-            public bool Boarding;
+            public float Clock;
         }
 
-        const float CrowdScale = 1.2f;
-        const float CrowdDepth = 1.5f;
-        const float CrowdFloorLift = .08f;
-        const float CrowdWalkSpeed = 2.6f;
-        const float CrowdLeaveSeconds = .7f;
         const float CrowdFloorRange = 3f;
-        static readonly float[] CrowdSlotOffsets = { 0f, -1.35f, 1.35f, -2.7f, 2.7f };
         readonly Dictionary<Rider, CrowdFigure> crowd = new Dictionary<Rider, CrowdFigure>();
-        readonly Dictionary<int, int> crowdSlots = new Dictionary<int, int>();
         Transform crowdRoot;
+
+        PassengerView WaitingPassengerView(Rider rider)
+        {
+            ElevatorManager owner = WorldOwner;
+            if (owner != this) return owner.WaitingPassengerView(rider);
+            if (crowdRoot == null)
+            {
+                crowdRoot = new GameObject("Shared floor passengers").transform;
+                crowdRoot.SetParent(exteriorCar.parent, false);
+            }
+            if (!crowd.TryGetValue(rider, out CrowdFigure figure) || figure.Root == null)
+            {
+                PassengerView view = SpawnPassengerArt(rider, crowdRoot);
+                view.name = rider.Name + " / floor queue";
+                if (view.speech != null) view.speech.gameObject.SetActive(false);
+                StyleDestinationTag(view.destination);
+                figure = new CrowdFigure { Root = view.transform, Clock = Random.value * 10f };
+                crowd[rider] = figure;
+                PlaceWaitingPassenger(rider, figure);
+            }
+            return figure.Root.GetComponent<PassengerView>();
+        }
+
+        // A floor queue belongs to its landing, never to whichever car is
+        // currently parked there. A second car cannot drag it to another lane.
+        Vector3 WaitingCabinOrigin(Rider rider)
+            => PhysicalCabinOrigin(StopWorldX(rider.OriginStop), rider.Origin);
+        void PlaceWaitingPassenger(Rider rider, CrowdFigure figure)
+        {
+            Vector3 position = WaitingQueuePosition(rider);
+            float wave = Mathf.Sin(figure.Clock * IdleBobSpeed + IdleBobPhase(rider));
+            position.y += IdleBobHeight * wave * wave;
+            figure.Root.localPosition = WaitingCabinOrigin(rider)
+                + PhysicalCabinRotation * (position * PhysicalCabinScale);
+            float facing = rider.PickupDoor == BoardingDoor.Left ? 90f
+                : rider.PickupDoor == BoardingDoor.Right ? -90f : 180f;
+            figure.Root.localRotation = PhysicalCabinRotation * Quaternion.Euler(0f, facing, wave * IdleWaddleDegrees);
+            figure.Root.localScale = Vector3.one * PhysicalCabinScale;
+            PassengerView view = figure.Root.GetComponent<PassengerView>();
+            if (view.destination != null)
+            {
+                view.destination.gameObject.SetActive(true);
+                view.destination.text = DestinationTag(rider);
+                view.destination.transform.position = figure.Root.TransformPoint(new Vector3(0f, 2.65f, 0f));
+                Camera camera = exteriorCamera;
+                if (InPassengerStop && round.IsOffered(rider)) camera = eye;
+                else if (Match != null && Match.Rival != null && Match.Rival.InPassengerStop
+                    && Match.Rival.round.IsOffered(rider)) camera = Match.Rival.eye;
+                if (camera != null)
+                    view.destination.transform.rotation = Quaternion.LookRotation(
+                        view.destination.transform.position - camera.transform.position);
+            }
+        }
 
         void UpdateShaftCrowd(float dt)
         {
             if (WorldOwner != this || round == null || exteriorCar == null || sceneView.passengers == null) return;
-            if (crowdRoot == null)
-            {
-                crowdRoot = new GameObject("Waiting crowd").transform;
-                crowdRoot.SetParent(exteriorCar.parent, false);
-            }
             float low = CurrentFloor, high = CurrentFloor;
             ElevatorManager rival = Match != null ? Match.Rival : null;
             if (rival != null)
@@ -381,7 +421,6 @@ namespace CrazyElevator.Managers
                 low = Mathf.Min(low, rival.CurrentFloor);
                 high = Mathf.Max(high, rival.CurrentFloor);
             }
-            crowdSlots.Clear();
             foreach (Rider rider in round.Riders)
             {
                 crowd.TryGetValue(rider, out CrowdFigure figure);
@@ -389,96 +428,34 @@ namespace CrazyElevator.Managers
                     && rider.Origin <= high + CrowdFloorRange && round.IsQueuedAtStop(rider);
                 if (waiting)
                 {
-                    int key = rider.Origin * ElevatorRound.Stops + rider.OriginStop;
-                    crowdSlots.TryGetValue(key, out int slot);
-                    crowdSlots[key] = slot + 1;
-                    float home = StopWorldX(rider.OriginStop) + CrowdSlotOffsets[slot % CrowdSlotOffsets.Length];
-                    if (figure == null) figure = SpawnCrowdFigure(rider, home);
-                    if (figure == null) continue;
-                    figure.Home = home;
-                    AnimateCrowdFigure(rider, figure, dt);
+                    if (figure == null || figure.Root == null)
+                    {
+                        WaitingPassengerView(rider);
+                        figure = crowd[rider];
+                    }
+                    figure.Root.gameObject.SetActive(true);
+                    figure.Clock += Mathf.Max(0f, dt);
+                    PlaceWaitingPassenger(rider, figure);
                     continue;
                 }
                 if (figure == null) continue;
-                if (figure.Leave < 0f && (rider.Boarded || rider.Resolved))
+                // Boarding reparents this exact figure; no second silhouette
+                // remains walking/shrinking on the landing.
+                if (rider.Boarded)
                 {
-                    figure.Leave = 0f;
-                    figure.Boarding = rider.Boarded;
+                    ElevatorManager boardingCar = rival != null && rider.BoardedBySeat == rival.Seat ? rival : this;
+                    boardingCar.AdoptWaitingFigure(rider);
+                    continue;
                 }
-                if (figure.Leave >= 0f && AnimateCrowdExit(rider, figure, dt)) continue;
-                if (figure.Root != null) Destroy(figure.Root.gameObject);
-                crowd.Remove(rider);
+                if (rider.Resolved)
+                {
+                    ForgetWaitingFigure(rider);
+                    if (rival != null) rival.ForgetWaitingFigure(rider);
+                    if (figure.Root != null) Destroy(figure.Root.gameObject);
+                    crowd.Remove(rider);
+                }
+                else if (figure.Root != null) figure.Root.gameObject.SetActive(false);
             }
-        }
-
-        CrowdFigure SpawnCrowdFigure(Rider rider, float home)
-        {
-            PassengerView template = null;
-            foreach (PassengerView art in sceneView.passengers)
-                if (art != null && art.ResolvedKind == rider.Kind) template = art;
-            if (template == null) return null;
-            PassengerView view = Instantiate(template, crowdRoot, false);
-            view.name = "Outside • " + rider.Name;
-            Color color = Palette[rider.Color % Palette.Length];
-            foreach (Renderer jacket in view.jackets) if (jacket != null) jacket.sharedMaterial = Mat(color);
-            if (view.speech != null) view.speech.gameObject.SetActive(false);
-            if (view.destination != null) view.destination.gameObject.SetActive(false);
-            foreach (Collider part in view.GetComponentsInChildren<Collider>(true)) part.enabled = false;
-            foreach (Transform part in view.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = ExteriorLayer;
-            // New riders stroll in from the outer side of their stop.
-            float side = home >= ElevatorMatchType.ShaftCenterX ? 1f : -1f;
-            var figure = new CrowdFigure
-            {
-                Root = view.transform, X = home + side * 5f, Home = home,
-                Clock = Random.value * 10f, WanderTimer = Random.Range(.5f, 2.5f)
-            };
-            crowd[rider] = figure;
-            return figure;
-        }
-
-        // Short strolls around the slot, then a Wii-style idle bounce facing the camera.
-        void AnimateCrowdFigure(Rider rider, CrowdFigure figure, float dt)
-        {
-            figure.Clock += dt;
-            figure.WanderTimer -= dt;
-            if (figure.WanderTimer <= 0f)
-            {
-                figure.Wander = Random.Range(-.7f, .7f);
-                figure.WanderTimer = Random.Range(2f, 4.5f);
-            }
-            float goal = figure.Home + figure.Wander;
-            float before = figure.X;
-            float speed = Mathf.Abs(goal - figure.X) > 1.5f ? CrowdWalkSpeed : 1.1f;
-            figure.X = Mathf.MoveTowards(figure.X, goal, speed * dt);
-            PlaceCrowdFigure(rider, figure, figure.X - before, 1f, dt);
-        }
-
-        // Boarders walk into the car; riders who give up walk away. Returns false when done.
-        bool AnimateCrowdExit(Rider rider, CrowdFigure figure, float dt)
-        {
-            figure.Leave += dt;
-            figure.Clock += dt;
-            float progress = Mathf.Clamp01(figure.Leave / CrowdLeaveSeconds);
-            float away = figure.Home >= ElevatorMatchType.ShaftCenterX ? 4f : -4f;
-            float goal = figure.Boarding ? StopWorldX(rider.OriginStop) : figure.Home + away;
-            float before = figure.X;
-            figure.X = Mathf.MoveTowards(figure.X, goal, CrowdWalkSpeed * 1.4f * dt);
-            float shrink = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.4f, 1f, progress));
-            PlaceCrowdFigure(rider, figure, figure.X - before, 1f - shrink, dt);
-            return progress < 1f;
-        }
-
-        void PlaceCrowdFigure(Rider rider, CrowdFigure figure, float step, float scale, float dt)
-        {
-            bool walking = Mathf.Abs(step) > .2f * dt;
-            float wave = Mathf.Sin(figure.Clock * (walking ? 10f : IdleBobSpeed) + IdleBobPhase(rider));
-            float bob = walking ? Mathf.Abs(wave) * .14f : IdleBobHeight * 2f * wave * wave;
-            float facing = walking ? (step > 0f ? 90f : -90f) : 180f;
-            figure.Yaw = Mathf.MoveTowardsAngle(figure.Yaw, facing, 540f * dt);
-            figure.Root.localPosition = new Vector3(figure.X,
-                rider.Origin * ShaftFloorHeight + CrowdFloorLift + bob, CrowdDepth);
-            figure.Root.localRotation = Quaternion.Euler(0f, figure.Yaw, wave * (walking ? 6f : IdleWaddleDegrees * 1.5f));
-            figure.Root.localScale = Vector3.one * (CrowdScale * Mathf.Max(.01f, scale));
         }
 
         void ClearShaftCrowd()
@@ -487,7 +464,6 @@ namespace CrazyElevator.Managers
                 if (figure.Root != null) Destroy(figure.Root.gameObject);
             crowd.Clear();
         }
-
         // ---------- CPU navigation ----------
         int npcTargetStop = CenterStop;
 

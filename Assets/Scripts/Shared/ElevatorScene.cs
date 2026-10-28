@@ -8,6 +8,11 @@ namespace CrazyElevator.Shared
         [Header("Cabin")]
         public Transform cabin;
         public Transform leftDoor, rightDoor, passingLights;
+        [Header("Side boarding doors")]
+        public Transform leftSideDoor, rightSideDoor;
+        public Vector3 leftSideDoorClosed = new Vector3(-2.9f, 1.5f, 2.58f);
+        public Vector3 rightSideDoorClosed = new Vector3(2.9f, 1.5f, 2.58f);
+        public float sideDoorTravel = 3.2f;
         public TextMesh floorDisplay;
         // Nine editable labels, ordered front-to-back and left-to-right.
         public TextMesh[] gridDestinations;

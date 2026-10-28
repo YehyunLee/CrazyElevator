@@ -75,6 +75,7 @@ public static class ExtendedInteriorChecks
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
+            else if (action == "unified-cabin") RunUnifiedCabin(game);
             else if (action == "grid-checks") RunGridChecks(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
@@ -144,7 +145,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks") && Application.isBatchMode)
+            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -461,6 +462,85 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "grid-checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Unified Cabin and Local Lobby")]
+    public static void RequestUnifiedCabin()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "unified-cabin");
+    }
+
+    static void RunUnifiedCabin(Game game)
+    {
+        Require(game.Match == null, "Run the unified cabin regression from the solo Main scene.");
+        CrazyElevator.Managers.MenuManager.Close();
+        game.enabled = false;
+        try
+        {
+            Call(game, "Restart");
+            Transform cabin = game.sceneView.cabin;
+            Transform car = game.sceneView.exteriorCar;
+            Camera camera = game.sceneView.cabinCamera;
+            Require(cabin.parent == car && camera.transform.parent == cabin,
+                "Inside and driving views do not observe the same moving cabin.");
+            Require((camera.cullingMask & (1 << 31)) != 0
+                && (game.sceneView.exteriorCamera.cullingMask & (1 << 31)) != 0,
+                "A camera cannot render the physical cabin and floor passengers.");
+            Vector3 originalCar = car.position;
+            Vector3 originalCamera = camera.transform.position;
+            Vector3 originalCabin = cabin.position;
+            Vector3 offset = new Vector3(2f, 4f, .5f);
+            car.position += offset;
+            Require(Vector3.Distance(camera.transform.position, originalCamera + offset) < .001f
+                && Vector3.Distance(cabin.position, originalCabin + offset) < .001f,
+                "The cabin or inside camera stayed behind while the car moved.");
+            car.position = originalCar;
+
+            var round = (Round)Get(game, "round");
+            Call(game, "UpdateShaftCrowd", 0f);
+            Call(game, "SyncFigures", 0f);
+            SharedRider rider = round.Riders.Find(r => round.IsOffered(r) && r.Arrival <= 0f);
+            Require(rider != null, "The first floor has no ready waiting passenger.");
+            var crowd = (IDictionary)Get(game, "crowd");
+            var figures = (IDictionary)Get(game, "figures");
+            Require(crowd.Contains(rider), "The offered passenger is absent from the physical landing.");
+            object waiting = crowd[rider];
+            Transform figure = (Transform)waiting.GetType().GetField("Root").GetValue(waiting);
+            Require(ReferenceEquals(figures[rider], figure) && figure.parent != cabin,
+                "The cabin view created a different passenger from the landing view.");
+            string number = figure.GetComponent<CrazyElevator.Shared.PassengerView>().destination.text;
+            Require(number == Game.DestinationTag(rider), "The landing destination number differs from rider state.");
+            Require(round.Board(rider), "The waiting passenger could not be boarded.");
+            Call(game, "AdoptWaitingFigure", rider);
+            Require(ReferenceEquals(figures[rider], figure) && figure.parent == cabin && !crowd.Contains(rider),
+                "Boarding cloned a passenger or left the same passenger on the landing.");
+            Call(game, "SyncFigures", 0f);
+            Require(((TextMesh)((IDictionary)Get(game, "destinationTags"))[rider]).text == number,
+                "Boarding changed the passenger's destination number.");
+
+            var menu = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Managers.MenuManager>();
+            Require(menu != null, "The Main scene has no MenuManager.");
+            Type menuType = menu.GetType();
+            object Lobby(string field) => menuType.GetField(field, Flags).GetValue(menu);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            Require((bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
+                && (int)Lobby("playerOneCursor") == 2, "Local lobby does not start on Player 1 READY.");
+            menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+            menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 1 });
+            Require((bool)Lobby("playerOneReady") && (bool)Lobby("playerTwoReady")
+                && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
+                && (int)Lobby("playerOneCursor") == 4 && (int)Lobby("playerTwoCursor") == 4,
+                "Ready confirmations changed a human to CPU or failed to reach Start.");
+            File.WriteAllText(Work + "/result.txt", "PASS: physical cabin and camera follow the driving car; both views render the landing; one waiting model boards without cloning; destination stays identical; both local lobby seats ready without switching to CPU.");
+        }
+        finally
+        {
+            CrazyElevator.Managers.MenuManager.Close();
+            Call(game, "Restart");
+            game.enabled = true;
+        }
     }
 
     static void RunGridChecks(Game game)

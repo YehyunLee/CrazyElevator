@@ -79,6 +79,7 @@ namespace CrazyElevator.Managers
             round = CreateExtendedRound();
             if (!BindScene()) { enabled = false; return; }
             InitializeExtendedInterior();
+            BindPhysicalCabin();
             SyncWorldFloorBands();
             InitializeAudio();
             ResetRouteLateral();
@@ -94,6 +95,7 @@ namespace CrazyElevator.Managers
         void Update()
         {
             if (MenuManager.IsOpen) return;
+            RefreshCabinCameraHome();
             sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
                 Time.unscaledDeltaTime / SessionFadeInSeconds);
             if (dimensionRevealActive)
@@ -115,7 +117,7 @@ namespace CrazyElevator.Managers
             bool menu = phase == Phase.Results;
             if (extendedInterior && inputManager != null)
             {
-                if (menu && input.StartPressed) { StartOrContinue(); return; }
+                if (Match == null && menu && input.StartPressed) { StartOrContinue(); return; }
             }
             if (phase == Phase.Intro)
             {
@@ -155,9 +157,9 @@ namespace CrazyElevator.Managers
             // must not consume time or passengers until the tutorial ends.
             if (IsNpc && MenuManager.TutorialActive) return;
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
-            if (IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
+            if (Match == null && IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
-            if (inputManager != null && input.StartPressed && menu) StartOrContinue();
+            if (Match == null && inputManager != null && input.StartPressed && menu) StartOrContinue();
             if (paused || phase == Phase.Results) return;
             // A scene/domain reload can run one Update before the fresh round
             // has been created. Wait for initialization instead of spamming a
@@ -173,7 +175,7 @@ namespace CrazyElevator.Managers
             UpdateShaftCrowd(dt);
             // Both cars may stop at one floor, but its shared waiting queue
             // should lose patience only once per frame.
-            bool tickWaiting = !IsNpc || Match == null || Match.player == null
+            bool tickWaiting = Seat == 0 || Match == null || Match.player == null
                 || !Match.player.AtStop || Match.player.DiscreteFloor != round.Floor
                 || Match.player.DiscreteStop != round.Stop;
             int waitingMisses = MenuManager.TutorialActive
@@ -232,6 +234,8 @@ namespace CrazyElevator.Managers
                 }
                 else if (phase == Phase.Boarding) TickAutoDropOff(dt);
             }
+            TickBoardingDoors(dt);
+            TickAutoBoarding(dt);
             UpdateThemeMusic();
             SetDoors(doors);
             SyncFigures(dt);
@@ -267,6 +271,7 @@ namespace CrazyElevator.Managers
             selectedRider = null; pendingSelectionAfterBoarding = null; selectFirstWaitingWhenAvailable = false;
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
+            ResetBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             sessionFadeAlpha = 1f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
@@ -278,7 +283,7 @@ namespace CrazyElevator.Managers
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
             travelStartCount = floorStopCount = 0;
-            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Press C on a selected passenger, or C with nobody selected to close the doors.";
+            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Choose LEFT / FRONT / RIGHT, then open that door. Passengers board automatically.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
 
@@ -291,6 +296,63 @@ namespace CrazyElevator.Managers
     using Rider = CrazyElevator.Shared.Rider;
     public sealed partial class ElevatorManager
     {
+        // Both cameras observe this cabin on the actual moving car. The rear
+        // wall is cut away only for the exterior camera, like a dollhouse.
+        const float PhysicalCabinScale = .45f;
+        const int CabinBackWallLayer = 29;
+        static readonly Quaternion PhysicalCabinRotation = Quaternion.Euler(0f, 180f, 0f);
+        Vector3 cabinCameraHome;
+        Quaternion cabinCameraHomeRotation;
+
+        static Vector3 PhysicalCabinOrigin(float x, int floor)
+            => new Vector3(x, floor * ShaftFloorHeight + .1f, .4f);
+
+        void BindPhysicalCabin()
+        {
+            // Save the authored camera pose before moving its set into the shaft.
+            eye.transform.SetParent(stage, true);
+            cabinCameraHome = eye.transform.localPosition;
+            cabinCameraHomeRotation = eye.transform.localRotation;
+            foreach (Light light in sceneView.lights ?? System.Array.Empty<Light>())
+            {
+                if (light == null) continue;
+                light.transform.SetParent(stage, true);
+                light.cullingMask |= (1 << ExteriorLayer) | (1 << CabinBackWallLayer);
+            }
+            // The old sealed exterior shell would hide the real cabin and doors.
+            foreach (Renderer part in exteriorCar.GetComponentsInChildren<Renderer>(true))
+                part.enabled = false;
+            foreach (Collider part in exteriorCar.GetComponentsInChildren<Collider>(true))
+                part.enabled = false;
+
+            stage.SetParent(exteriorCar, false);
+            stage.localPosition = new Vector3(0f, -1.3f, 1.2f);
+            stage.localRotation = PhysicalCabinRotation;
+            stage.localScale = Vector3.one * PhysicalCabinScale;
+            foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
+            {
+                part.gameObject.layer = part.name == "Back wall" || part.name == "Back metal rib"
+                    ? CabinBackWallLayer : ExteriorLayer;
+                // These belonged to the old isolated hallway. Landings and scenery
+                // now stay in the building instead of travelling with the car.
+                if (part.name.StartsWith("Hall ") || part.name == "Plant"
+                    || part.name == "Plant pot" || part.name == "Runner")
+                    part.gameObject.SetActive(false);
+            }
+            eye.nearClipPlane = Mathf.Min(eye.nearClipPlane, .04f);
+            eye.cullingMask = ~(1 << EncounterPreviewLayer);
+            exteriorCamera.cullingMask = ~((1 << EncounterPreviewLayer) | (1 << CabinBackWallLayer));
+            CacheExteriorCollisionSize();
+            RefreshCabinCameraHome();
+        }
+
+        void RefreshCabinCameraHome()
+        {
+            if (stage == null || eye == null) return;
+            cameraHome = stage.TransformPoint(cabinCameraHome);
+            cameraHomeRotation = stage.rotation * cabinCameraHomeRotation;
+        }
+
         // Read the scene's Inspector references; never regenerate its geometry.
         bool BindScene()
         {
@@ -305,6 +367,10 @@ namespace CrazyElevator.Managers
             stage = sceneView.cabin;
             eye = sceneView.cabinCamera;
             leftDoor = sceneView.leftDoor; rightDoor = sceneView.rightDoor;
+            MakeBoardingDoorTransparent(leftDoor);
+            MakeBoardingDoorTransparent(rightDoor);
+            MakeBoardingDoorTransparent(sceneView.leftSideDoor);
+            MakeBoardingDoorTransparent(sceneView.rightSideDoor);
             scenery = sceneView.passingLights;
             floorSign = sceneView.floorDisplay;
             foreach (TextMesh label in sceneView.GetComponentsInChildren<TextMesh>(true))
@@ -325,7 +391,6 @@ namespace CrazyElevator.Managers
             exteriorCamera = sceneView.exteriorCamera;
             exteriorCar = sceneView.exteriorCar;
             exteriorCarHomeRotation = exteriorCar.localRotation;
-            CacheExteriorCollisionSize();
             eye.gameObject.SetActive(true); eye.enabled = true;
             eye.targetTexture = null;
             exteriorCamera.enabled = false;
@@ -396,6 +461,7 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Boarding) return;
             // Nobody rides past their own floor: send any remaining riders out first.
             while (DropOffNextRider(true)) { }
+            openBoardingDoor = -1;
             travelStartCount++;
             SelectRider(null);
             travelFloor = round.Floor;
@@ -477,7 +543,7 @@ namespace CrazyElevator.Managers
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Select a waiting passenger and press C to welcome them.";
+                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Choose a door to open. Passengers board automatically.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -571,14 +637,68 @@ namespace CrazyElevator.Managers
             return 1 - Mathf.Pow(1 - value, 3);
         }
 
+        readonly Dictionary<Material, Material> transparentDoorMaterials = new Dictionary<Material, Material>();
+
+        // Clone only door materials so walls sharing the authored material stay solid.
+        void MakeBoardingDoorTransparent(Transform door)
+        {
+            if (door == null) return;
+            foreach (Renderer renderer in door.GetComponentsInChildren<Renderer>(true))
+            {
+                // Only the physical door surfaces fade; keep printed numbers legible.
+                if (renderer.GetComponent<TextMesh>() != null) continue;
+                Material[] panels = renderer.sharedMaterials;
+                for (int i = 0; i < panels.Length; i++)
+                {
+                    Material source = panels[i];
+                    if (source == null) continue;
+                    if (!transparentDoorMaterials.TryGetValue(source, out Material glass))
+                    {
+                        glass = new Material(source) { name = source.name + " (50% door)" };
+                        Color tint = glass.HasProperty("_BaseColor")
+                            ? glass.GetColor("_BaseColor") : glass.color;
+                        tint.a = .5f;
+                        if (glass.HasProperty("_BaseColor")) glass.SetColor("_BaseColor", tint);
+                        if (glass.HasProperty("_Color")) glass.SetColor("_Color", tint);
+                        glass.SetOverrideTag("RenderType", "Transparent");
+                        if (glass.HasProperty("_Surface")) glass.SetFloat("_Surface", 1f);
+                        if (glass.HasProperty("_Mode")) glass.SetFloat("_Mode", 3f);
+                        glass.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        glass.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        glass.SetInt("_ZWrite", 0);
+                        glass.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                        glass.EnableKeyword("_ALPHABLEND_ON");
+                        glass.DisableKeyword("_ALPHATEST_ON");
+                        glass.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                        glass.SetShaderPassEnabled("ShadowCaster", false);
+                        glass.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                        transparentDoorMaterials.Add(source, glass);
+                    }
+                    panels[i] = glass;
+                }
+                renderer.sharedMaterials = panels;
+            }
+        }
+
         // Slide both doors; 0 is shut and 1 is open.
         void SetDoors(float openness)
         {
             doors = Mathf.Clamp01(openness);
             if (leftDoor == null || rightDoor == null) return;
-            leftDoor.localPosition = sceneView.leftDoorClosed + Vector3.left * (doors * sceneView.doorTravel);
-            rightDoor.localPosition = sceneView.rightDoorClosed + Vector3.right * (doors * sceneView.doorTravel);
-            leftDoor.gameObject.SetActive(doors < .98f); rightDoor.gameObject.SetActive(doors < .98f);
+            float front = phase == Phase.Intro ? doors : boardingDoorOpenness[(int)BoardingDoor.Front];
+            leftDoor.localPosition = sceneView.leftDoorClosed + Vector3.left * (front * sceneView.doorTravel);
+            rightDoor.localPosition = sceneView.rightDoorClosed + Vector3.right * (front * sceneView.doorTravel);
+            leftDoor.gameObject.SetActive(front < .98f); rightDoor.gameObject.SetActive(front < .98f);
+            SetSideBoardingDoor(sceneView.leftSideDoor, sceneView.leftSideDoorClosed, BoardingDoor.Left);
+            SetSideBoardingDoor(sceneView.rightSideDoor, sceneView.rightSideDoorClosed, BoardingDoor.Right);
+        }
+
+        void SetSideBoardingDoor(Transform panel, Vector3 closed, BoardingDoor door)
+        {
+            if (panel == null) return;
+            float open = boardingDoorOpenness[(int)door];
+            panel.localPosition = closed + Vector3.up * (open * sceneView.sideDoorTravel);
+            panel.gameObject.SetActive(open < .98f);
         }
 
         // Show each passing floor with a small pulse.
@@ -609,8 +729,8 @@ namespace CrazyElevator.Managers
                 float strength = cabinTravelShake * travelShakeBlend;
                 float clock = Time.unscaledTime;
                 Vector3 localShake = new Vector3(Mathf.Sin(clock * 23f), Mathf.Sin(clock * 31f) * .7f, 0) * strength;
-                eye.transform.position = cameraHome + cameraHomeRotation * localShake;
-                eye.transform.rotation = cameraHomeRotation * Quaternion.Euler(
+                eye.transform.localPosition = cabinCameraHome + cabinCameraHomeRotation * localShake;
+                eye.transform.localRotation = cabinCameraHomeRotation * Quaternion.Euler(
                     Mathf.Sin(clock * 17f) * strength * 12f, 0, Mathf.Sin(clock * 19f) * strength * 9f);
                 return;
             }
@@ -619,8 +739,8 @@ namespace CrazyElevator.Managers
             {
                 arrivalImpact = Mathf.Max(0, arrivalImpact - dt * 2.8f);
                 float kick = Mathf.Sin((1 - arrivalImpact) * Mathf.PI * 4f) * arrivalImpact;
-                eye.transform.position = cameraHome + cameraHomeRotation * new Vector3(0, kick * .075f, 0);
-                eye.transform.rotation = cameraHomeRotation * Quaternion.Euler(kick * 1.1f, 0, 0);
+                eye.transform.localPosition = cabinCameraHome + cabinCameraHomeRotation * new Vector3(0, kick * .075f, 0);
+                eye.transform.localRotation = cabinCameraHomeRotation * Quaternion.Euler(kick * 1.1f, 0, 0);
                 return;
             }
             ResetCameraMotion();
@@ -630,8 +750,8 @@ namespace CrazyElevator.Managers
         void ResetCameraMotion()
         {
             if (eye == null) return;
-            eye.transform.position = cameraHome;
-            eye.transform.rotation = cameraHomeRotation;
+            eye.transform.localPosition = cabinCameraHome;
+            eye.transform.localRotation = cabinCameraHomeRotation;
         }
 
         // Update both control-panel messages.
@@ -1055,6 +1175,7 @@ namespace CrazyElevator.Managers
                         || part.StartsWith("Ceiling")) color = ceilingTint;
                     else if (part != "Right wall" && part != "Left wall" && !part.StartsWith("Sliding door")
                         && part != "Back wall" && !part.StartsWith("Back metal")) continue;
+                    if (part.StartsWith("Sliding door")) color.a = .5f;
                     surface.GetPropertyBlock(tint);
                     tint.SetColor("_BaseColor", color); tint.SetColor("_Color", color);
                     surface.SetPropertyBlock(tint);
@@ -1107,11 +1228,12 @@ namespace CrazyElevator.Managers
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
             if (input.CloseDoorsPressed) { CloseAndTravel(); return; }
+            if (ReadDoorButtonClick(input)) return;
             if (confirm)
             {
                 if (draggedRider != null) return;
-                if (selectedRider == null) return;
-                ConfirmPassenger();
+                if (selectedRider != null && selectedRider.Boarded) KickoutSelectedPublic();
+                else OpenBoardingDoor(selectedBoardingDoor);
                 return;
             }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
@@ -1135,7 +1257,7 @@ namespace CrazyElevator.Managers
 
         void BoardPassengerWithPersona(Rider rider)
         {
-            if (!CanSelect(rider) || rider.Boarded || !figures.TryGetValue(rider, out var figure)) return;
+            if (!CanBoardAutomatically(rider) || !figures.TryGetValue(rider, out var figure)) return;
             if (!round.HasCapacityFor(rider))
             {
                 int available = Mathf.Max(0, ElevatorRound.Capacity - round.Load);
@@ -1148,6 +1270,7 @@ namespace CrazyElevator.Managers
             if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
                 if (!round.Board(rider)) return;
+                AdoptWaitingFigure(rider);
                 PlayPassengerBoardingVoice(rider);
                 cabinPositions[rider] = spot;
                 RememberCabinTileRun(rider, spot);
@@ -1231,7 +1354,7 @@ namespace CrazyElevator.Managers
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
                 Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
-                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Drag riders to board, move, or eject", small);
+                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Choose a door for automatic boarding", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
@@ -1245,7 +1368,7 @@ namespace CrazyElevator.Managers
             }
             else if (selectedRider == null)
             {
-                prompt = "BOARD / KICK   ·   DRAG TO MOVE   ·   CLOSE WHEN READY";
+                prompt = "CHOOSE LEFT / FRONT / RIGHT   ·   OPEN DOOR   ·   AUTO BOARD";
             }
             else
             {
@@ -1370,6 +1493,7 @@ namespace CrazyElevator.Managers
             result.StopOpen = StopReachable;
             result.CenterStopsOnly = MenuManager.TutorialActive;
             result.AssignStops();
+            result.AssignBoardingDoors();
             float patienceScale = Mathf.Max(1f, patienceDurationMultiplier);
             foreach (var rider in result.Riders)
             {
@@ -1489,25 +1613,36 @@ namespace CrazyElevator.Managers
         Transform exteriorCar;
         Quaternion exteriorCarHomeRotation;
         Vector2 exteriorCollisionHalfSize = new Vector2(1.325f, 1.325f);
+        Vector3 exteriorCollisionCenterOffset;
         bool showingTravelView;
 
-        // Cache the authored car's visible size once. Collision logic can then
-        // follow replacement art without relying on an arbitrary floor gap.
+        // The static cabin shell defines contact size. Animated doors, riders,
+        // labels, and the hidden legacy car must not enlarge collision bounds.
         void CacheExteriorCollisionSize()
         {
-            if (exteriorCar == null) return;
-            Renderer[] renderers = exteriorCar.GetComponentsInChildren<Renderer>(true);
+            if (exteriorCar == null || stage == null) return;
+            Renderer[] renderers = stage.GetComponentsInChildren<Renderer>(true);
             bool found = false;
             Bounds bounds = default;
             foreach (Renderer renderer in renderers)
             {
-                if (renderer == null) continue;
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy
+                    || renderer.name != "Back wall" && renderer.name != "Cabin floor") continue;
                 if (!found) { bounds = renderer.bounds; found = true; }
                 else bounds.Encapsulate(renderer.bounds);
             }
-            if (found)
-                exteriorCollisionHalfSize = new Vector2(
-                    Mathf.Max(.1f, bounds.extents.x), Mathf.Max(.1f, bounds.extents.y));
+            // Replacement cabin art may use other names; still ignore hidden parts.
+            if (!found)
+                foreach (Renderer renderer in renderers)
+                {
+                    if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                    if (!found) { bounds = renderer.bounds; found = true; }
+                    else bounds.Encapsulate(renderer.bounds);
+                }
+            if (!found) return;
+            exteriorCollisionHalfSize = new Vector2(
+                Mathf.Max(.1f, bounds.extents.x), Mathf.Max(.1f, bounds.extents.y));
+            exteriorCollisionCenterOffset = exteriorCar.InverseTransformPoint(bounds.center);
         }
 
         public Vector2 ExteriorCollisionHalfSize => exteriorCollisionHalfSize;
@@ -1602,6 +1737,8 @@ namespace CrazyElevator.Managers
                 Mathf.Abs(collisionKick) * .17f, 0f);
             exteriorCar.localPosition = carLocal;
             exteriorCar.localRotation = CrazyTravelLocalRotation(travelFloor, collisionKick);
+            RefreshCabinCameraHome();
+            eye.backgroundColor = WorldSky(travelFloor);
             EnsureCrazyRouteMap();
             UpdateCrazyTravelCamera(carLocal);
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
@@ -1708,7 +1845,7 @@ namespace CrazyElevator.Managers
         // Create a primitive relative to its parent.
         Transform Shape(string name, PrimitiveType kind, Vector3 position, Vector3 size, Color color, Transform parent)
         {
-            var g = GameObject.CreatePrimitive(kind); g.name = name;
+            var g = GameObject.CreatePrimitive(kind); g.name = name; g.layer = parent.gameObject.layer;
             g.transform.SetParent(parent, false); g.transform.localPosition = position; g.transform.localScale = size;
             g.GetComponent<Renderer>().sharedMaterial = Mat(color);
             return g.transform;
@@ -2017,6 +2154,7 @@ namespace CrazyElevator.Managers
             ReleaseCabinPreview();
             ReleaseEncounterPreview();
             foreach (var m in materials.Values) Destroy(m);
+            foreach (var m in transparentDoorMaterials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);
             if (generatedGroove && groove) Destroy(groove);
             if (stamp) Destroy(stamp);
@@ -2258,11 +2396,10 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in round.Riders)
             {
                 if (rider.Boarded || rider.Resolved || !round.IsOffered(rider) || rider.Arrival > 0) continue;
-                if (!CanSelect(rider)) continue;
-                SelectRider(rider);
-                BoardPassengerWithPersona(rider);
-                SelectRider(null);
-                return rider.Boarded;
+                if (!HasBoardingSpace(rider)) continue;
+                // CPU chooses a door too; the same automatic queue does the pickup.
+                OpenBoardingDoor(rider.PickupDoor);
+                return true;
             }
             return false;
         }

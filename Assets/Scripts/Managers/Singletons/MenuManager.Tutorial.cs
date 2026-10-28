@@ -73,7 +73,7 @@ namespace CrazyElevator.Managers
         readonly int[] tutorialTargetFloor = new int[2];
         ElevatorManager tutorialGame;
 
-        int ActiveTutorialStepCount => tutorialActors[1] != null
+        int ActiveTutorialStepCount => tutorialActors[0] != null && tutorialActors[1] != null
             ? DuelTutorialStepCount : SoloTutorialStepCount;
 
         bool TutorialWaitingPanelActive
@@ -89,7 +89,7 @@ namespace CrazyElevator.Managers
         }
 
         bool RequiresBothControllerInstructionConfirmations
-            => tutorialActive ? tutorialActors[1] != null : playerTwoHumanOnLoad;
+            => tutorialActive ? tutorialActors[0] != null && tutorialActors[1] != null : playerTwoHumanOnLoad;
 
         void ResetControllerInstructionConfirmations()
         {
@@ -100,12 +100,18 @@ namespace CrazyElevator.Managers
         bool ToggleControllerInstructionConfirmation(int seat)
         {
             if (seat < 0 || seat >= controllerInstructionConfirmed.Length) return false;
-            controllerInstructionConfirmed[seat] = !controllerInstructionConfirmed[seat];
+            controllerInstructionConfirmed[seat] = true;
             return ControllerInstructionsReady();
         }
 
         bool ControllerInstructionsReady()
         {
+            if (tutorialActive)
+            {
+                for (int seat = 0; seat < tutorialActors.Length; seat++)
+                    if (tutorialActors[seat] != null && !controllerInstructionConfirmed[seat]) return false;
+                return true;
+            }
             return controllerInstructionConfirmed[0]
                 && (!RequiresBothControllerInstructionConfirmations
                     || controllerInstructionConfirmed[1]);
@@ -142,7 +148,11 @@ namespace CrazyElevator.Managers
             if (tutorialGame != null && tutorialGame.IsNpc && tutorialGame.Match != null
                 && tutorialGame.Match.Rival != null && !tutorialGame.Match.Rival.IsNpc)
                 tutorialGame = tutorialGame.Match.Rival;
-            tutorialActors[0] = tutorialGame;
+            // Keep tutorial slots aligned with input seats. A CPU in seat 0
+            // must not duplicate Player 2 into both slots or require its keys.
+            tutorialActors[0] = tutorialGame != null && tutorialGame.Match != null
+                ? (!tutorialGame.Match.player.IsNpc ? tutorialGame.Match.player : null)
+                : tutorialGame;
             tutorialActors[1] = tutorialGame != null && tutorialGame.Match != null
                 && tutorialGame.Match.Rival != null && !tutorialGame.Match.Rival.IsNpc
                 ? tutorialGame.Match.Rival : null;
@@ -282,7 +292,7 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0:
-                    return actor.HasSelectedPassenger;
+                    return actor.HasChosenBoardingDoor;
                 case 1:
                     return actor.CurrentPassengers.Count >= 2;
                 case 2:
@@ -581,8 +591,8 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "PRACTICE SHIFT";
-                case 0: return "SELECT PASSENGER";
-                case 1: return "ONBOARD";
+                case 0: return "CHOOSE A DOOR";
+                case 1: return "OPEN & AUTO BOARD";
                 case 2: return "CLOSE DOORS";
                 case 3: return "MOVE";
                 case 4: return "SPEED BOOST";
@@ -598,8 +608,8 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "TUTORIAL";
-                case 0: return "MOVE TO A PASSENGER.";
-                case 1: return "BOARD 2 PASSENGERS.";
+                case 0: return "LEFT, UP OR RIGHT CHOOSES A DOOR.";
+                case 1: return "OPEN A DOOR. RIDERS BOARD AUTOMATICALLY. TRY ANOTHER DOOR TO PICK UP 2.";
                 case 2: return "CLOSE THE DOORS.";
                 case 3: return "HOLD UP OR DOWN.";
                 case 4: return "HOLD IT + UP OR DOWN.";
@@ -665,7 +675,7 @@ namespace CrazyElevator.Managers
 
             if (step >= ActiveTutorialStepCount)
             {
-                DrawTutorialWaitingPanel(view, tutorialActors[1] != null);
+                DrawTutorialWaitingPanel(view, tutorialActors[0] != null && tutorialActors[1] != null);
                 GUI.matrix = previousMatrix;
                 GUI.color = previousGuiColor;
                 GUI.contentColor = previousContentColor;

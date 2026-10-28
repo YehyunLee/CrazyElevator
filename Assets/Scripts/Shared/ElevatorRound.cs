@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace CrazyElevator.Shared
 {
+    public enum BoardingDoor { Left, Front, Right }
+
     public sealed class Rider
     {
         // Optional ScriptableObject template; Kind string remains the runtime key.
@@ -42,6 +44,7 @@ namespace CrazyElevator.Shared
         public int Destination;
         public int OriginStop = ElevatorRound.CenterStop;
         public int DestinationStop = ElevatorRound.CenterStop;
+        public BoardingDoor PickupDoor = BoardingDoor.Front;
         public int Space;
         public int Bonus;
 
@@ -300,12 +303,27 @@ namespace CrazyElevator.Shared
                     Bonus = previous.Bonus
                 };
             replacement.OriginStop = previous.OriginStop;
+            replacement.PickupDoor = previous.PickupDoor;
             replacement.DestinationStop = PickStop(destination);
             replacement.SpawnDelay = 1f;
             return replacement;
         }
 
         // ---------- Stops ----------
+        // Keep queues stable while doors open/close and between the two duel views.
+        public void AssignBoardingDoors()
+        {
+            var queues = new Dictionary<int, int>();
+            int firstDoor = DestinationRandom.Next(3);
+            foreach (Rider rider in Riders)
+            {
+                int key = rider.Origin * Stops + rider.OriginStop;
+                queues.TryGetValue(key, out int slot);
+                rider.PickupDoor = (BoardingDoor)((firstDoor + slot) % 3);
+                queues[key] = slot + 1;
+            }
+        }
+
         public bool WaitsHere(Rider p) => p != null && !p.Boarded && !p.Resolved
             && p.Origin == Floor && p.OriginStop == Stop;
         public bool AtDestination(Rider p) => p != null && p.Destination == Floor && p.DestinationStop == Stop;

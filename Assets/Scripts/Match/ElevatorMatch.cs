@@ -99,14 +99,11 @@ namespace CrazyElevator.Match
             rivalView.name = humanRival ? "Player 2 elevator scene" : "NPC elevator scene";
             Transform duplicateWorld = rivalView.exteriorCar.parent;
             rivalView.exteriorCar.SetParent(source.exteriorCar.parent, false);
-            rivalView.exteriorCar.name = "NPC exterior car";
+            rivalView.exteriorCar.name = humanRival ? "Player 2 exterior car" : "NPC exterior car";
             Destroy(duplicateWorld.gameObject);
 
-            // Cabins are independent sets, outside each other's camera/raycast range.
-            rivalView.cabin.position += Vector3.right * 1000f;
-            rivalView.cabinCamera.transform.position += Vector3.right * 1000f;
-            foreach (var light in rivalView.lights)
-                if (light != null) light.transform.position += Vector3.right * 1000f;
+            // Each cabin is mounted on its own moving car by ElevatorManager.
+
             foreach (var listener in rivalView.GetComponentsInChildren<AudioListener>(true))
             { listener.enabled = false; Destroy(listener); }
             if (rivalView.clearCamera != null) rivalView.clearCamera.gameObject.SetActive(false);
@@ -133,6 +130,7 @@ namespace CrazyElevator.Match
             var actor = new GameObject(humanRival ? "Player 2 elevator controller" : "NPC elevator controller");
             actor.SetActive(false);
             Rival = actor.AddComponent<Game>();
+            actor.AddComponent<PassengerManager>().Bind(Rival);
             Rival.sceneView = rivalView;
             player.CopyMatchSettingsTo(Rival);
             Rival.ConfigureMatch(this, 1, !humanRival);
@@ -324,6 +322,18 @@ namespace CrazyElevator.Match
             Paused = !Paused;
             player.SetMatchPaused(Paused);
             Rival.SetMatchPaused(Paused);
+            // Tutorial pauses are managed by the tutorial cards themselves.
+            if (MenuManager.TutorialActive) return;
+            if (Paused)
+            {
+                MenuManager.OpenPause();
+                GameManager.Instance?.GoToView(GameView.Pause);
+            }
+            else
+            {
+                MenuManager.ClosePause();
+                GameManager.Instance?.SyncViewFromPlayer();
+            }
         }
 
         void ConfigureCameras()

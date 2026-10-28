@@ -10,6 +10,101 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         readonly Dictionary<Rider, Vector3> cabinPositions = new Dictionary<Rider, Vector3>();
+        BoardingDoor selectedBoardingDoor = BoardingDoor.Front;
+        int openBoardingDoor = -1;
+        bool hasChosenBoardingDoor;
+        float autoBoardWait;
+        readonly float[] boardingDoorOpenness = new float[3];
+
+        public bool HasChosenBoardingDoor => hasChosenBoardingDoor;
+
+        public void OpenBoardingDoor(BoardingDoor door)
+        {
+            if (phase != Phase.Boarding || round == null || round.Finished) return;
+            if ((int)door < 0 || (int)door >= boardingDoorOpenness.Length) return;
+            selectedBoardingDoor = door;
+            hasChosenBoardingDoor = true;
+            openBoardingDoor = (int)door;
+            autoBoardWait = .25f;
+            SelectRider(null);
+            notice = door.ToString().ToUpperInvariant() + " DOOR: passengers board automatically.";
+            Play(click);
+        }
+
+        void ResetBoardingDoors()
+        {
+            selectedBoardingDoor = BoardingDoor.Front;
+            openBoardingDoor = -1;
+            hasChosenBoardingDoor = false;
+            autoBoardWait = 0f;
+            System.Array.Clear(boardingDoorOpenness, 0, boardingDoorOpenness.Length);
+        }
+
+        void TickBoardingDoors(float dt)
+        {
+            bool atFloor = phase == Phase.Boarding || phase == Phase.Opening;
+            bool droppingOff = exiting.Count > 0;
+            if (atFloor && !droppingOff)
+                foreach (Rider rider in round.Riders)
+                    if (round.Owns(rider) && round.AtDestination(rider)) { droppingOff = true; break; }
+            for (int door = 0; door < boardingDoorOpenness.Length; door++)
+            {
+                bool needed = atFloor && (openBoardingDoor == door
+                    || door == (int)BoardingDoor.Front && droppingOff);
+                // Finish crossing the threshold before shutting a previous door.
+                if (atFloor && !needed)
+                    foreach (Rider rider in boardingTransfers.Keys)
+                        if ((int)rider.PickupDoor == door) { needed = true; break; }
+                boardingDoorOpenness[door] = Mathf.MoveTowards(boardingDoorOpenness[door],
+                    needed ? 1f : 0f, dt / .65f);
+            }
+        }
+
+        bool CanBoardAutomatically(Rider rider)
+            => rider != null && phase == Phase.Boarding && !round.Finished
+                && round.IsOffered(rider) && rider.Arrival <= 0f
+                && figures.TryGetValue(rider, out var figure) && figure != null;
+
+        void TickAutoBoarding(float dt)
+        {
+            if (phase != Phase.Boarding || openBoardingDoor < 0 || PersonaBusy) return;
+            if (MenuManager.TutorialActive && InputManager.Instance != null
+                && (InputManager.Instance.IsTutorialInputLocked(Seat)
+                    || InputManager.Instance.GetTutorialInputMode(Seat) != InputManager.TutorialInputMode.BoardPassengers)) return;
+            if (boardingDoorOpenness[openBoardingDoor] < .98f) return;
+            autoBoardWait -= dt;
+            if (autoBoardWait > 0f) return;
+            autoBoardWait = .45f;
+            // Board() can append a replacement to the shared queue. Never enumerate
+            // that list across the mutation, and never skip a party in this door's queue.
+            Rider next = null;
+            foreach (Rider rider in round.Riders)
+                if (round.IsOffered(rider) && (int)rider.PickupDoor == openBoardingDoor)
+                { next = rider; break; }
+            if (next == null || !CanBoardAutomatically(next)) return;
+            if (!HasBoardingSpace(next))
+            {
+                notice = "NO ROOM FOR THIS PARTY. Choose another door or close & travel.";
+                return;
+            }
+            BoardPassengerWithPersona(next);
+        }
+
+        void ReadBoardingDoorSelection(InputManager.SeatInput input)
+        {
+            if (phase != Phase.Boarding) return;
+            Vector2 direction = input.Select;
+            if (direction.magnitude >= .55f && direction != lastSelectionDirection)
+            {
+                if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+                    selectedBoardingDoor = direction.x < 0f ? BoardingDoor.Left : BoardingDoor.Right;
+                else if (direction.y > 0f) selectedBoardingDoor = BoardingDoor.Front;
+                else { SelectInDirection(Vector2.down); lastSelectionDirection = direction; return; }
+                hasChosenBoardingDoor = true;
+                SelectRider(null);
+            }
+            lastSelectionDirection = direction;
+        }
         // Vector2Int.x = first column, Vector2Int.y = row.
         readonly Dictionary<Rider, Vector2Int> cabinTileRuns = new Dictionary<Rider, Vector2Int>();
         readonly Dictionary<Renderer, MaterialPropertyBlock> selectionMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
@@ -283,7 +378,7 @@ namespace CrazyElevator.Managers
         bool PassengerFigureInView(Transform figure)
         {
             if (eye == null || figure == null) return false;
-            Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .95f);
+            Vector3 point = eye.WorldToScreenPoint(figure.TransformPoint(Vector3.up * .95f));
             return point.z > 0f && eye.pixelRect.Contains(new Vector2(point.x, point.y));
         }
 
@@ -294,9 +389,7 @@ namespace CrazyElevator.Managers
                 || rider == repairingHandyman || !figures.TryGetValue(rider, out var figure)
                 || figure == null || !figure.gameObject.activeInHierarchy) return false;
             if (round.Owns(rider)) return true;
-            return round.WaitsHere(rider) && rider.Arrival <= 0
-                && round.IsOffered(rider)
-                && (draggedRider == rider || PassengerFigureInView(figure));
+            return false; // Waiting passengers belong to door queues, never individual selection.
         }
 
         bool HasBoardingSpace(Rider rider)
@@ -353,6 +446,7 @@ namespace CrazyElevator.Managers
         // Mouse hover highlights; click-drag boards, rearranges, or ejects.
         void UpdatePassengerSelection()
         {
+            ReadBoardingDoorSelection(SeatControls);
             if (draggedRider != null && !CanSelect(draggedRider)) CancelPassengerDrag();
             Mouse mouse = MenuManager.TutorialActive ? null : Mouse.current;
             InputManager.SeatInput input = SeatControls;
@@ -402,18 +496,13 @@ namespace CrazyElevator.Managers
                     if (mouse.leftButton.wasPressedThisFrame && !overControl)
                     {
                         Rider clicked = PickHoveredRider(cursor);
-                        if (clicked != null) { BeginPassengerDrag(clicked, cursor); return; }
+                        if (clicked != null) { SelectRider(clicked); return; }
                     }
                     if (!overControl && !controllerSelection) SelectRider(PickHoveredRider(cursor));
                 }
                 lastMousePosition = cursor;
             }
             // Mouse raycast/drag still reads the device directly; stick/WASD come from InputManager.
-            Vector2 direction = navigation.magnitude < .55f ? Vector2.zero
-                : Mathf.Abs(navigation.x) > Mathf.Abs(navigation.y) ? new Vector2(Mathf.Sign(navigation.x), 0) : new Vector2(0, Mathf.Sign(navigation.y));
-            if (direction != Vector2.zero && direction != lastSelectionDirection)
-            { controllerSelection = true; SelectInDirection(direction); }
-            lastSelectionDirection = direction;
         }
 
         bool IsOverMouseControl(Vector2 screenCursor)
@@ -426,6 +515,9 @@ namespace CrazyElevator.Managers
                 guiCursor.y -= view.y;
             }
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
+            if (phase == Phase.Boarding)
+                for (int door = 0; door < 3; door++)
+                    if (BoardingDoorRect(door).Contains(guiCursor)) return true;
             return up.Contains(guiCursor) || down.Contains(guiCursor) || stop.Contains(guiCursor)
                 || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor);
         }
@@ -590,7 +682,7 @@ namespace CrazyElevator.Managers
             {
                 if (!CanSelect(pair.Key) || pair.Value == null || !pair.Value.gameObject.activeInHierarchy) continue;
                 Transform figure = pair.Value;
-                Vector3 point = eye.WorldToScreenPoint(figure.position + Vector3.up * .95f);
+                Vector3 point = eye.WorldToScreenPoint(figure.TransformPoint(Vector3.up * .95f));
                 float delta = ((Vector2)point - cursor).sqrMagnitude;
                 if (point.z > 0 && delta < radius * radius && delta < screenDistance)
                 { screenDistance = delta; screenClosest = pair.Key; }
@@ -602,7 +694,7 @@ namespace CrazyElevator.Managers
             if (closest != null && figures.TryGetValue(closest, out var colliderFigure)
                 && colliderFigure != null)
             {
-                Vector3 point = eye.WorldToScreenPoint(colliderFigure.position + Vector3.up * .95f);
+                Vector3 point = eye.WorldToScreenPoint(colliderFigure.TransformPoint(Vector3.up * .95f));
                 colliderScreenDistance = ((Vector2)point - cursor).sqrMagnitude;
             }
             return screenClosest != null && (closest == null || screenDistance < colliderScreenDistance)
@@ -622,7 +714,7 @@ namespace CrazyElevator.Managers
             }
             if (best != null) SelectRider(best);
         }
-        Vector2 SelectionScreenPoint(Rider rider) => eye.WorldToScreenPoint(figures[rider].position + Vector3.up);
+        Vector2 SelectionScreenPoint(Rider rider) => eye.WorldToScreenPoint(figures[rider].TransformPoint(Vector3.up));
 
         Dictionary<Rider, Vector2Int> CaptureWaitingSelectionSlots()
         {
@@ -1192,32 +1284,85 @@ namespace CrazyElevator.Managers
         static readonly Color BabyTearColor = new Color32(75, 220, 255, 255);
         static readonly Color GrandmaComfortColor = new Color32(255, 211, 61, 255);
 
-        // Spawn authored art and register its clickable labels.
-        Transform MakeRider(Rider p)
+        // Both cabin and moving-shaft views use the same model and jacket tint.
+        PassengerView SpawnPassengerArt(Rider rider, Transform parent)
         {
             PassengerView template = null;
-            foreach (var art in sceneView.passengers)
-                if (art != null && art.ResolvedKind == p.Kind) template = art;
+            foreach (PassengerView art in sceneView.passengers)
+                if (art != null && art.ResolvedKind == rider.Kind) template = art;
             if (template == null)
-                throw new System.InvalidOperationException("Assign passenger art for " + p.Kind + " in Elevator Scene.");
-            var view = Instantiate(template, stage, false);
-            var root = view.transform;
-            root.name = p.Name + " • " + p.Kind;
-            Color color = Palette[p.Color % Palette.Length];
-            foreach (var jacket in view.jackets) if (jacket != null) jacket.sharedMaterial = Mat(color);
-            bubbles[p] = view.speech;
-            destinationTags[p] = view.destination;
-            StyleDestinationTag(view.destination);
-            if (extendedInterior) CreateFloorMarker(p);
-            foreach (var collider in root.GetComponentsInChildren<Collider>()) riderHits[collider] = p;
-            AttachPatienceBar(p, root);
-            EnsurePassengerEffect(p, root);
-            // Extended mode uses one screen-space callout system in both solo
-            // and 1v1. Keep the authored world bubble only for legacy layouts.
-            if (Match != null && !extendedInterior) AttachSpeechBubble(p, root);
-            return root;
+                throw new System.InvalidOperationException("Assign passenger art for " + rider.Kind + " in Elevator Scene.");
+            PassengerView view = Instantiate(template, parent, false);
+            foreach (Transform part in view.GetComponentsInChildren<Transform>(true))
+                part.gameObject.layer = ExteriorLayer;
+            Color color = Palette[rider.Color % Palette.Length];
+            foreach (Renderer jacket in view.jackets)
+                if (jacket != null) jacket.sharedMaterial = Mat(color);
+            return view;
         }
 
+        // The hallway and the shaft reference the same authored passenger.
+        Transform MakeRider(Rider p)
+        {
+            PassengerView view = !p.Boarded && !p.Resolved
+                ? WorldOwner.WaitingPassengerView(p) : SpawnPassengerArt(p, stage);
+            RegisterRiderView(p, view);
+            return view.transform;
+        }
+
+        void RegisterRiderView(Rider rider, PassengerView view)
+        {
+            bubbles[rider] = view.speech;
+            destinationTags[rider] = view.destination;
+            StyleDestinationTag(view.destination);
+            if (extendedInterior) CreateFloorMarker(rider);
+            foreach (var collider in view.GetComponentsInChildren<Collider>()) riderHits[collider] = rider;
+            if (!round.Owns(rider)) return;
+            if (!patienceBars.ContainsKey(rider)) AttachPatienceBar(rider, view.transform);
+            EnsurePassengerEffect(rider, view.transform);
+            if (Match != null && !extendedInterior && !speechBubbleViews.ContainsKey(rider))
+                AttachSpeechBubble(rider, view.transform);
+        }
+
+        void ForgetWaitingFigure(Rider rider)
+        {
+            if (figures.TryGetValue(rider, out Transform figure) && figure != null)
+                foreach (Collider collider in figure.GetComponentsInChildren<Collider>(true)) riderHits.Remove(collider);
+            figures.Remove(rider);
+            bubbles.Remove(rider);
+            destinationTags.Remove(rider);
+            idleBobOffsets.Remove(rider);
+            if (floorMarkers.TryGetValue(rider, out FloorMarker marker))
+            {
+                if (marker != null && marker.Root != null) Destroy(marker.Root.gameObject);
+                floorMarkers.Remove(rider);
+            }
+        }
+
+        // Claiming a shared queue moves its existing model into this cabin.
+        // Keep the world pose so the boarding animation begins at the door.
+        void AdoptWaitingFigure(Rider rider)
+        {
+            if (rider == null || round == null || !round.Owns(rider)) return;
+            ElevatorManager owner = WorldOwner;
+            PassengerView view = null;
+            if (owner.crowd.TryGetValue(rider, out CrowdFigure waiting) && waiting.Root != null)
+            {
+                view = waiting.Root.GetComponent<PassengerView>();
+                owner.crowd.Remove(rider);
+            }
+            if (view == null && figures.TryGetValue(rider, out Transform existing) && existing != null)
+                view = existing.GetComponent<PassengerView>();
+            if (view == null) view = SpawnPassengerArt(rider, stage);
+            if (owner != this) owner.ForgetWaitingFigure(rider);
+            ElevatorManager rival = Match != null ? Match.Rival : null;
+            if (rival != null && rival != this) rival.ForgetWaitingFigure(rider);
+            view.transform.SetParent(stage, true);
+            view.transform.localScale = Vector3.one;
+            view.gameObject.SetActive(true);
+            figures[rider] = view.transform;
+            RegisterRiderView(rider, view);
+        }
         void CreateFloorMarker(Rider rider)
         {
             if (rider == null || stage == null || floorMarkers.ContainsKey(rider)) return;
@@ -1408,24 +1553,23 @@ namespace CrazyElevator.Managers
                 float[] cabinX = { -1.65f, -.55f, .55f, 1.65f };
                 return new Vector3(cabinX[Mathf.Min(slot, cabinX.Length - 1)], .12f, 1.08f);
             }
-            if (OfficeInterior)
-            {
-                // Office cubicles hide the old extreme queue positions. Keep
-                // waiting riders across the visible entrance aisle instead.
-                int queueColumn = slot % OfficeQueueX.Length;
-                int queueRow = slot / OfficeQueueX.Length;
-                float arrivalOffset = p.Kind == "ELDERLY"
-                    ? .7f * Mathf.Clamp01(p.Arrival / ElevatorRound.ElderlyArrivalSeconds)
-                    : Mathf.Min(.7f, p.Arrival * .12f);
-                return new Vector3(OfficeQueueX[queueColumn], .12f,
-                    -1.1f - queueRow * .65f - arrivalOffset);
-            }
-            float hallwayArrivalOffset = p.Kind == "ELDERLY"
-                ? 1.2f * Mathf.Clamp01(p.Arrival / ElevatorRound.ElderlyArrivalSeconds)
-                : Mathf.Min(1.2f, p.Arrival * .20f);
-            return new Vector3(-2f + slot * 2f, .12f, -1.45f - hallwayArrivalOffset);
+            return WaitingQueuePosition(p);
         }
 
+        Vector3 WaitingQueuePosition(Rider p)
+        {
+            int doorSlot = 0;
+            foreach (Rider other in round.Riders)
+            {
+                if (other == p) break;
+                if (other.Origin == p.Origin && other.OriginStop == p.OriginStop
+                    && round.IsQueuedAtStop(other) && other.PickupDoor == p.PickupDoor) doorSlot++;
+            }
+            float spacing = doorSlot * 1.15f + Mathf.Min(.7f, p.Arrival * .4f);
+            if (p.PickupDoor == BoardingDoor.Left) return new Vector3(-3.65f - spacing, .12f, 1.15f);
+            if (p.PickupDoor == BoardingDoor.Right) return new Vector3(3.65f + spacing, .12f, 1.15f);
+            return new Vector3(0f, .12f, -1.1f - spacing);
+        }
         // A shared rider claimed by the other car walks out of this hallway
         // before its local visual is hidden. The Rider itself is already boarded.
         void BeginSharedPickupDeparture(Rider rider, Transform figure)
@@ -1495,25 +1639,44 @@ namespace CrazyElevator.Managers
                 if (p == repairingHandyman && (!round.Owns(p) || phase != Phase.Boarding))
                     ClearHandymanRepair();
                 bool isExiting = exiting.TryGetValue(p, out float exitTime);
-                // TextMesh labels do not use the same occlusion as the solid
-                // doors, so explicitly hide the hall queue unless the doorway
-                // is open enough to interact with it.
-                bool hallVisible = phase == Phase.Boarding || phase == Phase.Opening && doors > .72f;
-                bool hasFigure = figures.TryGetValue(p, out var figure);
-                if (Match != null && hasFigure && figure.gameObject.activeInHierarchy
-                    && hallVisible && p.Boarded && !p.Resolved && p.BoardedBySeat != Seat
-                    && p.Origin == round.Floor && p.OriginStop == round.Stop && !sharedPickupDepartures.ContainsKey(p))
-                    BeginSharedPickupDeparture(p, figure);
-                bool departing = sharedPickupDepartures.ContainsKey(p);
-                bool visible = departing || isExiting || !p.Resolved && (round.Owns(p)
-                    || hallVisible && round.IsOffered(p));
-                if (visible && !departing && !isExiting && !p.Boarded && round.IsOffered(p))
-                    DiscoverPassenger(p);
+                bool hallVisible = phase == Phase.Boarding || phase == Phase.Opening
+                    || phase == Phase.Closing;
+                // Waiting figures stay on their actual world floor. Both cabin
+                // cameras and the driving camera render this same shared model.
+                if (!p.Boarded && !p.Resolved)
+                {
+                    if (hallVisible && round.IsOffered(p))
+                    {
+                        DiscoverPassenger(p);
+                        if (!figures.TryGetValue(p, out Transform waiting) || waiting == null)
+                            figures[p] = MakeRider(p);
+                    }
+                    continue;
+                }
+                // A rider boarding the other car is owned and animated there.
+                // Never hide it through this car's stale waiting reference.
+                if (p.Boarded && !round.Owns(p))
+                {
+                    ForgetWaitingFigure(p);
+                    continue;
+                }
+                bool hasFigure = figures.TryGetValue(p, out var figure) && figure != null;
+                if (round.Owns(p) && (!hasFigure || figure.parent != stage))
+                {
+                    AdoptWaitingFigure(p);
+                    figure = figures[p];
+                    hasFigure = true;
+                }
+                bool departing = false;
+                bool visible = isExiting || !p.Resolved && round.Owns(p);
                 if (!hasFigure)
                 {
                     if (!visible) continue;
-                    figure = MakeRider(p); figure.localPosition = RiderPosition(p); figures.Add(p, figure);
+                    figure = MakeRider(p); figure.localPosition = RiderPosition(p); figures[p] = figure;
                 }
+                // Resolved queue passengers are hidden by the shared world
+                // owner, never while an exit animation still uses their model.
+                if (p.Resolved && !isExiting && figure.parent != stage) continue;
                 figure.gameObject.SetActive(visible);
                 if (!visible)
                 {
@@ -1521,7 +1684,6 @@ namespace CrazyElevator.Managers
                     UpdateFloorMarker(p, figure, true);
                     continue;
                 }
-
                 bool idle = false;
                 if (departing)
                 {
@@ -1549,7 +1711,8 @@ namespace CrazyElevator.Managers
                         // Mom keeps facing the player so the carried baby and
                         // crying/calming effects remain readable after boarding.
                         float facing = p.HasFeature(PassengerFeature.CryingBaby) ? 180f
-                            : p.Boarded ? 0f : 180f;
+                            : p.Boarded ? 0f : p.PickupDoor == BoardingDoor.Left ? 90f
+                            : p.PickupDoor == BoardingDoor.Right ? -90f : 180f;
                         MoveIdleFigure(p, figure, RiderPosition(p), facing, dt);
                         idle = true;
                     }
@@ -1583,7 +1746,7 @@ namespace CrazyElevator.Managers
                     // color. Mood is already communicated by the patience bar
                     // and speech bubble, so it should not reduce legibility.
                     destinationTag.color = Ink;
-                    destinationTag.transform.position = figure.position + Vector3.up * 2.65f;
+                    destinationTag.transform.position = figure.TransformPoint(Vector3.up * 2.65f);
                     destinationTag.transform.rotation = Quaternion.LookRotation(destinationTag.transform.position - eye.transform.position);
                 }
                 UpdateFloorMarker(p, figure, isExiting || departing);
