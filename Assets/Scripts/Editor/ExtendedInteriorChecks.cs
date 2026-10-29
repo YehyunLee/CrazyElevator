@@ -284,13 +284,10 @@ public static class ExtendedInteriorChecks
         rival.SharePassengerPoolWith(player, 1);
         Require(player.Board(upward) && !rival.Board(upward) && rival.Board(downward),
             "Mixed-direction requests did not preserve exclusive shared boarding.");
-        Require(player.Riders.Count == 4 && ReferenceEquals(player.Riders, rival.Riders),
-            "Shared boarding did not replenish the same passenger pool.");
-        foreach (SharedRider replacement in player.Riders)
-            if (!replacement.Boarded)
-                Require(replacement.Destination >= 0 && replacement.Destination <= 7
-                    && replacement.Destination != replacement.Origin,
-                    "A shared replacement requested a locked or zero-distance trip.");
+        Require(player.Riders.Count == 2 && rival.Riders.Count == 2
+            && ReferenceEquals(player.Riders, rival.Riders)
+            && player.Riders.TrueForAll(r => r.Boarded),
+            "Shared boarding created passengers beyond the two visible riders.");
         player.Arrive(upward.Destination);
         rival.Arrive(downward.Destination);
         Require(player.Offboard(upward) == CrazyElevator.Shared.OffboardResult.Happy
@@ -313,31 +310,23 @@ public static class ExtendedInteriorChecks
             && ReferenceEquals(player.Riders[0], rival.Riders[0]),
             "Both elevators must use the same rider objects.");
 
-        // A duel must replenish the shared queue immediately. Otherwise the
-        // first car can consume the only two floor-zero offers before the
-        // second car gets a chance to board.
+        // Both cars compete for the same finite group shown on the landing.
         var fairnessPlayer = new Round();
         var fairnessRival = new Round();
         fairnessRival.SharePassengerPoolWith(fairnessPlayer, 1);
+        fairnessPlayer.RevealQueue(0, Round.CenterStop);
+        int initialRiderCount = fairnessPlayer.Riders.Count;
         SharedRider first = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
         SharedRider second = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "INTERVIEW");
-        Require(fairnessPlayer.Board(first) && fairnessPlayer.Board(second),
-            "The first elevator could not board the initial floor-zero offers.");
-        SharedRider third = fairnessPlayer.Riders.Find(r => r.Origin == 0
-            && !r.Boarded && !r.Resolved && r.Kind == "COURIER");
-        Require(third != null && fairnessPlayer.Board(third),
-            "The shared queue did not replenish after the first elevator boarded three.");
-        for (int i = 0; i < 2; i++)
-        {
-            SharedRider available = fairnessRival.Riders.Find(r => r.Origin == 0
-                && !r.Boarded && !r.Resolved && r.Kind != "ELDERLY");
-            Require(available != null && fairnessRival.Board(available),
-                "The second elevator could not claim its own shared-queue passenger.");
-        }
-        int fairnessPlayerLoad = fairnessPlayer.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 0).Count;
-        int fairnessRivalLoad = fairnessRival.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 1).Count;
-        Require(fairnessPlayerLoad == 3 && fairnessRivalLoad == 2,
-            "Shared passenger replenishment did not preserve both players' loads.");
+        Require(fairnessPlayer.Board(first) && !fairnessRival.Board(first)
+            && fairnessRival.Board(second) && !fairnessPlayer.Board(second),
+            "The two elevators did not claim distinct riders from the visible group.");
+        Require(fairnessPlayer.Riders.Count == initialRiderCount
+            && fairnessRival.Riders.Count == initialRiderCount
+            && fairnessPlayer.Riders.FindAll(fairnessPlayer.IsOffered).Count == 0
+            && fairnessRival.Riders.FindAll(fairnessRival.IsOffered).Count == 0
+            && fairnessPlayer.Load == first.Space && fairnessRival.Load == second.Space,
+            "The shared landing replenished or mixed the players' passenger loads.");
 
         Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
             && player.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),

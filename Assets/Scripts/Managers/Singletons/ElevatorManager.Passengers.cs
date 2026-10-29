@@ -76,8 +76,8 @@ namespace CrazyElevator.Managers
             autoBoardWait -= dt;
             if (autoBoardWait > 0f) return;
             autoBoardWait = .45f;
-            // Board() can append a replacement to the shared queue. Never enumerate
-            // that list across the mutation, and never skip a party in this door's queue.
+            // Find the head of this door's finite queue before boarding it.
+            // A party that cannot fit keeps its place; choose another door instead.
             Rider next = null;
             foreach (Rider rider in round.Riders)
                 if (round.IsOffered(rider) && (int)rider.PickupDoor == openBoardingDoor)

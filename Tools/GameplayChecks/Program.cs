@@ -17,22 +17,23 @@ internal static class Program
 
     static void CheckQueueConsistency()
     {
-        var primary = new ElevatorRound();
-        primary.Riders.Clear();
-        for (int floor = 0; floor < 24; floor++)
-            for (int stop = 0; stop < ElevatorRound.Stops; stop++)
-                for (int i = 0; i < 5; i++)
-                    primary.Riders.Add(NewRider(floor, stop, (BoardingDoor)(i % 3)));
-        var second = new ElevatorRound();
-        second.SharePassengerPoolWith(primary, 1);
         foreach (float elapsed in new[] { 0f, 40f, 110f })
         {
+            var primary = new ElevatorRound();
+            primary.Riders.Clear();
+            for (int floor = 0; floor < 24; floor++)
+                for (int stop = 0; stop < ElevatorRound.Stops; stop++)
+                    for (int i = 0; i < 5; i++)
+                        primary.Riders.Add(NewRider(floor, stop, (BoardingDoor)(i % 3)));
+            var second = new ElevatorRound();
+            second.SharePassengerPoolWith(primary, 1);
             primary.TimeLeft = second.TimeLeft = ElevatorRound.Duration - elapsed;
             for (int floor = 0; floor < 24; floor++)
                 for (int stop = 0; stop < ElevatorRound.Stops; stop++)
                 {
                     primary.Arrive(floor, stop);
                     second.Arrive(floor, stop);
+                    primary.RevealQueue(floor, stop);
                     Rider[] outside = primary.Riders.Where(r => r.Origin == floor && r.OriginStop == stop
                         && primary.IsQueuedAtStop(r)).ToArray();
                     Rider[] inside = primary.Riders.Where(primary.IsOffered).ToArray();
@@ -44,13 +45,82 @@ internal static class Program
                         Require(outside.Count(r => r.PickupDoor == door) == inside.Count(r => r.PickupDoor == door),
                             "A door's visible waiting count differs.");
                 }
+            Rider hidden = primary.Riders.First(r => primary.IsOffered(r));
+            hidden.SpawnDelay = 1f;
+            Require(!primary.IsQueuedAtStop(hidden) && !second.IsOffered(hidden), "Delayed rider is visible early.");
+            hidden.SpawnDelay = 0f;
+            hidden.Resolved = true;
+            Require(!primary.IsQueuedAtStop(hidden) && !second.IsOffered(hidden), "Resolved rider stays in the queue.");
         }
-        Rider hidden = primary.Riders.First(r => primary.IsOffered(r));
-        hidden.SpawnDelay = 1f;
-        Require(!primary.IsQueuedAtStop(hidden) && !second.IsOffered(hidden), "Delayed rider is visible early.");
-        hidden.SpawnDelay = 0f;
-        hidden.Resolved = true;
-        Require(!primary.IsQueuedAtStop(hidden) && !second.IsOffered(hidden), "Resolved rider stays in the queue.");
+    }
+
+    static void CheckFiniteLandingRoster()
+    {
+        foreach (bool shared in new[] { false, true })
+        {
+            var primary = new ElevatorRound { Floor = 3, TimeLeft = 140f };
+            primary.Riders.Clear();
+            var grandmaOne = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Left);
+            var grandmaTwo = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Right);
+            grandmaOne.Kind = grandmaTwo.Kind = "ELDERLY";
+            grandmaOne.Arrival = grandmaTwo.Arrival = ElevatorRound.ElderlyArrivalSeconds;
+            var boxMan = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
+            var hiddenGrandma = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Left);
+            hiddenGrandma.Kind = "ELDERLY";
+            var hiddenBoxMan = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
+            primary.Riders.AddRange(new[] { grandmaOne, grandmaTwo, boxMan, hiddenGrandma, hiddenBoxMan });
+            foreach (Rider rider in primary.Riders) rider.Remaining = rider.Patience = 600f;
+            Rider[] preview = primary.Riders.Where(primary.IsOffered).ToArray();
+            Require(preview.SequenceEqual(new[] { grandmaOne, grandmaTwo, boxMan }), "Unexpected floor preview.");
+            primary.RevealQueue(3, ElevatorRound.CenterStop);
+            var second = new ElevatorRound { Floor = 3, TimeLeft = primary.TimeLeft };
+            if (shared) second.SharePassengerPoolWith(primary, 1);
+            var boxCar = shared ? second : primary;
+            Require(!primary.Board(grandmaOne), "A slow grandma boarded before reaching the door.");
+            primary.Tick(2f, true);
+            Require(primary.Board(grandmaOne) && boxCar.Board(boxMan) && primary.Board(grandmaTwo),
+                "The exact visible two grandmas and box man could not board.");
+            Require(primary.Riders.Count == 5 && !primary.IsOffered(hiddenGrandma)
+                && !primary.IsOffered(hiddenBoxMan), "Boarding spawned a replacement or revealed a reserve.");
+            Require(!primary.Board(hiddenGrandma) && !boxCar.Board(hiddenBoxMan)
+                && !boxCar.Board(grandmaOne), "A hidden or already claimed passenger boarded.");
+            primary.Tick(80f, true);
+            if (shared) second.TimeLeft = primary.TimeLeft;
+            Require(!primary.Riders.Any(primary.IsOffered) && (!shared || !second.Riders.Any(second.IsOffered)),
+                "Progression introduced more passengers into the shown landing.");
+            Require(primary.Riders.Count(r => r.Boarded && r.Kind == "ELDERLY") == 2
+                && primary.Riders.Count(r => r.Boarded && r.Kind == "COURIER") == 1,
+                "The boarding total exceeded the preview's passenger types or amounts.");
+            primary.Arrive(4);
+            primary.Arrive(3);
+            Require(!primary.Riders.Any(primary.IsOffered), "Revisiting a cleared landing refilled it.");
+            Require(primary.Load + (shared ? second.Load : 0) == 4, "Physical cabin capacity mixed with passenger count.");
+        }
+    }
+
+    static void CheckQueueDepartures()
+    {
+        var round = new ElevatorRound();
+        round.Riders.Clear();
+        var rejected = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Left);
+        var expired = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Right);
+        var reserve = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front);
+        round.Riders.AddRange(new[] { rejected, expired, reserve });
+        round.RevealQueue(0, ElevatorRound.CenterStop);
+        Require(round.Reject(rejected), "Visible passenger could not be turned away.");
+        expired.Remaining = .1f;
+        Require(round.Tick(.2f, true) == 1 && expired.Resolved, "Waiting passenger did not time out.");
+        Require(!round.IsOffered(reserve) && !round.Board(reserve), "A departure exposed an unseen reserve.");
+        // A query used to plan navigation must not freeze an unseen landing early.
+        var unseen = new ElevatorRound { Floor = 3 };
+        unseen.Riders.Clear();
+        var futureGrandma = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front);
+        futureGrandma.Kind = "ELDERLY";
+        unseen.Riders.Add(futureGrandma);
+        Require(!unseen.IsQueuedAtStop(futureGrandma), "Grandma mechanic unlocked too early.");
+        unseen.Tick(31f, false);
+        unseen.RevealQueue(3, ElevatorRound.CenterStop);
+        Require(unseen.IsOffered(futureGrandma), "An unseen landing lost a newly unlocked passenger.");
     }
 
     static void CheckTwoSeatBoarding()
@@ -68,8 +138,8 @@ internal static class Program
         Require(second.Board(next), "Second player cannot board independently.");
         Require(primary.Load == 2 && second.Load == 1, "Seat loads mixed.");
         Require(!primary.Owns(next) && !second.Owns(first), "Seat ownership mixed.");
-        Require(primary.Riders.Count(r => !r.Boarded && !r.Resolved && primary.IsQueuedAtStop(r)) == 2,
-            "Shared pickups depleted the waiting offer for the other player.");
+        Require(primary.Riders.Count == 2 && !primary.Riders.Any(primary.IsOffered)
+            && !second.Riders.Any(second.IsOffered), "Shared pickups created passengers beyond the preview.");
         float firstPatience = first.Remaining;
         float nextPatience = next.Remaining;
         primary.Tick(1f, true);
@@ -91,13 +161,15 @@ internal static class Program
 
     static void CheckDeadlineAndCapacity()
     {
-        var round = new ElevatorRound();
+        var round = new ElevatorRound { TimeLeft = 60f };
         round.Riders.Clear();
-        for (int i = 0; i < 12; i++) round.Riders.Add(NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front));
-        Rider extra = null;
-        for (int i = 0; i < 9; i++) Require(round.Board(round.Riders[i]), "A free capacity space could not board.");
-        extra = round.Riders[9];
-        Require(round.Load == 9 && !round.Board(extra), "Capacity exceeded nine spaces.");
+        for (int i = 0; i < 5; i++)
+            round.Riders.Add(NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front, i < 4 ? 2 : 1));
+        foreach (Rider rider in round.Riders) Require(round.Board(rider), "A free capacity space could not board.");
+        var extra = NewRider(1, ElevatorRound.CenterStop, BoardingDoor.Front);
+        round.Riders.Add(extra);
+        round.Arrive(1);
+        Require(round.IsOffered(extra) && round.Load == 9 && !round.Board(extra), "Capacity exceeded nine spaces.");
         Rider passenger = round.Riders[0];
         round.Tick(10000f, false);
         Require(round.TimeLeft == 0f && round.Finished, "Large frame went past the shift deadline.");
@@ -118,6 +190,8 @@ internal static class Program
         var checks = new Dictionary<string, Action>
         {
             { "Matching inside/outside and both-seat door queues over all 24 floors and 5 stops", CheckQueueConsistency },
+            { "Exact two-grandma and one-box-man preview limits in solo and two-player", CheckFiniteLandingRoster },
+            { "Rejecting, timing out, revisiting, and progression preserve visible groups", CheckQueueDepartures },
             { "Two seats board exclusively, retain separate cabin clocks and score once", CheckTwoSeatBoarding },
             { "Capacity, deadline, and office/candy/underwater progression", CheckDeadlineAndCapacity }
         };

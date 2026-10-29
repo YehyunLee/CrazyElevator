@@ -362,6 +362,8 @@ namespace CrazyElevator.Managers
         {
             ElevatorManager owner = WorldOwner;
             if (owner != this) return owner.WaitingPassengerView(rider);
+            // The first visible model fixes this landing's finite passenger group.
+            round.RevealQueue(rider.Origin, rider.OriginStop);
             if (crowdRoot == null)
             {
                 crowdRoot = new GameObject("Shared floor passengers").transform;

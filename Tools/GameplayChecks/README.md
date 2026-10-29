@@ -6,7 +6,7 @@ Run the actual `ElevatorRound.cs` and `PassengerData.cs` with .NET 8, without Un
 dotnet run --project Tools/GameplayChecks/GameplayChecks.csproj
 ```
 
-The harness checks matching queue identities and per-door counts at every floor and stop, shared boarding exclusivity, independently owned cabin patience and delivery scores, replenishment for the other player, capacity, the three-minute deadline, and office/candy/underwater progression. `UnityDataStubs.cs` substitutes only Unity's asset/Inspector types and integer math; no gameplay rule is reimplemented. It does not verify rendering, cameras, lobby navigation, audio, or device input.
+The harness checks matching queue identities and per-door counts at every floor and stop, shared boarding exclusivity, independently owned cabin patience and delivery scores, finite shared passenger counts, the two-Grandmas-and-one-courier preview limit, and no hidden backfill after boarding, rejection, timeout, progression, or revisits, capacity, the three-minute deadline, and office/candy/underwater progression. `UnityDataStubs.cs` substitutes only Unity's asset/Inspector types and integer math; no gameplay rule is reimplemented. It does not verify rendering, cameras, lobby navigation, audio, or device input.
 
 Compile all runtime and editor C# sources against the installed Unity assemblies, independently of the Editor license:
 
