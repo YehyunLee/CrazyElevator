@@ -418,8 +418,8 @@ namespace CrazyElevator.Managers
             // Keep the same shallow downward view while bringing the camera in.
             Vector3 cameraLocal = new Vector3(
                 cameraX,
-                cameraFraming.y + 3.4f,
-                -20f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
+                cameraFraming.y + 2.9f,
+                -16f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
 
             routeBoostPulse = Mathf.MoveTowards(routeBoostPulse, 0f, Time.unscaledDeltaTime * 1.55f);
             if (phase == Phase.Moving)

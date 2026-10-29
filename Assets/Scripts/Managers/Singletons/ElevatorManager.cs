@@ -299,6 +299,7 @@ namespace CrazyElevator.Managers
         // Both cameras observe this cabin on the actual moving car. The rear
         // wall is cut away only for the exterior camera, like a dollhouse.
         const float PhysicalCabinScale = .45f;
+        const float PassengerVisualScale = 1.2f;
         const int CabinBackWallLayer = 29;
         static readonly Quaternion PhysicalCabinRotation = Quaternion.Euler(0f, 180f, 0f);
         Vector3 cabinCameraHome, authoredCabinCameraHome;
@@ -366,17 +367,17 @@ namespace CrazyElevator.Managers
                 {
                     if (!round.IsOffered(rider)) continue;
                     Vector3 position = WaitingPositionInCabin(rider);
-                    bounds.Encapsulate(position + new Vector3(-.65f, 0f, -.5f));
-                    bounds.Encapsulate(position + new Vector3(.65f, 2.8f, .5f));
+                    bounds.Encapsulate(position + new Vector3(-.65f, 0f, -.5f) * PassengerVisualScale);
+                    bounds.Encapsulate(position + new Vector3(.65f, 2.8f, .5f) * PassengerVisualScale);
                 }
             foreach (InteriorTransfer transfer in boardingTransfers.Values)
             {
-                bounds.Encapsulate(transfer.start + new Vector3(-.65f, 0f, -.5f));
-                bounds.Encapsulate(transfer.start + new Vector3(.65f, 2.8f, .5f));
+                bounds.Encapsulate(transfer.start + new Vector3(-.65f, 0f, -.5f) * PassengerVisualScale);
+                bounds.Encapsulate(transfer.start + new Vector3(.65f, 2.8f, .5f) * PassengerVisualScale);
             }
             Vector3 home = authoredCabinCameraHome + Vector3.right * bounds.center.x;
             Quaternion inverse = Quaternion.Inverse(cabinCameraHomeRotation);
-            float vertical = Mathf.Tan(eye.fieldOfView * .5f * Mathf.Deg2Rad) * .86f;
+            float vertical = Mathf.Tan(eye.fieldOfView * .5f * Mathf.Deg2Rad) * .92f;
             float horizontal = vertical * Mathf.Max(.1f, eye.aspect);
             float pullback = 0f;
             for (int corner = 0; corner < 8; corner++)

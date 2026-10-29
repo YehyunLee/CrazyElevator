@@ -1353,6 +1353,7 @@ namespace CrazyElevator.Managers
             if (template == null)
                 throw new System.InvalidOperationException("Assign passenger art for " + rider.Kind + " in Elevator Scene.");
             PassengerView view = Instantiate(template, parent, false);
+            view.transform.localScale = Vector3.one * PassengerVisualScale;
             foreach (Transform part in view.GetComponentsInChildren<Transform>(true))
                 part.gameObject.layer = ExteriorLayer;
             Color color = Palette[rider.Color % Palette.Length];
@@ -1418,7 +1419,7 @@ namespace CrazyElevator.Managers
             ElevatorManager rival = Match != null ? Match.Rival : null;
             if (rival != null && rival != this) rival.ForgetWaitingFigure(rider);
             view.transform.SetParent(stage, true);
-            view.transform.localScale = Vector3.one;
+            view.transform.localScale = Vector3.one * PassengerVisualScale;
             view.gameObject.SetActive(true);
             figures[rider] = view.transform;
             RegisterRiderView(rider, view);

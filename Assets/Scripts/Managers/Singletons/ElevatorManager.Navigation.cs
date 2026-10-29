@@ -408,7 +408,7 @@ namespace CrazyElevator.Managers
             float facing = rider.PickupDoor == BoardingDoor.Left ? 90f
                 : rider.PickupDoor == BoardingDoor.Right ? -90f : 180f;
             figure.Root.localRotation = PhysicalCabinRotation * Quaternion.Euler(0f, facing, wave * IdleWaddleDegrees);
-            figure.Root.localScale = Vector3.one * PhysicalCabinScale;
+            figure.Root.localScale = Vector3.one * (PhysicalCabinScale * PassengerVisualScale);
             PassengerView view = figure.Root.GetComponent<PassengerView>();
             if (view.destination != null)
             {
