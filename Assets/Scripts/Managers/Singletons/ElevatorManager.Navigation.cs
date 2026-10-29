@@ -386,13 +386,25 @@ namespace CrazyElevator.Managers
         // currently parked there. A second car cannot drag it to another lane.
         Vector3 WaitingCabinOrigin(Rider rider)
             => PhysicalCabinOrigin(StopWorldX(rider.OriginStop), rider.Origin);
-        void PlaceWaitingPassenger(Rider rider, CrowdFigure figure)
+
+        // Centre landings serve two shafts. Keep side queues beyond the outer
+        // cabin edges rather than standing inside either parked elevator.
+        Vector3 WaitingWorldPosition(Rider rider)
         {
             Vector3 position = WaitingQueuePosition(rider);
+            if (rider.OriginStop == CenterStop && rider.PickupDoor != BoardingDoor.Front)
+            {
+                float halfSpan = Match != null ? Match.shaftSpacing * .5f : SoloShaftOffset;
+                position += BoardingDoorOutward(rider.PickupDoor) * (halfSpan / PhysicalCabinScale);
+            }
+            return WaitingCabinOrigin(rider) + PhysicalCabinRotation * (position * PhysicalCabinScale);
+        }
+
+        void PlaceWaitingPassenger(Rider rider, CrowdFigure figure)
+        {
             float wave = Mathf.Sin(figure.Clock * IdleBobSpeed + IdleBobPhase(rider));
-            position.y += IdleBobHeight * wave * wave;
-            figure.Root.localPosition = WaitingCabinOrigin(rider)
-                + PhysicalCabinRotation * (position * PhysicalCabinScale);
+            figure.Root.localPosition = WaitingWorldPosition(rider)
+                + Vector3.up * (IdleBobHeight * wave * wave * PhysicalCabinScale);
             float facing = rider.PickupDoor == BoardingDoor.Left ? 90f
                 : rider.PickupDoor == BoardingDoor.Right ? -90f : 180f;
             figure.Root.localRotation = PhysicalCabinRotation * Quaternion.Euler(0f, facing, wave * IdleWaddleDegrees);

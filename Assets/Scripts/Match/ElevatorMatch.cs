@@ -15,7 +15,7 @@ namespace CrazyElevator.Match
         public Game player;
         [Min(3f)] public float shaftSpacing = 4f;
         [FormerlySerializedAs("cabinHorizontalFieldOfView")]
-        [Range(45f, 90f)] public float cabinVerticalFieldOfView = 90f;
+        [Range(45f, 90f)] public float cabinVerticalFieldOfView = 72f;
         [Header("Two-track collisions")]
         [Range(.15f, .8f)] public float trackSwitchSeconds = .32f;
         [FormerlySerializedAs("verticalBlockDistance")]

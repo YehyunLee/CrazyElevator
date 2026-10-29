@@ -1273,13 +1273,13 @@ namespace CrazyElevator.Managers
                 string name = ((BoardingDoor)slot).ToString().ToUpperInvariant();
                 int count = 0;
                 foreach (Rider rider in round.Riders)
-                    if (round.IsOffered(rider) && (int)rider.PickupDoor == door) count++;
+                    if (round.IsOffered(rider) && CanBoardThroughDoor(rider, (BoardingDoor)door)) count++;
                 GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 26f),
                     name + (openBoardingDoor == door ? " OPEN" : " DOOR"), calloutText);
                 float x = rect.x + 8f;
                 foreach (Rider rider in round.Riders)
                 {
-                    if (!round.IsOffered(rider) || (int)rider.PickupDoor != door) continue;
+                    if (!round.IsOffered(rider) || !CanBoardThroughDoor(rider, (BoardingDoor)door)) continue;
                     if (x + 40f > rect.xMax - 8f) break;
                     DrawPassengerBadgeIcon(new Rect(x, rect.y + 31f, 40f, 40f),
                         rider.Kind, Palette[rider.Color % Palette.Length]);
@@ -1290,7 +1290,7 @@ namespace CrazyElevator.Managers
                         : (slot == 0 ? "A" : slot == 1 ? "W" : "D")
                     : (slot == 0 ? "LEFT" : slot == 1 ? "UP" : "RIGHT");
                 GUI.Label(new Rect(rect.x + 8f, rect.y + 78f, rect.width - 16f, 26f),
-                    key + " + " + GameplayConfirmKey + "  |  " + count + " waiting", calloutText);
+                    key + " + " + GameplayConfirmKey + "  |  " + count + " can enter", calloutText);
             }
         }
 

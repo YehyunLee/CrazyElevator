@@ -301,7 +301,7 @@ namespace CrazyElevator.Managers
         const float PhysicalCabinScale = .45f;
         const int CabinBackWallLayer = 29;
         static readonly Quaternion PhysicalCabinRotation = Quaternion.Euler(0f, 180f, 0f);
-        Vector3 cabinCameraHome;
+        Vector3 cabinCameraHome, authoredCabinCameraHome;
         Quaternion cabinCameraHomeRotation;
 
         static Vector3 PhysicalCabinOrigin(float x, int floor)
@@ -311,7 +311,7 @@ namespace CrazyElevator.Managers
         {
             // Save the authored camera pose before moving its set into the shaft.
             eye.transform.SetParent(stage, true);
-            cabinCameraHome = eye.transform.localPosition;
+            cabinCameraHome = authoredCabinCameraHome = eye.transform.localPosition;
             cabinCameraHomeRotation = eye.transform.localRotation;
             foreach (Light light in sceneView.lights ?? System.Array.Empty<Light>())
             {
@@ -340,7 +340,7 @@ namespace CrazyElevator.Managers
                     part.gameObject.SetActive(false);
             }
             eye.nearClipPlane = Mathf.Min(eye.nearClipPlane, .04f);
-            eye.cullingMask = ~(1 << EncounterPreviewLayer);
+            eye.cullingMask = ~((1 << EncounterPreviewLayer) | (1 << CabinBackWallLayer));
             exteriorCamera.cullingMask = ~((1 << EncounterPreviewLayer) | (1 << CabinBackWallLayer));
             CacheExteriorCollisionSize();
             RefreshCabinCameraHome();
@@ -349,8 +349,47 @@ namespace CrazyElevator.Managers
         void RefreshCabinCameraHome()
         {
             if (stage == null || eye == null) return;
+            Vector3 previousHome = cabinCameraHome;
+            if (extendedInterior) FrameCabinDoorways();
+            if (eye.transform.parent == stage) eye.transform.localPosition += cabinCameraHome - previousHome;
             cameraHome = stage.TransformPoint(cabinCameraHome);
             cameraHomeRotation = stage.rotation * cabinCameraHomeRotation;
+        }
+
+        // Fit the three frames and the actual landing group, including narrow
+        // split-screen views. The authored rear angle keeps every entrance clear.
+        void FrameCabinDoorways()
+        {
+            var bounds = new Bounds(new Vector3(0f, 1.65f, 2.5f), new Vector3(6.6f, 3.5f, 5.5f));
+            if (round != null && (phase == Phase.Boarding || phase == Phase.Opening || phase == Phase.Closing))
+                foreach (Rider rider in round.Riders)
+                {
+                    if (!round.IsOffered(rider)) continue;
+                    Vector3 position = WaitingPositionInCabin(rider);
+                    bounds.Encapsulate(position + new Vector3(-.65f, 0f, -.5f));
+                    bounds.Encapsulate(position + new Vector3(.65f, 2.8f, .5f));
+                }
+            foreach (InteriorTransfer transfer in boardingTransfers.Values)
+            {
+                bounds.Encapsulate(transfer.start + new Vector3(-.65f, 0f, -.5f));
+                bounds.Encapsulate(transfer.start + new Vector3(.65f, 2.8f, .5f));
+            }
+            Vector3 home = authoredCabinCameraHome + Vector3.right * bounds.center.x;
+            Quaternion inverse = Quaternion.Inverse(cabinCameraHomeRotation);
+            float vertical = Mathf.Tan(eye.fieldOfView * .5f * Mathf.Deg2Rad) * .86f;
+            float horizontal = vertical * Mathf.Max(.1f, eye.aspect);
+            float pullback = 0f;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                Vector3 point = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (corner & 1) == 0 ? -1f : 1f,
+                    (corner & 2) == 0 ? -1f : 1f,
+                    (corner & 4) == 0 ? -1f : 1f));
+                Vector3 offset = inverse * (point - home);
+                pullback = Mathf.Max(pullback, Mathf.Max(Mathf.Abs(offset.x) / horizontal - offset.z,
+                    Mathf.Abs(offset.y) / vertical - offset.z));
+            }
+            cabinCameraHome = home - cabinCameraHomeRotation * Vector3.forward * pullback;
         }
 
         // Read the scene's Inspector references; never regenerate its geometry.
@@ -877,10 +916,12 @@ namespace CrazyElevator.Managers
 
         sealed class InteriorTransfer
         {
-            public Vector3 start, target, scale, targetScale;
+            public Vector3 start, outsideDoor, insideDoor, target, scale, targetScale;
+            public Vector3[] path;
             public Quaternion rotation;
-            public float time;
+            public float time, pathLength;
             public bool gentle;
+            public BoardingDoor entryDoor;
         }
 
         void SyncWorldFloorBands()
@@ -1258,6 +1299,8 @@ namespace CrazyElevator.Managers
         void BoardPassengerWithPersona(Rider rider)
         {
             if (!CanBoardAutomatically(rider) || !figures.TryGetValue(rider, out var figure)) return;
+            if (openBoardingDoor < 0 || !CanBoardThroughDoor(rider, (BoardingDoor)openBoardingDoor)) return;
+            BoardingDoor entryDoor = (BoardingDoor)openBoardingDoor;
             if (!round.HasCapacityFor(rider))
             {
                 int available = Mathf.Max(0, ElevatorRound.Capacity - round.Load);
@@ -1274,7 +1317,7 @@ namespace CrazyElevator.Managers
                 PlayPassengerBoardingVoice(rider);
                 cabinPositions[rider] = spot;
                 RememberCabinTileRun(rider, spot);
-                BeginPersonaBoard(rider, figure.localPosition, spot);
+                BeginPersonaBoard(rider, figure.localPosition, spot, entryDoor);
                 notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
                 return;
             }
@@ -1284,12 +1327,23 @@ namespace CrazyElevator.Managers
             Play(buzz);
         }
 
-        void BeginPersonaBoard(Rider rider, Vector3 start, Vector3 target)
+        void BeginPersonaBoard(Rider rider, Vector3 start, Vector3 target, BoardingDoor entryDoor)
         {
             if (!extendedInterior || !figures.TryGetValue(rider, out var figure)) return;
-            boardingTransfers[rider] = new InteriorTransfer { start = start, target = target, scale = figure.localScale,
-                targetScale = figure.localScale,
-                rotation = figure.localRotation, gentle = FriendlyInterior };
+            Vector3 doorway = BoardingDoorThreshold(entryDoor);
+            Vector3 outward = BoardingDoorOutward(entryDoor);
+            float clearance = PartyRadius(rider) + .22f;
+            var transfer = new InteriorTransfer
+            {
+                start = start, outsideDoor = doorway + outward * clearance,
+                insideDoor = doorway - outward * clearance, target = target,
+                scale = figure.localScale, targetScale = figure.localScale,
+                rotation = figure.localRotation, gentle = FriendlyInterior, entryDoor = entryDoor
+            };
+            transfer.path = BoardingPath(start, transfer.outsideDoor, transfer.insideDoor, target, entryDoor);
+            for (int point = 1; point < transfer.path.Length; point++)
+                transfer.pathLength += Vector3.Distance(transfer.path[point - 1], transfer.path[point]);
+            boardingTransfers[rider] = transfer;
             figure.localPosition = start;
             BeginHandymanRepair(rider);
             Play(FriendlyInterior ? chime : buzz);
@@ -1299,8 +1353,11 @@ namespace CrazyElevator.Managers
         {
             if (!boardingTransfers.TryGetValue(rider, out var transfer)) return false;
             transfer.time += dt / (transfer.gentle ? 1.35f : .78f);
-            ElevatorPersonaRig.PassengerPose(transfer.start, transfer.target, transfer.time, transfer.gentle,
-                out Vector3 position, out float lean, out float squash);
+            // Preserve the personality hop, but carry it along the selected
+            // doorway's approach and crossing instead of cutting through a wall.
+            ElevatorPersonaRig.PassengerPose(Vector3.zero, Vector3.forward, transfer.time, transfer.gentle,
+                out Vector3 pose, out float lean, out float squash);
+            Vector3 position = BoardingPathPosition(transfer, pose.z) + Vector3.up * pose.y;
             figure.localPosition = position;
             // Mina must keep facing the camera while being carried inside so
             // the baby never turns into an unreadable swaddle silhouette.
@@ -1319,6 +1376,43 @@ namespace CrazyElevator.Managers
                 if (persona) persona.RestHands();
             }
             return true;
+        }
+
+        Vector3[] BoardingPath(Vector3 start, Vector3 outside, Vector3 inside, Vector3 target, BoardingDoor door)
+        {
+            ElevatorManager other = Match == null ? null : Match.player == this ? Match.Rival : Match.player;
+            if (door != BoardingDoor.Front && other != null && other.stage != null)
+            {
+                Vector3 otherCentre = stage.InverseTransformPoint(other.stage.TransformPoint(new Vector3(0f, .12f, 2.58f)));
+                bool blocked = Mathf.Abs(otherCentre.y - start.y) < 3f
+                    && Mathf.Abs(otherCentre.z - outside.z) < 3f
+                    && otherCentre.x > Mathf.Min(start.x, outside.x)
+                    && otherCentre.x < Mathf.Max(start.x, outside.x);
+                if (blocked)
+                {
+                    // Walk in front of the other car, then approach this side's
+                    // opening through the gap between cars instead of its cabin.
+                    float front = BoardingDoorThreshold(BoardingDoor.Front).z - 1.3f;
+                    return new[] { start, new Vector3(start.x, .12f, front),
+                        new Vector3(outside.x, .12f, front), outside, inside, target };
+                }
+            }
+            return new[] { start, outside, inside, target };
+        }
+
+        static Vector3 BoardingPathPosition(InteriorTransfer transfer, float progress)
+        {
+            float distance = progress * transfer.pathLength;
+            for (int point = 1; point < transfer.path.Length; point++)
+            {
+                Vector3 start = transfer.path[point - 1], end = transfer.path[point];
+                float length = Vector3.Distance(start, end);
+                if (length <= .001f) continue;
+                if (distance < 0f) return start + (end - start).normalized * distance;
+                if (distance <= length) return Vector3.Lerp(start, end, distance / length);
+                distance -= length;
+            }
+            return transfer.target;
         }
 
         void ClearInteriorTransfers()
@@ -2398,7 +2492,7 @@ namespace CrazyElevator.Managers
                 if (rider.Boarded || rider.Resolved || !round.IsOffered(rider) || rider.Arrival > 0) continue;
                 if (!HasBoardingSpace(rider)) continue;
                 // CPU chooses a door too; the same automatic queue does the pickup.
-                OpenBoardingDoor(rider.PickupDoor);
+                OpenBoardingDoor(ClosestBoardingDoor(rider));
                 return true;
             }
             return false;

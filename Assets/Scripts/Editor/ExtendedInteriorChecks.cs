@@ -461,6 +461,38 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/request.txt", "unified-cabin");
     }
 
+    static void CheckDoorwayAccess(Game game, SharedRider rider, Transform figure)
+    {
+        Transform cabin = game.sceneView.cabin;
+        Vector3 saved = figure.position;
+        Vector3 left = game.sceneView.leftSideDoorClosed, right = game.sceneView.rightSideDoorClosed;
+        float front = (game.sceneView.leftDoorClosed.z + game.sceneView.rightDoorClosed.z) * .5f;
+        var cases = new[]
+        {
+            (position: new Vector3(0f, .12f, front - 1.15f), mask: 2),
+            (position: new Vector3(left.x - .75f, .12f, left.z), mask: 1),
+            (position: new Vector3(right.x + .75f, .12f, right.z), mask: 4),
+            (position: new Vector3(left.x - .75f, .12f, front - 1.15f), mask: 3),
+            (position: new Vector3(right.x + .75f, .12f, front - 1.15f), mask: 6)
+        };
+        MethodInfo canEnter = typeof(Game).GetMethod("CanBoardThroughDoor", Flags);
+        try
+        {
+            foreach (var test in cases)
+            {
+                figure.position = cabin.TransformPoint(test.position);
+                for (int door = 0; door < 3; door++)
+                {
+                    bool allowed = (bool)canEnter.Invoke(game,
+                        new object[] { rider, (CrazyElevator.Shared.BoardingDoor)door });
+                    Require(allowed == ((test.mask & (1 << door)) != 0),
+                        "A front, side, or corner passenger was assigned an implausible entrance.");
+                }
+            }
+        }
+        finally { figure.position = saved; }
+    }
+
     static void RunUnifiedCabin(Game game)
     {
         Require(game.Match == null, "Run the unified cabin regression from the solo Main scene.");
@@ -499,12 +531,28 @@ public static class ExtendedInteriorChecks
             Transform figure = (Transform)waiting.GetType().GetField("Root").GetValue(waiting);
             Require(ReferenceEquals(figures[rider], figure) && figure.parent != cabin,
                 "The cabin view created a different passenger from the landing view.");
+            CheckDoorwayAccess(game, rider, figure);
             string number = figure.GetComponent<CrazyElevator.Shared.PassengerView>().destination.text;
             Require(number == Game.DestinationTag(rider), "The landing destination number differs from rider state.");
             Require(round.Board(rider), "The waiting passenger could not be boarded.");
             Call(game, "AdoptWaitingFigure", rider);
             Require(ReferenceEquals(figures[rider], figure) && figure.parent == cabin && !crowd.Contains(rider),
                 "Boarding cloned a passenger or left the same passenger on the landing.");
+            Vector3 threshold = game.sceneView.leftSideDoorClosed;
+            threshold.y = .12f;
+            Call(game, "BeginPersonaBoard", rider, threshold + Vector3.left * .8f,
+                new Vector3(0f, .12f, threshold.z), CrazyElevator.Shared.BoardingDoor.Left);
+            var transfers = (IDictionary)Get(game, "boardingTransfers");
+            object transfer = transfers[rider];
+            Type transferType = transfer.GetType();
+            Vector3 outside = (Vector3)transferType.GetField("outsideDoor").GetValue(transfer);
+            Vector3 inside = (Vector3)transferType.GetField("insideDoor").GetValue(transfer);
+            Require((CrazyElevator.Shared.BoardingDoor)transferType.GetField("entryDoor").GetValue(transfer)
+                    == CrazyElevator.Shared.BoardingDoor.Left
+                && outside.x < threshold.x && inside.x > threshold.x
+                && Mathf.Abs(outside.z - threshold.z) < .001f && Mathf.Abs(inside.z - threshold.z) < .001f,
+                "The boarding path did not cross the door actually chosen by the player.");
+            Call(game, "AnimatePersonaBoard", rider, figure, 2f);
             Call(game, "SyncFigures", 0f);
             Require(((TextMesh)((IDictionary)Get(game, "destinationTags"))[rider]).text == number,
                 "Boarding changed the passenger's destination number.");

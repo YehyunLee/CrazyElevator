@@ -54,8 +54,8 @@ namespace CrazyElevator.Managers
                     || door == (int)BoardingDoor.Front && droppingOff);
                 // Finish crossing the threshold before shutting a previous door.
                 if (atFloor && !needed)
-                    foreach (Rider rider in boardingTransfers.Keys)
-                        if ((int)rider.PickupDoor == door) { needed = true; break; }
+                    foreach (InteriorTransfer transfer in boardingTransfers.Values)
+                        if ((int)transfer.entryDoor == door) { needed = true; break; }
                 boardingDoorOpenness[door] = Mathf.MoveTowards(boardingDoorOpenness[door],
                     needed ? 1f : 0f, dt / .65f);
             }
@@ -80,7 +80,7 @@ namespace CrazyElevator.Managers
             // A party that cannot fit keeps its place; choose another door instead.
             Rider next = null;
             foreach (Rider rider in round.Riders)
-                if (round.IsOffered(rider) && (int)rider.PickupDoor == openBoardingDoor)
+                if (round.IsOffered(rider) && CanBoardThroughDoor(rider, (BoardingDoor)openBoardingDoor))
                 { next = rider; break; }
             if (next == null || !CanBoardAutomatically(next)) return;
             if (!HasBoardingSpace(next))
@@ -89,6 +89,47 @@ namespace CrazyElevator.Managers
                 return;
             }
             BoardPassengerWithPersona(next);
+        }
+
+        Vector3 WaitingPositionInCabin(Rider rider)
+        {
+            ElevatorManager owner = WorldOwner;
+            if (owner.crowd.TryGetValue(rider, out CrowdFigure waiting) && waiting.Root != null)
+                return stage.InverseTransformPoint(waiting.Root.position);
+            return stage.InverseTransformPoint(owner.exteriorCar.parent.TransformPoint(WaitingWorldPosition(rider)));
+        }
+
+        BoardingDoor ClosestBoardingDoor(Rider rider)
+        {
+            Vector3 position = WaitingPositionInCabin(rider);
+            position.y = .12f;
+            BoardingDoor closest = BoardingDoor.Front;
+            float best = (position - BoardingDoorThreshold(closest)).sqrMagnitude;
+            for (int index = 0; index < 3; index++)
+            {
+                BoardingDoor door = (BoardingDoor)index;
+                float distance = (position - BoardingDoorThreshold(door)).sqrMagnitude;
+                if (distance >= best) continue;
+                closest = door;
+                best = distance;
+            }
+            return closest;
+        }
+
+        bool CanBoardThroughDoor(Rider rider, BoardingDoor door)
+        {
+            if (rider == null) return false;
+            Vector3 position = WaitingPositionInCabin(rider);
+            // Shared landings can lie at a corner of one of the two cars.
+            // That passenger may use either adjoining entrance, once in total.
+            if (position.z < BoardingDoorThreshold(BoardingDoor.Front).z - .25f)
+            {
+                if (position.x < sceneView.leftSideDoorClosed.x - .1f)
+                    return door == BoardingDoor.Front || door == BoardingDoor.Left;
+                if (position.x > sceneView.rightSideDoorClosed.x + .1f)
+                    return door == BoardingDoor.Front || door == BoardingDoor.Right;
+            }
+            return door == ClosestBoardingDoor(rider);
         }
 
         // Door names are authored in cabin space. Both views can look back
@@ -1585,10 +1626,25 @@ namespace CrazyElevator.Managers
                     && round.IsQueuedAtStop(other) && other.PickupDoor == p.PickupDoor) doorSlot++;
             }
             float spacing = doorSlot * 1.15f + Mathf.Min(.7f, p.Arrival * .4f);
-            if (p.PickupDoor == BoardingDoor.Left) return new Vector3(-3.65f - spacing, .12f, 1.15f);
-            if (p.PickupDoor == BoardingDoor.Right) return new Vector3(3.65f + spacing, .12f, 1.15f);
-            return new Vector3(0f, .12f, -1.1f - spacing);
+            Vector3 threshold = BoardingDoorThreshold(p.PickupDoor);
+            // Queue outwards from the centre of the actual opening. Side
+            // passengers stay halfway down the side wall, clear of front corners.
+            float gap = p.PickupDoor == BoardingDoor.Front ? 1.15f : .75f;
+            return threshold + BoardingDoorOutward(p.PickupDoor) * (gap + spacing);
         }
+
+        Vector3 BoardingDoorThreshold(BoardingDoor door)
+        {
+            Vector3 threshold = door == BoardingDoor.Left ? sceneView.leftSideDoorClosed
+                : door == BoardingDoor.Right ? sceneView.rightSideDoorClosed
+                : (sceneView.leftDoorClosed + sceneView.rightDoorClosed) * .5f;
+            threshold.y = .12f;
+            return threshold;
+        }
+
+        static Vector3 BoardingDoorOutward(BoardingDoor door)
+            => door == BoardingDoor.Left ? Vector3.left
+                : door == BoardingDoor.Right ? Vector3.right : Vector3.back;
         // A shared rider claimed by the other car walks out of this hallway
         // before its local visual is hidden. The Rider itself is already boarded.
         void BeginSharedPickupDeparture(Rider rider, Transform figure)
@@ -1871,9 +1927,9 @@ namespace CrazyElevator.Managers
         [Min(0f), Tooltip("Raises the cabin camera so hall passengers remain visible behind boarded riders.")]
         public float cameraLift;
         [Range(45f, 90f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
-        public float cabinVerticalFieldOfView = 90f;
+        public float cabinVerticalFieldOfView = 72f;
         [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
-        public float cabinAimDown = 15f;
+        public float cabinAimDown = 0f;
 
         readonly Dictionary<Rider, PassengerSpeechBubble> speechBubbleViews =
             new Dictionary<Rider, PassengerSpeechBubble>();
