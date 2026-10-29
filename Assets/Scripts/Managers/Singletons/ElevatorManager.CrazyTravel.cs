@@ -408,7 +408,7 @@ namespace CrazyElevator.Managers
                 Mathf.Lerp(.18f, 1f, Mathf.SmoothStep(0f, 1f, cameraFollowBlend)));
             // A short lag rounds off rail/track corners and turns a warp into a quick swoop.
             Vector2 framing = new Vector2(cameraX, carLocal.y);
-            bool snap = cameraFramingFrame != Time.frameCount - 1
+            bool snap = cameraFramingFrame < 0
                 || (framing - cameraFraming).sqrMagnitude > CameraSnapDistance * CameraSnapDistance;
             cameraFraming = snap ? framing
                 : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));

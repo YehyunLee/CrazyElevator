@@ -76,6 +76,7 @@ public static class ExtendedInteriorChecks
             else if (action == "match-run") RunMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "unified-cabin") RunUnifiedCabin(game);
+            else if (action == "camera-smoothing") RunCameraSmoothing(game);
             else if (action == "grid-checks") RunGridChecks(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
@@ -145,7 +146,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin") && Application.isBatchMode)
+            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -459,6 +460,127 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "unified-cabin");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Camera Smoothing")]
+    public static void RequestCameraSmoothing()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "camera-smoothing");
+    }
+
+    static object InvokeCameraHelper(Game game, string name, params object[] args)
+    {
+        MethodInfo method = typeof(Game).GetMethod(name, Flags | BindingFlags.Static);
+        Require(method != null, "The camera regression could not find " + name + ".");
+        return method.Invoke(method.IsStatic ? null : game, args);
+    }
+
+    static void RunCameraSmoothing(Game game)
+    {
+        Require(game.Match == null, "Run camera smoothing checks from solo Main.");
+        CrazyElevator.Managers.MenuManager.Close();
+        game.enabled = false;
+        try
+        {
+            Call(game, "Restart");
+            var round = (Round)Get(game, "round");
+            Phase(game, "Opening");
+            Set(game, "landingFramingFloor", -1);
+            var crowded = new Bounds(new Vector3(-2f, 1.5f, 2.5f), new Vector3(16f, 4f, 8f));
+            var empty = new Bounds(new Vector3(0f, 1.65f, 2.5f), new Vector3(6.6f, 3.5f, 5.5f));
+            Bounds Retain(Bounds value) => (Bounds)InvokeCameraHelper(game, "RetainLandingCameraBounds", value);
+            bool SameBounds(Bounds a, Bounds b) => Vector3.Distance(a.min, b.min) < .001f
+                && Vector3.Distance(a.max, b.max) < .001f;
+            Require(SameBounds(Retain(crowded), crowded), "Arrival did not capture the complete crowd framing.");
+            Phase(game, "Boarding");
+            Require(SameBounds(Retain(empty), crowded), "A pickup shrank or shifted the landing's camera bounds.");
+            Phase(game, "Closing");
+            Require(SameBounds(Retain(empty), crowded), "Closing the doors discarded the crowd framing early.");
+            round.Floor++;
+            Phase(game, "Opening");
+            Require(SameBounds(Retain(empty), empty), "A new floor retained the previous floor's wide framing.");
+            Retain(crowded);
+            round.Stop = (round.Stop + 1) % Round.Stops;
+            Require(SameBounds(Retain(empty), empty), "A new landing retained another stop's framing.");
+            Retain(crowded);
+            Phase(game, "Moving");
+            Retain(empty);
+            Phase(game, "Boarding");
+            Require(SameBounds(Retain(empty), empty), "Travel failed to release the previous landing's framing.");
+
+            Vector3 Smooth(Vector3 from, Vector3 target, float dt) => (Vector3)InvokeCameraHelper(game,
+                "SmoothCabinHome", from, target, dt);
+            Vector3 start = new Vector3(-8f, 3f, 6f), goal = new Vector3(4f, 9f, 18f);
+            Vector3 next = Smooth(start, goal, 1f / 60f);
+            Require(Vector3.Distance(next, goal) < Vector3.Distance(start, goal)
+                && Vector3.Distance(next, start) > .001f && Vector3.Distance(next, goal) > .001f,
+                "Cabin framing snapped or failed to move toward its target.");
+            Require(Vector3.Distance(Smooth(next, goal, 0f), next) < .0001f,
+                "A paused camera continued reframing.");
+            Vector3 thirty = start, oneTwenty = start;
+            for (int frame = 0; frame < 15; frame++) thirty = Smooth(thirty, goal, 1f / 30f);
+            for (int frame = 0; frame < 60; frame++) oneTwenty = Smooth(oneTwenty, goal, 1f / 120f);
+            Require(Vector3.Distance(thirty, oneTwenty) < .001f,
+                "Cabin smoothing depends on frame rate.");
+
+            float View(bool travel, float dt) => (float)InvokeCameraHelper(game, "AdvanceCameraView", travel, dt);
+            Set(game, "cameraViewReady", false);
+            Require(Mathf.Abs(View(false, 0f)) < .0001f, "An initial inside view started as a travel preview.");
+            float partial = View(true, .1f);
+            Require(partial > 0f && partial < 1f, "The camera handoff jumped directly to its destination.");
+            Require(Mathf.Abs(View(true, 0f) - partial) < .0001f, "Pausing advanced a camera handoff.");
+            Require(View(false, .05f) < partial, "A reversed camera handoff did not reverse smoothly.");
+            Require(Mathf.Abs(View(true, 1f) - 1f) < .0001f && Mathf.Abs(View(false, 1f)) < .0001f,
+                "The camera handoff did not finish at the requested view.");
+            var full = new Rect(0f, 0f, .5f, 1f);
+            var preview = new Rect(.29f, .7f, .18f, .1f);
+            Rect Blend(float value) => (Rect)InvokeCameraHelper(game, "BlendCameraRect", full, preview, value);
+            bool SameRect(Rect a, Rect b) => Vector2.Distance(a.position, b.position) < .0001f
+                && Vector2.Distance(a.size, b.size) < .0001f;
+            Rect halfway = Blend(.5f);
+            Require(SameRect(Blend(0f), full) && SameRect(Blend(1f), preview)
+                && halfway.width > preview.width && halfway.width < full.width
+                && halfway.height > preview.height && halfway.height < full.height
+                && halfway.xMin >= full.xMin && halfway.xMax <= full.xMax,
+                "The animated cabin viewport jumped or spilled across a split-screen seat.");
+
+            // Exercise the real Main framing path with a multi-passenger landing.
+            // Removing one of its visible riders must not move the settled camera.
+            Call(game, "Restart");
+            Phase(game, "Boarding");
+            round = (Round)Get(game, "round");
+            Call(game, "UpdateShaftCrowd", 0f);
+            Call(game, "SyncFigures", 0f);
+            Call(game, "LateUpdate");
+            Require(round.Riders.FindAll(round.IsOffered).Count > 1,
+                "The camera regression needs a landing with more than one passenger.");
+            float aspect = game.sceneView.cabinCamera.aspect;
+            InvokeCameraHelper(game, "FrameCabinDoorways", 10f, aspect);
+            Vector3 crowdedHome = (Vector3)Get(game, "cabinCameraHome");
+            SharedRider rider = round.Riders.Find(r => round.IsOffered(r) && r.Arrival <= 0f);
+            Require(rider != null && round.Board(rider), "The camera regression could not board a visible rider.");
+            Call(game, "AdoptWaitingFigure", rider);
+            InvokeCameraHelper(game, "FrameCabinDoorways", 10f, aspect);
+            Require(Vector3.Distance((Vector3)Get(game, "cabinCameraHome"), crowdedHome) < .001f,
+                "Boarding one passenger reframed a crowded floor.");
+            File.WriteAllText(Work + "/result.txt",
+                "PASS: stable crowded-landing framing across pickups and door closing; new landing release; smooth and frame-rate-independent camera motion; paused camera freeze; reversible viewport handoffs; split-seat bounds; Main multi-passenger pickup stability.");
+        }
+        finally
+        {
+            Call(game, "Restart");
+            game.enabled = true;
+        }
+    }
+
+    // Camera transitions run independently of the gameplay phase. Tests settle
+    // only the presentation so legacy arrival/closing checks can inspect endpoints.
+    static void SettleCameraView(Game game, bool travelView)
+    {
+        InvokeCameraHelper(game, "AdvanceCameraView", travelView, 1f);
+        Call(game, "LateUpdate");
     }
 
     static void CheckDoorwayAccess(Game game, SharedRider rider, Transform figure)
@@ -887,6 +1009,7 @@ public static class ExtendedInteriorChecks
         Require(Get(game, "phase").ToString() == "Opening" && game.sceneView.exteriorCamera.enabled,
             "Building view must stay visible while the stopped elevator opens its doors.");
         Set(game, "phaseTime", 1f); Call(game, "Update"); Call(game, "LateUpdate");
+        SettleCameraView(game, false);
         Require(Get(game, "phase").ToString() == "Boarding" && game.sceneView.cabinCamera.enabled && !game.sceneView.exteriorCamera.enabled,
             "The fully open elevator must return to the interior.");
     }
@@ -895,6 +1018,7 @@ public static class ExtendedInteriorChecks
         Call(game, "CloseAndTravel"); Call(game, "LateUpdate");
         Require(Get(game, "phase").ToString() == "Closing" && game.sceneView.cabinCamera.enabled, "The inside view should show the doors closing.");
         Set(game, "phaseTime", 1f); Call(game, "Update"); Call(game, "LateUpdate");
+        SettleCameraView(game, true);
         Require(Get(game, "phase").ToString() == "Moving" && game.sceneView.exteriorCamera.enabled
             && game.sceneView.cabinCamera.enabled && game.sceneView.cabinCamera.rect.width < game.sceneView.exteriorCamera.rect.width,
             "Closed doors must switch to shaft travel with a smaller cabin preview.");
