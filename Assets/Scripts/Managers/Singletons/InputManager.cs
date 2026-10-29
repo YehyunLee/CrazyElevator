@@ -468,6 +468,9 @@ namespace CrazyElevator.Managers
             Vector2 dpad = pad == null ? Vector2.zero : pad.dpad.ReadValue();
             Vector2 stick = leftStick + dpad;
             Vector2 navigation = stick + keys;
+            Vector2 rightStick = pad == null ? Vector2.zero : pad.rightStick.ReadValue();
+            Vector2 selectionStick = rightStick.magnitude >= .55f ? rightStick : leftStick;
+            Vector2 selection = rightStick.magnitude >= .55f ? rightStick + keys : navigation;
             bool playerTwoConfirm = keyboardAvailable
                 && (keyboard.periodKey.wasPressedThisFrame
                     || ActiveView == GameView.Menu && keyboard.slashKey.wasPressedThisFrame);
@@ -512,9 +515,9 @@ namespace CrazyElevator.Managers
             var result = new SeatInput
             {
                 Move = navigation,
-                Select = navigation,
+                Select = selection,
                 MovePressed = navigation.magnitude >= .55f,
-                SelectPressed = navigation.magnitude >= .55f,
+                SelectPressed = selection.magnitude >= .55f,
                 ConfirmPressed = confirm,
                 KickoutPressed = kickout,
                 PausePressed = pause,
@@ -538,17 +541,17 @@ namespace CrazyElevator.Managers
             }
             if (!ignoreTutorialRestrictions)
                 ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat),
-                    pad != null, leftStick, keys);
+                    pad != null, selectionStick, keys);
             return result;
         }
 
         static void ApplyTutorialInputMode(ref SeatInput input, TutorialInputMode mode,
-            bool controllerAssigned, Vector2 leftStick, Vector2 keyboardMove)
+            bool controllerAssigned, Vector2 selectionStick, Vector2 keyboardMove)
         {
             if (mode == TutorialInputMode.Free) return;
 
             bool pause = input.PausePressed;
-            Vector2 select = controllerAssigned ? leftStick : keyboardMove;
+            Vector2 select = controllerAssigned ? selectionStick : keyboardMove;
             // Travel steps teach up/down only; a slightly diagonal stick must not
             // turn the car onto a floor rail or switch duel lanes.
             Vector2 move = new Vector2(0f, input.Move.y);

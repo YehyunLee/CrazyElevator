@@ -27,7 +27,8 @@ namespace CrazyElevator.Managers
             openBoardingDoor = (int)door;
             autoBoardWait = .25f;
             SelectRider(null);
-            notice = door.ToString().ToUpperInvariant() + " DOOR: passengers board automatically.";
+            notice = ((BoardingDoor)BoardingDoorScreenSlot(door)).ToString().ToUpperInvariant()
+                + " DOOR: passengers board automatically.";
             Play(click);
         }
 
@@ -90,6 +91,24 @@ namespace CrazyElevator.Managers
             BoardPassengerWithPersona(next);
         }
 
+        // Door names are authored in cabin space. Both views can look back
+        // across the cabin, so controls and cards must follow screen space.
+        bool BoardingDoorOrderReversed
+        {
+            get
+            {
+                Camera camera = DisplayBuildingView ? exteriorCamera : eye;
+                return stage != null && camera != null
+                    && Vector3.Dot(stage.right, camera.transform.right) < 0f;
+            }
+        }
+
+        int BoardingDoorScreenSlot(BoardingDoor door)
+            => BoardingDoorOrderReversed ? 2 - (int)door : (int)door;
+
+        BoardingDoor BoardingDoorAtScreenSlot(int slot)
+            => (BoardingDoor)(BoardingDoorOrderReversed ? 2 - slot : slot);
+
         void ReadBoardingDoorSelection(InputManager.SeatInput input)
         {
             if (phase != Phase.Boarding) return;
@@ -97,7 +116,7 @@ namespace CrazyElevator.Managers
             if (direction.magnitude >= .55f && direction != lastSelectionDirection)
             {
                 if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-                    selectedBoardingDoor = direction.x < 0f ? BoardingDoor.Left : BoardingDoor.Right;
+                    selectedBoardingDoor = BoardingDoorAtScreenSlot(direction.x < 0f ? 0 : 2);
                 else if (direction.y > 0f) selectedBoardingDoor = BoardingDoor.Front;
                 else { SelectInDirection(Vector2.down); lastSelectionDirection = direction; return; }
                 hasChosenBoardingDoor = true;

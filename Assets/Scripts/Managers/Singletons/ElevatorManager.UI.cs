@@ -1241,8 +1241,9 @@ namespace CrazyElevator.Managers
 
         Rect BoardingDoorRect(int door)
         {
-            float width = Mathf.Min(200f, (ViewWidth - 48f) / 3f);
-            return new Rect(16f + door * (width + 8f), compactTopHud ? 88f : 154f, width, 88f);
+            float width = Mathf.Min(220f, (ViewWidth - 48f) / 3f);
+            int slot = BoardingDoorScreenSlot((BoardingDoor)door);
+            return new Rect(16f + slot * (width + 8f), compactTopHud ? 88f : 154f, width, 108f);
         }
 
         bool ReadDoorButtonClick(InputManager.SeatInput input)
@@ -1268,7 +1269,8 @@ namespace CrazyElevator.Managers
                 Rect rect = BoardingDoorRect(door);
                 Color accent = openBoardingDoor == door ? Teal : Gold;
                 GameplayControlPanel(rect, accent, selectedRider == null && (int)selectedBoardingDoor == door);
-                string name = ((BoardingDoor)door).ToString().ToUpperInvariant();
+                int slot = BoardingDoorScreenSlot((BoardingDoor)door);
+                string name = ((BoardingDoor)slot).ToString().ToUpperInvariant();
                 int count = 0;
                 foreach (Rider rider in round.Riders)
                     if (round.IsOffered(rider) && (int)rider.PickupDoor == door) count++;
@@ -1278,16 +1280,16 @@ namespace CrazyElevator.Managers
                 foreach (Rider rider in round.Riders)
                 {
                     if (!round.IsOffered(rider) || (int)rider.PickupDoor != door) continue;
-                    if (x + 26f > rect.xMax - 8f) break;
-                    DrawPassengerBadgeIcon(new Rect(x, rect.y + 31f, 26f, 26f),
+                    if (x + 40f > rect.xMax - 8f) break;
+                    DrawPassengerBadgeIcon(new Rect(x, rect.y + 31f, 40f, 40f),
                         rider.Kind, Palette[rider.Color % Palette.Length]);
-                    x += 30f;
+                    x += 44f;
                 }
                 string key = GameplayUsesKeyboard
-                    ? Seat == 1 ? (door == 0 ? "LEFT" : door == 1 ? "UP" : "RIGHT")
-                        : (door == 0 ? "A" : door == 1 ? "W" : "D")
-                    : (door == 0 ? "LEFT" : door == 1 ? "UP" : "RIGHT");
-                GUI.Label(new Rect(rect.x + 8f, rect.y + 58f, rect.width - 16f, 26f),
+                    ? Seat == 1 ? (slot == 0 ? "LEFT" : slot == 1 ? "UP" : "RIGHT")
+                        : (slot == 0 ? "A" : slot == 1 ? "W" : "D")
+                    : (slot == 0 ? "LEFT" : slot == 1 ? "UP" : "RIGHT");
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 78f, rect.width - 16f, 26f),
                     key + " + " + GameplayConfirmKey + "  |  " + count + " waiting", calloutText);
             }
         }

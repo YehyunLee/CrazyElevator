@@ -414,10 +414,12 @@ namespace CrazyElevator.Managers
                 : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));
             cameraFramingFrame = Time.frameCount;
             cameraX = cameraFraming.x;
+            // Frame the car and nearby queues closely enough to recognise riders.
+            // Keep the same shallow downward view while bringing the camera in.
             Vector3 cameraLocal = new Vector3(
                 cameraX,
-                cameraFraming.y + 5.2f,
-                -34f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
+                cameraFraming.y + 3.4f,
+                -20f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
 
             routeBoostPulse = Mathf.MoveTowards(routeBoostPulse, 0f, Time.unscaledDeltaTime * 1.55f);
             if (phase == Phase.Moving)
