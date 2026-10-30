@@ -270,8 +270,8 @@ namespace CrazyElevator.Managers
 
         void QueuePassengerDiscoveryCard(Rider rider)
         {
-            // Passenger types are introduced on the full-screen dimension reveal
-            // at each minute mark, not as a card when the shift or a world starts.
+            // Passenger types are covered by the full-screen preview before
+            // every round, keeping the active round free of tutorial popups.
             _ = rider;
         }
 
@@ -328,20 +328,16 @@ namespace CrazyElevator.Managers
         // unified screen instead of one card per player.
         public void PrepareDimensionPreview(WorldBand world)
         {
-            Color accent = world == WorldBand.Candy
-                ? new Color32(236, 118, 188, 255)
-                : world == WorldBand.Water
-                    ? new Color32(48, 196, 210, 255)
-                    : new Color32(98, 132, 178, 255);
+            Color accent = DimensionIntroAccent(world);
             GameObject source = FindWorldPreviewSource(world);
-            float yaw = world == WorldBand.Candy ? 18f : -20f;
+            float yaw = world == WorldBand.Office ? -12f : world == WorldBand.Candy ? 18f : -20f;
             // The art-team FBX dioramas face +Z (Maya front view) with single-sided
             // planes; turn them toward the preview camera and keep only a slight angle.
             if (source != null && source.name.StartsWith("BG_")) yaw = 180f + yaw * .4f;
             EncounterCard card = new EncounterCard
             {
-                Kicker = "NEW MULTIVERSE",
-                Title = world == WorldBand.Candy ? "COTTON CANDY" : world == WorldBand.Water ? "UNDERWATER" : "OFFICE",
+                Kicker = "ROUND PREVIEW",
+                Title = DimensionIntroTitle(world),
                 Description = string.Empty,
                 Badge = string.Empty,
                 Accent = accent,
@@ -362,7 +358,7 @@ namespace CrazyElevator.Managers
 
             GameObject stageObject = new GameObject("Encounter 3D preview stage");
             stageObject.hideFlags = HideFlags.HideAndDontSave;
-            stageObject.transform.position = new Vector3(10000f, -10000f, 10000f);
+            stageObject.transform.position = new Vector3(10000f + Seat * 100f, -10000f, 10000f);
             encounterPreviewStage = stageObject.transform;
 
             GameObject pivotObject = new GameObject("Preview model pivot");
@@ -673,16 +669,29 @@ namespace CrazyElevator.Managers
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
             if (round == null || eye == null || MenuManager.IsOpen) return;
-            if (phase == Phase.Countdown)
+            if (paused && Match == null && !MenuManager.TutorialActive)
             {
-                if (Match == null || !IsNpc) DrawNoTutorialCountdown();
+                Styles();
+                scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
+                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 900 * scale) / 2;
+                GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, Vector3.one * scale);
+                Overlay();
+                GUI.matrix = Matrix4x4.identity;
                 return;
             }
-            if (dimensionRevealActive && Match == null)
+            if (dimensionRevealActive)
             {
-                GUI.matrix = Matrix4x4.identity;
-                DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height));
-                DrawSessionFade(sessionFadeAlpha);
+                if (Match == null)
+                {
+                    GUI.matrix = Matrix4x4.identity;
+                    DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height));
+                    DrawSessionFade(sessionFadeAlpha);
+                }
+                return;
+            }
+            if (phase == Phase.Countdown)
+            {
+                if (!paused && (Match == null || !IsNpc)) DrawNoTutorialCountdown();
                 return;
             }
             if (Match != null || MenuManager.FullScreenOverlayActive) return;

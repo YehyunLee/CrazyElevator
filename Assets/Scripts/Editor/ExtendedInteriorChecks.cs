@@ -62,16 +62,17 @@ public static class ExtendedInteriorChecks
             typeof(CrazyElevator.Managers.MenuManager)
                 .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
                 .SetValue(null, true);
+            // These exercise real rounds rather than the separate guided practice.
+            // Override this run only; leave the saved tutorial preference intact.
+            var menu = typeof(CrazyElevator.Managers.MenuManager);
+            var statics = BindingFlags.Static | BindingFlags.NonPublic;
+            menu.GetField("tutorialOnLoad", statics).SetValue(null, false);
+            menu.GetField("tutorialMode", statics).SetValue(null, false);
+            menu.GetField("tutorialModeLoaded", statics).SetValue(null, true);
             if (singleDimension)
             {
-                // Override this run only; leave the user's saved tutorial preference intact.
-                var menu = typeof(CrazyElevator.Managers.MenuManager);
-                var statics = BindingFlags.Static | BindingFlags.NonPublic;
                 menu.GetField("playerTwoHumanOnLoad", statics).SetValue(null, true);
                 menu.GetField("playerOneCpuOnLoad", statics).SetValue(null, false);
-                menu.GetField("tutorialOnLoad", statics).SetValue(null, false);
-                menu.GetField("tutorialMode", statics).SetValue(null, false);
-                menu.GetField("tutorialModeLoaded", statics).SetValue(null, true);
             }
             CrazyElevator.Managers.MenuManager.Close();
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
@@ -1040,7 +1041,34 @@ public static class ExtendedInteriorChecks
     {
         Require(game.Match == null, "Solo mode unexpectedly created a rival elevator.");
         CrazyElevator.Managers.MenuManager.Close();
-        Call(game, "Restart");
+        game.StartSoloRound();
+        for (int dimension = 0; dimension < Round.Dimensions; dimension++)
+        {
+            var previewRound = (Round)Get(game, "round");
+            Require(game.DimensionRevealActive && game.DimensionRevealIndex == dimension && game.CountdownPlaying
+                && previewRound.TimeLeft == 60f && previewRound.Load == 0,
+                "Each solo round must introduce its world before the countdown.");
+            float patience = previewRound.Riders[0].Remaining;
+            Call(game, "Update");
+            Require(previewRound.TimeLeft == 60f && previewRound.Riders[0].Remaining == patience
+                && game.DimensionRevealActive && !game.NpcBoard(),
+                "The solo introduction consumed time or allowed boarding.");
+            float introTime = (float)Get(game, "dimensionRevealTime");
+            game.SetPausedPublic(true);
+            Call(game, "Update");
+            Require((float)Get(game, "dimensionRevealTime") == introTime,
+                "The solo introduction advanced while paused.");
+            game.SetPausedPublic(false);
+            Set(game, "dimensionRevealExitTime", 0f);
+            Call(game, "TickDimensionReveal", Game.DimensionRevealFadeSeconds);
+            FinishRoundCountdown(game);
+            if (dimension < Round.Dimensions - 1) Call(game, "StartOrContinue");
+        }
+        game.StartSoloRound();
+        Require(game.DimensionRevealActive && game.DimensionRevealIndex == 0,
+            "Restarting solo practice must introduce the office again.");
+        game.FinishDimensionReveal();
+        FinishRoundCountdown(game);
         Call(game, "LateUpdate");
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
@@ -1061,18 +1089,23 @@ public static class ExtendedInteriorChecks
                 && Mathf.Abs(rightLanding.localPosition.y - landingHeight) < .02f,
                 "The taller shaft landings do not line up with the floors.");
         }
-        Require(round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
-            && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8)
-            && round.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
-            && round.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
-            "Special passengers are waiting outside their assigned worlds.");
+        Require(round.ActiveDimension == 0 && round.Riders.Count > 0
+            && round.Riders.TrueForAll(r => round.ContainsFloor(r.Origin) && round.ContainsFloor(r.Destination))
+            && !round.Riders.Exists(r => r.Kind == "HANDYMAN" || r.Kind == "BOSS"),
+            "Solo passengers are waiting or requesting destinations outside the active office world.");
         var band = typeof(Game).GetMethod("BandForFloor", Flags);
         Require(band.Invoke(game, new object[] { 0f }).ToString() == "Office"
-            && band.Invoke(game, new object[] { 4f }).ToString() == "Candy"
-            && band.Invoke(game, new object[] { 8f }).ToString() == "Water",
+            && band.Invoke(game, new object[] { (float)Round.FloorsPerDimension }).ToString() == "Candy"
+            && band.Invoke(game, new object[] { (float)Round.FloorsPerDimension * 2 }).ToString() == "Water",
             "Office, candy, and underwater floors are out of order.");
 
+        round.CenterStopsOnly = true;
+        round.AssignStops();
+        round.AssignBoardingDoors();
+        Call(game, "SyncFigures", 0f);
         var rider = round.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
+        rider.Destination = 1;
+        rider.DestinationStop = Round.CenterStop;
         Require(round.Board(rider) && game.PassengerLoad == rider.Space
             && game.CurrentPassengers.Count == 1, "Solo boarding changed.");
         float before = round.TimeLeft;
@@ -1093,7 +1126,7 @@ public static class ExtendedInteriorChecks
             && game.PassengerLoad == 0 && round.Delivered == 1,
             "Solo travel or delivery changed.");
         File.WriteAllText(Work + "/result.txt",
-            "PASS: solo car centred with a diagonal perspective camera; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
+            "PASS: solo office/candy/water introductions before countdown; frozen intro timer, patience and boarding; pause and office restart; car and camera alignment; active-world passenger origins and destinations; boarding, travel, timer, and delivery.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
@@ -1113,6 +1146,96 @@ public static class ExtendedInteriorChecks
             if (led.enabled && led.sharedMaterial != null && led.sharedMaterial.color == litColor) lit++;
         }
         Require(lit == litSegments, "The cabin LED does not display local floor " + number + ".");
+    }
+
+    static void FinishRoundCountdown(Game game)
+    {
+        Require(game.CountdownPlaying && !game.DimensionRevealActive,
+            "The ready handoff must show the countdown before starting gameplay.");
+        float clock = game.SecondsLeft;
+        Set(game, "countdownTime", 4f);
+        Call(game, "Update");
+        Require(!game.CountdownPlaying && game.SecondsLeft == clock,
+            "The countdown handoff consumed round time.");
+    }
+
+    // Gameplay-only checks explicitly pass through the new ready break first.
+    static void FinishMatchRoundIntroduction(CrazyElevator.Match.ElevatorMatch match)
+    {
+        var type = typeof(CrazyElevator.Match.ElevatorMatch);
+        Require(match.DimensionRevealActive && match.player.DimensionRevealActive && match.Rival.DimensionRevealActive,
+            "A fresh match round must introduce its dimension to both cars.");
+        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
+        var human = type.GetMethod("DimensionRevealSeatHuman", Flags);
+        for (int seat = 0; seat < ready.Length; seat++)
+            ready[seat] = (bool)human.Invoke(match, new object[] { seat });
+        type.GetField("dimensionRevealTime", Flags).SetValue(match, Game.DimensionRevealSeconds);
+        var tick = type.GetMethod("UpdateDimensionReveal", Flags);
+        tick.Invoke(match, new object[] { 0f });
+        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        Require(!match.DimensionRevealActive && !match.player.DimensionRevealActive && !match.Rival.DimensionRevealActive,
+            "Ready players did not finish the dimension introduction together.");
+        FinishRoundCountdown(match.player);
+        FinishRoundCountdown(match.Rival);
+    }
+
+    static void CheckMatchRoundIntroduction(CrazyElevator.Match.ElevatorMatch match, int dimension)
+    {
+        var player = match.player;
+        var rival = match.Rival;
+        var round = (Round)Get(player, "round");
+        var other = (Round)Get(rival, "round");
+        Require(match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive
+            && player.DimensionRevealIndex == dimension && rival.DimensionRevealIndex == dimension
+            && player.CountdownPlaying && rival.CountdownPlaying,
+            "Every round, including office, must show its introduction before the countdown.");
+        var patience = new Dictionary<SharedRider, float[]>();
+        foreach (SharedRider rider in round.Riders)
+            patience[rider] = new[] { rider.Remaining, rider.Arrival, rider.SpawnDelay };
+        foreach (Game car in new[] { player, rival })
+        {
+            Call(car, "Update");
+            Call(car, "TickDimensionReveal", 2f);
+            car.OnboardSelectedPublic();
+            car.CloseAndTravelPublic();
+            car.SetTravelInput(1f, true);
+            Require(!car.NpcBoard() && !car.IsBoarding && car.PassengerLoad == 0 && car.CountdownPlaying,
+                "Passengers or navigation became active underneath the introduction.");
+        }
+        foreach (var saved in patience)
+            Require(saved.Key.Remaining == saved.Value[0] && saved.Key.Arrival == saved.Value[1]
+                && saved.Key.SpawnDelay == saved.Value[2] && !saved.Key.Boarded && !saved.Key.Resolved,
+                "An introduction consumed passenger patience, arrival time, or the waiting roster.");
+        Require(round.TimeLeft == 60f && other.TimeLeft == 60f && round.Score == 0 && other.Score == 0,
+            "An introduction consumed round time or changed the delivery score.");
+
+        var type = typeof(CrazyElevator.Match.ElevatorMatch);
+        var time = type.GetField("dimensionRevealTime", Flags);
+        var tick = type.GetMethod("UpdateDimensionReveal", Flags);
+        float beforePause = (float)time.GetValue(match);
+        match.TogglePause();
+        tick.Invoke(match, new object[] { 2f });
+        Require((float)time.GetValue(match) == beforePause && match.DimensionRevealActive,
+            "A paused introduction advanced its ready or fade clock.");
+        match.TogglePause();
+
+        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
+        Require(!ready[0] && !ready[1], "A new round retained another round's ready confirmations.");
+        var everyoneReady = type.GetMethod("DimensionRevealEveryoneReady", Flags);
+        time.SetValue(match, Game.DimensionRevealConfirmDelay + .01f);
+        ready[0] = true;
+        Require(!(bool)everyoneReady.Invoke(match, null),
+            "Player 1 skipped the introduction before Player 2 was ready.");
+        ready[1] = true;
+        Require((bool)everyoneReady.Invoke(match, null),
+            "Both human confirmations did not release the introduction.");
+        tick.Invoke(match, new object[] { 0f });
+        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        Require(!match.DimensionRevealActive && !player.DimensionRevealActive && !rival.DimensionRevealActive
+            && player.CountdownPlaying && rival.CountdownPlaying && round.TimeLeft == 60f && other.TimeLeft == 60f,
+            "The introduction must hand both cars to the countdown without consuming game time.");
+        FinishRoundCountdown(player);
+        FinishRoundCountdown(rival);
     }
 
     static void RunSingleDimensionMatch()
@@ -1179,19 +1302,7 @@ public static class ExtendedInteriorChecks
                     == (r.Destination - first + 1).ToString()),
                     "Passenger destination badges must use this world's local floor numbers.");
                 previousPool = round.Riders;
-                if (index > 0)
-                {
-                    Require(player.CountdownPlaying && rival.CountdownPlaying,
-                        "Both cars must wait for the next-round countdown.");
-                    Call(player, "Update"); Call(rival, "Update");
-                    Require(round.TimeLeft == 60f && other.TimeLeft == 60f,
-                        "Countdown consumed round time.");
-                    Set(player, "countdownTime", 4f); Set(rival, "countdownTime", 4f);
-                    Call(player, "Update"); Call(rival, "Update");
-                    Require(!player.CountdownPlaying && !rival.CountdownPlaying
-                        && round.TimeLeft == 60f && other.TimeLeft == 60f,
-                        "Countdown handoff must start both cars before consuming time.");
-                }
+                CheckMatchRoundIntroduction(match, dimension);
                 match.TogglePause();
                 Call(player, "Update"); Call(rival, "Update");
                 Require(round.TimeLeft == 60f && other.TimeLeft == 60f && player.IsPaused && rival.IsPaused,
@@ -1251,9 +1362,10 @@ public static class ExtendedInteriorChecks
             Require(session.RoundNumber == 1 && !session.MatchFinished
                 && session.PlayerOneWins == 0 && session.PlayerTwoWins == 0
                 && player.DiscreteFloor == 0 && rival.DiscreteFloor == 0
-                && player.CountdownPlaying && rival.CountdownPlaying,
-                "Play Again must reset the series and count down in the office.");
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; countdown and pause freeze clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch reset and countdown.");
+                && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
+                "Play Again must reset the series and introduce the office again.");
+            CheckMatchRoundIntroduction(match, 0);
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch office introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally
@@ -1270,6 +1382,7 @@ public static class ExtendedInteriorChecks
             "1v1 did not create the NPC elevator.");
         var player = match.player;
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         var rival = match.Rival;
         var playerRound = (Round)Get(player, "round");
         var rivalRound = (Round)Get(rival, "round");
@@ -1336,6 +1449,7 @@ public static class ExtendedInteriorChecks
             "The player kept showing the NPC's passenger after departure finished.");
 
         player.ResetRoundPublic();
+        FinishMatchRoundIntroduction(match);
         playerRound = (Round)Get(player, "round");
         rivalRound = (Round)Get(rival, "round");
         Require(ReferenceEquals(playerRound.Riders[0], rivalRound.Riders[0])
@@ -1359,6 +1473,7 @@ public static class ExtendedInteriorChecks
         // A moving rival should knock it back into shaft travel and visibly
         // displace it away from the floor.
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         trackPositions[1] = trackPositions[0];
         phaseField.SetValue(player, moving);
         var stoppedRound = (Round)Get(rival, "round");
@@ -1378,6 +1493,7 @@ public static class ExtendedInteriorChecks
         // The route remains a straight vertical shaft. Choosing the highlighted
         // express gate still grants one burst without changing the track path.
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         phaseField.SetValue(player, moving);
         float junctionFloor = match.JunctionFloor(0);
         Set(player, "travelFloor", junctionFloor);

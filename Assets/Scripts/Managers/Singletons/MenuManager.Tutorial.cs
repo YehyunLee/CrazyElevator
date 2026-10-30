@@ -225,6 +225,8 @@ namespace CrazyElevator.Managers
             if (!tutorialIntroReady)
             {
                 if (tutorialGame.IntroPlaying) return;
+                if (tutorialGame.Match != null && !tutorialGame.Match.Running)
+                    tutorialGame.Match.StartMatch();
                 PauseTutorialGame();
                 tutorialIntroReady = true;
                 for (int i = 0; i < tutorialActors.Length; i++)
@@ -538,6 +540,11 @@ namespace CrazyElevator.Managers
                 tutorialActors[i]?.SetTutorialStops(false);
             }
             ResumeTutorialGame();
+            if (tutorialGame != null)
+            {
+                if (tutorialGame.Match != null) tutorialGame.Match.StartMatch();
+                else tutorialGame.StartSoloRound();
+            }
             menuFadeAlpha = 1f;
             InputManager.Instance?.SetView(GameView.ControlElevator);
         }

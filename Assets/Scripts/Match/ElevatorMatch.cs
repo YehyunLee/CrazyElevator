@@ -56,7 +56,6 @@ namespace CrazyElevator.Match
         float dimensionRevealTime;
         float dimensionRevealExitTime = -1f;
         readonly bool[] dimensionRevealReady = new bool[2];
-        readonly bool[] dimensionRevealShown = new bool[ElevatorRound.Dimensions];
         public bool DimensionRevealActive => dimensionRevealActive;
 
         void Awake()
@@ -142,13 +141,13 @@ namespace CrazyElevator.Match
         void Update()
         {
             if (!enabled || player == null) return;
+            if (Paused || MenuManager.IsOpen) return;
             float dt = Time.unscaledDeltaTime;
             if (dimensionRevealActive)
             {
                 UpdateDimensionReveal(dt);
                 return;
             }
-            if (Paused) return;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
             expressFlash[0] = Mathf.Max(0f, expressFlash[0] - dt);
@@ -201,13 +200,12 @@ namespace CrazyElevator.Match
                 player.PlayEndingDrum();
             }
 
-            if (player.IntroPlaying || player.CountdownPlaying
+            if (player.IntroPlaying || Rival.IntroPlaying || player.CountdownPlaying
                 || Rival.CountdownPlaying || MenuManager.IsOpen) return;
             var input = InputManager.Instance;
             if (input == null) return;
 
-            // The lobby already confirms the matchup, so begin immediately
-            // after the intro instead of blocking on another tutorial popup.
+            // The round's world briefing precedes its shared countdown.
             if (!Running)
             {
                 StartMatch();
@@ -249,13 +247,12 @@ namespace CrazyElevator.Match
         // Both cars receive a fresh clock, passenger pool and starting position.
         void BeginRound()
         {
-            bool replayCountdown = Running;
+            bool practice = MenuManager.TutorialActive;
             Paused = false;
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
-            for (int i = 0; i < dimensionRevealShown.Length; i++) dimensionRevealShown[i] = false;
             resultRevealStartedAt = -1f;
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
@@ -267,37 +264,30 @@ namespace CrazyElevator.Match
             expressTrack[2] = Random.Range(0, 2);
             usedJunctionMask[0] = usedJunctionMask[1] = 0;
             expressFlash[0] = expressFlash[1] = 0f;
-            player.StartMatchShift(countdown: replayCountdown);
-            Rival.StartMatchShift(player, countdown: replayCountdown);
+            player.StartMatchShift(countdown: !practice);
+            Rival.StartMatchShift(player, countdown: !practice);
             player.GetComponent<NpcElevator>()?.ResetDecisions();
             Rival.GetComponent<NpcElevator>()?.ResetDecisions();
             Running = true;
             Paused = false;
+            if (!practice) BeginRoundIntroduction();
         }
 
-        void TryBeginDimensionReveal()
+        void BeginRoundIntroduction()
         {
-            if (!Running || player == null || dimensionRevealActive) return;
-            float elapsed = ElevatorRound.Duration - player.SecondsLeft;
-            for (int index = 1; index < ElevatorRound.Dimensions; index++)
-            {
-                if (dimensionRevealShown[index]
-                    || elapsed < ElevatorRound.DimensionUnlockAt(index)) continue;
-                dimensionRevealShown[index] = true;
-                dimensionRevealIndex = index;
-                dimensionRevealTime = 0f;
-                dimensionRevealExitTime = -1f;
-                dimensionRevealReady[0] = dimensionRevealReady[1] = false;
-                dimensionRevealActive = true;
-                player.BeginDimensionReveal(index);
-                Rival?.BeginDimensionReveal(index);
-                return;
-            }
+            dimensionRevealIndex = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
+            dimensionRevealTime = 0f;
+            dimensionRevealExitTime = -1f;
+            dimensionRevealReady[0] = dimensionRevealReady[1] = false;
+            dimensionRevealActive = true;
+            player.BeginDimensionReveal(dimensionRevealIndex);
+            Rival?.BeginDimensionReveal(dimensionRevealIndex);
         }
 
         // The card stays up until every human player confirms; the CPU never blocks it.
         void UpdateDimensionReveal(float dt)
         {
+            if (Paused || MenuManager.IsOpen) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
             if (dimensionRevealExitTime < 0f)
             {
@@ -762,7 +752,7 @@ namespace CrazyElevator.Match
         void OnGUI()
         {
             if (player == null || Rival == null) return;
-            if (player.CountdownPlaying || Rival.CountdownPlaying) return;
+            if (!dimensionRevealActive && !Paused && (player.CountdownPlaying || Rival.CountdownPlaying)) return;
             if (MenuManager.FullScreenOverlayActive) return;
             var previousMatrix = GUI.matrix;
             var previousColour = GUI.color;
@@ -784,6 +774,7 @@ namespace CrazyElevator.Match
             if (dimensionRevealActive)
             {
                 DrawDimensionReveal();
+                if (Paused) DrawPauseOverlay();
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -872,8 +863,7 @@ namespace CrazyElevator.Match
             if (contentAlpha <= .001f) return;
 
             WorldBand world = Game.DimensionWorld(dimensionRevealIndex);
-            Color accent = world == WorldBand.Candy ? new Color32(236, 118, 188, 255)
-                : new Color32(48, 196, 210, 255);
+            Color accent = Game.DimensionIntroAccent(world);
             float width = Mathf.Min(Screen.width - 72f, 1120f);
             float height = Mathf.Min(Screen.height - 96f, 720f);
             Rect card = new Rect((Screen.width - width) * .5f,
@@ -888,7 +878,7 @@ namespace CrazyElevator.Match
             if (preview != null)
             {
                 Rect image = new Rect(card.x + 26f, card.y + 18f,
-                    card.width - 52f, card.height * .29f);
+                    card.width - 52f, card.height * .26f);
                 Color previous = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, contentAlpha);
                 GUI.DrawTexture(image, preview, ScaleMode.ScaleToFit, true);
@@ -899,35 +889,22 @@ namespace CrazyElevator.Match
             int previousHeadingSize = heading.fontSize;
             TextAnchor previousAlign = heading.alignment;
             heading.alignment = TextAnchor.MiddleCenter;
+            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .015f, 14f, 22f));
+            heading.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .30f, card.width - 48f, 28f),
+                "ROUND " + (GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1), heading);
             heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .04f, 32f, 58f));
             heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
             GUI.Label(new Rect(card.x + 24f, card.y + card.height * .35f,
-                card.width - 48f, 56f), world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER", heading);
+                card.width - 48f, 56f), Game.DimensionIntroTitle(world), heading);
+            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .014f, 14f, 20f));
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .435f,
+                card.width - 48f, 28f), Game.DimensionIntroSummary(world), heading);
 
-            string[] names;
-            string[] lines;
-            if (world == WorldBand.Candy)
-            {
-                names = new[] { "MOM + BABY", "THE BOSS", "THE TRIO" };
-                lines = new[]
-                {
-                    "Crying drains patience. Grandma calms the baby.",
-                    "On-time delivery pays a bonus.",
-                    "Three spaces. Speeds the elevator up."
-                };
-            }
-            else
-            {
-                names = new[] { "HANDYMAN", "RUST", "REPAIR" };
-                lines = new[]
-                {
-                    "Clears rust while aboard.",
-                    "Slows the elevator over time.",
-                    "Hold to patch it back up."
-                };
-            }
+            string[] names = Game.DimensionIntroNames(world);
+            string[] lines = Game.DimensionIntroLines(world);
 
-            float rowTop = card.y + card.height * .46f;
+            float rowTop = card.y + card.height * .50f;
             float rowWidth = (card.width - 80f) / 3f;
             int nameSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .02f, 18f, 28f));
             Color previousBody = text.normal.textColor;
@@ -938,7 +915,7 @@ namespace CrazyElevator.Match
             text.wordWrap = true;
             for (int i = 0; i < 3; i++)
             {
-                Rect row = new Rect(card.x + 28f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .40f);
+                Rect row = new Rect(card.x + 28f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .36f);
                 Fill(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
                 heading.fontSize = nameSize;
                 heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
@@ -949,7 +926,7 @@ namespace CrazyElevator.Match
                 player?.DrawDimensionPassenger(new Rect(row.x, row.y + 120f, row.width, row.height - 124f),
                     i, contentAlpha);
             }
-            float rowBottom = rowTop + card.height * .40f;
+            float rowBottom = rowTop + card.height * .36f;
             DrawDimensionRevealPrompt(new Rect(card.x, rowBottom + 4f, card.width, card.yMax - rowBottom - 8f),
                 nameSize, contentAlpha);
 
@@ -972,12 +949,13 @@ namespace CrazyElevator.Match
             {
                 Rect left = new Rect(line.x, line.y, line.width * .5f, line.height);
                 Rect right = new Rect(line.center.x, line.y, line.width * .5f, line.height);
-                DrawSeatReady(left, 0, "P1  PRESS C / A", Coral, contentAlpha, blink);
-                DrawSeatReady(right, 1, "P2  PRESS . / A", Teal, contentAlpha, blink);
+                DrawSeatReady(left, 0, MenuManager.KeyboardHintsEnabled ? "P1  PRESS C" : "P1  PRESS A", Coral, contentAlpha, blink);
+                DrawSeatReady(right, 1, MenuManager.KeyboardHintsEnabled ? "P2  PRESS ." : "P2  PRESS A", Teal, contentAlpha, blink);
                 return;
             }
             if (!DimensionRevealSeatHuman(0) && !DimensionRevealSeatHuman(1)) return;
-            string prompt = DimensionRevealSeatHuman(0) ? "PRESS C / A TO CONTINUE" : "PRESS . / A TO CONTINUE";
+            string key = MenuManager.KeyboardHintsEnabled ? (DimensionRevealSeatHuman(0) ? "C" : ".") : "A";
+            string prompt = "PRESS " + key + " TO CONTINUE";
             heading.normal.textColor = new Color(1f, .82f, .24f, contentAlpha * blink);
             GUI.Label(line, prompt, heading);
         }

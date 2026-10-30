@@ -101,6 +101,7 @@ namespace CrazyElevator.Managers
                 Time.unscaledDeltaTime / SessionFadeInSeconds);
             if (dimensionRevealActive)
             {
+                if (paused || Match != null && Match.Paused) return;
                 TickDimensionReveal(Time.unscaledDeltaTime);
                 return;
             }
@@ -132,13 +133,10 @@ namespace CrazyElevator.Managers
                 {
                     introTime = 0;
                     SetDoors(1);
-                    if (MenuManager.TutorialModeEnabled)
+                    if (MenuManager.TutorialActive || Match != null)
                         phase = Phase.Boarding;
                     else
-                    {
-                        phase = Phase.Countdown;
-                        countdownTime = 0f;
-                    }
+                        BeginRoundIntroduction();
                 }
                 return;
             }
@@ -182,8 +180,6 @@ namespace CrazyElevator.Managers
                 || Match.player.DiscreteStop != round.Stop;
             int waitingMisses = MenuManager.TutorialActive
                 ? 0 : round.Tick(dt, phase == Phase.Boarding, tickWaiting);
-            if (Match == null && !IsNpc && !MenuManager.TutorialActive
-                && TryBeginSoloDimensionReveal()) return;
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
@@ -250,7 +246,15 @@ namespace CrazyElevator.Managers
         {
             session?.AdvanceRound();
             Restart();
-            BeginRoundCountdown();
+            BeginRoundIntroduction();
+        }
+
+        // Start the real solo round after practice, or restart from the pause menu.
+        public void StartSoloRound()
+        {
+            session?.ResetMatchProgress();
+            Restart();
+            BeginRoundIntroduction();
         }
 
         // Clear old rider state and reset the shift.
@@ -2365,8 +2369,14 @@ namespace CrazyElevator.Managers
         {
             npcTargetFloor = -1;
             RestartWithPool(poolSource != null ? poolSource.round : null);
-            // The first round already follows the menu/tutorial countdown.
             if (countdown) BeginRoundCountdown();
+        }
+
+        // The world card holds this fresh countdown until the player is ready.
+        public void BeginRoundIntroduction()
+        {
+            BeginRoundCountdown();
+            BeginDimensionReveal(round != null && round.ActiveDimension >= 0 ? round.ActiveDimension : 0);
         }
 
         void BeginRoundCountdown()

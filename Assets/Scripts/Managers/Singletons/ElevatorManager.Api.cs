@@ -87,7 +87,7 @@ namespace CrazyElevator.Managers
         public void ResetRoundPublic()
         {
             if (Match != null) Match.StartMatch();
-            else Restart();
+            else StartSoloRound();
         }
         public void SetPausedPublic(bool value) => paused = value;
 

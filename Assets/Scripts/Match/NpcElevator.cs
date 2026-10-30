@@ -28,7 +28,8 @@ namespace CrazyElevator.Match
             // Keep the CPU from boarding, travelling, or making decisions early.
             if (MenuManager.TutorialActive) return;
             if (game == null || game.Match == null || !game.Match.Running
-                || game.Match.Paused || game.ShiftFinished) return;
+                || game.Match.Paused || game.Match.DimensionRevealActive
+                || game.DimensionRevealActive || game.CountdownPlaying || game.ShiftFinished) return;
             if (game.Traveling)
             {
                 if (wasAtStop) ResetDecisions();

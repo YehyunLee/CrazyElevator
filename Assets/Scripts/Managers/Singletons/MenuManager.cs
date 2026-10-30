@@ -1002,9 +1002,8 @@ namespace CrazyElevator.Managers
             if (tutorialActive && tutorialFinalePhase == TutorialFinalePhase.Controls)
             {
                 showingControllerInstructions = false;
-                tutorialFinalePhase = TutorialFinalePhase.Countdown;
-                tutorialFinaleTimer = 0f;
                 Close();
+                FinishTutorial();
                 SyncTitleButtons();
                 InputManager.Instance?.SetView(GameView.ControlElevator);
                 return;

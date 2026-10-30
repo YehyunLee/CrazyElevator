@@ -7,6 +7,8 @@ On the `single-dimension` branch, each round lasts **60 seconds** in one world: 
 
 Every world displays floors **1–8**, including the HUD, cabin indicator, world signs, passenger destinations, and teleport gates. `ElevatorRound.FloorNumber` converts the authored floor indices (0–23) for display; movement and delivery still use those original indices. Passenger destination generators stay inside the passenger's origin world and never request the origin floor.
 
+Before every round, including Office and rematches, a world preview introduces its characters and mechanics using the existing 3D models. Solo waits for confirmation; in a match every human player must be ready, while CPU seats never block. The briefing holds the timer, passenger patience, boarding, and countdown. Once everyone is ready, the shared countdown runs before the round starts. Tutorial practice hands off to this same briefing for the first real round.
+
 ## Scene ownership (required)
 
 Put each global manager on its **own named GameObject** in `Main.unity` and attach the script in the Inspector. Do **not** recreate them with runtime `new GameObject` / `AddComponent`.
