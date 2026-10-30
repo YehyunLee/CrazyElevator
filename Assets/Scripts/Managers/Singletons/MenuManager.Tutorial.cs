@@ -19,9 +19,9 @@ namespace CrazyElevator.Managers
             "YOU ARE THE ELEVATOR DRIVER.",
             "YOU ARE FIGHTING FOR A PROMOTION.",
             "BEAT YOUR COLLEAGUE.",
-            "UNDER 3 MINUTES, DELIVER THE MOST PASSENGERS.",
+            "ONE MINUTE PER ROUND. SCORE THE MOST TO WIN.",
             "COLLIDE WITH THEIR ELEVATOR TO ATTACK.",
-            "USE UNIQUE PASSENGERS AND THE MULTIVERSE TO GET AHEAD."
+            "FIRST TO 3 ROUND WINS. THE WORLD CHANGES EACH ROUND."
         };
         enum TutorialCardMotion
         {

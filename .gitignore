@@ -44,6 +44,7 @@
 ExportedObj/
 .consulo/
 *.csproj
+!Tools/GameplayChecks/GameplayChecks.csproj
 *.unityproj
 *.sln
 *.slnx

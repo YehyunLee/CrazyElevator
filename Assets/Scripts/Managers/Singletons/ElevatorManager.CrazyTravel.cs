@@ -160,23 +160,23 @@ namespace CrazyElevator.Managers
         bool TryGetVerticalTrack(float x, float floor, out float trackX, out float bottom, out float top)
         {
             trackX = NearestShaftX(x);
-            bottom = 0f;
-            top = ElevatorRound.Floors - 1f;
+            bottom = MinTravelFloor;
+            top = MaxTravelFloor;
             if (OnMainShaft(x)) return true;
             foreach (SideTrack track in SideTracks)
             {
                 if (Mathf.Abs(x - track.X) > ShaftAlignReach) continue;
                 if (floor < track.Bottom - .02f || floor > track.Top + .02f) continue;
                 trackX = track.X;
-                bottom = track.Bottom;
-                top = track.Top;
-                return true;
+                bottom = Mathf.Max(track.Bottom, MinTravelFloor);
+                top = Mathf.Min(track.Top, MaxTravelFloor);
+                return bottom <= top && floor >= bottom - .02f && floor <= top + .02f;
             }
             return false;
         }
 
         static int AxisSign(float axis) => axis >= .5f ? 1 : axis <= -.5f ? -1 : 0;
-        int ClampRailFloor(float floor) => Mathf.Clamp(Mathf.RoundToInt(floor), 0, MaxTravelFloor);
+        int ClampRailFloor(float floor) => Mathf.Clamp(Mathf.RoundToInt(floor), MinTravelFloor, MaxTravelFloor);
         int TowardCentre => routeLateralX < ElevatorMatchType.ShaftCenterX ? 1 : -1;
         float RouteSpeed => railRiding ? Mathf.Abs(railVelocity) : Mathf.Abs(travelVelocity);
 
@@ -288,9 +288,8 @@ namespace CrazyElevator.Managers
         void TryTurnOntoTrack(float fromX, float toX)
         {
             if (Mathf.Abs(toX - trackCatchBlockX) > ShaftAlignReach) trackCatchBlockX = float.NaN;
-            int topFloor = ElevatorRound.Floors - 1;
-            bool found = TrackCatches(fromX, toX, LeftShaftX, 0, topFloor)
-                || TrackCatches(fromX, toX, RightShaftX, 0, topFloor);
+            bool found = TrackCatches(fromX, toX, LeftShaftX, MinTravelFloor, MaxTravelFloor)
+                || TrackCatches(fromX, toX, RightShaftX, MinTravelFloor, MaxTravelFloor);
             foreach (SideTrack track in SideTracks)
                 found = found || TrackCatches(fromX, toX, track.X, track.Bottom, track.Top);
             if (found) LeaveRailOntoTrack();
@@ -299,6 +298,8 @@ namespace CrazyElevator.Managers
         // The car passed (or is right at) a track that continues the queued way.
         bool TrackCatches(float fromX, float toX, float trackX, int bottom, int top)
         {
+            bottom = Mathf.Max(bottom, MinTravelFloor);
+            top = Mathf.Min(top, MaxTravelFloor);
             if (Mathf.Abs(trackX - trackCatchBlockX) <= ShaftAlignReach) return false;
             if (railFloor < bottom || railFloor > top) return false;
             bool continues = pendingTrackDirection > 0
@@ -315,7 +316,7 @@ namespace CrazyElevator.Managers
                 railCatchBlockFloor = -1;
             if (pendingRailDirection == 0) return false;
             int floor = Mathf.RoundToInt(floorPosition);
-            if (floor < 0 || floor > MaxTravelFloor || floor == railCatchBlockFloor
+            if (floor < MinTravelFloor || floor > MaxTravelFloor || floor == railCatchBlockFloor
                 || Mathf.Abs(floorPosition - floor) > RailCatchGrace)
                 return false;
             StartRailRide(floor, pendingRailDirection, Mathf.Abs(travelVelocity));
@@ -339,6 +340,7 @@ namespace CrazyElevator.Managers
                 StartRailRide(ClampRailFloor(before), TowardCentre, Mathf.Abs(velocity));
                 return before;
             }
+            bottom = Mathf.Max(bottom, MinTravelFloor);
             top = Mathf.Min(top, MaxTravelFloor);
             float clamped = Mathf.Clamp(candidate, bottom, top);
             if (TryTurnOntoRail(clamped)) return railFloor;
@@ -363,7 +365,8 @@ namespace CrazyElevator.Managers
         }
 
         bool TeleportGateOpen(TeleportGate gate) =>
-            gate.Floor <= MaxTravelFloor && gate.Target <= MaxTravelFloor;
+            gate.Floor >= MinTravelFloor && gate.Floor <= MaxTravelFloor
+            && gate.Target >= MinTravelFloor && gate.Target <= MaxTravelFloor;
 
         void CheckTeleportGates(float fromX, float toX)
         {
@@ -585,7 +588,7 @@ namespace CrazyElevator.Managers
             RefreshTeleportGateViews(world);
         }
 
-        // Gates to floors that are still locked stay hidden until that dimension opens.
+        // Only gates whose entrance and exit both belong to this round can open.
         void RefreshTeleportGateViews(Transform world)
         {
             if (teleportGateViews == null)

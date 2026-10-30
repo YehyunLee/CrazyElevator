@@ -55,12 +55,24 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare")
         {
-            File.WriteAllText(request, "match-run");
+            bool singleDimension = action == "single-dimension-prepare";
+            File.WriteAllText(request, singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
                 .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
                 .SetValue(null, true);
+            if (singleDimension)
+            {
+                // Override this run only; leave the user's saved tutorial preference intact.
+                var menu = typeof(CrazyElevator.Managers.MenuManager);
+                var statics = BindingFlags.Static | BindingFlags.NonPublic;
+                menu.GetField("playerTwoHumanOnLoad", statics).SetValue(null, true);
+                menu.GetField("playerOneCpuOnLoad", statics).SetValue(null, false);
+                menu.GetField("tutorialOnLoad", statics).SetValue(null, false);
+                menu.GetField("tutorialMode", statics).SetValue(null, false);
+                menu.GetField("tutorialModeLoaded", statics).SetValue(null, true);
+            }
             CrazyElevator.Managers.MenuManager.Close();
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
             return;
@@ -74,6 +86,7 @@ public static class ExtendedInteriorChecks
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
+            else if (action == "single-dimension-run") RunSingleDimensionMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "unified-cabin") RunUnifiedCabin(game);
             else if (action == "camera-smoothing") RunCameraSmoothing(game);
@@ -146,7 +159,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
+            if ((action == "match-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -436,6 +449,14 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "match-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
+    public static void RequestSingleDimensionMatch()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "single-dimension-prepare");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Solo Layout and Passengers")]
@@ -1072,6 +1093,137 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/result.txt",
             "PASS: solo car centred with a diagonal perspective camera; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
+    }
+
+    static void RunSingleDimensionMatch()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        var session = CrazyElevator.Managers.GameManager.Instance;
+        Require(match != null && match.player != null && match.Rival != null && session != null
+            && match.SplitScreen, "Main must create two human elevators for the round checks.");
+        foreach (Type type in new[] { typeof(CrazyElevator.Managers.GameManager),
+            typeof(CrazyElevator.Managers.InputManager), typeof(CrazyElevator.Managers.SfxManager),
+            typeof(CrazyElevator.Managers.MusicManager), typeof(CrazyElevator.Managers.MenuManager) })
+        {
+            var root = GameObject.Find(type.Name);
+            Require(root != null && root.GetComponent(type) != null && root.transform.parent == null,
+                "Main is missing the authored manager root " + type.Name + ".");
+        }
+        var player = match.player;
+        var rival = match.Rival;
+        bool playerEnabled = player.enabled, rivalEnabled = rival.enabled, matchEnabled = match.enabled;
+        player.enabled = rival.enabled = match.enabled = false;
+        CrazyElevator.Managers.MenuManager.Close();
+        var updateMatch = typeof(CrazyElevator.Match.ElevatorMatch).GetMethod("Update", Flags);
+        List<SharedRider> previousPool = null;
+        try
+        {
+            match.StartMatch();
+            for (int index = 0; index < 5; index++)
+            {
+                int dimension = index % Round.Dimensions;
+                int first = dimension * Round.FloorsPerDimension, last = first + Round.FloorsPerDimension - 1;
+                var round = (Round)Get(player, "round");
+                var other = (Round)Get(rival, "round");
+                Require(session.RoundNumber == index + 1 && session.ActiveDimension == dimension
+                    && round.Floor == first && other.Floor == first
+                    && player.ActiveMinFloor == first && player.ActiveMaxFloor == last
+                    && round.TimeLeft == 60f && other.TimeLeft == 60f
+                    && round.Score == 0 && other.Score == 0,
+                    "Round " + (index + 1) + " did not reset both cars to the active world's first floor and 60 seconds.");
+                var bands = player.sceneView.exteriorCar.parent.Find("Shaft World Bands");
+                Require(bands != null, "The authored world bands are missing from Main.");
+                int activeBands = 0;
+                foreach (Transform band in bands)
+                {
+                    int bandDimension = band.name.StartsWith("Office Band") ? 0
+                        : band.name.StartsWith("Candy Band") ? 1 : band.name.StartsWith("Water Band") ? 2 : -1;
+                    if (bandDimension < 0) continue;
+                    Require(band.gameObject.activeSelf == (bandDimension == dimension),
+                        "The visible world did not switch with the round.");
+                    if (band.gameObject.activeSelf) activeBands++;
+                }
+                Require(activeBands > 0, "No authored world band is visible for this round.");
+                Require(ReferenceEquals(round.Riders, other.Riders)
+                    && !ReferenceEquals(round.Riders, previousPool) && round.Riders.Count > 0
+                    && round.Riders.TrueForAll(r => r.Origin >= first && r.Origin <= last
+                        && r.Destination >= first && r.Destination <= last && r.Origin != r.Destination
+                        && !r.Boarded && !r.Resolved),
+                    "New rounds must share a fresh, deliverable passenger pool within one world.");
+                previousPool = round.Riders;
+                if (index > 0)
+                {
+                    Require(player.CountdownPlaying && rival.CountdownPlaying,
+                        "Both cars must wait for the next-round countdown.");
+                    Call(player, "Update"); Call(rival, "Update");
+                    Require(round.TimeLeft == 60f && other.TimeLeft == 60f,
+                        "Countdown consumed round time.");
+                    Set(player, "countdownTime", 4f); Set(rival, "countdownTime", 4f);
+                    Call(player, "Update"); Call(rival, "Update");
+                    Require(!player.CountdownPlaying && !rival.CountdownPlaying
+                        && round.TimeLeft == 60f && other.TimeLeft == 60f,
+                        "Countdown handoff must start both cars before consuming time.");
+                }
+                match.TogglePause();
+                Call(player, "Update"); Call(rival, "Update");
+                Require(round.TimeLeft == 60f && other.TimeLeft == 60f && player.IsPaused && rival.IsPaused,
+                    "Pausing must freeze both clocks.");
+                match.TogglePause();
+                foreach (var gate in Game.TeleportGates)
+                {
+                    bool open = (bool)typeof(Game).GetMethod("TeleportGateOpen", Flags)
+                        .Invoke(player, new object[] { gate });
+                    Require(open == (gate.Floor >= first && gate.Floor <= last
+                        && gate.Target >= first && gate.Target <= last),
+                        "Teleport gates must never leave the active dimension.");
+                }
+                Phase(player, "Moving");
+                Set(player, "travelFloor", first + .1f); Set(player, "travelVelocity", -2f);
+                Set(player, "travelDirection", -1);
+                Call(player, "AdvanceBuildingTravel", 20f);
+                Require(player.CurrentFloor >= first && player.CurrentFloor <= last,
+                    "Travel escaped below the active world.");
+                Set(player, "travelFloor", last - .1f); Set(player, "travelVelocity", 2f);
+                Set(player, "travelDirection", 1);
+                Call(player, "AdvanceBuildingTravel", 20f);
+                Require(player.CurrentFloor >= first && player.CurrentFloor <= last,
+                    "Travel escaped above the active world.");
+                // P1, draw, P2, P1, P1 exercises rotation past round three and a 3-1 finish.
+                round.Score = index == 2 ? 50 : 100;
+                other.Score = index == 1 ? 100 : index == 2 ? 100 : 50;
+                round.TimeLeft = other.TimeLeft = 0f;
+                Call(player, "Update"); Call(rival, "Update");
+                // Update's enabled guard still applies to reflection; no frame is yielded here.
+                match.enabled = true;
+                updateMatch.Invoke(match, null);
+                int wins = session.PlayerOneWins + session.PlayerTwoWins;
+                updateMatch.Invoke(match, null);
+                match.enabled = false;
+                Require(session.RoundRecorded && session.PlayerOneWins + session.PlayerTwoWins == wins
+                    && round.Score == (index == 2 ? 50 : 100),
+                    "Results must lock the score and record each round only once.");
+                if (index == 1) Require(session.PlayerOneWins == 1 && session.PlayerTwoWins == 0,
+                    "A tied round awarded a win.");
+                if (index < 4) match.ContinueMatch();
+            }
+            Require(session.MatchFinished && session.PlayerOneWins == 3 && session.PlayerTwoWins == 1,
+                "The match must finish when one player wins three rounds.");
+            session.AdvanceRound();
+            Require(session.RoundNumber == 5, "A completed match advanced to another round.");
+            match.ContinueMatch();
+            Require(session.RoundNumber == 1 && !session.MatchFinished
+                && session.PlayerOneWins == 0 && session.PlayerTwoWins == 0
+                && player.DiscreteFloor == 0 && rival.DiscreteFloor == 0
+                && player.CountdownPlaying && rival.CountdownPlaying,
+                "Play Again must reset the series and count down in the office.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; countdown and pause freeze clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch reset and countdown.");
+            Debug.Log(File.ReadAllText(Work + "/result.txt"));
+        }
+        finally
+        {
+            CrazyElevator.Managers.MenuManager.ClosePause();
+            player.enabled = playerEnabled; rival.enabled = rivalEnabled; match.enabled = matchEnabled;
+        }
     }
 
     static void RunMatch()

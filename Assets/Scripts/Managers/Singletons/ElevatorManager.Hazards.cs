@@ -68,7 +68,7 @@ namespace CrazyElevator.Managers
         }
 
         bool HazardOpen(HazardSpec spec) => !MenuManager.TutorialActive && round != null
-            && spec.Floor <= MaxTravelFloor + .5f
+            && spec.Floor >= MinTravelFloor && spec.Floor <= MaxTravelFloor + .5f
             && (spec.Floor >= ElevatorRound.FloorsPerDimension || round.Elapsed >= OfficeHazardDelay);
 
         void UpdateShaftHazards(float dt)

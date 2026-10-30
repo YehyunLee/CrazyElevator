@@ -1,12 +1,16 @@
 # Gameplay regression checks
 
-Run the actual `ElevatorRound.cs` and `PassengerData.cs` with .NET 8, without Unity or package downloads:
+Run the actual `ElevatorRound.cs`, `PassengerData.cs`, and `SessionTypes.cs` with .NET 8, without Unity or package downloads:
 
 ```powershell
 dotnet run --project Tools/GameplayChecks/GameplayChecks.csproj
 ```
 
-The harness checks matching queue identities and per-door counts at every floor and stop, front-first groups with alternating side entrances, stable captured door/slot assignments, shared boarding exclusivity, independently owned cabin patience and delivery scores, finite shared passenger counts, the two-Grandmas-and-one-courier preview limit, and no hidden backfill after boarding, rejection, timeout, progression, or revisits, capacity, the three-minute deadline, and office/candy/underwater progression. `UnityDataStubs.cs` substitutes only Unity's asset/Inspector types and integer math; no gameplay rule is reimplemented. It does not verify rendering, cameras, lobby navigation, audio, or device input.
+The harness checks matching queue identities and per-door counts at every floor and stop, front-first groups with alternating side entrances, stable captured door/slot assignments, shared boarding exclusivity, independently owned cabin patience and delivery scores, finite shared passenger counts, the two-Grandmas-and-one-courier preview limit, and no hidden backfill after boarding, rejection, timeout, progression, or revisits. It also checks capacity, the one-minute deadline, the office/candy/underwater order, default and catalog rosters confined to the active dimension, reachable passenger destinations, immediate availability of that world's passenger mechanics, rejection of arrivals outside the active world, and fresh shared rosters and clocks across six rounds. Match-state checks cover first-to-three wins, ties awarding no wins, repeated result calls awarding once, dimensions cycling back to office, championship locking, either seat winning, and Play Again resetting the series. `UnityDataStubs.cs` substitutes only Unity's asset/Inspector types and integer math; no gameplay rule is reimplemented. It does not verify rendering, cameras, lobby navigation, audio, or device input.
+
+The small GameplayChecks project is included in version control; Unity-generated projects stay ignored.
+
+For the round flow in Main, use **Tools > Crazy Elevator > Check Single-Dimension Match** (batch entry point: `ExtendedInteriorChecks.RequestSingleDimensionMatch`). It checks both human seats, fresh shared rosters and 60-second clocks, Office/Candy/Underwater rotation, countdown and pause, travel and teleport bounds, tied rounds, first-to-three results, and rematches. It writes `Temp/ExtendedInterior/result.txt` and does not save scene changes. This check requires a working Unity runtime.
 
 Compile all runtime and editor C# sources against the installed Unity assemblies, independently of the Editor license:
 

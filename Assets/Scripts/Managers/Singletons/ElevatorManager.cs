@@ -81,6 +81,7 @@ namespace CrazyElevator.Managers
             InitializeExtendedInterior();
             BindPhysicalCabin();
             SyncWorldFloorBands();
+            SyncRoundWorldVisibility();
             InitializeAudio();
             ResetRouteLateral();
             phase = Phase.Intro;
@@ -143,6 +144,7 @@ namespace CrazyElevator.Managers
             }
             if (phase == Phase.Countdown)
             {
+                if (paused) return;
                 countdownTime += Time.unscaledDeltaTime;
                 if (countdownTime >= 4f)
                 {
@@ -159,7 +161,7 @@ namespace CrazyElevator.Managers
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
             if (Match == null && IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
-            if (Match == null && inputManager != null && input.StartPressed && menu) StartOrContinue();
+            if (Match == null && inputManager != null && input.StartPressed && menu) { StartOrContinue(); return; }
             if (paused || phase == Phase.Results) return;
             // A scene/domain reload can run one Update before the fresh round
             // has been created. Wait for initialization instead of spamming a
@@ -243,8 +245,13 @@ namespace CrazyElevator.Managers
             UpdateInteriorPersona(dt);
         }
 
-        // Restart the shift from the results screen.
-        void StartOrContinue() => Restart();
+        // Solo practice follows the same world rotation; duels advance in ElevatorMatch.
+        void StartOrContinue()
+        {
+            session?.AdvanceRound();
+            Restart();
+            BeginRoundCountdown();
+        }
 
         // Clear old rider state and reset the shift.
         void Restart() => RestartWithPool(null);
@@ -274,10 +281,11 @@ namespace CrazyElevator.Managers
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             sessionFadeAlpha = 1f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            SetFloorDisplayText("0");
+            SetFloorDisplayText(round.Floor.ToString());
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
+            SyncRoundWorldVisibility();
             cabinFramingReady = cameraViewReady = false;
             ResetDimensionReveal();
             ResetEncounterCards();
@@ -455,12 +463,9 @@ namespace CrazyElevator.Managers
         bool BuildingView => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         bool DisplayBuildingView => BuildingView
             && !(MenuManager.TutorialActive && tutorialPassengerView);
-        // Preserve a manually staged test/setup floor while normal play still
-        // begins in the office-only range and unlocks upward on the clock.
-        int MaxTravelFloor => round != null
-            ? Mathf.Max(round.MaxUnlockedFloor, round.Floor)
-            : ElevatorRound.Floors - 1;
-        int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), 0, MaxTravelFloor);
+        int MinTravelFloor => round != null ? round.MinFloor : 0;
+        int MaxTravelFloor => round != null ? round.MaxUnlockedFloor : ElevatorRound.Floors - 1;
+        int NearbyFloor => Mathf.Clamp(Mathf.RoundToInt(travelFloor), MinTravelFloor, MaxTravelFloor);
         bool CanStopAtFloor => phase == Phase.Moving
             && NearbyFloor <= MaxTravelFloor
             && Mathf.Abs(travelFloor - NearbyFloor) <= stopWindow;
@@ -474,7 +479,7 @@ namespace CrazyElevator.Managers
             travelStartCount++;
             SelectRider(null);
             travelFloor = round.Floor;
-            if (round.Floor == 0) travelDirection = 1;
+            if (round.Floor == MinTravelFloor) travelDirection = 1;
             if (round.Floor >= MaxTravelFloor) travelDirection = -1;
             destination = -1; phase = Phase.Closing; phaseTime = 0;
             notice = "Doors closing. Choose up/down outside, then press C near a floor to stop.";
@@ -500,7 +505,7 @@ namespace CrazyElevator.Managers
             if (railRiding || Mathf.Abs(travelFloor - NearbyFloor) <= stopWindow) return NearbyFloor;
             int ahead = travelVelocity > .05f ? Mathf.CeilToInt(travelFloor)
                 : travelVelocity < -.05f ? Mathf.FloorToInt(travelFloor) : NearbyFloor;
-            float bottom = 0f, top = MaxTravelFloor;
+            float bottom = MinTravelFloor, top = MaxTravelFloor;
             if (TryGetVerticalTrack(RouteLateralX, travelFloor, out _, out float trackBottom, out float trackTop))
             {
                 bottom = trackBottom;
@@ -585,13 +590,14 @@ namespace CrazyElevator.Managers
             else if (oldVelocity * travelDirection < CruiseSpeed)
                 travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
             else travelVelocity = oldVelocity; // Releasing boost preserves the accumulated momentum.
-            float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, 0, MaxTravelFloor);
+            float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, MinTravelFloor, MaxTravelFloor);
             candidate = ConstrainToRoute(before, candidate, ref travelVelocity);
             travelFloor = Match != null
                 ? Match.ConstrainTravel(this, before, candidate, ref travelVelocity)
                 : candidate;
+            travelFloor = Mathf.Clamp(travelFloor, MinTravelFloor, MaxTravelFloor);
             Match?.EvaluateJunction(this, before, travelFloor);
-            if (travelFloor <= 0 && travelVelocity < 0 || travelFloor >= MaxTravelFloor && travelVelocity > 0) travelVelocity = 0;
+            if (travelFloor <= MinTravelFloor && travelVelocity < 0 || travelFloor >= MaxTravelFloor && travelVelocity > 0) travelVelocity = 0;
             int motionDirection = travelFloor >= before ? 1 : -1;
             // A skipped floor counts only after leaving its stopping window; docking there never incurs a missed-stop penalty.
             // Only riders whose stop is on this track complain.
@@ -811,10 +817,10 @@ namespace CrazyElevator.Managers
             {
                 int above = round.Floor + distance;
                 int below = round.Floor - distance;
-                if (above < ElevatorRound.Floors) nearby.Add(above);
-                if (below >= 0) nearby.Add(below);
+                if (above <= MaxTravelFloor) nearby.Add(above);
+                if (below >= MinTravelFloor) nearby.Add(below);
             }
-            return nearby.Count > 0 ? nearby[Random.Range(0, nearby.Count)] : (round.Floor + 1) % ElevatorRound.Floors;
+            return nearby.Count > 0 ? nearby[Random.Range(0, nearby.Count)] : MinTravelFloor;
         }
 
         // Choose a stop when boarding time runs out.
@@ -851,7 +857,7 @@ namespace CrazyElevator.Managers
         // Accept floor choices only while stopped or closing.
         void DepartToFloor(int floor)
         {
-            if (paused || floor < 0 || floor >= ElevatorRound.Floors) return;
+            if (paused || floor < MinTravelFloor || floor > MaxTravelFloor) return;
             if (floor == round.Floor)
             {
                 selectedFloor = -1; destination = -1; RefreshFloorButtons(); SetControlStatus("CURRENT FLOOR");
@@ -1558,6 +1564,7 @@ namespace CrazyElevator.Managers
                 result.Riders.Insert(first < 0 ? result.Riders.Count : Mathf.Min(first + 2, result.Riders.Count), fixer);
             }
             ExpandProgressionRoster(result);
+            result.ConfigureDimension(GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0);
             result.StopOpen = StopReachable;
             result.CenterStopsOnly = MenuManager.TutorialActive;
             result.AssignStops();
@@ -2287,6 +2294,8 @@ namespace CrazyElevator.Managers
         public int PassengerLoad => round != null ? round.Load : 0;
         public int HappyDeliveries => round != null ? round.Happy : 0;
         public float SecondsLeft => round != null ? round.TimeLeft : ElevatorRound.Duration;
+        public int ActiveMinFloor => MinTravelFloor;
+        public int ActiveMaxFloor => MaxTravelFloor;
         public float CurrentFloor => BuildingView ? travelFloor : round != null ? round.Floor : 0f;
         public bool Traveling => phase == Phase.Moving || phase == Phase.Docking || phase == Phase.Opening;
         public bool TutorialPassengerViewActive
@@ -2354,10 +2363,19 @@ namespace CrazyElevator.Managers
             target.backgroundMusic = null;
         }
 
-        public void StartMatchShift(ElevatorManager poolSource = null)
+        public void StartMatchShift(ElevatorManager poolSource = null, bool countdown = false)
         {
             npcTargetFloor = -1;
             RestartWithPool(poolSource != null ? poolSource.round : null);
+            // The first round already follows the menu/tutorial countdown.
+            if (countdown) BeginRoundCountdown();
+        }
+
+        void BeginRoundCountdown()
+        {
+            countdownTime = 0f;
+            phase = Phase.Countdown;
+            phaseTime = 0f;
         }
 
         public void SetMatchPaused(bool value) => paused = value;
@@ -2402,7 +2420,7 @@ namespace CrazyElevator.Managers
             // dropping passengers and its old destination is still current.
             int direction = travelDirection >= 0 ? 1 : -1;
             int target = round.Floor + direction * 2;
-            if (target < 0 || target >= ElevatorRound.Floors)
+            if (target < MinTravelFloor || target > MaxTravelFloor)
             {
                 // A rebound at the top/bottom floor must turn the CPU back
                 // into the shaft instead of leaving it driving into a bound.
@@ -2411,7 +2429,7 @@ namespace CrazyElevator.Managers
                 travelDirection = direction;
                 travelVelocity = direction * Mathf.Abs(travelVelocity);
             }
-            npcTargetFloor = Mathf.Clamp(target, 0, ElevatorRound.Floors - 1);
+            npcTargetFloor = Mathf.Clamp(target, MinTravelFloor, MaxTravelFloor);
             npcTargetStop = ElevatorRound.CenterStop;
         }
 

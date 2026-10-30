@@ -82,7 +82,7 @@ namespace CrazyElevator.Shared
         public const int Dimensions = 3;
         public const int FloorsPerDimension = Floors / Dimensions;
         public const int Capacity = 9;
-        public const float Duration = 180f;
+        public const float Duration = 60f;
         // Seconds into the shift when candy (1) and underwater (2) open.
         static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f };
         public static float DimensionUnlockAt(int dimension)
@@ -93,6 +93,11 @@ namespace CrazyElevator.Shared
         static readonly Random DestinationRandom = new Random();
         public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
+        // -1 retains the full-building rules for previews and standalone rule checks.
+        public int ActiveDimension { get; private set; } = -1;
+        public int MinFloor => ActiveDimension < 0 ? 0 : ActiveDimension * FloorsPerDimension;
+        public int MaxFloor => ActiveDimension < 0 ? Floors - 1 : MinFloor + FloorsPerDimension - 1;
+        public bool ContainsFloor(int floor) => floor >= MinFloor && floor <= MaxFloor;
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
         // Each floor has five stops, left to right. The car is parked at Stop on Floor.
         public const int Stops = 5;
@@ -112,13 +117,14 @@ namespace CrazyElevator.Shared
         public float PeakTime;
         public float TimeLeft = Duration;
         public float Elapsed => Duration - TimeLeft;
-        public int MaxUnlockedFloor => MaxUnlockedFloorAt(Elapsed);
+        public int MaxUnlockedFloor => ActiveDimension >= 0 ? MaxFloor : MaxUnlockedFloorAt(Elapsed);
         int TimeBasedPassengerOfferLimit => Elapsed < 30f ? 2
             : Elapsed < 70f ? 3
             : Elapsed < 110f ? 4 : 5;
         public int PassengerOfferLimit => OfferLimitAt(Floor);
-        int OfferLimitAt(int floor) => PassengerData.ThemeAtFloor(floor) == PassengerTheme.Office
-            ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
+        int OfferLimitAt(int floor) => ActiveDimension >= 0 ? 3
+            : PassengerData.ThemeAtFloor(floor) == PassengerTheme.Office
+                ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
         // The first visible group at a landing is its finite roster for this shift.
         // Both elevators share these identities, just as they share Riders.
         Dictionary<int, HashSet<Rider>> revealedQueues = new Dictionary<int, HashSet<Rider>>();
@@ -139,7 +145,7 @@ namespace CrazyElevator.Shared
                 return occupiedSpaces;
             }
         }
-        // Every round lasts three minutes. Reaching the top or clearing all
+        // Every round lasts one minute. Reaching the top or clearing all
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
 
@@ -180,6 +186,24 @@ namespace CrazyElevator.Shared
         ElevatorRound(bool seedDefaults)
         {
             if (seedDefaults) SeedDefaults();
+        }
+
+        // Keep the authored world floors, but play and deliver only inside this
+        // round's dimension. Configure a fresh roster before assigning its stops.
+        public void ConfigureDimension(int dimension)
+        {
+            if (dimension < 0 || dimension >= Dimensions)
+                throw new ArgumentOutOfRangeException(nameof(dimension));
+            ActiveDimension = dimension;
+            Floor = PeakFloor = MinFloor;
+            Stop = CenterStop;
+            PeakTime = 0f;
+            TimeLeft = Duration;
+            revealedQueues.Clear();
+            Riders.RemoveAll(rider => rider == null || !ContainsFloor(rider.Origin));
+            foreach (Rider rider in Riders)
+                rider.Destination = MinFloor + DestinationFor(rider.Kind,
+                    rider.Origin - MinFloor, FloorsPerDimension - 1);
         }
 
         void SeedDefaults()
@@ -268,7 +292,8 @@ namespace CrazyElevator.Shared
         // Validate boarding; input code also checks physical fit.
         public bool Board(Rider p)
         {
-            if (p == null || Finished || p.Resolved || p.Boarded || p.Origin != Floor
+            if (p == null || Finished || p.Resolved || p.Boarded || !ContainsFloor(p.Origin)
+                || !ContainsFloor(p.Destination) || p.Origin != Floor
                 || p.OriginStop != Stop) return false;
             RevealQueue(Floor, Stop);
             if (!IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
@@ -305,7 +330,7 @@ namespace CrazyElevator.Shared
         }
 
         public bool WaitsHere(Rider p) => p != null && !p.Boarded && !p.Resolved
-            && p.Origin == Floor && p.OriginStop == Stop;
+            && ContainsFloor(p.Origin) && p.Origin == Floor && p.OriginStop == Stop;
         public bool AtDestination(Rider p) => p != null && p.Destination == Floor && p.DestinationStop == Stop;
 
         public int PickStop(int floor)
@@ -375,6 +400,8 @@ namespace CrazyElevator.Shared
         public bool IsPassengerTypeUnlocked(Rider rider)
         {
             if (rider == null) return false;
+            // Each one-minute round starts with its world's complete mechanics.
+            if (ActiveDimension >= 0) return ContainsFloor(rider.Origin);
             switch (rider.Kind)
             {
                 case "COURIER":
@@ -412,6 +439,7 @@ namespace CrazyElevator.Shared
         // querying an unseen stop (for example for CPU navigation) stays read-only.
         public void RevealQueue(int floor, int stop)
         {
+            if (!ContainsFloor(floor) || stop < 0 || stop >= Stops) return;
             int key = floor * Stops + stop;
             if (revealedQueues.ContainsKey(key)) return;
             var queue = new HashSet<Rider>();
@@ -433,7 +461,8 @@ namespace CrazyElevator.Shared
         // Both camera views and boarding use the same remaining landing roster.
         public bool IsQueuedAtStop(Rider candidate)
         {
-            if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0)
+            if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
+                || !ContainsFloor(candidate.Origin) || !ContainsFloor(candidate.Destination))
                 return false;
             int key = candidate.Origin * Stops + candidate.OriginStop;
             if (revealedQueues.TryGetValue(key, out HashSet<Rider> queue)) return queue.Contains(candidate);
@@ -517,7 +546,7 @@ namespace CrazyElevator.Shared
         // Change floors; delivery remains manual.
         public int Arrive(int floor, int stop = CenterStop)
         {
-            if (floor < 0 || floor >= Floors) throw new ArgumentOutOfRangeException(nameof(floor));
+            if (!ContainsFloor(floor)) throw new ArgumentOutOfRangeException(nameof(floor));
             Floor = floor;
             Stop = Math.Max(0, Math.Min(Stops - 1, stop));
             if (floor > PeakFloor)

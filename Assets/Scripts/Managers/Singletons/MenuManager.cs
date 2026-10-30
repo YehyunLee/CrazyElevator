@@ -1039,9 +1039,9 @@ namespace CrazyElevator.Managers
                 "CHOOSE YOUR MODE", caption);
 
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "Office → candy → water  ·  3 minutes", false, !playerTwoSelected);
+                "SINGLE PLAYER", "One world per round / 60 seconds", false, !playerTwoSelected);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "Local duel  ·  CPU or Player 2", true, playerTwoSelected);
+                "1V1", "60 seconds / First to 3 round wins", true, playerTwoSelected);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
                 "PICK A MODE", caption);
         }
@@ -1121,6 +1121,7 @@ namespace CrazyElevator.Managers
                         playerOneCursor = 5;
                         ReturnToMainMenu();
                     }
+                    GUI.Label(new Rect(430, 735, 840, 34), "60 SECONDS / ONE WORLD PER ROUND / FIRST TO 3 WINS", caption);
                     bool playerTwoAvailable = InputManager.Instance != null
                         && InputManager.Instance.HasLobbyInput(1);
                     bool startEnabled = !BothCpu;

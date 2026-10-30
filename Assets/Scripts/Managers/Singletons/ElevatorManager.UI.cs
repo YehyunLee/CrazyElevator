@@ -790,6 +790,14 @@ namespace CrazyElevator.Managers
             title.fontSize = previousSize;
             title.alignment = previousAlignment;
             title.normal.textColor = previousTextColor;
+            var progress = GameManager.Instance;
+            string roundLabel = progress != null
+                ? "ROUND " + progress.RoundNumber + "  /  " + progress.ActiveDimensionName
+                : "ROUND 1  /  OFFICE";
+            var roundStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = 24 };
+            GUI.Label(new Rect(0f, Screen.height * .23f, Screen.width, 40f), roundLabel, roundStyle);
+            GUI.Label(new Rect(0f, Screen.height * .65f, Screen.width, 40f),
+                Match != null ? "60 SECONDS  /  FIRST TO 3 ROUND WINS" : "60 SECONDS", roundStyle);
             GUI.depth = previousDepth;
         }
 
@@ -937,7 +945,8 @@ namespace CrazyElevator.Managers
             Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
-                WorldName(round.Floor), "F" + round.Floor); cursor += 152;
+                "ROUND " + (session != null ? session.RoundNumber : 1) + " / " + WorldName(round.Floor),
+                "F" + round.Floor); cursor += 152;
             DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
@@ -1478,14 +1487,15 @@ namespace CrazyElevator.Managers
             Panel(new Rect(308, 162, 824, 590), UiBlack);
             Panel(new Rect(308, 162, 824, 7), Teal);
             AccentBar(new Rect(304, 186, 9, 522), Teal);
-            string heading = paused ? "TAKE A BREATHER" : "SHIFT COMPLETE";
+            string heading = paused ? "TAKE A BREATHER" : "ROUND COMPLETE";
             Label(new Rect(354, 196, 700, 52), heading, title);
             string copy = paused
                 ? "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu."
                 : "FINAL SCORE: " + round.Score
                     + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                     + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
-                    + "\n\nYour 3-minute shift is over. Try again for a better mix!";
+                    + "\n\n60 seconds complete. Next world: "
+                    + (session != null ? session.NextDimensionName : "CANDY") + ".";
             Label(new Rect(356, 292, 690, 240), copy, body);
             if (paused)
             {
@@ -1505,7 +1515,7 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                if (Button(new Rect(350, 700, 724, 48), "TRY AGAIN  /  CLICK or ENTER", Teal))
+                if (Button(new Rect(350, 700, 724, 48), "NEXT ROUND  /  CLICK or ENTER", Teal))
                     StartOrContinue();
             }
         }

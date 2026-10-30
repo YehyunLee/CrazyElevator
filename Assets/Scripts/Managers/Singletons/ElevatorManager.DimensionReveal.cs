@@ -302,7 +302,7 @@ namespace CrazyElevator.Managers
 
         bool TryBeginSoloDimensionReveal()
         {
-            if (round == null) return false;
+            if (round == null || round.ActiveDimension >= 0) return false;
             for (int index = 1; index < ElevatorRound.Dimensions; index++)
             {
                 if (dimensionRevealed[index]

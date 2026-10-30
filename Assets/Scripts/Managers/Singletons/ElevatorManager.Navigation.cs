@@ -18,6 +18,56 @@ namespace CrazyElevator.Managers
         int dockingStop = CenterStop;
         float dockingStartX, dockingTargetX;
 
+        // These are authored groups in Assets/Prefabs/Resources/ExteriorWorld.prefab.
+        // Keep every band editable; a round only toggles its visible world art.
+        void SyncRoundWorldVisibility()
+        {
+            if (WorldOwner != this || round == null || round.ActiveDimension < 0
+                || exteriorCar == null || exteriorCar.parent == null) return;
+            Transform world = exteriorCar.parent;
+            Transform bands = world.Find("Shaft World Bands");
+            if (bands != null)
+                foreach (Transform band in bands)
+                {
+                    int dimension = band.name.StartsWith("Office Band") ? 0
+                        : band.name.StartsWith("Candy Band") ? 1
+                        : band.name.StartsWith("Water Band") ? 2 : -1;
+                    if (dimension >= 0)
+                        band.gameObject.SetActive(dimension == round.ActiveDimension);
+                }
+
+            Transform backdrops = world.Find("World Backdrops");
+            if (backdrops != null)
+                foreach (Transform backdrop in backdrops)
+                {
+                    if (backdrop.name == "Candy Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 1);
+                    else if (backdrop.name == "Water Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 2);
+                }
+
+            Transform rails = world.Find("Floor Rails");
+            if (rails != null)
+                foreach (Transform rail in rails)
+                    if (TryAuthoredFloorNumber(rail.name, "Floor rail ", out int floor))
+                        rail.gameObject.SetActive(round.ContainsFloor(floor));
+
+            // Landings and floor signs are direct children of the world root.
+            // Full-height guide rails and the elevator itself stay in place.
+            foreach (Transform part in world)
+                if (TryAuthoredFloorNumber(part.name, "World landing ", out int floor)
+                    || TryAuthoredFloorNumber(part.name, "Shaft landing ", out floor)
+                    || TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out floor))
+                    part.gameObject.SetActive(round.ContainsFloor(floor));
+        }
+
+        static bool TryAuthoredFloorNumber(string name, string prefix, out int floor)
+        {
+            floor = -1;
+            return name.StartsWith(prefix)
+                && int.TryParse(name.Substring(prefix.Length).Split(' ')[0], out floor);
+        }
+
         public static float StopWorldX(int stop) => ElevatorMatchType.ShaftCenterX + StopOffsets[stop];
 
         // The centre stop is whichever shaft (or duel lane) the car is on.
@@ -449,7 +499,8 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in round.Riders)
             {
                 crowd.TryGetValue(rider, out CrowdFigure figure);
-                bool waiting = rider.Origin <= MaxTravelFloor && rider.Origin >= low - CrowdFloorRange
+                bool waiting = rider.Origin >= MinTravelFloor && rider.Origin <= MaxTravelFloor
+                    && rider.Origin >= low - CrowdFloorRange
                     && rider.Origin <= high + CrowdFloorRange && round.IsQueuedAtStop(rider);
                 if (waiting)
                 {
@@ -498,10 +549,10 @@ namespace CrazyElevator.Managers
             if (!IsBoarding || round == null) return;
             if (!FindNpcTarget(out int target, out int stop))
             {
-                target = round.Floor < MaxTravelFloor ? round.Floor + 1 : Mathf.Max(0, round.Floor - 1);
+                target = round.Floor < MaxTravelFloor ? round.Floor + 1 : Mathf.Max(MinTravelFloor, round.Floor - 1);
                 stop = CenterStop;
             }
-            npcTargetFloor = Mathf.Clamp(target, 0, MaxTravelFloor);
+            npcTargetFloor = Mathf.Clamp(target, MinTravelFloor, MaxTravelFloor);
             npcTargetStop = stop;
             if (npcTargetFloor != round.Floor) travelDirection = npcTargetFloor > round.Floor ? 1 : -1;
             CloseAndTravel();
@@ -573,7 +624,8 @@ namespace CrazyElevator.Managers
                 else if (round.IsQueuedAtStop(rider) && round.HasCapacityFor(rider))
                 { riderFloor = rider.Origin; riderStop = rider.OriginStop; }
                 else continue;
-                if (riderFloor > MaxTravelFloor || riderFloor == round.Floor && riderStop == round.Stop) continue;
+                if (riderFloor < MinTravelFloor || riderFloor > MaxTravelFloor
+                    || riderFloor == round.Floor && riderStop == round.Stop) continue;
                 float cost = Mathf.Abs(riderFloor - round.Floor)
                     + Mathf.Abs(StopOffsets[riderStop] - StopOffsets[round.Stop]) / 11f;
                 if (cost >= best) continue;

@@ -31,6 +31,26 @@ namespace CrazyElevator.Managers
         public int Score => Player != null ? Player.Points : 0;
         public bool IsPaused => Player != null && Player.IsPaused;
 
+        readonly MatchProgress matchProgress = new MatchProgress();
+        public const int RoundsToWin = MatchProgress.RoundsToWin;
+        public int RoundNumber => matchProgress.RoundNumber;
+        public int ActiveDimension => matchProgress.ActiveDimension;
+        public int PlayerOneWins => matchProgress.PlayerOneWins;
+        public int PlayerTwoWins => matchProgress.PlayerTwoWins;
+        public bool MatchFinished => matchProgress.Finished;
+        public bool RoundRecorded => matchProgress.RoundRecorded;
+        public int LastRoundWinner => matchProgress.LastRoundWinner;
+        public string ActiveDimensionName => DimensionName(ActiveDimension);
+        public string NextDimensionName => DimensionName((ActiveDimension + 1) % ElevatorRound.Dimensions);
+
+        static string DimensionName(int dimension) => dimension == 0 ? "OFFICE"
+            : dimension == 1 ? "CANDY" : "UNDERWATER";
+
+        public void ResetMatchProgress() => matchProgress.Reset();
+        public void RecordRoundResult(int playerOneScore, int playerTwoScore)
+            => matchProgress.RecordResult(playerOneScore, playerTwoScore);
+        public void AdvanceRound() => matchProgress.AdvanceRound();
+
         void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
@@ -112,6 +132,7 @@ namespace CrazyElevator.Managers
         public void ResetRound()
         {
             PassengerOverlayVisible = false;
+            ResetMatchProgress();
             Player?.ResetRoundPublic();
             SyncViewFromPlayer();
         }
