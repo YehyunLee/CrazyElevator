@@ -618,7 +618,7 @@ namespace CrazyElevator.Managers
         void CreateRouteLine(string name, float x, float startFloor, float endFloor, Color colour)
         {
             var route = new GameObject(name);
-            route.layer = ExteriorLayer;
+            route.layer = 28; // Elevator tracks: independently hidden by the cabin camera.
             route.transform.SetParent(crazyRouteMap, false);
             var line = route.AddComponent<LineRenderer>();
             line.useWorldSpace = false;

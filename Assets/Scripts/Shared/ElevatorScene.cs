@@ -30,6 +30,10 @@ namespace CrazyElevator.Shared
 
         [Header("Cameras and lights")]
         public Camera cabinCamera;
+        [Tooltip("When off, the cabin Camera Transform and Lens settings are used as authored. Enable to fit the floor and doorways automatically.")]
+        public bool autoFrameCabin = false;
+        [Tooltip("Add ride and arrival motion when Auto Frame Cabin is enabled. Manual mode always preserves the Camera Transform.")]
+        public bool cabinCameraShake = false;
         public Camera exteriorCamera;
         public Camera clearCamera;
         public Light[] lights;

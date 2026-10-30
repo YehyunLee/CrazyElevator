@@ -14,8 +14,6 @@ namespace CrazyElevator.Match
         public const float ShaftCenterX = 9f;
         public Game player;
         [Min(3f)] public float shaftSpacing = 4f;
-        [FormerlySerializedAs("cabinHorizontalFieldOfView")]
-        [Range(45f, 90f)] public float cabinVerticalFieldOfView = 72f;
         [Header("Two-track collisions")]
         [Range(.15f, .8f)] public float trackSwitchSeconds = .32f;
         [FormerlySerializedAs("verticalBlockDistance")]
@@ -102,9 +100,11 @@ namespace CrazyElevator.Match
             rivalView.exteriorCar.name = humanRival ? "Player 2 exterior car" : "NPC exterior car";
             Destroy(duplicateWorld.gameObject);
 
-            // Each cabin is mounted on its own moving car by ElevatorManager.
+            // The saved prefab already mounts the cabin and camera on this car.
 
             foreach (var listener in rivalView.GetComponentsInChildren<AudioListener>(true))
+            { listener.enabled = false; Destroy(listener); }
+            foreach (var listener in rivalView.exteriorCar.GetComponentsInChildren<AudioListener>(true))
             { listener.enabled = false; Destroy(listener); }
             if (rivalView.clearCamera != null) rivalView.clearCamera.gameObject.SetActive(false);
 
@@ -364,8 +364,6 @@ namespace CrazyElevator.Match
             float aspect = Mathf.Max(.1f, Screen.width * rect.width
                 / Mathf.Max(1f, Screen.height * rect.height));
             game.sceneView.cabinCamera.aspect = aspect;
-            game.sceneView.cabinCamera.fieldOfView =
-                Mathf.Clamp(game.Match.cabinVerticalFieldOfView, 45f, 90f);
         }
 
         // Both duel tracks straddle the authored solo shaft at equal distances.

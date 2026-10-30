@@ -45,6 +45,8 @@ namespace CrazyElevator.Shared
         public int OriginStop = ElevatorRound.CenterStop;
         public int DestinationStop = ElevatorRound.CenterStop;
         public BoardingDoor PickupDoor = BoardingDoor.Front;
+        // Captured landing position, retained when earlier passengers leave.
+        public int PickupQueueSlot = -1;
         public int Space;
         public int Bonus;
 
@@ -280,14 +282,26 @@ namespace CrazyElevator.Shared
         public void AssignBoardingDoors()
         {
             var queues = new Dictionary<int, int>();
-            int firstDoor = DestinationRandom.Next(3);
             foreach (Rider rider in Riders)
             {
                 int key = rider.Origin * Stops + rider.OriginStop;
+                if (revealedQueues.ContainsKey(key) || rider.Resolved || rider.Boarded
+                    || rider.SpawnDelay > 0 || !IsPassengerTypeUnlocked(rider)) continue;
                 queues.TryGetValue(key, out int slot);
-                rider.PickupDoor = (BoardingDoor)((firstDoor + slot) % 3);
+                rider.PickupDoor = QueueDoor(rider.Origin, rider.OriginStop, slot);
+                rider.PickupQueueSlot = slot;
                 queues[key] = slot + 1;
             }
+        }
+
+        // Even the first small group has someone at the front. Alternate the
+        // next side between landings; larger groups use all three entrances.
+        static BoardingDoor QueueDoor(int floor, int stop, int slot)
+        {
+            int entrance = slot % 3;
+            if (entrance == 0) return BoardingDoor.Front;
+            bool leftFirst = (floor + stop) % 2 == 0;
+            return (entrance == 1) == leftFirst ? BoardingDoor.Left : BoardingDoor.Right;
         }
 
         public bool WaitsHere(Rider p) => p != null && !p.Boarded && !p.Resolved
@@ -406,6 +420,10 @@ namespace CrazyElevator.Shared
             {
                 if (rider.Origin != floor || rider.OriginStop != stop || rider.Resolved
                     || rider.Boarded || rider.SpawnDelay > 0 || !IsPassengerTypeUnlocked(rider)) continue;
+                // Capture doors together with the visible roster. Hidden or
+                // locked riders must not consume the front entrance's place.
+                rider.PickupDoor = QueueDoor(floor, stop, queue.Count);
+                rider.PickupQueueSlot = queue.Count;
                 queue.Add(rider);
                 if (queue.Count >= limit) break;
             }

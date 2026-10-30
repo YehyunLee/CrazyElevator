@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1467587388219951948}
   - component: {fileID: 7455297768668069669}
   - component: {fileID: 7442686691344232530}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -142,7 +142,7 @@ GameObject:
   - component: {fileID: 7627460630698896942}
   - component: {fileID: 4728605556769633446}
   - component: {fileID: 7398272928463537186}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -253,7 +253,7 @@ GameObject:
   - component: {fileID: 7783832672308201119}
   - component: {fileID: 630554500817436555}
   - component: {fileID: 697993267244801273}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 8"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -357,7 +357,7 @@ GameObject:
   - component: {fileID: 4443683345083928297}
   - component: {fileID: 632311416193796536}
   - component: {fileID: 7024485066773285491}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 READY"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -461,7 +461,7 @@ GameObject:
   - component: {fileID: 9007229366623689956}
   - component: {fileID: 3657825326896937597}
   - component: {fileID: 4699697078092643368}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 1"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -563,7 +563,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6313950730235690371}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Cabin
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -738,7 +738,7 @@ GameObject:
   - component: {fileID: 4548287456677251124}
   - component: {fileID: 423382451908881347}
   - component: {fileID: 280549041535713533}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -849,7 +849,7 @@ GameObject:
   - component: {fileID: 910000000000000012}
   - component: {fileID: 910000000000000013}
   - component: {fileID: 910000000000000014}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam left baseboard
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -939,7 +939,7 @@ GameObject:
   - component: {fileID: 910000000000000022}
   - component: {fileID: 910000000000000023}
   - component: {fileID: 910000000000000024}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam right baseboard
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1030,7 +1030,7 @@ GameObject:
   - component: {fileID: 795395568077249790}
   - component: {fileID: 3387924261168518925}
   - component: {fileID: 2678712413509031688}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Wall control panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1141,7 +1141,7 @@ GameObject:
   - component: {fileID: 3873328133514836878}
   - component: {fileID: 5098501654429677966}
   - component: {fileID: 7813035652707638607}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 10"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1246,7 +1246,7 @@ GameObject:
   - component: {fileID: 1129246703162625947}
   - component: {fileID: 7141755412188888073}
   - component: {fileID: 2367069493747966078}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back metal rib
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1358,13 +1358,13 @@ GameObject:
   - component: {fileID: 2962090636836908519}
   - component: {fileID: 739007354211149972}
   - component: {fileID: 30432222381329294}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &4442758349016990666
 Transform:
   m_ObjectHideFlags: 0
@@ -1470,7 +1470,7 @@ GameObject:
   - component: {fileID: 3222575945979446599}
   - component: {fileID: 8319032551577729582}
   - component: {fileID: 7240967401618672713}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1582,7 +1582,7 @@ GameObject:
   - component: {fileID: 4263901449431098770}
   - component: {fileID: 4325383599530315987}
   - component: {fileID: 6909693526675433084}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail bracket
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1694,7 +1694,7 @@ GameObject:
   - component: {fileID: 4303894491321565141}
   - component: {fileID: 4425505857557722093}
   - component: {fileID: 2377804208524000841}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1806,7 +1806,7 @@ GameObject:
   - component: {fileID: 860035315796454350}
   - component: {fileID: 7485989294899097130}
   - component: {fileID: 1902143113967441228}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1918,7 +1918,7 @@ GameObject:
   - component: {fileID: 7885661371592827847}
   - component: {fileID: 2415376190725778274}
   - component: {fileID: 3577377790309689997}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Sliding door Right side
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2029,7 +2029,7 @@ GameObject:
   - component: {fileID: 9109500891515442804}
   - component: {fileID: 8419536441285546088}
   - component: {fileID: 4688488007834269472}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 0"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2134,7 +2134,7 @@ GameObject:
   - component: {fileID: 4994933452631306154}
   - component: {fileID: 2188030155131244388}
   - component: {fileID: 1433437886307603776}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2247,7 +2247,7 @@ GameObject:
   - component: {fileID: 1411354723719081369}
   - component: {fileID: 8411894903590180792}
   - component: {fileID: 7115906294028454518}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2376,7 +2376,7 @@ GameObject:
   - component: {fileID: 6734049401775087375}
   - component: {fileID: 6838714018800914426}
   - component: {fileID: 4550526782588896051}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2488,7 +2488,7 @@ GameObject:
   - component: {fileID: 7968184247201827617}
   - component: {fileID: 376041908799931096}
   - component: {fileID: 7033387470287904434}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail end
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2600,7 +2600,7 @@ GameObject:
   - component: {fileID: 8586581680726819242}
   - component: {fileID: 5611524107674267421}
   - component: {fileID: 7255505339257991815}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2709,7 +2709,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8516389228967733744}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Passing shaft lights
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2755,7 +2755,7 @@ GameObject:
   - component: {fileID: 61920041284067987}
   - component: {fileID: 9181424840187998910}
   - component: {fileID: 7818551616407426620}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2867,7 +2867,7 @@ GameObject:
   - component: {fileID: 9084598927681572244}
   - component: {fileID: 4628801703305750764}
   - component: {fileID: 354853711172336373}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall back wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2978,7 +2978,7 @@ GameObject:
   - component: {fileID: 2379933860842950003}
   - component: {fileID: 1438392033814624184}
   - component: {fileID: 1662850488424331889}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 5"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3083,7 +3083,7 @@ GameObject:
   - component: {fileID: 7226004546031172687}
   - component: {fileID: 6093039746800081877}
   - component: {fileID: 6134148860532717772}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3195,7 +3195,7 @@ GameObject:
   - component: {fileID: 6021351950246454359}
   - component: {fileID: 5163222465826013898}
   - component: {fileID: 6430997018821608411}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3307,13 +3307,13 @@ GameObject:
   - component: {fileID: 2275421885567845835}
   - component: {fileID: 4808456067616902224}
   - component: {fileID: 3752241926313241330}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall ceiling
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &4591933311981082878
 Transform:
   m_ObjectHideFlags: 0
@@ -3420,7 +3420,7 @@ GameObject:
   - component: {fileID: 2302377856268661725}
   - component: {fileID: 3876648787394878287}
   - component: {fileID: 7056198655256703025}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3548,7 +3548,7 @@ GameObject:
   - component: {fileID: 3326795396866021952}
   - component: {fileID: 9092424954034411328}
   - component: {fileID: 2014280446068058304}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Left floor number
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3654,7 +3654,7 @@ GameObject:
   - component: {fileID: 3481947029329405876}
   - component: {fileID: 8314919154896808591}
   - component: {fileID: 7035994556659158530}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3783,7 +3783,7 @@ GameObject:
   - component: {fileID: 1673442773930499181}
   - component: {fileID: 1442710283650066736}
   - component: {fileID: 3403920657223968627}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3896,7 +3896,7 @@ GameObject:
   - component: {fileID: 4055614332168499639}
   - component: {fileID: 6522370181840810591}
   - component: {fileID: 7923523549960088048}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4025,7 +4025,7 @@ GameObject:
   - component: {fileID: 6126885906371973970}
   - component: {fileID: 309894307183279452}
   - component: {fileID: 7848527381375168605}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail end
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4138,7 +4138,7 @@ GameObject:
   - component: {fileID: 2845963246950128652}
   - component: {fileID: 240075499578214356}
   - component: {fileID: 5165360813370662735}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4266,7 +4266,7 @@ GameObject:
   - component: {fileID: 873778193651536306}
   - component: {fileID: 2050742328278943885}
   - component: {fileID: 5478546635141854608}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 CLOSE"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4371,7 +4371,7 @@ GameObject:
   - component: {fileID: 4680266678809642820}
   - component: {fileID: 7853618964175933488}
   - component: {fileID: 3312922876656131793}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4483,7 +4483,7 @@ GameObject:
   - component: {fileID: 8808575416919182211}
   - component: {fileID: 202285728929989796}
   - component: {fileID: 8102872998383654225}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Door jamb left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4596,7 +4596,7 @@ GameObject:
   - component: {fileID: 6822469149388551787}
   - component: {fileID: 7530412020416999622}
   - component: {fileID: 2123424665730345040}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4725,13 +4725,13 @@ GameObject:
   - component: {fileID: 8072190850279453100}
   - component: {fileID: 8397830796552871525}
   - component: {fileID: 7633511172782288055}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &9032793062735261558
 Transform:
   m_ObjectHideFlags: 0
@@ -4837,7 +4837,7 @@ GameObject:
   - component: {fileID: 5512028088026988821}
   - component: {fileID: 5736368465780774676}
   - component: {fileID: 2745146973115506399}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Wall control panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4949,13 +4949,13 @@ GameObject:
   - component: {fileID: 64430971400696987}
   - component: {fileID: 5680224215865924029}
   - component: {fileID: 6970638815437534322}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5256131547442672265
 Transform:
   m_ObjectHideFlags: 0
@@ -5061,7 +5061,7 @@ GameObject:
   - component: {fileID: 1985377783748366695}
   - component: {fileID: 1338184367455517361}
   - component: {fileID: 7674998552731843483}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5173,7 +5173,7 @@ GameObject:
   - component: {fileID: 194186818066748788}
   - component: {fileID: 7942160411714656592}
   - component: {fileID: 2616390686234656191}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5285,7 +5285,7 @@ GameObject:
   - component: {fileID: 3705447615318123017}
   - component: {fileID: 6203819247451772289}
   - component: {fileID: 3387829760403085428}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Sliding door R
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5397,7 +5397,7 @@ GameObject:
   - component: {fileID: 2083169975540083381}
   - component: {fileID: 533612617513436868}
   - component: {fileID: 7637313333822908747}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door sill
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5510,7 +5510,7 @@ GameObject:
   - component: {fileID: 803304676986454760}
   - component: {fileID: 7661067494194294827}
   - component: {fileID: 1978595008653821801}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5639,7 +5639,7 @@ GameObject:
   - component: {fileID: 4032267546637569887}
   - component: {fileID: 4032617454228952901}
   - component: {fileID: 7376332464346682664}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail bracket
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5751,7 +5751,7 @@ GameObject:
   - component: {fileID: 145943941613580505}
   - component: {fileID: 5101133440458715842}
   - component: {fileID: 9198060889834052912}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5863,7 +5863,7 @@ GameObject:
   - component: {fileID: 3413778226272180761}
   - component: {fileID: 781370239759074811}
   - component: {fileID: 8413095838013269188}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5976,7 +5976,7 @@ GameObject:
   - component: {fileID: 5777053476721583854}
   - component: {fileID: 1486942842682558758}
   - component: {fileID: 1316971674353143282}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6104,7 +6104,7 @@ GameObject:
   - component: {fileID: 1284883513471455606}
   - component: {fileID: 367854788674911614}
   - component: {fileID: 41253778020712978}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 READY"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6209,7 +6209,7 @@ GameObject:
   - component: {fileID: 5134684623923884626}
   - component: {fileID: 2249524064883695107}
   - component: {fileID: 2775266220556073292}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6321,7 +6321,7 @@ GameObject:
   - component: {fileID: 3357417781376850995}
   - component: {fileID: 9029265926075640238}
   - component: {fileID: 6579041900040130846}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6433,7 +6433,7 @@ GameObject:
   - component: {fileID: 5841589430878376739}
   - component: {fileID: 2747127204500898450}
   - component: {fileID: 7144969010882029496}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail bracket
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6545,7 +6545,7 @@ GameObject:
   - component: {fileID: 1945426700674136952}
   - component: {fileID: 3995070720321505914}
   - component: {fileID: 2814992405629965580}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6656,7 +6656,7 @@ GameObject:
   - component: {fileID: 3372387710547274977}
   - component: {fileID: 6407924810263493156}
   - component: {fileID: 5198869380017705705}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 6\u201311"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6761,7 +6761,7 @@ GameObject:
   - component: {fileID: 3135277156941033880}
   - component: {fileID: 7872157300325439663}
   - component: {fileID: 1384362002238099239}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6873,7 +6873,7 @@ GameObject:
   - component: {fileID: 7906728993930898795}
   - component: {fileID: 8887432364096030243}
   - component: {fileID: 8972645125716960509}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Door header
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6985,7 +6985,7 @@ GameObject:
   - component: {fileID: 5317734211157604411}
   - component: {fileID: 1795536144501958100}
   - component: {fileID: 1195685178982249244}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7097,7 +7097,7 @@ GameObject:
   - component: {fileID: 8040975006558093638}
   - component: {fileID: 5735148418706921716}
   - component: {fileID: 1308451976877934481}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7210,7 +7210,7 @@ GameObject:
   - component: {fileID: 3737700618161727999}
   - component: {fileID: 1961294149585397804}
   - component: {fileID: 8816742660206625881}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Button CLOSE
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7337,7 +7337,7 @@ GameObject:
   - component: {fileID: 1567825092702214097}
   - component: {fileID: 2425963504810749017}
   - component: {fileID: 5425997443018968650}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7449,7 +7449,7 @@ GameObject:
   - component: {fileID: 3779906523162816159}
   - component: {fileID: 870902630617176675}
   - component: {fileID: 1793422932841490674}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7561,7 +7561,7 @@ GameObject:
   - component: {fileID: 8638427049949456598}
   - component: {fileID: 6340635885148772896}
   - component: {fileID: 3001340487315075327}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail end
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7672,7 +7672,7 @@ GameObject:
   - component: {fileID: 9218416857590598111}
   - component: {fileID: 377054326941739525}
   - component: {fileID: 3326487999543876829}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 7"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7777,7 +7777,7 @@ GameObject:
   - component: {fileID: 3515299042017883839}
   - component: {fileID: 1788124906934455052}
   - component: {fileID: 8442917400190295664}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Wall control trim
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7888,7 +7888,7 @@ GameObject:
   - component: {fileID: 881730338371849767}
   - component: {fileID: 1808654031859067628}
   - component: {fileID: 762739696772193077}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 OPEN"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7993,7 +7993,7 @@ GameObject:
   - component: {fileID: 1568976090564151996}
   - component: {fileID: 4026463125966654471}
   - component: {fileID: 7055784298315507012}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8105,7 +8105,7 @@ GameObject:
   - component: {fileID: 4096114034016471383}
   - component: {fileID: 6269767423953061983}
   - component: {fileID: 1962397597652317686}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8217,7 +8217,7 @@ GameObject:
   - component: {fileID: 4904724747138987486}
   - component: {fileID: 6009783319879164489}
   - component: {fileID: 6486245461781753082}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Wall control trim
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8329,7 +8329,7 @@ GameObject:
   - component: {fileID: 5191783785262269768}
   - component: {fileID: 4983082163095170838}
   - component: {fileID: 5089661172120128711}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back metal rib
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8441,7 +8441,7 @@ GameObject:
   - component: {fileID: 7680551873417279049}
   - component: {fileID: 4942731027592373036}
   - component: {fileID: 6003897276834597342}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floating foundation
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8553,7 +8553,7 @@ GameObject:
   - component: {fileID: 4975179492811787798}
   - component: {fileID: 5808056829727274866}
   - component: {fileID: 1522952313260755907}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8665,7 +8665,7 @@ GameObject:
   - component: {fileID: 8085471525372149231}
   - component: {fileID: 3737240847712118203}
   - component: {fileID: 6158242047045930759}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail wall mount
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8777,7 +8777,7 @@ GameObject:
   - component: {fileID: 4855077230618621683}
   - component: {fileID: 220098285407536543}
   - component: {fileID: 3701361467146105746}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail bracket
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8888,7 +8888,7 @@ GameObject:
   - component: {fileID: 1684082676293566614}
   - component: {fileID: 1670802713334439380}
   - component: {fileID: 5024959354267918201}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 4"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8993,7 +8993,7 @@ GameObject:
   - component: {fileID: 2660735265137394515}
   - component: {fileID: 2574721449619934784}
   - component: {fileID: 1920600734408676397}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9105,13 +9105,13 @@ GameObject:
   - component: {fileID: 8323265730105289624}
   - component: {fileID: 1929573822394423394}
   - component: {fileID: 7612822278128147520}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2364536166481435155
 Transform:
   m_ObjectHideFlags: 0
@@ -9217,7 +9217,7 @@ GameObject:
   - component: {fileID: 1161212703011647188}
   - component: {fileID: 1355329228059676166}
   - component: {fileID: 8319055407214846181}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back metal rib
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9330,7 +9330,7 @@ GameObject:
   - component: {fileID: 8873419829725502543}
   - component: {fileID: 7103380365236196377}
   - component: {fileID: 5790375332297487759}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9460,7 +9460,7 @@ GameObject:
   - component: {fileID: 1563760970459433025}
   - component: {fileID: 3439413513596051163}
   - component: {fileID: 2371843018754958900}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Button OPEN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9587,7 +9587,7 @@ GameObject:
   - component: {fileID: 5576709147585887525}
   - component: {fileID: 9085882907105909844}
   - component: {fileID: 164027006338254537}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Floor seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9698,7 +9698,7 @@ GameObject:
   - component: {fileID: 3621597947634335617}
   - component: {fileID: 6994988513225130687}
   - component: {fileID: 4926152276557164888}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 CLOSE"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9803,7 +9803,7 @@ GameObject:
   - component: {fileID: 6115490275631540923}
   - component: {fileID: 6403273961437083252}
   - component: {fileID: 5672806226621938219}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail wall mount
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9915,13 +9915,13 @@ GameObject:
   - component: {fileID: 9106647693453311205}
   - component: {fileID: 812392637020979698}
   - component: {fileID: 7434488122434293402}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall floor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &3789823325602354093
 Transform:
   m_ObjectHideFlags: 0
@@ -10027,7 +10027,7 @@ GameObject:
   - component: {fileID: 5529046866324117631}
   - component: {fileID: 2412076436470547406}
   - component: {fileID: 3076863964957896176}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10139,7 +10139,7 @@ GameObject:
   - component: {fileID: 5754420917152905187}
   - component: {fileID: 1657451426870699610}
   - component: {fileID: 1920628056743005010}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10251,13 +10251,13 @@ GameObject:
   - component: {fileID: 1634568194141715884}
   - component: {fileID: 1424416698017108439}
   - component: {fileID: 5659218383477935042}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Plant
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2860073558015172480
 Transform:
   m_ObjectHideFlags: 0
@@ -10363,7 +10363,7 @@ GameObject:
   - component: {fileID: 1933421201514103559}
   - component: {fileID: 23214261992385855}
   - component: {fileID: 3642531137794117288}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail end
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10475,7 +10475,7 @@ GameObject:
   - component: {fileID: 7392003206379545111}
   - component: {fileID: 5052596888218968212}
   - component: {fileID: 5803261465659121170}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back metal rib
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10586,7 +10586,7 @@ GameObject:
   - component: {fileID: 5006184867407013233}
   - component: {fileID: 1294011127723917333}
   - component: {fileID: 5388380549077494539}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 6"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10690,7 +10690,7 @@ GameObject:
   - component: {fileID: 5800970335192552321}
   - component: {fileID: 2175884593452825150}
   - component: {fileID: 3505673773463149879}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 9"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10796,7 +10796,7 @@ GameObject:
   - component: {fileID: 9050287745208971125}
   - component: {fileID: 2179329322745957185}
   - component: {fileID: 5176816089666378374}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Button CLOSE
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10923,7 +10923,7 @@ GameObject:
   - component: {fileID: 373668145560468158}
   - component: {fileID: 4139524950539795519}
   - component: {fileID: 6833394316611654083}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Door jamb right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11035,13 +11035,13 @@ GameObject:
   - component: {fileID: 2238257373681703944}
   - component: {fileID: 8359733091864710917}
   - component: {fileID: 7879799249064454164}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall upper band
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5348183963276851994
 Transform:
   m_ObjectHideFlags: 0
@@ -11147,7 +11147,7 @@ GameObject:
   - component: {fileID: 1176667288047537690}
   - component: {fileID: 1578732627882423439}
   - component: {fileID: 6504205158370940141}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Sliding door L
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11259,7 +11259,7 @@ GameObject:
   - component: {fileID: 1751955320343975343}
   - component: {fileID: 1497962780958882172}
   - component: {fileID: 7788453575906549059}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11371,7 +11371,7 @@ GameObject:
   - component: {fileID: 3371254163505217861}
   - component: {fileID: 6892967173262440878}
   - component: {fileID: 4962143582696333755}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Cabin floor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11483,7 +11483,7 @@ GameObject:
   - component: {fileID: 1403868790553615678}
   - component: {fileID: 1051735759604821932}
   - component: {fileID: 1386912249185763171}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11596,7 +11596,7 @@ GameObject:
   - component: {fileID: 2933330424695482453}
   - component: {fileID: 8517393289477520691}
   - component: {fileID: 6155867784688877722}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Button OPEN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11723,7 +11723,7 @@ GameObject:
   - component: {fileID: 4718162070809030039}
   - component: {fileID: 2491428058088540923}
   - component: {fileID: 8222791005291451547}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail tube
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11837,13 +11837,13 @@ GameObject:
   - component: {fileID: 6541064433814296934}
   - component: {fileID: 3296125289230908146}
   - component: {fileID: 5285471614642097738}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2830666953208930648
 Transform:
   m_ObjectHideFlags: 0
@@ -11948,7 +11948,7 @@ GameObject:
   - component: {fileID: 6436569030849931169}
   - component: {fileID: 2550552963602401113}
   - component: {fileID: 8290106587247242219}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 11"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12052,7 +12052,7 @@ GameObject:
   - component: {fileID: 5145642299039044623}
   - component: {fileID: 8346147458441367596}
   - component: {fileID: 5149423172353367002}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 OPEN"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12157,13 +12157,13 @@ GameObject:
   - component: {fileID: 8199717029286325207}
   - component: {fileID: 6870414249262986970}
   - component: {fileID: 8863270158590225947}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall bench
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &620458128827108868
 Transform:
   m_ObjectHideFlags: 0
@@ -12269,7 +12269,7 @@ GameObject:
   - component: {fileID: 7722686517390099741}
   - component: {fileID: 8735177280235907438}
   - component: {fileID: 2220655564461137938}
-  m_Layer: 0
+  m_Layer: 29
   m_Name: Back metal rib
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12381,7 +12381,7 @@ GameObject:
   - component: {fileID: 5230572193046277316}
   - component: {fileID: 7927434180207195923}
   - component: {fileID: 5668998363444326372}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail tube
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12495,7 +12495,7 @@ GameObject:
   - component: {fileID: 6296085711918385385}
   - component: {fileID: 9016998184142184437}
   - component: {fileID: 6670124454063933474}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Sliding door Left side
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12608,7 +12608,7 @@ GameObject:
   - component: {fileID: 8620582004369268384}
   - component: {fileID: 8298772268857799619}
   - component: {fileID: 93051644614205549}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12736,7 +12736,7 @@ GameObject:
   - component: {fileID: 5726148211490392388}
   - component: {fileID: 5114310988232324134}
   - component: {fileID: 5305128382798458870}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 0\u20135"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12841,7 +12841,7 @@ GameObject:
   - component: {fileID: 4298155077526859720}
   - component: {fileID: 8969465695216541041}
   - component: {fileID: 515773809368068942}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12953,13 +12953,13 @@ GameObject:
   - component: {fileID: 7567445287058710061}
   - component: {fileID: 1293177160365704587}
   - component: {fileID: 6146980656927550756}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &4532303492094151146
 Transform:
   m_ObjectHideFlags: 0
@@ -13065,7 +13065,7 @@ GameObject:
   - component: {fileID: 7622227612704292276}
   - component: {fileID: 3402677595280556096}
   - component: {fileID: 8272885477521143410}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13177,7 +13177,7 @@ GameObject:
   - component: {fileID: 6698917558344841114}
   - component: {fileID: 5446963136081971302}
   - component: {fileID: 644424711128202239}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13289,7 +13289,7 @@ GameObject:
   - component: {fileID: 5119585236504128841}
   - component: {fileID: 4225042807562344686}
   - component: {fileID: 9036333265257117754}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Shaft lamp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13401,7 +13401,7 @@ GameObject:
   - component: {fileID: 7919307873267733714}
   - component: {fileID: 2675768212219412350}
   - component: {fileID: 5433732866367195067}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall wall seam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13513,13 +13513,13 @@ GameObject:
   - component: {fileID: 3904128964750967398}
   - component: {fileID: 3262300796745340994}
   - component: {fileID: 582199990698739736}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Runner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &6374285068754533813
 Transform:
   m_ObjectHideFlags: 0
@@ -13625,7 +13625,7 @@ GameObject:
   - component: {fileID: 903216972734141667}
   - component: {fileID: 7386314451554236202}
   - component: {fileID: 3928175814536261160}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13736,7 +13736,7 @@ GameObject:
   - component: {fileID: 7442232918200877064}
   - component: {fileID: 4155369428010654955}
   - component: {fileID: 3207444462056726886}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 3"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13840,7 +13840,7 @@ GameObject:
   - component: {fileID: 2696658470526918368}
   - component: {fileID: 2135483678945724532}
   - component: {fileID: 4411912768552956688}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: "Sign \u2022 2"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13945,7 +13945,7 @@ GameObject:
   - component: {fileID: 8878476104194324013}
   - component: {fileID: 161843691289026917}
   - component: {fileID: 2190021471189922707}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail wall mount
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14058,7 +14058,7 @@ GameObject:
   - component: {fileID: 5368340342092274102}
   - component: {fileID: 1621405870230304460}
   - component: {fileID: 2948863015256443211}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Round button 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14187,13 +14187,13 @@ GameObject:
   - component: {fileID: 7638221418214918644}
   - component: {fileID: 6970772374429220691}
   - component: {fileID: 6544794470633914850}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Hall tile
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &3079572501032427614
 Transform:
   m_ObjectHideFlags: 0
@@ -14299,13 +14299,13 @@ GameObject:
   - component: {fileID: 6090522357492685180}
   - component: {fileID: 1353617381670908376}
   - component: {fileID: 5168193797952752530}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Plant pot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &11144516146697737
 Transform:
   m_ObjectHideFlags: 0
@@ -14411,7 +14411,7 @@ GameObject:
   - component: {fileID: 5673259775284229096}
   - component: {fileID: 7794895060459855057}
   - component: {fileID: 3547641605803048834}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Handrail wall mount
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14523,7 +14523,7 @@ GameObject:
   - component: {fileID: 2768005604053116495}
   - component: {fileID: 8333668774491203286}
   - component: {fileID: 3036475412656907097}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front door safety stripe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14634,7 +14634,7 @@ GameObject:
   - component: {fileID: 920000000000000001}
   - component: {fileID: 920000000000000002}
   - component: {fileID: 920000000000000003}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid column border 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14724,7 +14724,7 @@ GameObject:
   - component: {fileID: 920000000000000011}
   - component: {fileID: 920000000000000012}
   - component: {fileID: 920000000000000013}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid column border 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14814,7 +14814,7 @@ GameObject:
   - component: {fileID: 920000000000000021}
   - component: {fileID: 920000000000000022}
   - component: {fileID: 920000000000000023}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid column border 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14904,7 +14904,7 @@ GameObject:
   - component: {fileID: 920000000000000031}
   - component: {fileID: 920000000000000032}
   - component: {fileID: 920000000000000033}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid column border 4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14994,7 +14994,7 @@ GameObject:
   - component: {fileID: 920000000000000041}
   - component: {fileID: 920000000000000042}
   - component: {fileID: 920000000000000043}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid row border 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15084,7 +15084,7 @@ GameObject:
   - component: {fileID: 920000000000000051}
   - component: {fileID: 920000000000000052}
   - component: {fileID: 920000000000000053}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid row border 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15174,7 +15174,7 @@ GameObject:
   - component: {fileID: 920000000000000061}
   - component: {fileID: 920000000000000062}
   - component: {fileID: 920000000000000063}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid row border 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15264,7 +15264,7 @@ GameObject:
   - component: {fileID: 920000000000000071}
   - component: {fileID: 920000000000000072}
   - component: {fileID: 920000000000000073}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid row border 4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15354,13 +15354,13 @@ GameObject:
   - component: {fileID: 930000000000000021}
   - component: {fileID: 930000000000000022}
   - component: {fileID: 930000000000000023}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 1-1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000021
 Transform:
   m_ObjectHideFlags: 0
@@ -15458,13 +15458,13 @@ GameObject:
   - component: {fileID: 930000000000000031}
   - component: {fileID: 930000000000000032}
   - component: {fileID: 930000000000000033}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 1-2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000031
 Transform:
   m_ObjectHideFlags: 0
@@ -15562,13 +15562,13 @@ GameObject:
   - component: {fileID: 930000000000000041}
   - component: {fileID: 930000000000000042}
   - component: {fileID: 930000000000000043}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 1-3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000041
 Transform:
   m_ObjectHideFlags: 0
@@ -15666,13 +15666,13 @@ GameObject:
   - component: {fileID: 930000000000000051}
   - component: {fileID: 930000000000000052}
   - component: {fileID: 930000000000000053}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 2-1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000051
 Transform:
   m_ObjectHideFlags: 0
@@ -15770,13 +15770,13 @@ GameObject:
   - component: {fileID: 930000000000000061}
   - component: {fileID: 930000000000000062}
   - component: {fileID: 930000000000000063}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 2-2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000061
 Transform:
   m_ObjectHideFlags: 0
@@ -15874,13 +15874,13 @@ GameObject:
   - component: {fileID: 930000000000000071}
   - component: {fileID: 930000000000000072}
   - component: {fileID: 930000000000000073}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 2-3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000071
 Transform:
   m_ObjectHideFlags: 0
@@ -15978,13 +15978,13 @@ GameObject:
   - component: {fileID: 930000000000000081}
   - component: {fileID: 930000000000000082}
   - component: {fileID: 930000000000000083}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 3-1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000081
 Transform:
   m_ObjectHideFlags: 0
@@ -16082,13 +16082,13 @@ GameObject:
   - component: {fileID: 930000000000000091}
   - component: {fileID: 930000000000000092}
   - component: {fileID: 930000000000000093}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 3-2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000091
 Transform:
   m_ObjectHideFlags: 0
@@ -16186,13 +16186,13 @@ GameObject:
   - component: {fileID: 930000000000000101}
   - component: {fileID: 930000000000000102}
   - component: {fileID: 930000000000000103}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Grid destination 3-3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &930000000000000101
 Transform:
   m_ObjectHideFlags: 0
@@ -16290,7 +16290,7 @@ GameObject:
   - component: {fileID: 960000000000000001}
   - component: {fileID: 960000000000000002}
   - component: {fileID: 960000000000000003}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door header left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16380,7 +16380,7 @@ GameObject:
   - component: {fileID: 960000000000000011}
   - component: {fileID: 960000000000000012}
   - component: {fileID: 960000000000000013}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door header right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16470,7 +16470,7 @@ GameObject:
   - component: {fileID: 960000000000000021}
   - component: {fileID: 960000000000000022}
   - component: {fileID: 960000000000000023}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door rear jamb left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16560,7 +16560,7 @@ GameObject:
   - component: {fileID: 960000000000000031}
   - component: {fileID: 960000000000000032}
   - component: {fileID: 960000000000000033}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door rear jamb right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16650,7 +16650,7 @@ GameObject:
   - component: {fileID: 960000000000000041}
   - component: {fileID: 960000000000000042}
   - component: {fileID: 960000000000000043}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door sill left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16740,7 +16740,7 @@ GameObject:
   - component: {fileID: 960000000000000051}
   - component: {fileID: 960000000000000052}
   - component: {fileID: 960000000000000053}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Side door sill right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16830,7 +16830,7 @@ GameObject:
   - component: {fileID: 960000000000000101}
   - component: {fileID: 960000000000000102}
   - component: {fileID: 960000000000000103}
-  m_Layer: 0
+  m_Layer: 31
   m_Name: Front doorway floor label
   m_TagString: Untagged
   m_Icon: {fileID: 0}

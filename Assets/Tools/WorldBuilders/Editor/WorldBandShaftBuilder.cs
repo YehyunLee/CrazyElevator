@@ -110,6 +110,8 @@ namespace CrazyElevator.Tools.WorldBuilders
                 foreach (string name in new[]
                     { FloorRailRootName, SideTrackRootName, Game.TeleportGateRootName, BackdropRootName })
                     SetLayer(root.transform.Find(name), ExteriorLayer);
+                foreach (string name in new[] { FloorRailRootName, SideTrackRootName, "Left guide rail", "Right guide rail" })
+                    SetLayer(root.transform.Find(name), 28); // Elevator tracks, separate from the cabin/world.
                 PaintLandings(root.transform);
                 PrefabUtility.SaveAsPrefabAsset(root, ExteriorPath);
                 AssetDatabase.SaveAssets();

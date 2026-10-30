@@ -458,6 +458,7 @@ public static class ExtendedInteriorChecks
     public static void RequestUnifiedCabin()
     {
         EditorSceneManager.OpenScene(Scene);
+        CheckSavedCabinHierarchy();
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "unified-cabin");
     }
@@ -466,8 +467,35 @@ public static class ExtendedInteriorChecks
     public static void RequestCameraSmoothing()
     {
         EditorSceneManager.OpenScene(Scene);
+        CheckSavedCabinHierarchy();
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "camera-smoothing");
+    }
+
+    static void CheckSavedCabinHierarchy()
+    {
+        Require(!EditorApplication.isPlaying, "Check the saved cabin hierarchy before entering Play Mode.");
+        Game game = UnityEngine.Object.FindAnyObjectByType<Game>();
+        Require(game != null && game.gameObject.scene.path == Scene && game.sceneView != null,
+            "Main needs an assigned elevator scene before the cabin checks can run.");
+        var view = game.sceneView;
+        Require(view.exteriorCar != null && view.exteriorCar.name == "Gameplay elevator",
+            "The saved moving carrier must be named Gameplay elevator.");
+        Require(view.cabin != null && view.cabin.parent == view.exteriorCar
+            && view.cabinCamera != null && view.cabinCamera.transform.parent == view.cabin,
+            "Save the cabin under Gameplay elevator and its camera under the cabin before Play Mode.");
+        Require(!view.autoFrameCabin && !view.cabinCameraShake,
+            "Main should default to manual cabin camera framing and motion.");
+        foreach (string name in new[] { "Car body", "Car doors", "Door seam" })
+        {
+            Transform legacy = view.exteriorCar.Find(name);
+            Require(legacy != null && !legacy.gameObject.activeSelf,
+                "The saved legacy exterior geometry must be inactive: " + name + ".");
+        }
+        foreach (Renderer renderer in view.exteriorCar.GetComponentsInChildren<Renderer>(true))
+            if (!renderer.transform.IsChildOf(view.cabin))
+                Require(!renderer.enabled || !renderer.gameObject.activeInHierarchy,
+                    "An active legacy shell mesh surrounds the saved cabin: " + renderer.name + ".");
     }
 
     static object InvokeCameraHelper(Game game, string name, params object[] args)
@@ -477,38 +505,202 @@ public static class ExtendedInteriorChecks
         return method.Invoke(method.IsStatic ? null : game, args);
     }
 
+    static Renderer CabinFloor(Game game)
+    {
+        foreach (Renderer renderer in game.sceneView.cabin.GetComponentsInChildren<Renderer>(true))
+            if (renderer.name == "Cabin floor") return renderer;
+        throw new Exception("The cabin framing regression needs the authored Cabin floor renderer.");
+    }
+
+    static void CheckCabinRailClearance(Game game)
+    {
+        Bounds floor = CabinFloor(game).bounds;
+        int nearbyRails = 0;
+        foreach (GameObject root in game.gameObject.scene.GetRootGameObjects())
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy
+                    || renderer.transform.IsChildOf(game.sceneView.exteriorCar)
+                    || renderer.name != "Rail" && !renderer.name.EndsWith("guide rail", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Bounds rail = renderer.bounds;
+                // Horizontal supports below the walking surface belong under the cabin.
+                if (rail.max.y < floor.max.y + .05f || rail.min.y > floor.max.y
+                    || Mathf.Abs(rail.center.x - floor.center.x) > floor.size.x) continue;
+                nearbyRails++;
+                Require(floor.max.z + .05f < rail.min.z,
+                    "The cabin floor reaches into the nearby track: " + renderer.name + ".");
+            }
+        Require(nearbyRails > 0, "The cabin clearance regression found no nearby track rails.");
+    }
+
+    static void CheckCabinProjection(Game game)
+    {
+        Camera camera = game.sceneView.cabinCamera;
+        Renderer floor = CabinFloor(game);
+        Bounds floorBounds = floor.localBounds;
+        float originalAspect = camera.aspect, originalFov = camera.fieldOfView;
+        Vector3 originalPosition = camera.transform.localPosition;
+        Quaternion originalRotation = camera.transform.localRotation;
+        Vector3 originalHome = (Vector3)Get(game, "cabinCameraHome");
+        bool originalReady = (bool)Get(game, "cabinFramingReady");
+        bool originalAutoFrame = game.sceneView.autoFrameCabin;
+        try
+        {
+            game.sceneView.autoFrameCabin = true;
+            foreach (float aspect in new[] { 1f, 16f / 9f, 8f / 9f })
+            {
+                camera.aspect = aspect;
+                Set(game, "cabinFramingReady", false);
+                InvokeCameraHelper(game, "FrameCabinDoorways", 0f, aspect);
+                Call(game, "ResetCameraMotion");
+                Vector2 minimum = Vector2.one, maximum = Vector2.zero;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 local = floorBounds.center + Vector3.Scale(floorBounds.extents,
+                        new Vector3((corner & 1) == 0 ? -1f : 1f,
+                            (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f));
+                    Vector3 point = camera.WorldToViewportPoint(floor.transform.TransformPoint(local));
+                    Require(point.z > camera.nearClipPlane && point.x >= .02f && point.x <= .98f
+                        && point.y >= .02f && point.y <= .98f,
+                        "The playable cabin floor is clipped at aspect " + aspect + ".");
+                    minimum = Vector2.Min(minimum, point);
+                    maximum = Vector2.Max(maximum, point);
+                }
+                Require(maximum.x - minimum.x >= .4f && maximum.y - minimum.y >= .35f,
+                    "The cabin floor is too small to read at aspect " + aspect + ".");
+                Vector3[] entrances = { game.sceneView.leftSideDoorClosed,
+                    (game.sceneView.leftDoorClosed + game.sceneView.rightDoorClosed) * .5f,
+                    game.sceneView.rightSideDoorClosed };
+                foreach (Vector3 center in entrances)
+                    foreach (float height in new[] { .12f, 3.35f })
+                    {
+                        Vector3 local = new Vector3(center.x, height, center.z);
+                        Vector3 point = camera.WorldToViewportPoint(game.sceneView.cabin.TransformPoint(local));
+                        Require(point.z > camera.nearClipPlane && point.x >= .02f && point.x <= .98f
+                            && point.y >= .02f && point.y <= .98f,
+                            "An entrance or its selection cue is clipped at aspect " + aspect + ".");
+                    }
+            }
+        }
+        finally
+        {
+            camera.aspect = originalAspect;
+            camera.fieldOfView = originalFov;
+            camera.transform.localPosition = originalPosition;
+            camera.transform.localRotation = originalRotation;
+            Set(game, "cabinCameraHome", originalHome);
+            Set(game, "cabinFramingReady", originalReady);
+            game.sceneView.autoFrameCabin = originalAutoFrame;
+        }
+    }
+
+    static void CheckManualCabinCamera(Game game)
+    {
+        var view = game.sceneView;
+        Camera camera = view.cabinCamera, exterior = view.exteriorCamera;
+        bool originalAutoFrame = view.autoFrameCabin, originalShake = view.cabinCameraShake;
+        Vector3 originalPosition = camera.transform.localPosition;
+        Quaternion originalRotation = camera.transform.localRotation;
+        float originalFov = camera.fieldOfView, originalFar = camera.farClipPlane;
+        int originalMask = camera.cullingMask;
+        Rect originalRect = camera.rect, exteriorRect = exterior.rect;
+        float originalAspect = camera.aspect;
+        bool originalEnabled = camera.enabled, exteriorEnabled = exterior.enabled;
+        RenderTexture originalTexture = camera.targetTexture, exteriorTexture = exterior.targetTexture;
+        object originalPhase = Get(game, "phase");
+        Vector3 originalHome = (Vector3)Get(game, "cabinCameraHome");
+        Vector3 originalAuthoredHome = (Vector3)Get(game, "authoredCabinCameraHome");
+        Quaternion originalHomeRotation = (Quaternion)Get(game, "cabinCameraHomeRotation");
+        Vector3 carPosition = view.exteriorCar.localPosition;
+        Quaternion carRotation = view.exteriorCar.localRotation;
+        var match = game.GetComponent<CrazyElevator.Match.ElevatorMatch>();
+        bool originalHumanPlayer = false, originalHumanRival = false;
+        if (match != null)
+        {
+            originalHumanPlayer = (bool)match.GetType().GetField("humanPlayer", Flags).GetValue(match);
+            originalHumanRival = (bool)match.GetType().GetField("humanRival", Flags).GetValue(match);
+        }
+        try
+        {
+            view.autoFrameCabin = view.cabinCameraShake = false;
+            Vector3 manualPosition = originalPosition + new Vector3(.31f, .23f, -.27f);
+            Quaternion manualRotation = originalRotation * Quaternion.Euler(4f, -6f, 2f);
+            camera.transform.localPosition = manualPosition;
+            camera.transform.localRotation = manualRotation;
+            manualRotation = camera.transform.localRotation;
+            camera.fieldOfView = 57.5f;
+            camera.farClipPlane = 187f;
+            camera.cullingMask = originalMask ^ (1 << 28);
+            void Unchanged(string action)
+            {
+                Require(Vector3.Distance(camera.transform.localPosition, manualPosition) < .0001f
+                    && Mathf.Abs(Quaternion.Dot(camera.transform.localRotation, manualRotation)) >= .999999f,
+                    action + " overwrote the manually edited cabin camera Transform.");
+                Require(Mathf.Abs(camera.fieldOfView - 57.5f) < .0001f
+                    && Mathf.Abs(camera.farClipPlane - 187f) < .0001f
+                    && camera.cullingMask == (originalMask ^ (1 << 28)),
+                    action + " overwrote the manually edited cabin camera Lens or culling mask.");
+            }
+            foreach (string phase in new[] { "Boarding", "Moving" })
+            {
+                Phase(game, phase);
+                Call(game, "LateUpdate"); Unchanged(phase + " LateUpdate");
+                Call(game, "ResetCameraMotion"); Unchanged("ResetCameraMotion");
+                Call(game, "UpdateRideMotion", 1f / 60f); Unchanged("UpdateRideMotion");
+            }
+            Require(match != null, "Main needs its existing ElevatorMatch for the split-camera lens check.");
+            match.GetType().GetField("humanPlayer", Flags).SetValue(match, true);
+            match.GetType().GetField("humanRival", Flags).SetValue(match, true);
+            MethodInfo setRect = match.GetType().GetMethod("SetCameraRect", Flags);
+            Require(setRect != null, "The split-camera check could not find SetCameraRect.");
+            for (int seat = 0; seat < 2; seat++)
+            {
+                setRect.Invoke(match, new object[] { game, seat });
+                Require(camera.rect.width < 1f, "The camera lens check did not exercise split-screen setup.");
+                Unchanged("Player " + (seat + 1) + " split-camera setup");
+            }
+        }
+        finally
+        {
+            view.autoFrameCabin = originalAutoFrame;
+            view.cabinCameraShake = originalShake;
+            camera.transform.localPosition = originalPosition;
+            camera.transform.localRotation = originalRotation;
+            camera.fieldOfView = originalFov;
+            camera.farClipPlane = originalFar;
+            camera.cullingMask = originalMask;
+            camera.rect = originalRect; exterior.rect = exteriorRect;
+            camera.aspect = originalAspect;
+            camera.enabled = originalEnabled; exterior.enabled = exteriorEnabled;
+            camera.targetTexture = originalTexture; exterior.targetTexture = exteriorTexture;
+            view.exteriorCar.localPosition = carPosition;
+            view.exteriorCar.localRotation = carRotation;
+            Set(game, "phase", originalPhase);
+            Set(game, "cabinCameraHome", originalHome);
+            Set(game, "authoredCabinCameraHome", originalAuthoredHome);
+            Set(game, "cabinCameraHomeRotation", originalHomeRotation);
+            if (match != null)
+            {
+                match.GetType().GetField("humanPlayer", Flags).SetValue(match, originalHumanPlayer);
+                match.GetType().GetField("humanRival", Flags).SetValue(match, originalHumanRival);
+            }
+        }
+    }
+
     static void RunCameraSmoothing(Game game)
     {
         Require(game.Match == null, "Run camera smoothing checks from solo Main.");
         CrazyElevator.Managers.MenuManager.Close();
         game.enabled = false;
+        bool originalAutoFrame = game.sceneView.autoFrameCabin;
         try
         {
             Call(game, "Restart");
             var round = (Round)Get(game, "round");
+            CheckManualCabinCamera(game);
             Phase(game, "Opening");
-            Set(game, "landingFramingFloor", -1);
-            var crowded = new Bounds(new Vector3(-2f, 1.5f, 2.5f), new Vector3(16f, 4f, 8f));
-            var empty = new Bounds(new Vector3(0f, 1.65f, 2.5f), new Vector3(6.6f, 3.5f, 5.5f));
-            Bounds Retain(Bounds value) => (Bounds)InvokeCameraHelper(game, "RetainLandingCameraBounds", value);
-            bool SameBounds(Bounds a, Bounds b) => Vector3.Distance(a.min, b.min) < .001f
-                && Vector3.Distance(a.max, b.max) < .001f;
-            Require(SameBounds(Retain(crowded), crowded), "Arrival did not capture the complete crowd framing.");
-            Phase(game, "Boarding");
-            Require(SameBounds(Retain(empty), crowded), "A pickup shrank or shifted the landing's camera bounds.");
-            Phase(game, "Closing");
-            Require(SameBounds(Retain(empty), crowded), "Closing the doors discarded the crowd framing early.");
-            round.Floor++;
-            Phase(game, "Opening");
-            Require(SameBounds(Retain(empty), empty), "A new floor retained the previous floor's wide framing.");
-            Retain(crowded);
-            round.Stop = (round.Stop + 1) % Round.Stops;
-            Require(SameBounds(Retain(empty), empty), "A new landing retained another stop's framing.");
-            Retain(crowded);
-            Phase(game, "Moving");
-            Retain(empty);
-            Phase(game, "Boarding");
-            Require(SameBounds(Retain(empty), empty), "Travel failed to release the previous landing's framing.");
+            CheckCabinProjection(game);
 
             Vector3 Smooth(Vector3 from, Vector3 target, float dt) => (Vector3)InvokeCameraHelper(game,
                 "SmoothCabinHome", from, target, dt);
@@ -548,6 +740,7 @@ public static class ExtendedInteriorChecks
 
             // Exercise the real Main framing path with a multi-passenger landing.
             // Removing one of its visible riders must not move the settled camera.
+            game.sceneView.autoFrameCabin = true;
             Call(game, "Restart");
             Phase(game, "Boarding");
             round = (Round)Get(game, "round");
@@ -566,10 +759,11 @@ public static class ExtendedInteriorChecks
             Require(Vector3.Distance((Vector3)Get(game, "cabinCameraHome"), crowdedHome) < .001f,
                 "Boarding one passenger reframed a crowded floor.");
             File.WriteAllText(Work + "/result.txt",
-                "PASS: stable crowded-landing framing across pickups and door closing; new landing release; smooth and frame-rate-independent camera motion; paused camera freeze; reversible viewport handoffs; split-seat bounds; Main multi-passenger pickup stability.");
+                "PASS: manual camera Transform/Lens/culling edits survive runtime and split-screen setup; readable optional automatic framing in square, wide, and split-screen views; smooth and frame-rate-independent camera motion; paused camera freeze; reversible viewport handoffs; split-seat bounds; Main multi-passenger pickup stability.");
         }
         finally
         {
+            game.sceneView.autoFrameCabin = originalAutoFrame;
             Call(game, "Restart");
             game.enabled = true;
         }
@@ -615,6 +809,70 @@ public static class ExtendedInteriorChecks
         finally { figure.position = saved; }
     }
 
+    static void CheckPhysicalWaitingQueues(Game game)
+    {
+        // Use a separate roster so testing a claimed front passenger cannot
+        // consume or rearrange the real solo/shared match passengers.
+        var roundField = typeof(Game).GetField("round", Flags);
+        object savedRound = roundField.GetValue(game);
+        Transform car = game.sceneView.exteriorCar;
+        Vector3 savedPosition = car.localPosition;
+        Quaternion savedRotation = car.localRotation;
+        var waitingPosition = typeof(Game).GetMethod("WaitingWorldPosition", Flags);
+        var cabinOrigin = typeof(Game).GetMethod("PhysicalCabinOrigin", Flags);
+        var canEnter = typeof(Game).GetMethod("CanBoardThroughDoor", Flags);
+        float leftX = (float)Property(game, "LeftShaftX"), rightX = (float)Property(game, "RightShaftX");
+        float scale = game.sceneView.cabin.localScale.x;
+        float halfWidth = Mathf.Max(Mathf.Abs(game.sceneView.leftSideDoorClosed.x),
+            Mathf.Abs(game.sceneView.rightSideDoorClosed.x)) * scale;
+        try
+        {
+            car.localRotation = Quaternion.identity;
+            foreach (int floor in new[] { 0, 1 })
+            {
+                var round = new Round { Floor = floor, TimeLeft = 60f, CenterStopsOnly = true };
+                round.Riders.Clear();
+                for (int slot = 0; slot < 5; slot++)
+                    round.Riders.Add(new SharedRider { Name = "Queue placement check", Kind = "COURIER",
+                        Origin = floor, Destination = floor + 1, Space = 1, Patience = 100f, Remaining = 100f });
+                round.AssignBoardingDoors();
+                round.RevealQueue(floor, Round.CenterStop);
+                roundField.SetValue(game, round);
+                Vector3 Position(SharedRider rider) => (Vector3)waitingPosition.Invoke(game, new object[] { rider });
+                Vector3 Origin(float x) => (Vector3)cabinOrigin.Invoke(game, new object[] { x, floor });
+                bool rightFirst = game.Match != null && floor % 2 != 0;
+                SharedRider front = round.Riders[0], nextFront = round.Riders[3];
+                Vector3 nextBefore = Position(nextFront);
+                Require(Mathf.Abs(Position(front).x - Origin(rightFirst ? rightX : leftX).x) < .001f
+                    && Mathf.Abs(nextBefore.x - Origin(rightFirst ? leftX : rightX).x) < .001f,
+                    "Front passengers stand between shafts instead of at the actual front entrances.");
+                foreach (SharedRider rider in round.Riders.GetRange(0, 3))
+                {
+                    Vector3 position = Position(rider);
+                    if (rider.PickupDoor != CrazyElevator.Shared.BoardingDoor.Front)
+                        Require(position.x < Origin(leftX).x - halfWidth
+                            || position.x > Origin(rightX).x + halfWidth,
+                            "A side queue stands inside one of the parked cabins.");
+                    float laneX = position.x < (leftX + rightX) * .5f ? leftX : rightX;
+                    car.localPosition = new Vector3(laneX, floor * Game.ShaftFloorHeight + 1.4f, -.8f);
+                    for (int door = 0; door < 3; door++)
+                        Require((bool)canEnter.Invoke(game, new object[] { rider,
+                            (CrazyElevator.Shared.BoardingDoor)door }) == (door == (int)rider.PickupDoor),
+                            "A physical front or side queue cannot use its corresponding entrance.");
+                }
+                Require(round.Board(front), "The queue check could not claim its first front passenger.");
+                Require(nextFront.PickupQueueSlot == 3 && Mathf.Abs(Position(nextFront).x - nextBefore.x) < .001f,
+                    "Claiming an earlier front passenger moved the next passenger to another shaft.");
+            }
+        }
+        finally
+        {
+            roundField.SetValue(game, savedRound);
+            car.localPosition = savedPosition;
+            car.localRotation = savedRotation;
+        }
+    }
+
     static void RunUnifiedCabin(Game game)
     {
         Require(game.Match == null, "Run the unified cabin regression from the solo Main scene.");
@@ -628,6 +886,9 @@ public static class ExtendedInteriorChecks
             Camera camera = game.sceneView.cabinCamera;
             Require(cabin.parent == car && camera.transform.parent == cabin,
                 "Inside and driving views do not observe the same moving cabin.");
+            CheckManualCabinCamera(game);
+            CheckCabinRailClearance(game);
+            CheckPhysicalWaitingQueues(game);
             Require((camera.cullingMask & (1 << 31)) != 0
                 && (game.sceneView.exteriorCamera.cullingMask & (1 << 31)) != 0,
                 "A camera cannot render the physical cabin and floor passengers.");
@@ -692,7 +953,7 @@ public static class ExtendedInteriorChecks
                 && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
                 && (int)Lobby("playerOneCursor") == 4 && (int)Lobby("playerTwoCursor") == 4,
                 "Ready confirmations changed a human to CPU or failed to reach Start.");
-            File.WriteAllText(Work + "/result.txt", "PASS: physical cabin and camera follow the driving car; both views render the landing; one waiting model boards without cloning; destination stays identical; both local lobby seats ready without switching to CPU.");
+            File.WriteAllText(Work + "/result.txt", "PASS: saved cabin hierarchy; manual camera Transform/Lens/culling edits survive runtime and split-screen setup; physical cabin and camera follow the driving car; both views render the landing; one waiting model boards without cloning; destination stays identical; both local lobby seats ready without switching to CPU.");
         }
         finally
         {
@@ -827,6 +1088,7 @@ public static class ExtendedInteriorChecks
             "1v1 elevators did not start with one shared passenger pool.");
         Require(Mathf.Abs(match.ShaftX(0) + match.ShaftX(1) - 2f * CrazyElevator.Match.ElevatorMatch.ShaftCenterX) < .001f,
             "1v1 tracks do not straddle the building centre.");
+        CheckPhysicalWaitingQueues(player);
 
         var matchType = typeof(CrazyElevator.Match.ElevatorMatch);
         var trackPositions = (float[])matchType.GetField("trackPosition", Flags).GetValue(match);

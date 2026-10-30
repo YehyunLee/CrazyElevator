@@ -21,6 +21,7 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
         // elevator face. Keep the serialized face references for prefab
         // compatibility, but never show the old artwork at runtime.
         if (face) face.gameObject.SetActive(false);
+        HideLegacyBackdrops();
         RestHands();
     }
 
@@ -36,16 +37,9 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
         // Cabin décor matches the floor band: clean office, candy trim, rusty water.
         if (candyDecor) candyDecor.SetActive(world == WorldBand.Candy);
         if (rustyDecor) rustyDecor.SetActive(world == WorldBand.Water);
-        if (officeBackdrop != null)
-        {
-            officeBackdrop.SetActive(world == WorldBand.Office);
-            if (candyBackdrop) candyBackdrop.SetActive(world == WorldBand.Candy);
-        }
-        else if (candyBackdrop)
-        {
-            candyBackdrop.SetActive(world != WorldBand.Water);
-        }
-        if (waterBackdrop) waterBackdrop.SetActive(world == WorldBand.Water);
+        // The doors look onto the real landing and its three passenger queues.
+        // Retain old prefab references for compatibility, but never show a second room.
+        HideLegacyBackdrops();
         // Soft glove is candy-only. Office stays friendly without the pink helping hand;
         // water keeps the rusty pusher.
         if (candyHand) candyHand.gameObject.SetActive(world == WorldBand.Candy);
@@ -57,6 +51,13 @@ public sealed class ElevatorPersonaRig : MonoBehaviour
         if (frown) frown.gameObject.SetActive(!friendly);
         if (leftBrow) leftBrow.localRotation = Quaternion.Euler(0, 0, friendly ? 8 : -23);
         if (rightBrow) rightBrow.localRotation = Quaternion.Euler(0, 0, friendly ? -8 : 23);
+    }
+
+    void HideLegacyBackdrops()
+    {
+        if (officeBackdrop) officeBackdrop.SetActive(false);
+        if (candyBackdrop) candyBackdrop.SetActive(false);
+        if (waterBackdrop) waterBackdrop.SetActive(false);
     }
 
     public void Tick(float dt, bool moving, bool busy)

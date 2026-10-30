@@ -98,6 +98,61 @@ internal static class Program
         }
     }
 
+    static void CheckVisibleDoorDistribution()
+    {
+        var firstSides = new List<BoardingDoor>();
+        for (int floor = 0; floor < 2; floor++)
+        {
+            var round = new ElevatorRound { Floor = floor };
+            round.Riders.Clear();
+            var locked = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Left);
+            locked.Kind = "ELDERLY";
+            var delayed = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Right);
+            delayed.SpawnDelay = 1f;
+            var front = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Left);
+            var side = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Front);
+            var reserve = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Front);
+            round.Riders.AddRange(new[] { locked, delayed, front, side, reserve });
+            round.AssignBoardingDoors();
+            BoardingDoor assignedSide = side.PickupDoor;
+            Require(front.PickupDoor == BoardingDoor.Front && assignedSide != BoardingDoor.Front,
+                "Small groups do not have both a front and a side passenger.");
+            round.RevealQueue(floor, ElevatorRound.CenterStop);
+            Require(round.Riders.Where(round.IsOffered).SequenceEqual(new[] { front, side })
+                && front.PickupDoor == BoardingDoor.Front && side.PickupDoor == assignedSide
+                && front.PickupQueueSlot == 0 && side.PickupQueueSlot == 1,
+                "Locked or delayed passengers consumed a visible entrance slot.");
+            firstSides.Add(side.PickupDoor);
+
+            var other = new ElevatorRound { Floor = floor };
+            other.SharePassengerPoolWith(round, 1);
+            other.RevealQueue(floor, ElevatorRound.CenterStop);
+            Require(other.IsOffered(front) && other.IsOffered(side),
+                "The second seat lost the same front and side passengers.");
+            Require(round.Board(front) && round.Reject(side), "Visible group could not leave.");
+            delayed.SpawnDelay = 0f;
+            round.TimeLeft = other.TimeLeft = 120f;
+            round.AssignBoardingDoors();
+            other.RevealQueue(floor, ElevatorRound.CenterStop);
+            Require(front.PickupDoor == BoardingDoor.Front && side.PickupDoor == assignedSide
+                && front.PickupQueueSlot == 0 && side.PickupQueueSlot == 1
+                && !round.Riders.Any(round.IsOffered) && !other.Riders.Any(other.IsOffered),
+                "Departures or a later unlock moved doors or refilled a captured landing.");
+        }
+        Require(firstSides.Contains(BoardingDoor.Left) && firstSides.Contains(BoardingDoor.Right),
+            "Early side passengers do not use both sides across neighboring floors.");
+
+        var larger = new ElevatorRound { Floor = 3, TimeLeft = 140f };
+        larger.Riders.Clear();
+        for (int i = 0; i < 5; i++)
+            larger.Riders.Add(NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front));
+        larger.AssignBoardingDoors();
+        larger.RevealQueue(3, ElevatorRound.CenterStop);
+        Rider[] visible = larger.Riders.Where(larger.IsOffered).ToArray();
+        Require(visible.Length == 3 && visible.Select(r => r.PickupDoor).Distinct().Count() == 3,
+            "A three-passenger landing does not use front, left, and right entrances.");
+    }
+
     static void CheckQueueDepartures()
     {
         var round = new ElevatorRound();
@@ -191,6 +246,7 @@ internal static class Program
         {
             { "Matching inside/outside and both-seat door queues over all 24 floors and 5 stops", CheckQueueConsistency },
             { "Exact two-grandma and one-box-man preview limits in solo and two-player", CheckFiniteLandingRoster },
+            { "Visible groups use front and alternating sides without moving or refilling captured queues", CheckVisibleDoorDistribution },
             { "Rejecting, timing out, revisiting, and progression preserve visible groups", CheckQueueDepartures },
             { "Two seats board exclusively, retain separate cabin clocks and score once", CheckTwoSeatBoarding },
             { "Capacity, deadline, and office/candy/underwater progression", CheckDeadlineAndCapacity }

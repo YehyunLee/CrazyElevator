@@ -385,7 +385,18 @@ namespace CrazyElevator.Managers
         // A floor queue belongs to its landing, never to whichever car is
         // currently parked there. A second car cannot drag it to another lane.
         Vector3 WaitingCabinOrigin(Rider rider)
-            => PhysicalCabinOrigin(StopWorldX(rider.OriginStop), rider.Origin);
+        {
+            float x = StopWorldX(rider.OriginStop);
+            if (rider.OriginStop == CenterStop && rider.PickupDoor == BoardingDoor.Front)
+            {
+                // The space between shafts is not a doorway. Use the actual
+                // shaft fronts, with a fixed lane for each captured queue slot.
+                int frontSlot = Mathf.Max(0, rider.PickupQueueSlot) / 3;
+                bool right = (frontSlot + (Match != null ? rider.Origin : 0)) % 2 != 0;
+                x = right ? RightShaftX : LeftShaftX;
+            }
+            return PhysicalCabinOrigin(x, rider.Origin);
+        }
 
         // Centre landings serve two shafts. Keep side queues beyond the outer
         // cabin edges rather than standing inside either parked elevator.

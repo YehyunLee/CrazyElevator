@@ -279,7 +279,6 @@ namespace CrazyElevator.Managers
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
             cabinFramingReady = cameraViewReady = false;
-            landingFramingFloor = landingFramingStop = -1;
             ResetDimensionReveal();
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
@@ -299,54 +298,31 @@ namespace CrazyElevator.Managers
     {
         // Both cameras observe this cabin on the actual moving car. The rear
         // wall is cut away only for the exterior camera, like a dollhouse.
-        const float PhysicalCabinScale = .45f;
+        float PhysicalCabinScale => stage.localScale.x;
         const float PassengerVisualScale = 1.2f;
-        const int CabinBackWallLayer = 29;
-        static readonly Quaternion PhysicalCabinRotation = Quaternion.Euler(0f, 180f, 0f);
+        Quaternion PhysicalCabinRotation => stage.localRotation;
+        // Frame the usable floor and entrances. The cutaway's near upper corners
+        // can extend off-screen without shrinking the floor to fit an empty box.
+        static readonly Vector3[] CabinFramingPoints =
+        {
+            new Vector3(-2.95f, .02f, .02f), new Vector3(2.95f, .02f, .02f),
+            new Vector3(-2.95f, .02f, 5.2f), new Vector3(2.95f, .02f, 5.2f),
+            new Vector3(-2.95f, 3.55f, 0f), new Vector3(2.95f, 3.55f, 0f),
+            new Vector3(-3f, 3.55f, 2.58f), new Vector3(3f, 3.55f, 2.58f)
+        };
         Vector3 cabinCameraHome, authoredCabinCameraHome;
         Quaternion cabinCameraHomeRotation;
         bool cabinFramingReady;
-        Bounds landingFramingBounds;
-        int landingFramingFloor = -1, landingFramingStop = -1;
 
-        static Vector3 PhysicalCabinOrigin(float x, int floor)
-            => new Vector3(x, floor * ShaftFloorHeight + .1f, .4f);
+        Vector3 PhysicalCabinOrigin(float x, int floor)
+            => new Vector3(x, floor * ShaftFloorHeight + 1.4f, -.8f) + stage.localPosition;
 
         void BindPhysicalCabin()
         {
-            // Save the authored camera pose before moving its set into the shaft.
-            eye.transform.SetParent(stage, true);
+            // The prefab already contains the moving cabin, camera and lights.
+            // Read its authored pose without rebuilding or repositioning the set.
             cabinCameraHome = authoredCabinCameraHome = eye.transform.localPosition;
             cabinCameraHomeRotation = eye.transform.localRotation;
-            foreach (Light light in sceneView.lights ?? System.Array.Empty<Light>())
-            {
-                if (light == null) continue;
-                light.transform.SetParent(stage, true);
-                light.cullingMask |= (1 << ExteriorLayer) | (1 << CabinBackWallLayer);
-            }
-            // The old sealed exterior shell would hide the real cabin and doors.
-            foreach (Renderer part in exteriorCar.GetComponentsInChildren<Renderer>(true))
-                part.enabled = false;
-            foreach (Collider part in exteriorCar.GetComponentsInChildren<Collider>(true))
-                part.enabled = false;
-
-            stage.SetParent(exteriorCar, false);
-            stage.localPosition = new Vector3(0f, -1.3f, 1.2f);
-            stage.localRotation = PhysicalCabinRotation;
-            stage.localScale = Vector3.one * PhysicalCabinScale;
-            foreach (Transform part in stage.GetComponentsInChildren<Transform>(true))
-            {
-                part.gameObject.layer = part.name == "Back wall" || part.name == "Back metal rib"
-                    ? CabinBackWallLayer : ExteriorLayer;
-                // These belonged to the old isolated hallway. Landings and scenery
-                // now stay in the building instead of travelling with the car.
-                if (part.name.StartsWith("Hall ") || part.name == "Plant"
-                    || part.name == "Plant pot" || part.name == "Runner")
-                    part.gameObject.SetActive(false);
-            }
-            eye.nearClipPlane = Mathf.Min(eye.nearClipPlane, .04f);
-            eye.cullingMask = ~((1 << EncounterPreviewLayer) | (1 << CabinBackWallLayer));
-            exteriorCamera.cullingMask = ~((1 << EncounterPreviewLayer) | (1 << CabinBackWallLayer));
             CacheExteriorCollisionSize();
             RefreshCabinCameraHome();
         }
@@ -358,40 +334,21 @@ namespace CrazyElevator.Managers
             cameraHomeRotation = stage.rotation * cabinCameraHomeRotation;
         }
 
-        // Fit once after movement and viewport updates. Keep a stop's whole
-        // landing in view so each pickup cannot change the camera composition.
+        // Keep the cabin large and stable as waiting passengers board or leave.
+        // Viewport changes still reframe smoothly for solo, split screen and PIP.
         void FrameCabinDoorways(float dt, float seatAspect)
         {
-            var bounds = new Bounds(new Vector3(0f, 1.65f, 2.5f), new Vector3(6.6f, 3.5f, 5.5f));
-            if (round != null && (phase == Phase.Boarding || phase == Phase.Opening || phase == Phase.Closing))
-                foreach (Rider rider in round.Riders)
-                {
-                    if (!round.IsOffered(rider)) continue;
-                    Vector3 position = WaitingPositionInCabin(rider);
-                    bounds.Encapsulate(position + new Vector3(-.65f, 0f, -.5f) * PassengerVisualScale);
-                    bounds.Encapsulate(position + new Vector3(.65f, 2.8f, .5f) * PassengerVisualScale);
-                }
-            foreach (InteriorTransfer transfer in boardingTransfers.Values)
-            {
-                bounds.Encapsulate(transfer.start + new Vector3(-.65f, 0f, -.5f) * PassengerVisualScale);
-                bounds.Encapsulate(transfer.start + new Vector3(.65f, 2.8f, .5f) * PassengerVisualScale);
-            }
-            bounds = RetainLandingCameraBounds(bounds);
-            Vector3 home = authoredCabinCameraHome + Vector3.right * bounds.center.x;
+            Vector3 home = authoredCabinCameraHome;
             Quaternion inverse = Quaternion.Inverse(cabinCameraHomeRotation);
-            float vertical = Mathf.Tan(eye.fieldOfView * .5f * Mathf.Deg2Rad) * .92f;
+            float vertical = Mathf.Tan(eye.fieldOfView * .5f * Mathf.Deg2Rad) * .94f;
             // Prepare the final cabin framing while the doors open, before the
             // wide preview grows into a narrower split-screen seat.
             bool atLanding = phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing;
             float aspect = atLanding ? Mathf.Min(eye.aspect, seatAspect) : eye.aspect;
             float horizontal = vertical * Mathf.Max(.1f, aspect);
             float pullback = 0f;
-            for (int corner = 0; corner < 8; corner++)
+            foreach (Vector3 point in CabinFramingPoints)
             {
-                Vector3 point = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
-                    (corner & 1) == 0 ? -1f : 1f,
-                    (corner & 2) == 0 ? -1f : 1f,
-                    (corner & 4) == 0 ? -1f : 1f));
                 Vector3 offset = inverse * (point - home);
                 pullback = Mathf.Max(pullback, Mathf.Max(Mathf.Abs(offset.x) / horizontal - offset.z,
                     Mathf.Abs(offset.y) / vertical - offset.z));
@@ -399,23 +356,6 @@ namespace CrazyElevator.Managers
             Vector3 target = home - cabinCameraHomeRotation * Vector3.forward * pullback;
             cabinCameraHome = cabinFramingReady ? SmoothCabinHome(cabinCameraHome, target, dt) : target;
             cabinFramingReady = true;
-        }
-
-        Bounds RetainLandingCameraBounds(Bounds current)
-        {
-            bool atLanding = round != null
-                && (phase == Phase.Opening || phase == Phase.Boarding || phase == Phase.Closing);
-            if (!atLanding)
-            {
-                landingFramingFloor = landingFramingStop = -1;
-                return current;
-            }
-            if (landingFramingFloor != round.Floor || landingFramingStop != round.Stop)
-                landingFramingBounds = current;
-            else landingFramingBounds.Encapsulate(current);
-            landingFramingFloor = round.Floor;
-            landingFramingStop = round.Stop;
-            return landingFramingBounds;
         }
 
         static Vector3 SmoothCabinHome(Vector3 current, Vector3 target, float dt)
@@ -432,6 +372,12 @@ namespace CrazyElevator.Managers
                 Debug.LogError("The Main scene needs its Elevator Scene references assigned in the Inspector.", this);
                 return false;
             }
+            if (sceneView.cabin.parent != sceneView.exteriorCar
+                || sceneView.cabinCamera.transform.parent != sceneView.cabin)
+            {
+                Debug.LogError("Mount the cabin under Gameplay elevator and its Cabin camera under the cabin in the saved prefab.", this);
+                return false;
+            }
             stage = sceneView.cabin;
             eye = sceneView.cabinCamera;
             leftDoor = sceneView.leftDoor; rightDoor = sceneView.rightDoor;
@@ -443,17 +389,12 @@ namespace CrazyElevator.Managers
             floorSign = sceneView.floorDisplay;
             foreach (TextMesh label in sceneView.GetComponentsInChildren<TextMesh>(true))
                 GameTypography.Apply(label, true);
+            // A rival's complete car is moved into the shared world before Awake.
+            if (!stage.IsChildOf(sceneView.transform))
+                foreach (TextMesh label in stage.GetComponentsInChildren<TextMesh>(true))
+                    GameTypography.Apply(label, true);
             floorSignHome = floorSign.transform.localPosition;
             cabinCameraDepth = eye.depth;
-            // ElevatorMatch is initialized before either elevator controller,
-            // so both the player and cloned NPC camera need the same framing.
-            if (keepDoorwayClear && cameraLift > 0)
-                eye.transform.position += eye.transform.up * cameraLift;
-            if (extendedInterior)
-            {
-                eye.fieldOfView = Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
-                eye.transform.rotation *= Quaternion.Euler(Mathf.Clamp(cabinAimDown, 0f, 12f), 0f, 0f);
-            }
             cameraHome = eye.transform.position;
             cameraHomeRotation = eye.transform.rotation;
             exteriorCamera = sceneView.exteriorCamera;
@@ -791,10 +732,12 @@ namespace CrazyElevator.Managers
         void UpdateRideMotion(float dt)
         {
             if (eye == null) return;
+            bool animateCamera = sceneView.autoFrameCabin && sceneView.cabinCameraShake;
             if (phase == Phase.Moving)
             {
                 float speed = Mathf.InverseLerp(0, Mathf.Max(.01f, SpeedLimit), RouteSpeed);
                 travelShakeBlend = Mathf.MoveTowards(travelShakeBlend, Mathf.Lerp(.35f, 1f, speed), dt * 2.5f);
+                if (!animateCamera) { ResetCameraMotion(); return; }
                 float strength = cabinTravelShake * travelShakeBlend;
                 float clock = Time.unscaledTime;
                 Vector3 localShake = new Vector3(Mathf.Sin(clock * 23f), Mathf.Sin(clock * 31f) * .7f, 0) * strength;
@@ -807,6 +750,7 @@ namespace CrazyElevator.Managers
             if (arrivalImpact > 0)
             {
                 arrivalImpact = Mathf.Max(0, arrivalImpact - dt * 2.8f);
+                if (!animateCamera) { ResetCameraMotion(); return; }
                 float kick = Mathf.Sin((1 - arrivalImpact) * Mathf.PI * 4f) * arrivalImpact;
                 eye.transform.localPosition = cabinCameraHome + cabinCameraHomeRotation * new Vector3(0, kick * .075f, 0);
                 eye.transform.localRotation = cabinCameraHomeRotation * Quaternion.Euler(kick * 1.1f, 0, 0);
@@ -818,7 +762,7 @@ namespace CrazyElevator.Managers
         // Restore the camera's resting pose.
         void ResetCameraMotion()
         {
-            if (eye == null) return;
+            if (eye == null || !sceneView.autoFrameCabin) return;
             eye.transform.localPosition = cabinCameraHome;
             eye.transform.localRotation = cabinCameraHomeRotation;
         }
@@ -1857,9 +1801,6 @@ namespace CrazyElevator.Managers
             eye.rect = BlendCameraRect(cameraRect, CabinPreviewRect(cameraRect), viewBlend);
             eye.depth = exteriorCamera.enabled ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
-            eye.fieldOfView = Match != null
-                ? Mathf.Clamp(Match.cabinVerticalFieldOfView, 45f, 90f)
-                : Mathf.Clamp(cabinVerticalFieldOfView, 45f, 90f);
             float collisionKick = collisionImpact > 0f
                 ? Mathf.Sin((1f - collisionImpact) * Mathf.PI * 3f) * collisionImpact : 0f;
             float carX = RouteLateralX;
@@ -1869,14 +1810,22 @@ namespace CrazyElevator.Managers
                 Mathf.Abs(collisionKick) * .17f, 0f);
             exteriorCar.localPosition = carLocal;
             exteriorCar.localRotation = CrazyTravelLocalRotation(travelFloor, collisionKick);
-            bool initializeFraming = !cabinFramingReady;
-            if (!cameraPaused || initializeFraming)
+            if (!sceneView.autoFrameCabin)
+            {
+                // Manual edits remain live, including during Play Mode. The
+                // camera still rides with its authored parent and viewport.
+                cabinCameraHome = authoredCabinCameraHome = eye.transform.localPosition;
+                cabinCameraHomeRotation = eye.transform.localRotation;
+                cabinFramingReady = false;
+                RefreshCabinCameraHome();
+            }
+            else if (!cameraPaused || !cabinFramingReady)
             {
                 if (extendedInterior) FrameCabinDoorways(dt, PixelAspect(cameraRect));
                 else cabinFramingReady = true;
                 RefreshCabinCameraHome();
-                UpdateRideMotion(dt);
             }
+            if (!cameraPaused || initializeView) UpdateRideMotion(dt);
             eye.backgroundColor = WorldSky(travelFloor);
             EnsureCrazyRouteMap();
             if (!cameraPaused || initializeView) UpdateCrazyTravelCamera(carLocal);
@@ -2382,9 +2331,6 @@ namespace CrazyElevator.Managers
             target.passengerSpeechBubblePrefab = passengerSpeechBubblePrefab;
             target.speechDuration = speechDuration;
             target.keepDoorwayClear = keepDoorwayClear;
-            target.cameraLift = cameraLift;
-            target.cabinVerticalFieldOfView = cabinVerticalFieldOfView;
-            target.cabinAimDown = cabinAimDown;
             target.impairmentGaugePrefab = impairmentGaugePrefab;
             target.handymanShovelPrefab = handymanShovelPrefab;
             target.secondsPerRustLevel = secondsPerRustLevel;

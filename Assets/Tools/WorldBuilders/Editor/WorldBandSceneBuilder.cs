@@ -78,7 +78,9 @@ namespace CrazyElevator.Tools.WorldBuilders
                 var office = BuildOfficeLobby(Group("Office Lobby", lobbies));
                 var candy = BuildCandyLobby(Group("Candy Lobby", lobbies));
                 var water = BuildWaterLobby(Group("Water Lobby", lobbies));
-                office.gameObject.SetActive(true);
+                // Legacy isolated lobby previews stay out of the physical elevator.
+                lobbies.gameObject.SetActive(false);
+                office.gameObject.SetActive(false);
                 candy.gameObject.SetActive(false);
                 water.gameObject.SetActive(false);
 

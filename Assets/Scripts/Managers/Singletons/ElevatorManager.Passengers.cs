@@ -1994,12 +1994,6 @@ namespace CrazyElevator.Managers
         [Min(.5f)] public float speechDuration = 2.2f;
         [Tooltip("Keeps boarded passengers near the side walls and prioritizes hall passengers when selecting overlaps.")]
         public bool keepDoorwayClear;
-        [Min(0f), Tooltip("Raises the cabin camera so hall passengers remain visible behind boarded riders.")]
-        public float cameraLift;
-        [Range(45f, 90f), Tooltip("Vertical cabin lens angle. Lower values make the playable cabin fill more of the screen.")]
-        public float cabinVerticalFieldOfView = 72f;
-        [Range(0f, 12f), Tooltip("Tilts the camera down so the doorway and passengers use the empty upper screen space.")]
-        public float cabinAimDown = 0f;
 
         readonly Dictionary<Rider, PassengerSpeechBubble> speechBubbleViews =
             new Dictionary<Rider, PassengerSpeechBubble>();
