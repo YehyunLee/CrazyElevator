@@ -15,6 +15,9 @@ namespace CrazyElevator.Managers
         bool hasChosenBoardingDoor;
         float autoBoardWait;
         readonly float[] boardingDoorOpenness = new float[3];
+        readonly Dictionary<Renderer, MaterialPropertyBlock> doorFrameMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
+        MaterialPropertyBlock doorFrameTint;
+        static readonly Color DoorFrameIdle = new Color32(88, 105, 124, 255);
 
         public bool HasChosenBoardingDoor => hasChosenBoardingDoor;
 
@@ -133,7 +136,7 @@ namespace CrazyElevator.Managers
         }
 
         // Door names are authored in cabin space. Both views can look back
-        // across the cabin, so controls and cards must follow screen space.
+        // across the cabin, so directional controls must follow screen space.
         bool BoardingDoorOrderReversed
         {
             get
@@ -164,6 +167,74 @@ namespace CrazyElevator.Managers
                 SelectRider(null);
             }
             lastSelectionDirection = direction;
+        }
+
+        // Tint the authored doorway frames, leaving the transparent panels alone.
+        void UpdateBoardingDoorFrames()
+        {
+            bool choosing = phase == Phase.Boarding && round != null && !round.Finished && !IsNpc;
+            TintBoardingDoorFrame(sceneView.leftDoorFrame, BoardingDoor.Left, choosing);
+            TintBoardingDoorFrame(sceneView.frontDoorFrame, BoardingDoor.Front, choosing);
+            TintBoardingDoorFrame(sceneView.rightDoorFrame, BoardingDoor.Right, choosing);
+        }
+
+        void TintBoardingDoorFrame(Renderer[] frame, BoardingDoor door, bool choosing)
+        {
+            if (frame == null) return;
+            bool selected = choosing && selectedRider == null && selectedBoardingDoor == door;
+            bool open = choosing && openBoardingDoor == (int)door;
+            Color color = open ? Teal : selected ? Gold : DoorFrameIdle;
+            if (doorFrameTint == null) doorFrameTint = new MaterialPropertyBlock();
+            foreach (Renderer renderer in frame)
+            {
+                if (renderer == null) continue;
+                if (!doorFrameMaterials.TryGetValue(renderer, out var original))
+                {
+                    original = new MaterialPropertyBlock();
+                    renderer.GetPropertyBlock(original);
+                    doorFrameMaterials.Add(renderer, original);
+                }
+                if (!choosing) { renderer.SetPropertyBlock(original); continue; }
+                renderer.GetPropertyBlock(doorFrameTint);
+                doorFrameTint.SetColor("_BaseColor", color);
+                doorFrameTint.SetColor("_Color", color);
+                renderer.SetPropertyBlock(doorFrameTint);
+            }
+        }
+
+        // Use the closed doorway dimensions so an open entrance stays clickable.
+        bool TryPickBoardingDoor(Vector2 cursor, out BoardingDoor picked)
+        {
+            picked = BoardingDoor.Front;
+            if (phase != Phase.Boarding || eye == null || stage == null
+                || !eye.pixelRect.Contains(cursor) || PickHoveredRider(cursor) != null) return false;
+            Ray worldRay = eye.ScreenPointToRay(cursor);
+            Ray ray = new Ray(stage.InverseTransformPoint(worldRay.origin),
+                stage.InverseTransformVector(worldRay.direction));
+            float nearest = float.MaxValue;
+            for (int index = 0; index < 3; index++)
+            {
+                BoardingDoor door = (BoardingDoor)index;
+                Transform panel = door == BoardingDoor.Left ? sceneView.leftSideDoor
+                    : door == BoardingDoor.Right ? sceneView.rightSideDoor : leftDoor;
+                if (panel == null) continue;
+                Vector3 center = door == BoardingDoor.Left ? sceneView.leftSideDoorClosed
+                    : door == BoardingDoor.Right ? sceneView.rightSideDoorClosed
+                    : (sceneView.leftDoorClosed + sceneView.rightDoorClosed) * .5f;
+                Plane plane = new Plane(BoardingDoorOutward(door), center);
+                if (!plane.Raycast(ray, out float distance) || distance >= nearest) continue;
+                Vector3 hit = ray.GetPoint(distance) - center;
+                float halfWidth = door == BoardingDoor.Front
+                    ? Mathf.Abs(sceneView.rightDoorClosed.x - sceneView.leftDoorClosed.x) * .5f
+                        + (leftDoor.localScale.x + rightDoor.localScale.x) * .25f
+                    : panel.localScale.z * .5f;
+                float horizontal = door == BoardingDoor.Front ? hit.x : hit.z;
+                if (Mathf.Abs(horizontal) > halfWidth + .18f
+                    || Mathf.Abs(hit.y) > panel.localScale.y * .5f + .18f) continue;
+                nearest = distance;
+                picked = door;
+            }
+            return nearest < float.MaxValue;
         }
         // Vector2Int.x = first column, Vector2Int.y = row.
         readonly Dictionary<Rider, Vector2Int> cabinTileRuns = new Dictionary<Rider, Vector2Int>();
@@ -565,7 +636,7 @@ namespace CrazyElevator.Managers
             // Mouse raycast/drag still reads the device directly; stick/WASD come from InputManager.
         }
 
-        bool IsOverMouseControl(Vector2 screenCursor)
+        bool IsOverMouseControl(Vector2 screenCursor, bool includeDoors = true)
         {
             Vector2 guiCursor = new Vector2(screenCursor.x, Screen.height - screenCursor.y);
             if (Match != null)
@@ -575,11 +646,9 @@ namespace CrazyElevator.Managers
                 guiCursor.y -= view.y;
             }
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
-            if (phase == Phase.Boarding)
-                for (int door = 0; door < 3; door++)
-                    if (BoardingDoorRect(door).Contains(guiCursor)) return true;
             return up.Contains(guiCursor) || down.Contains(guiCursor) || stop.Contains(guiCursor)
-                || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor);
+                || close.Contains(guiCursor) || kickout.Contains(guiCursor) || repair.Contains(guiCursor)
+                || includeDoors && TryPickBoardingDoor(screenCursor, out _);
         }
 
         // Preserve the rider's grab point so dragging feels direct and stable.

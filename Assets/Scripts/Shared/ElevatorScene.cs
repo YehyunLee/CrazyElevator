@@ -13,6 +13,10 @@ namespace CrazyElevator.Shared
         public Vector3 leftSideDoorClosed = new Vector3(-2.9f, 1.5f, 2.58f);
         public Vector3 rightSideDoorClosed = new Vector3(2.9f, 1.5f, 2.58f);
         public float sideDoorTravel = 3.2f;
+        [Header("Door selection")]
+        public Renderer[] frontDoorFrame;
+        public Renderer[] leftDoorFrame;
+        public Renderer[] rightDoorFrame;
         public TextMesh floorDisplay;
         // Nine editable labels, ordered front-to-back and left-to-right.
         public TextMesh[] gridDestinations;

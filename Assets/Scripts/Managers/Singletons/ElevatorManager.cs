@@ -759,6 +759,7 @@ namespace CrazyElevator.Managers
             leftDoor.gameObject.SetActive(front < .98f); rightDoor.gameObject.SetActive(front < .98f);
             SetSideBoardingDoor(sceneView.leftSideDoor, sceneView.leftSideDoorClosed, BoardingDoor.Left);
             SetSideBoardingDoor(sceneView.rightSideDoor, sceneView.rightSideDoorClosed, BoardingDoor.Right);
+            UpdateBoardingDoorFrames();
         }
 
         void SetSideBoardingDoor(Transform panel, Vector3 closed, BoardingDoor door)
@@ -1298,7 +1299,7 @@ namespace CrazyElevator.Managers
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
             if (input.CloseDoorsPressed) { CloseAndTravel(); return; }
-            if (ReadDoorButtonClick(input)) return;
+            if (ReadDoorClick(input)) return;
             if (confirm)
             {
                 if (draggedRider != null) return;
