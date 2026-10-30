@@ -1039,9 +1039,9 @@ namespace CrazyElevator.Managers
                 "CHOOSE YOUR MODE", caption);
 
             DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "One world per round / 60 seconds", false, !playerTwoSelected);
+                "SINGLE PLAYER", "Solo practice", false, !playerTwoSelected);
             DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "60 seconds / First to 3 round wins", true, playerTwoSelected);
+                "1V1", "CPU or Player 2", true, playerTwoSelected);
             GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
                 "PICK A MODE", caption);
         }
@@ -1121,7 +1121,6 @@ namespace CrazyElevator.Managers
                         playerOneCursor = 5;
                         ReturnToMainMenu();
                     }
-                    GUI.Label(new Rect(430, 735, 840, 34), "60 SECONDS / ONE WORLD PER ROUND / FIRST TO 3 WINS", caption);
                     bool playerTwoAvailable = InputManager.Instance != null
                         && InputManager.Instance.HasLobbyInput(1);
                     bool startEnabled = !BothCpu;
@@ -1195,11 +1194,6 @@ namespace CrazyElevator.Managers
                         HandleLobbyConfirm(0);
                     }
                     DrawLobbyCursor(backButton, playerOneCursor == 5, false, playerTwoAvailable);
-                    if (AllPlayersReady)
-                    {
-                        Panel(new Rect(560, 1018, 580, 52), new Color(Ink.r, Ink.g, Ink.b, .94f));
-                        GUI.Label(new Rect(580, 1022, 540, 44), "BOTH READY  ·  PRESS START", caption);
-                    }
                 }
                 if (launching) Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(0, 0, 0,
                     Mathf.Clamp01((launchTimer / LaunchSeconds - .55f) * 2.2f)));

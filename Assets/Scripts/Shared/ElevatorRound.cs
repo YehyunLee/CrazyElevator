@@ -81,6 +81,12 @@ namespace CrazyElevator.Shared
         public const int Floors = 24;
         public const int Dimensions = 3;
         public const int FloorsPerDimension = Floors / Dimensions;
+        // Authored floor indices stay global; every world's signs start at 1.
+        public static int FloorNumber(int floor)
+        {
+            if (floor < 0 || floor >= Floors) throw new ArgumentOutOfRangeException(nameof(floor));
+            return floor % FloorsPerDimension + 1;
+        }
         public const int Capacity = 9;
         public const float Duration = 60f;
         // Seconds into the shift when candy (1) and underwater (2) open.
@@ -234,10 +240,14 @@ namespace CrazyElevator.Shared
                 Color = color, Badge = badge, Bonus = bonus });
         }
 
-        // Special passengers may request any other floor, including a floor in
-        // their own world. Skipping the origin prevents a zero-distance trip.
+        // Special passengers may request any other floor in their origin world.
+        // Skipping the origin prevents a zero-distance trip.
         public static int RandomDestination(int origin)
-            => RandomDestination(origin, Floors - 1);
+        {
+            if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
+            int firstFloor = origin / FloorsPerDimension * FloorsPerDimension;
+            return firstFloor + RandomDestination(origin - firstFloor, FloorsPerDimension - 1);
+        }
 
         static int RandomDestination(int origin, int highestFloor)
         {
@@ -372,9 +382,9 @@ namespace CrazyElevator.Shared
         public static int DestinationFor(string kind, int origin)
         {
             if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
-            // Initial rosters must be deliverable when their world first opens.
-            int worldCeiling = (origin / FloorsPerDimension + 1) * FloorsPerDimension - 1;
-            return DestinationFor(kind, origin, worldCeiling);
+            // Generate locally so a downward request cannot enter an earlier world.
+            int firstFloor = origin / FloorsPerDimension * FloorsPerDimension;
+            return firstFloor + DestinationFor(kind, origin - firstFloor, FloorsPerDimension - 1);
         }
 
         public static int DestinationFor(string kind, int origin, int highestFloor)

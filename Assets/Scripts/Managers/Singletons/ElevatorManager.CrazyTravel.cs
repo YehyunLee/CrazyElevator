@@ -389,7 +389,7 @@ namespace CrazyElevator.Managers
             teleportFlash = TeleportFlashSeconds;
             teleportFlashTarget = gate.Target;
             routeBoostPulse = 1f;
-            notice = "TELEPORT! Warped to floor " + gate.Target + ".";
+            notice = "TELEPORT! Warped to floor " + ElevatorRound.FloorNumber(gate.Target) + ".";
             Play(chime, 1.05f);
         }
 
@@ -597,7 +597,13 @@ namespace CrazyElevator.Managers
                 Transform root = world.Find(TeleportGateRootName);
                 if (root != null)
                     for (int i = 0; i < TeleportGates.Length; i++)
+                    {
                         teleportGateViews[i] = root.Find(TeleportGateName(i));
+                        Transform destinationLabel = teleportGateViews[i] != null
+                            ? teleportGateViews[i].Find("Destination") : null;
+                        TextMesh label = destinationLabel != null ? destinationLabel.GetComponent<TextMesh>() : null;
+                        if (label != null) label.text = ElevatorRound.FloorNumber(TeleportGates[i].Target).ToString();
+                    }
             }
             for (int i = 0; i < teleportGateViews.Length; i++)
             {
@@ -640,14 +646,14 @@ namespace CrazyElevator.Managers
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
             if (teleportFlash > 0f)
             {
-                DrawRouteGuide(view, "TELEPORT!  >>  FLOOR " + teleportFlashTarget, Gold);
+                DrawRouteGuide(view, "TELEPORT!  >>  FLOOR " + ElevatorRound.FloorNumber(teleportFlashTarget), Gold);
                 return;
             }
             if (railRiding)
             {
                 DrawRouteGuide(view, pendingTrackDirection != 0
                     ? "TURNING " + (pendingTrackDirection > 0 ? "UP" : "DOWN") + " AT NEXT TRACK"
-                    : "FLOOR " + railFloor + " RAIL  ·  W/S TO TURN AT NEXT TRACK", Gold);
+                    : "FLOOR " + ElevatorRound.FloorNumber(railFloor) + " RAIL  ·  W/S TO TURN AT NEXT TRACK", Gold);
                 return;
             }
             if (pendingRailDirection != 0)
@@ -659,8 +665,9 @@ namespace CrazyElevator.Managers
             if (!OnMainShaft(routeLateralX)
                 && TryGetVerticalTrack(routeLateralX, travelFloor, out _, out float bottom, out float top))
             {
-                DrawRouteGuide(view, "SIDE TRACK  F" + bottom + "-F" + top + "  ·  ENDS AT F"
-                    + (travelDirection > 0 ? top : bottom), Teal);
+                DrawRouteGuide(view, "SIDE TRACK  F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(bottom))
+                    + "-F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(top)) + "  ·  ENDS AT F"
+                    + ElevatorRound.FloorNumber(Mathf.RoundToInt(travelDirection > 0 ? top : bottom)), Teal);
                 return;
             }
 
@@ -678,7 +685,7 @@ namespace CrazyElevator.Managers
                 if (!Match.TryGetUpcomingJunction(this, out int junction, out float distance)) return;
                 string direction = Match.ExpressTrack(junction) == 0 ? "LEFT" : "RIGHT";
                 int exitFloor = Mathf.CeilToInt(Match.JunctionFloor(junction));
-                message = "EXPRESS GATE F" + exitFloor + "  /  " + direction
+                message = "EXPRESS GATE F" + ElevatorRound.FloorNumber(exitFloor) + "  /  " + direction
                     + "  /  " + distance.ToString("0.0") + "F";
                 accent = Teal;
             }

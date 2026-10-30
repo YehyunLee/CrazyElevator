@@ -787,17 +787,33 @@ namespace CrazyElevator.Managers
             title.normal.textColor = Cream;
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
                 countdown, title);
+            var progress = GameManager.Instance;
+            string roundLabel = "ROUND " + (progress != null ? progress.RoundNumber : 1);
+            string worldName = progress != null ? progress.ActiveDimensionName : "OFFICE";
+            float uiScale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
+            float badgeHeight = Mathf.Clamp(34f * uiScale, 22f, 40f);
+            float worldHeight = Mathf.Clamp(64f * uiScale, 30f, 76f);
+            float gap = Mathf.Max(4f, 10f * uiScale);
+            float headerY = Screen.height * .22f - (badgeHeight + gap + worldHeight) * .5f;
+            int previousBodySize = body.fontSize;
+            TextAnchor previousBodyAlignment = body.alignment;
+            Color previousBodyColour = body.normal.textColor;
+            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(18f * uiScale), 12, 22);
+            body.alignment = TextAnchor.MiddleCenter;
+            Color accent = WorldAccent(round != null ? round.Floor : 0);
+            body.normal.textColor = accent;
+            float badgeWidth = body.CalcSize(new GUIContent(roundLabel)).x + 28f;
+            Rect badge = new Rect((Screen.width - badgeWidth) * .5f, headerY, badgeWidth, badgeHeight);
+            FramedPanel(badge, accent, 2f);
+            GUI.Label(badge, roundLabel, body);
+            title.fontSize = Mathf.Clamp(Mathf.RoundToInt(44f * uiScale), 24, 54);
+            GUI.Label(new Rect(16f, badge.yMax + gap, Screen.width - 32f, worldHeight), worldName, title);
+            body.fontSize = previousBodySize;
+            body.alignment = previousBodyAlignment;
+            body.normal.textColor = previousBodyColour;
             title.fontSize = previousSize;
             title.alignment = previousAlignment;
             title.normal.textColor = previousTextColor;
-            var progress = GameManager.Instance;
-            string roundLabel = progress != null
-                ? "ROUND " + progress.RoundNumber + "  /  " + progress.ActiveDimensionName
-                : "ROUND 1  /  OFFICE";
-            var roundStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = 24 };
-            GUI.Label(new Rect(0f, Screen.height * .23f, Screen.width, 40f), roundLabel, roundStyle);
-            GUI.Label(new Rect(0f, Screen.height * .65f, Screen.width, 40f),
-                Match != null ? "60 SECONDS  /  FIRST TO 3 ROUND WINS" : "60 SECONDS", roundStyle);
             GUI.depth = previousDepth;
         }
 
@@ -946,7 +962,7 @@ namespace CrazyElevator.Managers
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
                 "ROUND " + (session != null ? session.RoundNumber : 1) + " / " + WorldName(round.Floor),
-                "F" + round.Floor); cursor += 152;
+                "F" + ElevatorRound.FloorNumber(round.Floor)); cursor += 152;
             DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
@@ -1241,7 +1257,7 @@ namespace CrazyElevator.Managers
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
-            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + GlideStopFloor() : "STOP", Gold,
+            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP", Gold,
                 GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
@@ -1494,7 +1510,7 @@ namespace CrazyElevator.Managers
                 : "FINAL SCORE: " + round.Score
                     + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                     + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
-                    + "\n\n60 seconds complete. Next world: "
+                    + "\n\nNext world: "
                     + (session != null ? session.NextDimensionName : "CANDY") + ".";
             Label(new Rect(356, 292, 690, 240), copy, body);
             if (paused)

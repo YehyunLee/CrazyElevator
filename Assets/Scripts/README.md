@@ -5,6 +5,8 @@ One Main scene. Liam's singleton managers own the public design.
 
 On the `single-dimension` branch, each round lasts **60 seconds** in one world: **office -> candy -> underwater -> office**, repeating until someone wins three rounds. Higher delivery score wins the round; ties award no win and the next round still changes worlds. `GameManager` owns the round number and match wins. Both elevators reset their score, passengers, position, and clock together. Results offer **Next Round**, or **Play Again** after a match winner. Solo practice uses the same one-minute world rotation.
 
+Every world displays floors **1–8**, including the HUD, cabin indicator, world signs, passenger destinations, and teleport gates. `ElevatorRound.FloorNumber` converts the authored floor indices (0–23) for display; movement and delivery still use those original indices. Passenger destination generators stay inside the passenger's origin world and never request the origin floor.
+
 ## Scene ownership (required)
 
 Put each global manager on its **own named GameObject** in `Main.unity` and attach the script in the Inspector. Do **not** recreate them with runtime `new GameObject` / `AddComponent`.

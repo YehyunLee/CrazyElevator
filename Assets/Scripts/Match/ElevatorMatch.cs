@@ -755,7 +755,8 @@ namespace CrazyElevator.Match
         static readonly Color Gold = new Color32(255, 205, 82, 255);
         static readonly Color Ink = new Color32(25, 31, 46, 255);
         [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue, collisionWord,
-            resultTitle, resultName, resultPoints, resultWinner, roundStatus;
+            resultTitle, resultName, resultPoints, resultWinner, roundStatus, sharedClock,
+            resultSmall, resultWorld, resultAction, resultKey, resultWinBadge;
         [System.NonSerialized] Texture2D resultGlowTexture;
 
         void OnGUI()
@@ -791,6 +792,7 @@ namespace CrazyElevator.Match
             if (IsVisibleSeat(0)) DrawSeat(player, 0, Coral);
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Teal);
             if (SplitScreen) DrawSplitDivider();
+            DrawSharedRoundHUD();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
             else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
@@ -829,21 +831,30 @@ namespace CrazyElevator.Match
             tileValue = new GUIStyle(score) { fontSize = 22 };
             GameTypography.Apply(tileValue, true);
             tileValue.normal.textColor = Color.white;
+            sharedClock = new GUIStyle(tileValue) { fontSize = 32, alignment = TextAnchor.MiddleCenter };
             collisionWord = new GUIStyle(centred) { fontSize = 24, clipping = TextClipping.Overflow };
             GameTypography.Apply(collisionWord, true);
             collisionWord.normal.textColor = Color.white;
-            resultTitle = new GUIStyle(centred) { fontSize = 30 };
+            resultTitle = new GUIStyle(centred) { fontSize = 18 };
             GameTypography.Apply(resultTitle, true);
             resultTitle.normal.textColor = Color.white;
-            resultName = new GUIStyle(centred) { fontSize = 17 };
+            resultName = new GUIStyle(centred) { fontSize = 20, alignment = TextAnchor.MiddleLeft };
             GameTypography.Apply(resultName, true);
             resultName.normal.textColor = Color.white;
-            resultPoints = new GUIStyle(centred) { fontSize = 58 };
+            resultPoints = new GUIStyle(centred) { fontSize = 88, alignment = TextAnchor.MiddleLeft };
             GameTypography.Apply(resultPoints, true);
             resultPoints.normal.textColor = Color.white;
-            resultWinner = new GUIStyle(centred) { fontSize = 38, clipping = TextClipping.Overflow };
+            resultWinner = new GUIStyle(centred) { fontSize = 58, wordWrap = false };
             GameTypography.Apply(resultWinner, true);
             resultWinner.normal.textColor = Color.white;
+            resultSmall = new GUIStyle(resultName) { fontSize = 12 };
+            resultSmall.normal.textColor = new Color(.65f, .71f, .79f);
+            resultWorld = new GUIStyle(resultName) { fontSize = 28 };
+            resultAction = new GUIStyle(centred) { fontSize = 20 };
+            resultAction.normal.textColor = Ink;
+            resultKey = new GUIStyle(centred) { fontSize = 12 };
+            resultKey.normal.textColor = Ink;
+            resultWinBadge = new GUIStyle(resultKey) { fontSize = 11 };
         }
 
         static void Fill(Rect rect, Color colour)
@@ -991,32 +1002,60 @@ namespace CrazyElevator.Match
             Fill(new Rect(x + width * .5f - 2f, 0, 2f, Screen.height), Coral);
         }
 
+        float SharedClockWidth => Mathf.Clamp(Screen.width * .13f, 104f, 160f);
+
         void DrawSeat(Game actor, int seat, Color colour)
         {
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
             DrawPlayerScreenBorder(view, colour);
-            int seconds = Mathf.CeilToInt(player.SecondsLeft);
-            string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            float barWidth = Mathf.Max(1f, Mathf.Min(view.width - 16f,
-                SplitScreen ? view.width : 760f));
-            var bar = new Rect(view.x + 8f, view.y + 8f, barWidth, 58f);
-            Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 26f), Color.white);
-            Fill(new Rect(bar.x, bar.y, bar.width, bar.height + 22f),
-                new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            float tileWidth = bar.width / 3f;
+            float availableWidth = SplitScreen ? view.width - SharedClockWidth * .5f - 16f
+                : (view.width - SharedClockWidth) * .5f - 16f;
+            float barWidth = Mathf.Max(1f, SplitScreen ? availableWidth : Mathf.Min(availableWidth, 760f));
+            float barX = SplitScreen && seat == 1 ? view.xMax - 8f - barWidth : view.x + 8f;
+            var bar = new Rect(barX, view.y + 8f, barWidth, 58f);
+            Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
+            Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
+            float tileWidth = bar.width * .5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
                 (actor.IsNpc ? "CPU " : "PLAYER ") + (seat + 1) + " SCORE", actor.Points.ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
-                colour, "FLOOR", Mathf.RoundToInt(actor.CurrentFloor).ToString());
-            DrawSeatTile(new Rect(bar.x + tileWidth * 2f, bar.y, tileWidth, bar.height),
-                new Color32(112, 183, 255, 255), "TIME", clock);
+                colour, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(actor.CurrentFloor),
+                    actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString());
+        }
+
+        // Both seats read GameManager's round clock; draw it once across the split.
+        void DrawSharedRoundHUD()
+        {
             var session = GameManager.Instance;
-            if (session != null)
-                GUI.Label(new Rect(bar.x, bar.yMax, bar.width, 22f),
-                    "ROUND " + session.RoundNumber + " / " + session.ActiveDimensionName
-                    + "  ·  WINS " + session.PlayerOneWins + " - " + session.PlayerTwoWins
-                    + "  ·  FIRST TO " + GameManager.RoundsToWin, roundStatus);
+            float remaining = session != null ? session.MainTimer : player.SecondsLeft;
+            int seconds = Mathf.CeilToInt(remaining);
+            string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
+            var timer = new Rect((Screen.width - SharedClockWidth) * .5f, 8f, SharedClockWidth, 58f);
+            Fill(new Rect(timer.x - 2f, timer.y - 2f, timer.width + 4f, timer.height + 4f), Color.white);
+            Fill(timer, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
+            GUI.Label(timer, clock, sharedClock);
+            Fill(new Rect(timer.x, timer.yMax - 5f, timer.width * .5f, 5f), Coral);
+            Fill(new Rect(timer.center.x, timer.yMax - 5f, timer.width * .5f, 5f), Teal);
+            if (session == null) return;
+            float statusWidth = Mathf.Min(Screen.width - 16f, 520f);
+            var status = new Rect((Screen.width - statusWidth) * .5f, timer.yMax + 4f, statusWidth, 26f);
+            Fill(status, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
+            var badge = new Rect(status.x, status.y, statusWidth * .22f, status.height);
+            Fill(badge, new Color32(29, 38, 54, 255));
+            GUI.Label(badge, "ROUND " + session.RoundNumber, roundStatus);
+            DrawRevealLabel(new Rect(badge.xMax + 8, status.y, statusWidth * .36f - 16, status.height),
+                session.ActiveDimensionName, roundStatus, 1f, ResultWorldColour(session.ActiveDimension));
+            float winsWidth = statusWidth * .21f;
+            for (int seat = 0; seat < 2; seat++)
+            {
+                float x = status.x + statusWidth * .58f + winsWidth * seat;
+                Color accent = seat == 0 ? Coral : Teal;
+                DrawRevealLabel(new Rect(x, status.y, 26, status.height), "P" + (seat + 1),
+                    roundStatus, 1f, accent);
+                DrawRoundWinMarkers(new Rect(x + 26, status.y + 8, winsWidth - 28, 10),
+                    seat == 0 ? session.PlayerOneWins : session.PlayerTwoWins, accent);
+            }
         }
 
         void DrawPlayerScreenBorder(Rect view, Color playerColour)
@@ -1065,80 +1104,132 @@ namespace CrazyElevator.Match
             Fill(new Rect(Screen.width - panelWidth, 0, panelWidth, Screen.height), Color.black);
             if (time < .85f) return;
 
-            Fill(new Rect(0, 0, Screen.width, Screen.height), Color.black);
-            float light = Reveal01((time - 1.35f) / .8f);
-            if (light > 0f)
-            {
-                EnsureResultGlow();
-                float glowWidth = Mathf.Min(Screen.width * .82f, 960f);
-                float glowHeight = Mathf.Min(Screen.height * .9f, 760f);
-                Rect glow = new Rect((Screen.width - glowWidth) * .5f,
-                    Screen.height * .04f, glowWidth, glowHeight);
-                Color previous = GUI.color;
-                GUI.color = new Color(1f, .82f, .48f, .74f * light);
-                GUI.DrawTexture(glow, resultGlowTexture, ScaleMode.StretchToFill, true);
-                GUI.color = previous;
-            }
-
-            float titleIn = Reveal01((time - 2.05f) / .45f);
+            Fill(new Rect(0, 0, Screen.width, Screen.height), new Color32(8, 11, 18, 255));
             var session = GameManager.Instance;
             bool matchFinished = session != null && session.MatchFinished;
-            DrawRevealLabel(new Rect(0, Screen.height * .18f, Screen.width, 46f),
-                session == null ? "ROUND SCORES" : "ROUND " + session.RoundNumber + " / "
-                    + session.ActiveDimensionName, resultTitle, titleIn, Color.white);
+            bool draw = !matchFinished && player.Points == Rival.Points;
+            bool playerWon = matchFinished ? session.PlayerOneWins > session.PlayerTwoWins
+                : player.Points > Rival.Points;
+            Color winnerColour = draw ? Gold : playerWon ? Coral : Teal;
 
-            string rivalName = Rival.IsNpc ? "CPU" : "PLAYER 2";
-            float cardWidth = Mathf.Min(290f, Screen.width * .32f);
-            float gap = Mathf.Min(28f, Screen.width * .035f);
-            float cardsWidth = cardWidth * 2f + gap;
-            float cardY = Screen.height * .34f;
-            Rect playerCard = new Rect((Screen.width - cardsWidth) * .5f, cardY, cardWidth, 142f);
-            Rect rivalCard = new Rect(playerCard.xMax + gap, cardY, cardWidth, 142f);
-            DrawRevealScoreCard(playerCard, player.IsNpc ? "CPU" : "PLAYER 1", player.Points, Teal,
-                Reveal01((time - 2.65f) / .75f));
-            DrawRevealScoreCard(rivalCard, rivalName, Rival.Points, Coral,
-                Reveal01((time - 3.55f) / .75f));
+            // Scale the whole composition, including typography and mouse hitboxes.
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColour = GUI.color;
+            float uiScale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
+            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1440f * uiScale) * .5f,
+                (Screen.height - 900f * uiScale) * .5f, 0f), Quaternion.identity,
+                new Vector3(uiScale, uiScale, 1f));
+            try
+            {
+                EnsureResultGlow();
+                float light = Reveal01((time - 1.35f) / .8f);
+                GUI.color = new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light);
+                GUI.DrawTexture(new Rect(160, 0, 1120, 820), resultGlowTexture, ScaleMode.StretchToFill, true);
+                GUI.color = Color.white;
 
-            bool draw = player.Points == Rival.Points;
-            bool playerWon = player.Points > Rival.Points;
-            string playerName = player.IsNpc ? "CPU 1" : "PLAYER 1";
-            string winnerName = playerWon ? playerName : rivalName;
-            string winner = draw ? "DRAW / NO ROUND WIN"
-                : winnerName + (matchFinished ? " WINS THE MATCH!" : " WINS THE ROUND!");
-            Color winnerColour = draw ? Gold : playerWon ? Teal : Coral;
-            float winnerIn = Reveal01((time - 4.55f) / .6f);
-            DrawRevealLabel(new Rect(0, cardY + 168f, Screen.width, 56f),
-                winner, resultWinner, winnerIn, winnerColour);
-            if (session != null)
-                DrawRevealLabel(new Rect(0, cardY + 218f, Screen.width, 28f),
-                    "ROUND WINS " + session.PlayerOneWins + " - " + session.PlayerTwoWins
-                    + "  /  FIRST TO " + GameManager.RoundsToWin
-                    + (matchFinished ? "" : "  /  NEXT: " + session.NextDimensionName),
-                    resultName, winnerIn, Color.white);
+                float titleIn = Reveal01((time - 2.05f) / .45f);
+                int dimension = session != null ? session.ActiveDimension : 0;
+                Color worldColour = ResultWorldColour(dimension);
+                Fill(new Rect(530, 78, 140, 36), new Color(worldColour.r, worldColour.g, worldColour.b, .16f * titleIn));
+                DrawRevealLabel(new Rect(530, 78, 140, 36),
+                    "ROUND " + (session != null ? session.RoundNumber : 1), resultTitle, titleIn, worldColour);
+                DrawRevealLabel(new Rect(694, 78, 260, 36),
+                    session != null ? session.ActiveDimensionName : "OFFICE", resultName, titleIn, Color.white);
 
-            if (time < ResultRevealInputAt) return;
-            float buttonWidth = Mathf.Min(440f, Screen.width - 40f);
-            Rect button = new Rect((Screen.width - buttonWidth) * .5f,
-                Mathf.Min(Screen.height - 62f, cardY + 260f), buttonWidth, 40f);
-            Fill(button, Teal);
-            string prompt = matchFinished ? "PLAY AGAIN / ENTER" : "NEXT ROUND / ENTER";
-            if (GUI.Button(button, prompt, centred)) ContinueMatch();
+                string playerName = player.IsNpc ? "CPU 1" : "PLAYER 1";
+                string rivalName = Rival.IsNpc ? "CPU 2" : "PLAYER 2";
+                string winnerName = playerWon ? playerName : rivalName;
+                string headline = draw ? "IT'S A DRAW" : winnerName + " WINS";
+                float winnerIn = Reveal01((time - 4.55f) / .6f);
+                DrawRevealLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
+                DrawRevealLabel(new Rect(180, 232, 1080, 30),
+                    matchFinished ? "MATCH CHAMPION" : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
+                    resultTitle, winnerIn, new Color(.73f, .79f, .86f));
+
+                DrawRevealScoreCard(new Rect(220, 300, 488, 256), playerName, player.Points,
+                    session != null ? session.PlayerOneWins : 0, Coral, !draw && playerWon,
+                    Reveal01((time - 2.65f) / .75f));
+                DrawRevealScoreCard(new Rect(732, 300, 488, 256), rivalName, Rival.Points,
+                    session != null ? session.PlayerTwoWins : 0, Teal, !draw && !playerWon,
+                    Reveal01((time - 3.55f) / .75f));
+
+                if (time < ResultRevealInputAt) return;
+                int nextDimension = matchFinished ? 0 : (dimension + 1) % ElevatorRound.Dimensions;
+                Color nextColour = ResultWorldColour(nextDimension);
+                Fill(new Rect(220, 596, 1000, 112), new Color32(18, 24, 36, 255));
+                Fill(new Rect(220, 596, 4, 112), nextColour);
+                DrawRevealLabel(new Rect(248, 614, 500, 24),
+                    matchFinished ? "NEW MATCH" : "NEXT WORLD", resultSmall, 1f, Color.white);
+                DrawRevealLabel(new Rect(248, 642, 500, 44),
+                    matchFinished ? "OFFICE" : session != null ? session.NextDimensionName : "CANDY",
+                    resultWorld, 1f, nextColour);
+
+                Rect button = new Rect(832, 620, 364, 64);
+                bool hovered = button.Contains(Event.current.mousePosition);
+                Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+                Fill(button, hovered ? Color.Lerp(Teal, Color.white, .2f) : Teal);
+                GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height),
+                    matchFinished ? "PLAY AGAIN" : "NEXT ROUND", resultAction);
+                var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
+                Fill(key, new Color(0, 0, 0, .2f));
+                Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
+                GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
+                if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
+            }
+            finally
+            {
+                GUI.matrix = previousMatrix;
+                GUI.color = previousColour;
+            }
         }
 
-        void DrawRevealScoreCard(Rect area, string name, int points, Color accent, float reveal)
+        static Color ResultWorldColour(int dimension) => dimension == 1 ? new Color32(236, 118, 188, 255)
+            : dimension == 2 ? new Color32(48, 196, 210, 255) : new Color32(130, 165, 214, 255);
+
+        void DrawRevealScoreCard(Rect area, string name, int points, int wins, Color accent, bool winner, float reveal)
         {
             if (reveal <= 0f) return;
             area.y += Mathf.Lerp(26f, 0f, reveal);
-            Fill(area, new Color(Ink.r, Ink.g, Ink.b, .96f * reveal));
-            Fill(new Rect(area.x, area.y, area.width, 5f),
-                new Color(accent.r, accent.g, accent.b, reveal));
-            Color previous = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, reveal);
-            GUI.Label(new Rect(area.x + 10f, area.y + 15f, area.width - 20f, 30f), name, resultName);
+            Color border = Color.Lerp(Ink, accent, winner ? .75f : .25f);
+            Fill(new Rect(area.x - 2, area.y - 2, area.width + 4, area.height + 4),
+                new Color(border.r, border.g, border.b, reveal));
+            Fill(area, new Color(18f / 255f, 24f / 255f, 36f / 255f, reveal));
+            Fill(new Rect(area.x, area.y, area.width, 5), new Color(accent.r, accent.g, accent.b, reveal));
+            DrawRevealLabel(new Rect(area.x + 26, area.y + 22, area.width - 160, 30),
+                name, resultName, reveal, accent);
+            if (winner)
+            {
+                Rect badge = new Rect(area.xMax - 112, area.y + 24, 86, 26);
+                Fill(badge, new Color(accent.r, accent.g, accent.b, reveal));
+                DrawRevealLabel(badge, "WINNER", resultWinBadge, reveal, Color.white);
+            }
             int shownPoints = Mathf.RoundToInt(Mathf.Lerp(0f, points, reveal));
-            GUI.Label(new Rect(area.x + 10f, area.y + 48f, area.width - 20f, 78f),
-                shownPoints.ToString(), resultPoints);
-            GUI.color = previous;
+            DrawRevealLabel(new Rect(area.x + 24, area.y + 62, area.width - 48, 108),
+                shownPoints.ToString(), resultPoints, reveal, Color.white);
+            DrawRevealLabel(new Rect(area.x + 28, area.y + 170, area.width - 56, 22),
+                "DELIVERY SCORE", resultSmall, reveal, Color.white);
+            Fill(new Rect(area.x + 26, area.y + 207, area.width - 52, 1), new Color(1, 1, 1, .1f * reveal));
+            DrawRevealLabel(new Rect(area.x + 28, area.y + 218, 200, 24),
+                "ROUND WINS", resultSmall, reveal, Color.white);
+            DrawRoundWinMarkers(new Rect(area.xMax - 122, area.y + 218, 96, 24), wins, accent, reveal);
+        }
+
+        void DrawRoundWinMarkers(Rect area, int wins, Color accent, float alpha = 1f)
+        {
+            int target = GameManager.RoundsToWin;
+            wins = Mathf.Clamp(wins, 0, target);
+            float gap = area.height * .4f;
+            float size = Mathf.Min(area.height, (area.width - gap * (target - 1)) / target);
+            float x = area.center.x - (target * size + (target - 1) * gap) * .5f;
+            for (int i = 0; i < target; i++)
+            {
+                var marker = new Rect(x + i * (size + gap), area.y, size, size);
+                Color colour = i < wins ? accent : new Color(.28f, .34f, .43f);
+                Fill(marker, new Color(colour.r, colour.g, colour.b, alpha));
+                if (i >= wins)
+                    Fill(new Rect(marker.x + 2, marker.y + 2, marker.width - 4, marker.height - 4),
+                        new Color(18f / 255f, 24f / 255f, 36f / 255f, alpha));
+            }
         }
 
         void DrawRevealLabel(Rect area, string value, GUIStyle style, float reveal, Color colour)

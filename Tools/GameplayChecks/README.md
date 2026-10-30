@@ -10,6 +10,8 @@ The harness checks matching queue identities and per-door counts at every floor 
 
 The small GameplayChecks project is included in version control; Unity-generated projects stay ignored.
 
+Floor-number checks cover 1–8 in each of the three worlds. Destination checks sample every passenger kind at every origin floor, including special random destinations and default/catalog rosters, to verify requests stay inside the origin world and skip the origin floor.
+
 For the round flow in Main, use **Tools > Crazy Elevator > Check Single-Dimension Match** (batch entry point: `ExtendedInteriorChecks.RequestSingleDimensionMatch`). It checks both human seats, fresh shared rosters and 60-second clocks, Office/Candy/Underwater rotation, countdown and pause, travel and teleport bounds, tied rounds, first-to-three results, and rematches. It writes `Temp/ExtendedInterior/result.txt` and does not save scene changes. This check requires a working Unity runtime.
 
 Compile all runtime and editor C# sources against the installed Unity assemblies, independently of the Editor license:

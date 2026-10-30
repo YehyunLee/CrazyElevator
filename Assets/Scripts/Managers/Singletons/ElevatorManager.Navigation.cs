@@ -55,10 +55,17 @@ namespace CrazyElevator.Managers
             // Landings and floor signs are direct children of the world root.
             // Full-height guide rails and the elevator itself stay in place.
             foreach (Transform part in world)
+            {
+                if (TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out int signFloor))
+                {
+                    TextMesh sign = part.GetComponent<TextMesh>();
+                    if (sign != null) sign.text = ElevatorRound.FloorNumber(signFloor).ToString();
+                }
                 if (TryAuthoredFloorNumber(part.name, "World landing ", out int floor)
                     || TryAuthoredFloorNumber(part.name, "Shaft landing ", out floor)
                     || TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out floor))
                     part.gameObject.SetActive(round.ContainsFloor(floor));
+            }
         }
 
         static bool TryAuthoredFloorNumber(string name, string prefix, out int floor)
@@ -105,6 +112,7 @@ namespace CrazyElevator.Managers
 
         public static string StopTag(int floor, int stop)
         {
+            floor = ElevatorRound.FloorNumber(floor);
             switch (stop)
             {
                 case 0: return "←←" + floor;
@@ -213,7 +221,7 @@ namespace CrazyElevator.Managers
         {
             float x = StopWorldX(stop), y = floor * ShaftFloorHeight;
             Vector2 spot = GuiPoint(new Vector3(x, y + 1.6f, BeaconDepth), out bool inFront);
-            string label = "F" + floor + StopSide(stop);
+            string label = "F" + ElevatorRound.FloorNumber(floor) + StopSide(stop);
             if (inFront && Inset(view, 12f * size, 12f * size, 12f * size, 12f * size).Contains(spot))
                 DrawLandingHighlight(view, size, x, y, stop == CenterStop ? 4.6f : 2.6f, label, riders);
             else

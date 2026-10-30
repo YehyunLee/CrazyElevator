@@ -1108,7 +1108,7 @@ namespace CrazyElevator.Managers
                 Vector3 movedPosition = figures[rider].localPosition;
                 cabinPositions.Remove(rider); cabinTileRuns.Remove(rider);
                 QueueRiderExit(rider, figures[rider].localPosition);
-                notice = "Helping " + rider.Name + " out at floor " + round.Floor + ".";
+                notice = "Helping " + rider.Name + " out at floor " + ElevatorRound.FloorNumber(round.Floor) + ".";
                 SelectAfterOffboarding(rider, movedRun, movedPosition);
             }
             else

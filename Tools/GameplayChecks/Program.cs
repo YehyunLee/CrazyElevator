@@ -290,6 +290,57 @@ internal static class Program
             }
     }
 
+    static void CheckLocalFloorNumbers()
+    {
+        for (int dimension = 0; dimension < ElevatorRound.Dimensions; dimension++)
+            for (int number = 1; number <= ElevatorRound.FloorsPerDimension; number++)
+            {
+                int floor = dimension * ElevatorRound.FloorsPerDimension + number - 1;
+                Require(ElevatorRound.FloorNumber(floor) == number,
+                    "A world does not number its floors from 1 through 8.");
+            }
+        foreach (int invalid in new[] { -1, ElevatorRound.Floors })
+        {
+            bool rejected = false;
+            try { ElevatorRound.FloorNumber(invalid); }
+            catch (ArgumentOutOfRangeException) { rejected = true; }
+            Require(rejected, "Floor labels accepted an invalid authored floor.");
+        }
+    }
+
+    static void CheckWorldDestinations()
+    {
+        string[] kinds = { "COURIER", "INTERVIEW", "ELDERLY", "PREGNANT", "GROUP", "BOSS", "HANDYMAN", "GENERIC" };
+        foreach (string kind in kinds)
+            for (int origin = 0; origin < ElevatorRound.Floors; origin++)
+                for (int sample = 0; sample < 256; sample++)
+                {
+                    int destination = ElevatorRound.DestinationFor(kind, origin);
+                    Require(destination >= 0 && destination < ElevatorRound.Floors
+                        && destination / ElevatorRound.FloorsPerDimension == origin / ElevatorRound.FloorsPerDimension
+                        && destination != origin, kind + " requests another world or its origin floor.");
+                    int distance = Math.Abs(destination - origin);
+                    Require(kind == "BOSS" || kind == "HANDYMAN" || distance <= (kind == "INTERVIEW" ? 3 : 6),
+                        kind + " lost its existing trip-length limit.");
+                    Require(ElevatorRound.FloorNumber(destination) >= 1
+                        && ElevatorRound.FloorNumber(destination) <= ElevatorRound.FloorsPerDimension,
+                        "A destination label falls outside the world's visible floor numbers.");
+                    int specialDestination = ElevatorRound.RandomDestination(origin);
+                    Require(specialDestination >= 0 && specialDestination < ElevatorRound.Floors
+                        && specialDestination / ElevatorRound.FloorsPerDimension == origin / ElevatorRound.FloorsPerDimension
+                        && specialDestination != origin, "A special passenger requests another world or its origin floor.");
+                }
+
+        var catalog = new PassengerCatalog
+        {
+            types = kinds.Select(kind => new PassengerData { kind = kind, theme = PassengerTheme.Any }).ToArray()
+        };
+        foreach (ElevatorRound round in new[] { new ElevatorRound(), ElevatorRound.FromCatalog(catalog) })
+            Require(round.Riders.Count > 0 && round.Riders.All(r => r.Destination != r.Origin
+                && r.Destination / ElevatorRound.FloorsPerDimension == r.Origin / ElevatorRound.FloorsPerDimension),
+                "An initial default or catalog roster contains a cross-world request before round configuration.");
+    }
+
     static void CheckSharedDimensionResets()
     {
         var previousRiders = new HashSet<Rider>();
@@ -379,6 +430,8 @@ internal static class Program
             { "Two seats board exclusively, retain separate cabin clocks and score once", CheckTwoSeatBoarding },
             { "Capacity, one-minute deadline, and office/candy/underwater order", CheckDeadlineAndCapacity },
             { "Default and catalog rounds stay inside one dimension with reachable destinations", CheckSingleDimensionRounds },
+            { "Every world's displayed floors run from 1 to 8", CheckLocalFloorNumbers },
+            { "Every passenger kind and random request stays within its origin world", CheckWorldDestinations },
             { "Six dimension rounds reset clocks and rosters while sharing identities between seats", CheckSharedDimensionResets },
             { "First-to-three results, ties, idempotent wins, cycling, championship lock, and Play Again", CheckFirstToThreeMatch }
         };

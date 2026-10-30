@@ -222,7 +222,7 @@ namespace CrazyElevator.Tools.WorldBuilders
                 PlaceFloorPiece(root, shaftTemplate, "Shaft landing " + floor, floor);
                 var sign = PlaceFloorPiece(root, signTemplate, "Sign • " + floor, floor);
                 var text = sign.GetComponent<TextMesh>();
-                if (text != null) text.text = floor.ToString();
+                if (text != null) text.text = ElevatorRound.FloorNumber(floor).ToString();
             }
             RemoveFloorsAbove(root, Floors);
         }
@@ -360,7 +360,7 @@ namespace CrazyElevator.Tools.WorldBuilders
                 Block(view, "Frame right", new Vector3(1.95f, .1f, 0f), new Vector3(.45f, 3.9f, .7f), frame);
                 Block(view, "Frame top", new Vector3(0f, 2.05f, 0f), new Vector3(4.35f, .45f, .7f), frame);
                 bool up = gate.Target > gate.Floor;
-                GateText(view, signTemplate, "Destination", gate.Target.ToString(),
+                GateText(view, signTemplate, "Destination", ElevatorRound.FloorNumber(gate.Target).ToString(),
                     new Vector3(0f, 4.4f, -.9f), .5f, new Color32(255, 222, 92, 255));
                 GateText(view, signTemplate, "Label", up ? "WARP UP" : "WARP DOWN",
                     new Vector3(0f, 2.75f, -.9f), .14f, Color.white);

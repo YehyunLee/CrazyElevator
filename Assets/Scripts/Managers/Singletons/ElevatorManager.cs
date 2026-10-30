@@ -281,7 +281,7 @@ namespace CrazyElevator.Managers
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             sessionFadeAlpha = 1f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
-            SetFloorDisplayText(round.Floor.ToString());
+            SetFloorDisplayText(ElevatorRound.FloorNumber(round.Floor).ToString());
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ResetBuildingTravel();
@@ -552,7 +552,7 @@ namespace CrazyElevator.Managers
                     LineUpWithStop(1f);
                     int waiting = round.Arrive(destination, dockingStop);
                     DiscoverWorld(BandForFloor(destination));
-                    SetFloorDisplayText(destination.ToString());
+                    SetFloorDisplayText(ElevatorRound.FloorNumber(destination).ToString());
                     phase = Phase.Opening; phaseTime = 0;
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
@@ -574,7 +574,7 @@ namespace CrazyElevator.Managers
             }
             EndRouteFrame(dt);
             CheckHazardHits();
-            SetFloorDisplayText(NearbyFloor.ToString());
+            SetFloorDisplayText(ElevatorRound.FloorNumber(NearbyFloor).ToString());
         }
 
         void AdvanceTravelStep(float dt)
@@ -729,7 +729,7 @@ namespace CrazyElevator.Managers
             int shownFloor = origin + direction * completedStep;
             float betweenFloors = exactStep - completedStep;
             float pulse = Mathf.Sin(Mathf.Clamp01(betweenFloors) * Mathf.PI);
-            SetFloorDisplayText(shownFloor.ToString());
+            SetFloorDisplayText(ElevatorRound.FloorNumber(shownFloor).ToString());
             if (floorLedDigits != null)
                 floorLedDigits.localPosition = floorLedDigitsHome + Vector3.up * (.035f * pulse);
         }
@@ -830,7 +830,7 @@ namespace CrazyElevator.Managers
             int next = AutomaticNextFloor();
             selectedFloor = next; destination = next; RefreshFloorButtons();
             phase = Phase.Closing; phaseTime = 0;
-            SetControlStatus("AUTO " + next.ToString()); Play(click);
+            SetControlStatus("AUTO " + ElevatorRound.FloorNumber(next)); Play(click);
             notice = "Doors timed out. Continuing to " + FloorNames[next] + ".";
         }
 
@@ -850,7 +850,7 @@ namespace CrazyElevator.Managers
             int missed = round.LeaveFloor();
             travelDuration = 1.1f + Mathf.Abs(destination - origin) * .8f;
             phase = Phase.Moving; phaseTime = 0;
-            SetControlStatus("GOING " + destination.ToString());
+            SetControlStatus("GOING " + ElevatorRound.FloorNumber(destination));
             notice = missed > 0 ? "You passed someone's floor. Their mood dropped." : "Next stop: " + FloorNames[destination] + ".";
         }
 
@@ -865,7 +865,7 @@ namespace CrazyElevator.Managers
             }
             if (phase != Phase.Boarding && phase != Phase.Closing && phase != Phase.Closed) return;
             selectedFloor = floor; destination = floor; RefreshFloorButtons();
-            SetControlStatus("GOING " + destination.ToString()); Play(click);
+            SetControlStatus("GOING " + ElevatorRound.FloorNumber(destination)); Play(click);
             if (phase == Phase.Closed) StartMoving();
             else if (phase == Phase.Boarding) { phase = Phase.Closing; phaseTime = 0; }
         }
@@ -967,7 +967,7 @@ namespace CrazyElevator.Managers
         {
             // Replace the old face with a compact overhead indicator. The
             // frame and inset screen make it read as part of the cabin.
-            string initialFloor = string.IsNullOrEmpty(floorSign.text) ? "0" : floorSign.text;
+            string initialFloor = ElevatorRound.FloorNumber(round != null ? round.Floor : 0).ToString();
             floorSign.gameObject.SetActive(false);
 
             if (floorLedPanel == null)
@@ -1039,7 +1039,7 @@ namespace CrazyElevator.Managers
             if (floorSign != null) floorSign.text = value;
             if (floorLedDigits == null) return;
 
-            string display = string.IsNullOrEmpty(value) ? "0" : value;
+            string display = string.IsNullOrEmpty(value) ? "1" : value;
             int maxDigits = floorSegmentRenderers.Length / 7;
             int digitCount = Mathf.Clamp(display.Length, 1, maxDigits);
             float firstX = -(digitCount - 1) * LedDigitPitch * .5f;
@@ -1070,7 +1070,7 @@ namespace CrazyElevator.Managers
         {
             floorDisplayColor = color;
             if (floorSign != null) floorSign.color = color;
-            SetFloorDisplayText(floorSign != null ? floorSign.text : "0");
+            SetFloorDisplayText(floorSign != null ? floorSign.text : "1");
         }
 
         void DisableCollider(Transform part)
@@ -1414,11 +1414,11 @@ namespace CrazyElevator.Managers
             if (!compactTopHud && DisplayBuildingView)
             {
                 Panel(new Rect(12, 42, 550, 153), new Color(Ink.r, Ink.g, Ink.b, .92f));
-                string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + destination
-                    : OnFloorRail ? (railVelocity >= 0 ? "GOING RIGHT" : "GOING LEFT") + "  /  FLOOR " + railFloor
-                    : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + travelFloor.ToString("0.0");
+                string status = phase == Phase.Opening ? "DOORS OPENING" : phase == Phase.Docking ? "DOCKING AT FLOOR " + ElevatorRound.FloorNumber(destination)
+                    : OnFloorRail ? (railVelocity >= 0 ? "GOING RIGHT" : "GOING LEFT") + "  /  FLOOR " + ElevatorRound.FloorNumber(railFloor)
+                    : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + (travelFloor % ElevatorRound.FloorsPerDimension + 1f).ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), phase == Phase.Moving ? "Press C to stop at floor " + GlideStopFloor() : "Hold UP / DOWN or W / S or left joystick", body);
+                Label(new Rect(24, 84, 500, 28), phase == Phase.Moving ? "Press C to stop at floor " + ElevatorRound.FloorNumber(GlideStopFloor()) : "Hold UP / DOWN or W / S or left joystick", body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 bool accelerating = OnFloorRail ? railBoost : boostHeld && boostAxis != 0;
                 Label(new Rect(24, 137, 525, 24), RouteSpeed.ToString("0.00") + " floors/s  |  " + (accelerating ? "ACCELERATING" : "COASTING"), body);
@@ -1428,7 +1428,7 @@ namespace CrazyElevator.Managers
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
                 Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
-                Label(new Rect(24, 77, 444, 24), "FLOOR " + round.Floor + "  |  Choose a door for automatic boarding", small);
+                Label(new Rect(24, 77, 444, 24), "FLOOR " + ElevatorRound.FloorNumber(round.Floor) + "  |  Choose a door for automatic boarding", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
@@ -1750,10 +1750,8 @@ namespace CrazyElevator.Managers
         {
             switch (BandForFloor(floor))
             {
-                case WorldBand.Office: return "OFFICE  /  floors 0–"
-                    + (ElevatorRound.FloorsPerDimension - 1);
-                case WorldBand.Candy: return "CANDY  /  floors " + ElevatorRound.FloorsPerDimension
-                    + "–" + (ElevatorRound.FloorsPerDimension * 2 - 1);
+                case WorldBand.Office: return "OFFICE  /  floors 1-" + ElevatorRound.FloorsPerDimension;
+                case WorldBand.Candy: return "CANDY  /  floors 1-" + ElevatorRound.FloorsPerDimension;
                 default: return "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair");
             }
         }
@@ -1891,7 +1889,7 @@ namespace CrazyElevator.Managers
             var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
             Panel(new Rect(x - 98 * size, y + 49 * size, 196 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
             Label(new Rect(x - 96 * size, y + 50 * size, 192 * size, 26 * size),
-                moving ? "F" + floor + side + "  ·  STOP" : "F" + floor + "  ·  " + WorldName(floor), markerStyle);
+                moving ? "F" + ElevatorRound.FloorNumber(floor) + side + "  ·  STOP" : "F" + ElevatorRound.FloorNumber(floor) + "  ·  " + WorldName(floor), markerStyle);
         }
 
         void DrawCabinPreviewFrame()

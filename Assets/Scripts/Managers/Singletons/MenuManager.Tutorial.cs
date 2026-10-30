@@ -616,7 +616,7 @@ namespace CrazyElevator.Managers
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0
-                        ? "STOP AT FLOOR " + targetFloor + "."
+                        ? "STOP AT FLOOR " + ElevatorRound.FloorNumber(targetFloor) + "."
                         : "STOP AT PASSENGER FLOOR.";
                 case 6: return "RIDERS GET OFF BY THEMSELVES.";
                 case 7:

@@ -98,7 +98,7 @@ public static class ExtendedInteriorChecks
                 int water = game.underwaterStartsAtFloor;
                 ((Round)Get(game, "round")).Floor = water;
                 Set(game, "rustExposure", game.secondsPerRustLevel * 2);
-                game.sceneView.floorDisplay.text = water.ToString();
+                Call(game, "SetFloorDisplayText", Round.FloorNumber(water).ToString());
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action == "rust-outside")
                 {
@@ -131,7 +131,7 @@ public static class ExtendedInteriorChecks
                 int previewFloor = water ? 8 : action.StartsWith("candy") ? 4 : 0;
                 string previewKind = water ? "HANDYMAN" : action.StartsWith("candy") ? "PREGNANT" : "COURIER";
                 ((Round)Get(game, "round")).Floor = previewFloor;
-                game.sceneView.floorDisplay.text = previewFloor.ToString();
+                Call(game, "SetFloorDisplayText", Round.FloorNumber(previewFloor).ToString());
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action.EndsWith("-transfer"))
                 {
@@ -189,13 +189,14 @@ public static class ExtendedInteriorChecks
         foreach (string kind in kinds)
             for (int origin = 0; origin < Round.Floors; origin++)
             {
+                int first = origin / Round.FloorsPerDimension * Round.FloorsPerDimension;
                 int ceiling = (origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
                 for (int sample = 0; sample < 256; sample++)
                 {
                     int destination = Round.DestinationFor(kind, origin);
                     int distance = Math.Abs(destination - origin);
-                    Require(destination >= 0 && destination <= ceiling && distance > 0,
-                        kind + " requested its origin or a floor in a locked world.");
+                    Require(destination >= first && destination <= ceiling && distance > 0,
+                        kind + " requested its origin or a floor outside its world.");
                     if (kind == "INTERVIEW")
                         Require(distance <= 3, "An interview passenger received an excessively long trip.");
                     else if (kind != "BOSS" && kind != "HANDYMAN")
@@ -252,8 +253,8 @@ public static class ExtendedInteriorChecks
                 "A live request exceeded its unlocked ceiling.");
             reachedNewWorld |= destination > 7;
             int special = Round.RandomDestination(12);
-            Require(special >= 0 && special < Round.Floors && special != 12,
-                "Unrestricted special requests must remain valid.");
+            Require(special >= Round.FloorsPerDimension && special < Round.FloorsPerDimension * 2 && special != 12,
+                "Special requests must remain inside their origin world.");
         }
         Require(reachedNewWorld, "Live requests never reached the newly opened world.");
 
@@ -275,9 +276,10 @@ public static class ExtendedInteriorChecks
             catalog.types = new[] { type };
             foreach (SharedRider rider in Round.FromCatalog(catalog).Riders)
             {
+                int first = rider.Origin / Round.FloorsPerDimension * Round.FloorsPerDimension;
                 int ceiling = (rider.Origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
-                Require(rider.Destination >= 0 && rider.Destination <= ceiling && rider.Destination != rider.Origin,
-                    "A catalog passenger received an invalid or locked destination.");
+                Require(rider.Destination >= first && rider.Destination <= ceiling && rider.Destination != rider.Origin,
+                    "A catalog passenger received an invalid or cross-world destination.");
             }
         }
         finally
@@ -1012,8 +1014,8 @@ public static class ExtendedInteriorChecks
 
         Call(game, "UpdateGridDestinations");
         var labels = game.sceneView.gridDestinations;
-        Require(labels.Length == 9 && labels[0].text == courier.Destination.ToString()
-            && labels[1].text == "+" && labels[2].text == single.Destination.ToString(),
+        Require(labels.Length == 9 && labels[0].text == Game.DestinationTag(courier)
+            && labels[1].text == "+" && labels[2].text == Game.DestinationTag(single),
             "The visible cell labels do not match the occupied footprints.");
         File.WriteAllText(Work + "/result.txt", "3x3 occupancy, adjacent placement, and floor labels passed.");
 
@@ -1095,6 +1097,24 @@ public static class ExtendedInteriorChecks
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
+    static void RequireLocalFloorDisplay(Game game, string number, int litSegments)
+    {
+        var sign = (TextMesh)Get(game, "floorSign");
+        var segments = (Renderer[])Get(game, "floorSegmentRenderers");
+        Color litColor = (Color)Get(game, "floorDisplayColor");
+        Require(sign != null && sign.text == number && segments != null && segments.Length >= 7,
+            "The cabin floor sign does not show local floor " + number + ".");
+        int lit = 0;
+        for (int segment = 0; segment < segments.Length; segment++)
+        {
+            Renderer led = segments[segment];
+            Require(led != null && led.enabled == (segment < 7),
+                "The cabin LED retained an extra digit or lost its local floor digit.");
+            if (led.enabled && led.sharedMaterial != null && led.sharedMaterial.color == litColor) lit++;
+        }
+        Require(lit == litSegments, "The cabin LED does not display local floor " + number + ".");
+    }
+
     static void RunSingleDimensionMatch()
     {
         var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
@@ -1131,6 +1151,11 @@ public static class ExtendedInteriorChecks
                     && round.TimeLeft == 60f && other.TimeLeft == 60f
                     && round.Score == 0 && other.Score == 0,
                     "Round " + (index + 1) + " did not reset both cars to the active world's first floor and 60 seconds.");
+                RequireLocalFloorDisplay(player, "1", 2);
+                RequireLocalFloorDisplay(rival, "1", 2);
+                Require(Game.DestinationTag(new SharedRider
+                    { Destination = first + 1, DestinationStop = Round.CenterStop }) == "2",
+                    "The world's second authored floor must display destination 2.");
                 var bands = player.sceneView.exteriorCar.parent.Find("Shaft World Bands");
                 Require(bands != null, "The authored world bands are missing from Main.");
                 int activeBands = 0;
@@ -1150,6 +1175,9 @@ public static class ExtendedInteriorChecks
                         && r.Destination >= first && r.Destination <= last && r.Origin != r.Destination
                         && !r.Boarded && !r.Resolved),
                     "New rounds must share a fresh, deliverable passenger pool within one world.");
+                Require(round.Riders.TrueForAll(r => Game.DestinationTag(r).Trim('\u2190', '\u2192')
+                    == (r.Destination - first + 1).ToString()),
+                    "Passenger destination badges must use this world's local floor numbers.");
                 previousPool = round.Riders;
                 if (index > 0)
                 {
@@ -1176,6 +1204,15 @@ public static class ExtendedInteriorChecks
                     Require(open == (gate.Floor >= first && gate.Floor <= last
                         && gate.Target >= first && gate.Target <= last),
                         "Teleport gates must never leave the active dimension.");
+                }
+                foreach (Game car in new[] { player, rival })
+                {
+                    Phase(car, "Moving");
+                    Set(car, "travelFloor", first + 1f); Set(car, "travelVelocity", 0f);
+                    Call(car, "AdvanceBuildingTravel", .001f);
+                    RequireLocalFloorDisplay(car, "2", 5);
+                    Require(((Round)Get(car, "round")).Floor == first,
+                        "Showing a passing local floor changed the internal stopped floor index.");
                 }
                 Phase(player, "Moving");
                 Set(player, "travelFloor", first + .1f); Set(player, "travelVelocity", -2f);
@@ -1216,7 +1253,7 @@ public static class ExtendedInteriorChecks
                 && player.DiscreteFloor == 0 && rival.DiscreteFloor == 0
                 && player.CountdownPlaying && rival.CountdownPlaying,
                 "Play Again must reset the series and count down in the office.");
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; countdown and pause freeze clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch reset and countdown.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; countdown and pause freeze clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch reset and countdown.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally
@@ -1553,7 +1590,7 @@ public static class ExtendedInteriorChecks
         Call(game, "Restart");
         var round = (Round)Get(game, "round");
         round.Floor = damaged ? game.underwaterStartsAtFloor : 0;
-        game.sceneView.floorDisplay.text = round.Floor.ToString();
+        Call(game, "SetFloorDisplayText", Round.FloorNumber(round.Floor).ToString());
         Set(game, "rustExposure", damaged ? game.secondsPerRustLevel * 2 : 0f);
         Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
         Call(game, "LateUpdate"); Physics.SyncTransforms();
