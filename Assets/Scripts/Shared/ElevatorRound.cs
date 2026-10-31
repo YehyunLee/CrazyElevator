@@ -69,8 +69,6 @@ namespace CrazyElevator.Shared
         public float SpawnDelay;
         // Resolved riders cannot board or score again.
         public bool Resolved;
-        // The diver's shield is spent once for this particular passenger.
-        public bool AbilityUsed;
     }
 
     public enum OffboardResult { None, Happy, Late, WrongFloor }
@@ -235,7 +233,7 @@ namespace CrazyElevator.Shared
                 if (world == PassengerTheme.Candy && f % 3 == 0)
                     Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
                 if (world == PassengerTheme.Underwater && f % 3 == 1)
-                    Add("Diver", "DIVER", "Blocks one tornado", "SHIELD", f, 1, 60, 0, 4, 100);
+                    Add("Diver", "DIVER", "Blocks tornadoes", "SHIELD", f, 1, 60, 0, 4, 100);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);

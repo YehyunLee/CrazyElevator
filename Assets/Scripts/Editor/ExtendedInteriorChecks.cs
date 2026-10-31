@@ -971,12 +971,19 @@ public static class ExtendedInteriorChecks
             menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
             Require((bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
                 && (int)Lobby("playerOneCursor") == 2, "Local lobby does not start on Player 1 READY.");
+            menuType.GetField("transition", Flags).SetValue(menu, 10f);
+            MethodInfo tryStartLobby = menuType.GetMethod("TryStartReadyLobby", Flags);
             menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+            Require(!(bool)tryStartLobby.Invoke(menu, null) && !(bool)Lobby("launching"),
+                "The lobby started before both human players were ready.");
             menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 1 });
             Require((bool)Lobby("playerOneReady") && (bool)Lobby("playerTwoReady")
                 && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
                 && (int)Lobby("playerOneCursor") == 4 && (int)Lobby("playerTwoCursor") == 4,
                 "Ready confirmations changed a human to CPU or failed to reach Start.");
+            Require((bool)tryStartLobby.Invoke(menu, null) && (bool)Lobby("launching")
+                && !(bool)tryStartLobby.Invoke(menu, null),
+                "The lobby did not start once when both players were ready.");
             File.WriteAllText(Work + "/result.txt", "PASS: saved cabin hierarchy; manual camera Transform/Lens/culling edits survive runtime and split-screen setup; physical cabin and camera follow the driving car; both views render the landing; one waiting model boards without cloning; destination stays identical; both local lobby seats ready without switching to CPU.");
         }
         finally

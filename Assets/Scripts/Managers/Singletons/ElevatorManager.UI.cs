@@ -194,7 +194,7 @@ namespace CrazyElevator.Managers
         string ShortRequest(Rider p)
         {
             if (p.Kind == "HUNTER") return "Stuns monsters";
-            if (p.Kind == "DIVER") return "Blocks one tornado";
+            if (p.Kind == "DIVER") return "Blocks tornadoes";
             if (p.Kind == "BOUNCER") return "Stronger collisions";
             if (p.Kind == "HANDYMAN") return "Full power while aboard";
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
@@ -1041,19 +1041,19 @@ namespace CrazyElevator.Managers
                     Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
                     OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
 
-                    // Keep the confirm action beside the selected passenger so
+                    // Keep the kick action beside the selected passenger so
                     // it remains visible even when the lower HUD is covered by
                     // the travel/door controls.
-                    if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    if (rider == selectedRider && rider.Boarded && draggedRider == null && phase == Phase.Boarding)
                     {
                         float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
                         float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
                         Rect hint = new Rect(hintX, hintY, 42f, 42f);
-                        DrawGameplayKeyHint(hint, GameplayConfirmKey);
+                        DrawGameplayKeyHint(hint, GameplayKickoutKey);
                         Color previousHintText = calloutText.normal.textColor;
                         calloutText.normal.textColor = UiWhite;
                         GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
-                            rider.Boarded ? "KICK" : "BOARD", calloutText);
+                            "KICK", calloutText);
                         calloutText.normal.textColor = previousHintText;
                     }
                 }
@@ -1101,7 +1101,7 @@ namespace CrazyElevator.Managers
         string PassengerVisualCue(Rider rider, bool selected)
         {
             if (rider.Kind == "HUNTER") return "MONSTER STUN";
-            if (rider.Kind == "DIVER") return rider.AbilityUsed ? "SHIELD USED" : "TORNADO SHIELD";
+            if (rider.Kind == "DIVER") return "TORNADO SHIELD";
             if (rider.Kind == "BOUNCER") return "BUMP ↑";
             if (!rider.Boarded)
                 return selected && rider.Space > 1 ? rider.Space + " TILES" : null;
@@ -1389,8 +1389,8 @@ namespace CrazyElevator.Managers
         string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
         string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
         string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
-        string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";
-        string GameplayKickoutKey => GameplayUsesKeyboard ? "I" : "B";
+        string GameplayCloseKey => GameplayConfirmKey;
+        string GameplayKickoutKey => GameplayUsesKeyboard ? (Seat == 1 ? "," : "I") : "B";
         string GameplayRepairKey => GameplayUsesKeyboard ? "R" : "RB";
 
         void DrawGameplayKeyHint(Rect rect, string key)

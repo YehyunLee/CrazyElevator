@@ -59,7 +59,7 @@ namespace CrazyElevator.Managers
         readonly List<ShaftHazard> hazards = new List<ShaftHazard>();
         Transform hazardRoot;
         float hazardCooldown, carSpin;
-        float hunterCooldown, abilityFeedbackTime;
+        float abilityFeedbackTime;
         string abilityFeedback;
         Vector3 abilityFeedbackPosition;
         Vector3 abilityFeedbackOrigin;
@@ -80,7 +80,6 @@ namespace CrazyElevator.Managers
         {
             hazardCooldown = Mathf.Max(0f, hazardCooldown - dt);
             carSpin = Mathf.Max(0f, carSpin - dt / TornadoSpinSeconds);
-            hunterCooldown = Mathf.Max(0f, hunterCooldown - dt);
             abilityFeedbackTime = Mathf.Max(0f, abilityFeedbackTime - dt);
         }
 
@@ -177,11 +176,10 @@ namespace CrazyElevator.Managers
                 if (!hazard.Live) continue;
                 Vector2 centre = HazardCentre(hazard);
                 if (hazard.Spec.Kind == HazardKind.Monster && hazard.Stunned <= 0f
-                    && hunterCooldown <= 0f && round.HasOnboardFeature(PassengerFeature.StunsMonster)
+                    && round.HasOnboardFeature(PassengerFeature.StunsMonster)
                     && Vector2.Distance(car, centre) <= 7f)
                 {
                     hazard.Stunned = 3f;
-                    hunterCooldown = 5f;
                     ShowPassengerAbility("STUN!", exteriorCar.parent.TransformPoint(new Vector3(centre.x, centre.y + 2f, HazardDepth)));
                     Play(chime);
                 }
@@ -197,16 +195,12 @@ namespace CrazyElevator.Managers
         void HitHazard(ShaftHazard hazard, Vector2 car, Vector2 centre)
         {
             hazardCooldown = HazardHitCooldown;
-            if (hazard.Spec.Kind == HazardKind.Tornado)
+            if (hazard.Spec.Kind == HazardKind.Tornado
+                && round.HasOnboardFeature(PassengerFeature.BlocksTornado))
             {
-                foreach (Rider rider in round.Riders)
-                {
-                    if (!round.Owns(rider) || rider.AbilityUsed || !rider.HasFeature(PassengerFeature.BlocksTornado)) continue;
-                    rider.AbilityUsed = true;
-                    ShowPassengerAbility("BLOCK!", exteriorCar.position + Vector3.up * 3f);
-                    Play(chime);
-                    return;
-                }
+                ShowPassengerAbility("BLOCK!", exteriorCar.position + Vector3.up * 3f);
+                Play(chime);
+                return;
             }
             collisionImpact = 1f;
             boostAxis = 0f;

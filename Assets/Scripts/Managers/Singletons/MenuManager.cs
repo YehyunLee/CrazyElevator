@@ -385,19 +385,6 @@ namespace CrazyElevator.Managers
                 UpdateLobbyMouseCursor(playerTwoAvailable);
             }
 
-            // Start only from the START tile. In particular, Player 2's
-            // period/slash input is also exposed as StartPressed for title
-            // navigation, but it must still confirm the currently selected
-            // lobby control first (for example, CPU -> PLAYER 2).
-            if (choosingMode && transition >= TransitionSeconds
-                && AllPlayersReady
-                && ((playerOneInput.StartPressed && playerOneCursor == 4)
-                    || (playerTwoInput.StartPressed && playerTwoCursor == 4)))
-            {
-                StartSelectedMode();
-                return;
-            }
-
             if (playerOneInput.ConfirmPressed)
             {
                 if (choosingMode && transition >= TransitionSeconds)
@@ -406,6 +393,7 @@ namespace CrazyElevator.Managers
             if (choosingMode && transition >= TransitionSeconds && playerTwoAvailable
                 && playerTwoInput.ConfirmPressed)
                 HandleLobbyConfirm(1);
+            if (TryStartReadyLobby()) return;
             if (!choosingMode && (playerOneInput.StartPressed || playerOneInput.ConfirmPressed
                 || playerTwoInput.StartPressed || playerTwoInput.ConfirmPressed
                 || playerTwoMenuStart || keyboardMenuConfirm))
@@ -520,6 +508,14 @@ namespace CrazyElevator.Managers
 
         bool BothCpu => !playerOneHuman && !playerTwoSelected;
         bool AllPlayersReady => !BothCpu && playerOneReady && playerTwoReady;
+
+        bool TryStartReadyLobby()
+        {
+            if (!choosingMode || launching || transition < TransitionSeconds || !AllPlayersReady)
+                return false;
+            StartSelectedMode();
+            return true;
+        }
 
         void HandleLobbyConfirm(int seat)
         {
@@ -870,8 +866,8 @@ namespace CrazyElevator.Managers
         void DrawGamepadInstructions()
         {
             DrawKeyboardHint(new Rect(210, 220, 380, 110), "STICK / D-PAD", "MOVE / OPEN DOOR");
-            DrawKeyboardHint(new Rect(660, 220, 380, 110), "A", "STOP / KICK");
-            DrawKeyboardHint(new Rect(1110, 220, 380, 110), "Y", "CLOSE DOORS");
+            DrawKeyboardHint(new Rect(660, 220, 380, 110), "A", "STOP / CLOSE DOORS");
+            DrawKeyboardHint(new Rect(1110, 220, 380, 110), "B", "KICK");
             DrawKeyboardHint(new Rect(210, 365, 380, 110), "DOWN", "SELECT PASSENGER");
             DrawKeyboardHint(new Rect(660, 365, 380, 110), "RB", "REPAIR");
             DrawKeyboardHint(new Rect(1110, 365, 380, 110), "LB / TRIGGER", "SPEED BOOST");
@@ -882,11 +878,10 @@ namespace CrazyElevator.Managers
         {
             GUI.Label(new Rect(210, 126, 1280, 42), "PLAYER 1", caption);
             DrawKeyboardHint(new Rect(210, 180, 380, 96), "W A S D", "MOVE / OPEN DOOR");
-            DrawKeyboardHint(new Rect(660, 180, 380, 96), "C", "STOP");
-            DrawKeyboardHint(new Rect(1110, 180, 380, 96), "E", "CLOSE DOORS");
-            DrawKeyboardHint(new Rect(210, 300, 380, 96), "I", "KICK");
-            DrawKeyboardHint(new Rect(660, 300, 380, 96), "R", "REPAIR");
-            DrawKeyboardHint(new Rect(1110, 300, 380, 96), "LSHIFT", "SPEED BOOST");
+            DrawKeyboardHint(new Rect(660, 180, 380, 96), "C", "STOP / CLOSE DOORS");
+            DrawKeyboardHint(new Rect(1110, 180, 380, 96), "I", "KICK");
+            DrawKeyboardHint(new Rect(435, 300, 380, 96), "R", "REPAIR");
+            DrawKeyboardHint(new Rect(885, 300, 380, 96), "LSHIFT", "SPEED BOOST");
             if (tutorialActors[1] != null
                 || GameManager.Instance != null && GameManager.Instance.Player != null
                     && GameManager.Instance.Player.Match != null
@@ -894,11 +889,10 @@ namespace CrazyElevator.Managers
             {
                 GUI.Label(new Rect(210, 426, 1280, 42), "PLAYER 2", caption);
                 DrawKeyboardHint(new Rect(210, 480, 380, 96), "ARROWS", "MOVE / OPEN DOOR");
-                DrawKeyboardHint(new Rect(660, 480, 380, 96), ".", "STOP");
-                DrawKeyboardHint(new Rect(1110, 480, 380, 96), "/", "CLOSE DOORS");
-                DrawKeyboardHint(new Rect(210, 600, 380, 96), ",", "KICK");
-                DrawKeyboardHint(new Rect(660, 600, 380, 96), ";", "REPAIR");
-                DrawKeyboardHint(new Rect(1110, 600, 380, 96), "RSHIFT", "SPEED BOOST");
+                DrawKeyboardHint(new Rect(660, 480, 380, 96), ".", "STOP / CLOSE DOORS");
+                DrawKeyboardHint(new Rect(1110, 480, 380, 96), ",", "KICK");
+                DrawKeyboardHint(new Rect(435, 600, 380, 96), ";", "REPAIR");
+                DrawKeyboardHint(new Rect(885, 600, 380, 96), "RSHIFT", "SPEED BOOST");
             }
             DrawKeyboardHint(new Rect(435, 780, 830, 104), "ESC", "PAUSE");
         }
@@ -1158,15 +1152,15 @@ namespace CrazyElevator.Managers
 
                     Color startFill = AllPlayersReady ? Teal
                         : startEnabled ? LobbySurface : DisabledColour;
-                    DrawActionButton(startButton, "START", startFill,
+                    DrawActionButton(startButton, AllPlayersReady ? "START" : "WAITING", startFill,
                         AllPlayersReady ? Ink : Cream,
                         playerOneCursor == 4, playerTwoAvailable && playerTwoCursor == 4);
                     DrawLobbyKeyHint(playerOneButton, 0, playerOneCursor == 0);
                     DrawLobbyKeyHint(rivalButton, 1, playerTwoAvailable && playerTwoCursor == 1);
                     DrawLobbyKeyHint(playerOneReadyButton, 0, playerOneCursor == 2);
                     DrawLobbyKeyHint(playerTwoReadyButton, 1, playerTwoAvailable && playerTwoCursor == 3);
-                    DrawLobbyKeyHint(startButton, 0, playerOneCursor == 4);
-                    DrawLobbyKeyHint(startButton, 1, playerTwoAvailable && playerTwoCursor == 4);
+                    DrawLobbyKeyHint(startButton, 0, AllPlayersReady && playerOneCursor == 4);
+                    DrawLobbyKeyHint(startButton, 1, AllPlayersReady && playerTwoAvailable && playerTwoCursor == 4);
                     // The lobby is drawn with IMGUI labels, so provide
                     // transparent hitboxes for mouse users as well as the
                     // keyboard/controller cursor.

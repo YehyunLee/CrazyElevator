@@ -1428,14 +1428,16 @@ namespace CrazyElevator.Managers
         PassengerView SpawnPassengerArt(Rider rider, Transform parent)
         {
             PassengerView template = null;
-            // Prototype roles reuse the team's editable prefabs until they have
-            // dedicated models. A catalog can supply a dedicated prefab.
+            // A catalog can override the scene's editable passenger prefabs.
             if (rider.Data != null) template = rider.Data.prefab;
-            string artKind = rider.Kind == "HUNTER" ? "INTERVIEW"
+            foreach (PassengerView art in sceneView.passengers)
+                if (template == null && art != null && art.ResolvedKind == rider.Kind) template = art;
+            // Older scenes may not have the special prefabs assigned yet.
+            string fallbackKind = rider.Kind == "HUNTER" ? "INTERVIEW"
                 : rider.Kind == "DIVER" ? "HANDYMAN"
                 : rider.Kind == "BOUNCER" ? "BOSS" : rider.Kind;
             foreach (PassengerView art in sceneView.passengers)
-                if (template == null && art != null && art.ResolvedKind == artKind) template = art;
+                if (template == null && art != null && art.ResolvedKind == fallbackKind) template = art;
             if (template == null)
                 throw new System.InvalidOperationException("Assign passenger art for " + rider.Kind + " in Elevator Scene.");
             PassengerView view = Instantiate(template, parent, false);

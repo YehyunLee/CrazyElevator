@@ -32,7 +32,7 @@ namespace CrazyElevator.EditorTools
                     PassengerFeature.ClearsRust, PassengerTheme.Underwater),
                 Make(folder, "Hunter", "Hunter", "HUNTER", "STUN", "Stuns monsters", 2, 1, 50, 0, 100,
                     PassengerFeature.StunsMonster, PassengerTheme.Office),
-                Make(folder, "Diver", "Diver", "DIVER", "SHIELD", "Blocks one tornado", 4, 1, 60, 0, 100,
+                Make(folder, "Diver", "Diver", "DIVER", "SHIELD", "Blocks tornadoes", 4, 1, 60, 0, 100,
                     PassengerFeature.BlocksTornado, PassengerTheme.Underwater),
                 Make(folder, "Bouncer", "Bouncer", "BOUNCER", "BUMP", "Stronger collision", 3, 2, 50, 0, 100,
                     PassengerFeature.MultiSpace | PassengerFeature.StrongCollision, PassengerTheme.Candy)

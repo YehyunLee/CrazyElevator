@@ -487,11 +487,7 @@ namespace CrazyElevator.Managers
                         || ActiveView == GameView.Pause);
             bool overlay = !playerTwoKeyboard && keyboardAvailable
                 && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            bool closeDoors = playerTwoKeyboard
-                ? keyboardAvailable && keyboard.slashKey.wasPressedThisFrame
-                : keyboardAvailable && keyboard.eKey.wasPressedThisFrame
-                    || pad != null && pad.buttonNorth.wasPressedThisFrame
-                        && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            bool closeDoors = confirm;
             bool repair = playerTwoKeyboard
                 ? keyboardAvailable && keyboard.semicolonKey.isPressed
                 : keyboardAvailable && keyboard.rKey.isPressed
@@ -555,6 +551,7 @@ namespace CrazyElevator.Managers
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool confirm = input.ConfirmPressed;
+            bool kickout = input.KickoutPressed;
             bool closeDoors = input.CloseDoorsPressed;
             input = default;
             input.PausePressed = pause;
@@ -569,7 +566,7 @@ namespace CrazyElevator.Managers
                     if (mode == TutorialInputMode.HelpPassenger)
                         input.ConfirmPressed = confirm;
                     else if (mode == TutorialInputMode.Kickout)
-                        input.KickoutPressed = confirm;
+                        input.KickoutPressed = kickout;
                     break;
                 case TutorialInputMode.BoardPassengers:
                     input.Select = select;
@@ -657,11 +654,8 @@ namespace CrazyElevator.Managers
                     || ActiveView == GameView.Pause))
                 pause = true;
             bool overlay = keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            // Confirm stops during travel or kicks a selected onboard rider.
-            // E / controller Y is the dedicated close-door input.
-            bool closeDoors = (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-                || pad != null && pad.buttonNorth.wasPressedThisFrame
-                && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            // The same action stops the car or closes its doors to travel.
+            bool closeDoors = confirm;
             bool repair = (keyboard != null && keyboard.rKey.isPressed)
                 || (pad != null && pad.rightShoulder.isPressed);
             bool boost = (keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed))

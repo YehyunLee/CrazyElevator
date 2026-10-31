@@ -557,11 +557,11 @@ namespace CrazyElevator.Managers
                 switch (step)
                 {
                     case 0: case 1: return "STICK";
-                    case 2: return "Y";
+                    case 2: return "A";
                     case 3: return "STICK";
                     case 4: return "LB/RB";
                     case 5: return "A";
-                    case 7: return "A";
+                    case 7: return "B";
                     case 8: return "A/D";
                     default: return "A";
                 }
@@ -571,11 +571,11 @@ namespace CrazyElevator.Managers
                 switch (step)
                 {
                     case 0: case 1: return "ARROWS";
-                    case 2: return "/";
+                    case 2: return ".";
                     case 3: return "↑/↓";
                     case 4: return "RSHIFT";
                     case 5: return ".";
-                    case 7: return ".";
+                    case 7: return ",";
                     case 8: return "A/D";
                     default: return ".";
                 }
@@ -583,11 +583,11 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0: case 1: return "W/A/D";
-                case 2: return "E";
+                case 2: return "C";
                 case 3: return "W/S";
                 case 4: return "SHIFT";
                 case 5: return "C";
-                case 7: return "C";
+                case 7: return "I";
                 case 8: return "A/D";
                 default: return "C";
             }

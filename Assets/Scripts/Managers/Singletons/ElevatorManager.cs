@@ -624,7 +624,7 @@ namespace CrazyElevator.Managers
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
             routeBoostPulse = 0f;
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
-            hazardCooldown = carSpin = hunterCooldown = abilityFeedbackTime = 0f;
+            hazardCooldown = carSpin = abilityFeedbackTime = 0f;
             if (WorldOwner == this)
                 foreach (var hazard in hazards) hazard.Stunned = 0f;
             ResetRouteLateral();
@@ -1255,14 +1255,9 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Boarding) return;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && mouseClose.Contains(mouseGui))
             { CloseAndTravel(); return; }
-            if (input.CloseDoorsPressed) { CloseAndTravel(); return; }
+            if (input.CloseDoorsPressed && encounterConfirmationConsumedFrame != Time.frameCount)
+            { CloseAndTravel(); return; }
             if (ReadDoorClick(input)) return;
-            if (confirm)
-            {
-                if (draggedRider != null) return;
-                if (selectedRider != null && selectedRider.Boarded) KickoutSelectedPublic();
-                return;
-            }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
             if (HasSelectedBoardedPassenger && mouse != null
                 && mouse.leftButton.wasPressedThisFrame && mouseKickout.Contains(mouseGui))
@@ -1458,7 +1453,8 @@ namespace CrazyElevator.Managers
             }
             string footerKey = !DisplayBuildingView && selectedRider == null
                 ? (GameplayUsesKeyboard && Seat == 0 ? "W/A/D" : "←/↑/→")
-                : GameplayConfirmKey;
+                : !DisplayBuildingView && selectedRider != null && selectedRider.Boarded
+                    ? GameplayKickoutKey : GameplayConfirmKey;
             DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
             Label(new Rect(76, screenHeight - 48, width - 76, 30),
                 DisplayBuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
