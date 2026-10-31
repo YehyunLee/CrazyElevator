@@ -29,7 +29,13 @@ namespace CrazyElevator.EditorTools
                 Make(folder, "Group", "The Trio", "GROUP", "3X", "All three or none!", 5, 3, 32, 0, 130,
                     PassengerFeature.MultiSpace | PassengerFeature.GroupParty | PassengerFeature.SpeedBoost, PassengerTheme.Candy),
                 Make(folder, "Handyman", "Casey", "HANDYMAN", "FIX", "Rust-free while I'm aboard!", 4, 1, 80, 0, 110,
-                    PassengerFeature.ClearsRust, PassengerTheme.Underwater)
+                    PassengerFeature.ClearsRust, PassengerTheme.Underwater),
+                Make(folder, "Hunter", "Hunter", "HUNTER", "STUN", "Stuns monsters", 2, 1, 50, 0, 100,
+                    PassengerFeature.StunsMonster, PassengerTheme.Office),
+                Make(folder, "Diver", "Diver", "DIVER", "SHIELD", "Blocks one tornado", 4, 1, 60, 0, 100,
+                    PassengerFeature.BlocksTornado, PassengerTheme.Underwater),
+                Make(folder, "Bouncer", "Bouncer", "BOUNCER", "BUMP", "Stronger collision", 3, 2, 50, 0, 100,
+                    PassengerFeature.MultiSpace | PassengerFeature.StrongCollision, PassengerTheme.Candy)
             };
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();

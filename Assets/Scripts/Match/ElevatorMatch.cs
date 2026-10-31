@@ -565,10 +565,14 @@ namespace CrazyElevator.Match
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
+                bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
+                bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
                 if (first != tutorialTarget && !TutorialInputLocked(first))
-                    ApplyCollisionResponse(first, -verticalDirection * rebound);
+                    ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f));
                 if (second != tutorialTarget && !TutorialInputLocked(second))
-                    ApplyCollisionResponse(second, verticalDirection * rebound);
+                    ApplyCollisionResponse(second, verticalDirection * rebound * (firstBoost ? 1.5f : 1f));
+                if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
+                if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
             }
             else
             {

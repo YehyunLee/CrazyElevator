@@ -28,6 +28,7 @@ namespace CrazyElevator.Managers
             public HazardSpec Spec;
             public Transform View, Spinner;
             public float X, Clock;
+            public float Stunned;
             public int Direction = 1;
             public bool Live;
         }
@@ -58,6 +59,20 @@ namespace CrazyElevator.Managers
         readonly List<ShaftHazard> hazards = new List<ShaftHazard>();
         Transform hazardRoot;
         float hazardCooldown, carSpin;
+        float hunterCooldown, abilityFeedbackTime;
+        string abilityFeedback;
+        Vector3 abilityFeedbackPosition;
+        Vector3 abilityFeedbackOrigin;
+
+        public bool HasBouncer => round != null && round.HasOnboardFeature(PassengerFeature.StrongCollision);
+
+        public void ShowPassengerAbility(string label, Vector3 worldPosition)
+        {
+            abilityFeedback = label;
+            abilityFeedbackPosition = worldPosition;
+            abilityFeedbackOrigin = exteriorCar != null ? exteriorCar.position : worldPosition;
+            abilityFeedbackTime = 1.4f;
+        }
 
         float CarSpinDegrees => carSpin > 0f ? Mathf.SmoothStep(0f, 720f, 1f - carSpin) : 0f;
 
@@ -65,6 +80,8 @@ namespace CrazyElevator.Managers
         {
             hazardCooldown = Mathf.Max(0f, hazardCooldown - dt);
             carSpin = Mathf.Max(0f, carSpin - dt / TornadoSpinSeconds);
+            hunterCooldown = Mathf.Max(0f, hunterCooldown - dt);
+            abilityFeedbackTime = Mathf.Max(0f, abilityFeedbackTime - dt);
         }
 
         bool HazardOpen(HazardSpec spec) => !MenuManager.TutorialActive && round != null
@@ -80,6 +97,12 @@ namespace CrazyElevator.Managers
                 hazard.Live = HazardOpen(hazard.Spec);
                 if (hazard.View.gameObject.activeSelf != hazard.Live) hazard.View.gameObject.SetActive(hazard.Live);
                 if (!hazard.Live) continue;
+                if (hazard.Stunned > 0f)
+                {
+                    hazard.Stunned = Mathf.Max(0f, hazard.Stunned - dt);
+                    hazard.View.localScale = Vector3.one * (1f + .12f * Mathf.Sin(hazard.Stunned * 15f));
+                    continue;
+                }
                 hazard.Clock += dt;
                 float left = ElevatorMatchType.ShaftCenterX + hazard.Spec.Left;
                 float right = ElevatorMatchType.ShaftCenterX + hazard.Spec.Right;
@@ -144,7 +167,7 @@ namespace CrazyElevator.Managers
         // Every car checks the shared hazards owned by seat 0's world.
         void CheckHazardHits()
         {
-            if (phase != Phase.Moving || hazardCooldown > 0f || MenuManager.TutorialActive) return;
+            if (phase != Phase.Moving || round == null || MenuManager.TutorialActive) return;
             Vector3 carPosition = CrazyTravelLocalPosition(RouteLateralX, travelFloor)
                 + CrazyTravelLocalRotation(travelFloor, 0f) * exteriorCollisionCenterOffset;
             Vector2 car = new Vector2(carPosition.x, carPosition.y);
@@ -153,6 +176,16 @@ namespace CrazyElevator.Managers
             {
                 if (!hazard.Live) continue;
                 Vector2 centre = HazardCentre(hazard);
+                if (hazard.Spec.Kind == HazardKind.Monster && hazard.Stunned <= 0f
+                    && hunterCooldown <= 0f && round.HasOnboardFeature(PassengerFeature.StunsMonster)
+                    && Vector2.Distance(car, centre) <= 7f)
+                {
+                    hazard.Stunned = 3f;
+                    hunterCooldown = 5f;
+                    ShowPassengerAbility("STUN!", exteriorCar.parent.TransformPoint(new Vector3(centre.x, centre.y + 2f, HazardDepth)));
+                    Play(chime);
+                }
+                if (hazard.Stunned > 0f || hazardCooldown > 0f) continue;
                 Vector2 half = HazardHalfSize(hazard.Spec.Kind);
                 if (Mathf.Abs(car.x - centre.x) > half.x + carHalf.x
                     || Mathf.Abs(car.y - centre.y) > half.y + carHalf.y) continue;
@@ -164,6 +197,17 @@ namespace CrazyElevator.Managers
         void HitHazard(ShaftHazard hazard, Vector2 car, Vector2 centre)
         {
             hazardCooldown = HazardHitCooldown;
+            if (hazard.Spec.Kind == HazardKind.Tornado)
+            {
+                foreach (Rider rider in round.Riders)
+                {
+                    if (!round.Owns(rider) || rider.AbilityUsed || !rider.HasFeature(PassengerFeature.BlocksTornado)) continue;
+                    rider.AbilityUsed = true;
+                    ShowPassengerAbility("BLOCK!", exteriorCar.position + Vector3.up * 3f);
+                    Play(chime);
+                    return;
+                }
+            }
             collisionImpact = 1f;
             boostAxis = 0f;
             boostHeld = false;
@@ -210,6 +254,35 @@ namespace CrazyElevator.Managers
             }
             notice = "TORNADO! Spun around and flung away.";
             Play(kickWhoosh);
+        }
+
+        void DrawPassengerAbilityFeedback()
+        {
+            if (abilityFeedbackTime <= 0f || exteriorCamera == null) return;
+            Vector3 screen = exteriorCamera.WorldToScreenPoint(abilityFeedbackPosition);
+            if (screen.z <= 0f) return;
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            if (abilityFeedback == "STUN!" && abilityFeedbackTime > 1f)
+            {
+                Vector3 source = exteriorCamera.WorldToScreenPoint(abilityFeedbackOrigin);
+                if (source.z > 0f)
+                {
+                    Vector2 from = new Vector2(source.x, Screen.height - source.y);
+                    Vector2 to = new Vector2(screen.x, Screen.height - screen.y);
+                    Vector2 direction = to - from;
+                    Matrix4x4 previousMatrix = GUI.matrix;
+                    Color previousColour = GUI.color;
+                    GUIUtility.RotateAroundPivot(Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg, from);
+                    GUI.color = Gold;
+                    GUI.DrawTexture(new Rect(from.x, from.y - 3f, direction.magnitude, 6f), Texture2D.whiteTexture);
+                    GUI.color = previousColour;
+                    GUI.matrix = previousMatrix;
+                }
+            }
+            float x = Mathf.Clamp(screen.x, view.x + 90f, view.xMax - 90f);
+            float y = Mathf.Clamp(Screen.height - screen.y, view.y + 80f, view.yMax - 45f);
+            GUIStyle style = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter, fontSize = 30 };
+            OutlinedLabel(new Rect(x - 90f, y - 30f, 180f, 45f), abilityFeedback, style, Gold);
         }
     }
 }

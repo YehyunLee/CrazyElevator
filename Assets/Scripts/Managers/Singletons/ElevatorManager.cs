@@ -624,6 +624,9 @@ namespace CrazyElevator.Managers
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
             routeBoostPulse = 0f;
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
+            hazardCooldown = carSpin = hunterCooldown = abilityFeedbackTime = 0f;
+            if (WorldOwner == this)
+                foreach (var hazard in hazards) hazard.Stunned = 0f;
             ResetRouteLateral();
             SelectRider(null); controllerSelection = false; lastSelectionDirection = Vector2.zero;
         }
@@ -1879,6 +1882,7 @@ namespace CrazyElevator.Managers
             DrawCabinPreviewFrame();
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
+            DrawPassengerAbilityFeedback();
             // While moving, the marker shows the stop a stop press would glide into.
             bool moving = phase == Phase.Moving;
             int floor = moving ? GlideStopFloor() : NearbyFloor;

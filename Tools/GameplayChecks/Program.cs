@@ -419,6 +419,28 @@ internal static class Program
             "The second player cannot win three straight rounds with higher, negative scores.");
     }
 
+    static void CheckAbilityOwnership()
+    {
+        var first = new ElevatorRound();
+        first.Riders.Clear();
+        var hunter = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front);
+        hunter.Kind = "HUNTER";
+        var diver = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Left);
+        diver.Kind = "DIVER";
+        first.Riders.AddRange(new[] { hunter, diver });
+        var second = new ElevatorRound();
+        second.SharePassengerPoolWith(first, 1);
+        Require(first.Board(hunter) && second.Board(diver), "Ability riders could not board independently.");
+        Require(first.HasOnboardFeature(PassengerFeature.StunsMonster)
+            && !second.HasOnboardFeature(PassengerFeature.StunsMonster)
+            && second.HasOnboardFeature(PassengerFeature.BlocksTornado)
+            && !first.HasOnboardFeature(PassengerFeature.BlocksTornado), "Abilities leaked between elevators.");
+        Require(first.Remove(hunter) && !first.HasOnboardFeature(PassengerFeature.StunsMonster),
+            "The ability stayed active after its passenger left.");
+        var bouncer = new Rider { Kind = "BOUNCER", Space = 2 };
+        Require(bouncer.HasFeature(PassengerFeature.StrongCollision), "Bouncer is missing its collision ability.");
+    }
+
     static int Main()
     {
         var checks = new Dictionary<string, Action>
@@ -433,7 +455,8 @@ internal static class Program
             { "Every world's displayed floors run from 1 to 8", CheckLocalFloorNumbers },
             { "Every passenger kind and random request stays within its origin world", CheckWorldDestinations },
             { "Six dimension rounds reset clocks and rosters while sharing identities between seats", CheckSharedDimensionResets },
-            { "First-to-three results, ties, idempotent wins, cycling, championship lock, and Play Again", CheckFirstToThreeMatch }
+            { "First-to-three results, ties, idempotent wins, cycling, championship lock, and Play Again", CheckFirstToThreeMatch },
+            { "Passenger abilities follow their owning elevator", CheckAbilityOwnership }
         };
         int failures = 0;
         foreach (var check in checks)

@@ -34,6 +34,9 @@ namespace CrazyElevator.Shared
                 case PassengerFeature.SpeedSlow: return Kind == "ELDERLY";
                 case PassengerFeature.CryingBaby: return Kind == "PREGNANT";
                 case PassengerFeature.CalmsBaby: return Kind == "ELDERLY";
+                case PassengerFeature.StunsMonster: return Kind == "HUNTER";
+                case PassengerFeature.BlocksTornado: return Kind == "DIVER";
+                case PassengerFeature.StrongCollision: return Kind == "BOUNCER";
                 default: return false;
             }
         }
@@ -66,6 +69,8 @@ namespace CrazyElevator.Shared
         public float SpawnDelay;
         // Resolved riders cannot board or score again.
         public bool Resolved;
+        // The diver's shield is spent once for this particular passenger.
+        public bool AbilityUsed;
     }
 
     public enum OffboardResult { None, Happy, Late, WrongFloor }
@@ -223,8 +228,14 @@ namespace CrazyElevator.Shared
                     Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, 2, 42, 0, 1, 70);
                 if (world == PassengerTheme.Office)
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, 1, 13, 0, 2, 120);
+                if (world == PassengerTheme.Office && f % 3 == 1)
+                    Add("Hunter", "HUNTER", "Stuns monsters", "STUN", f, 1, 50, 0, 2, 100);
                 if (world == PassengerTheme.Candy)
                     Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
+                if (world == PassengerTheme.Candy && f % 3 == 0)
+                    Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
+                if (world == PassengerTheme.Underwater && f % 3 == 1)
+                    Add("Diver", "DIVER", "Blocks one tornado", "SHIELD", f, 1, 60, 0, 4, 100);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);

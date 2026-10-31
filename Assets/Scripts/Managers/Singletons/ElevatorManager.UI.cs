@@ -193,6 +193,9 @@ namespace CrazyElevator.Managers
         // Summarize a passenger type for the UI.
         string ShortRequest(Rider p)
         {
+            if (p.Kind == "HUNTER") return "Stuns monsters";
+            if (p.Kind == "DIVER") return "Blocks one tornado";
+            if (p.Kind == "BOUNCER") return "Stronger collisions";
             if (p.Kind == "HANDYMAN") return "Full power while aboard";
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
             if (p.Kind == "PREGNANT") return "Baby cries • 2 spaces";
@@ -1058,6 +1061,9 @@ namespace CrazyElevator.Managers
                 string cue = PassengerVisualCue(rider, selected);
                 if (!string.IsNullOrEmpty(cue))
                 {
+                    if (rider.Kind == "HUNTER" || rider.Kind == "DIVER" || rider.Kind == "BOUNCER")
+                        DrawPassengerBadgeIcon(new Rect(Mathf.Clamp(headX - 20f, 8f, viewWidth - 48f),
+                            Mathf.Max(72f, headY - 46f), 40f, 40f), rider.Kind, Teal);
                     float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
                     float cueX = headX + 22f + cueWidth <= viewWidth - 8f
                         ? headX + 22f : headX - cueWidth - 22f;
@@ -1094,6 +1100,9 @@ namespace CrazyElevator.Managers
 
         string PassengerVisualCue(Rider rider, bool selected)
         {
+            if (rider.Kind == "HUNTER") return "MONSTER STUN";
+            if (rider.Kind == "DIVER") return rider.AbilityUsed ? "SHIELD USED" : "TORNADO SHIELD";
+            if (rider.Kind == "BOUNCER") return "BUMP ↑";
             if (!rider.Boarded)
                 return selected && rider.Space > 1 ? rider.Space + " TILES" : null;
             if (!round.Owns(rider)) return null;
@@ -1284,20 +1293,50 @@ namespace CrazyElevator.Managers
         void DrawBoardingDoorCue()
         {
             if (phase != Phase.Boarding || round.Finished || paused || selectedRider != null) return;
-            Vector3 anchor = BoardingDoorThreshold(selectedBoardingDoor);
+            for (int slot = 0; slot < 3; slot++)
+                DrawBoardingDoorHint(BoardingDoorAtScreenSlot(slot), slot);
+        }
+
+        // Selection uses screen-relative left / up / right, even when the
+        // cabin is viewed from the opposite side. Confirm opens that door.
+        void DrawBoardingDoorHint(BoardingDoor door, int slot)
+        {
+            Vector3 anchor = BoardingDoorThreshold(door);
             anchor.y = 3.35f;
             Vector3 point = eye.WorldToScreenPoint(stage.TransformPoint(anchor));
-            if (point.z <= 0f) return;
-            Vector2 cursor = new Vector2(point.x, Screen.height - point.y);
-            if (Match != null) cursor -= Match.ViewRect(Seat).position;
-            float size = Mathf.Clamp(ViewHeight * .05f, 32f, 46f);
-            // Keep the cue tied to its doorway, inside this player's camera pane.
-            if (cursor.x < size || cursor.x > ViewWidth - size
-                || cursor.y < size || cursor.y > ViewHeight - size) return;
-            if (openBoardingDoor != (int)selectedBoardingDoor)
-                DrawGameplayKeyHint(new Rect(cursor.x - size * .5f, cursor.y - size, size, size),
-                    GameplayConfirmKey, Gold);
-            OutlinedLabel(new Rect(cursor.x - 20f, cursor.y - 5f, 40f, 32f), "↓", selectionArrow, Gold);
+            Vector2 cursor;
+            if (point.z > 0f)
+            {
+                cursor = new Vector2(point.x, Screen.height - point.y);
+                if (Match != null) cursor -= Match.ViewRect(Seat).position;
+            }
+            else
+            {
+                // A doorway behind the camera still needs a selectable hint.
+                cursor = new Vector2(ViewWidth * (slot == 0 ? .1f : slot == 1 ? .5f : .9f),
+                    ViewHeight * .5f);
+            }
+            float size = Mathf.Clamp(ViewHeight * .042f, 28f, 38f);
+            float inset = size * 1.15f;
+            // Side doorways may be partially offscreen. Keep their direction
+            // hints visible at the corresponding edge of this player's pane.
+            float minX = slot == 0 ? inset : slot == 1 ? ViewWidth * .36f : ViewWidth * .70f;
+            float maxX = slot == 0 ? ViewWidth * .30f : slot == 1 ? ViewWidth * .64f : ViewWidth - inset;
+            cursor.x = Mathf.Clamp(cursor.x, minX, maxX);
+            cursor.y = Mathf.Clamp(cursor.y, 70f + size, ViewHeight - size * 2f);
+
+            string direction = GameplayUsesKeyboard && Seat == 0
+                ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
+                : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
+            bool selected = door == selectedBoardingDoor;
+            DrawGameplayKeyHint(new Rect(cursor.x - size * .5f, cursor.y - size, size, size),
+                direction, selected ? Gold : Teal);
+            if (selected && openBoardingDoor != (int)door)
+            {
+                float confirmSize = size * .85f;
+                DrawGameplayKeyHint(new Rect(cursor.x - confirmSize * .5f, cursor.y + 4f,
+                    confirmSize, confirmSize), GameplayConfirmKey, Gold);
+            }
         }
 
         void DrawMouseControl(Rect rect, string text, Color accent, string key)

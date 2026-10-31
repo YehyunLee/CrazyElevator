@@ -60,6 +60,16 @@ namespace CrazyElevator.Shared
                 case "INTERVIEW":
                     DrawUrgency(pixels, size, center, accent);
                     break;
+                case "HUNTER":
+                    DrawSpeedBoost(pixels, size, center, cream);
+                    break;
+                case "DIVER":
+                    Polygon(pixels, size, new[] { center + new Vector2(-25, 24), center + new Vector2(25, 24),
+                        center + new Vector2(21, -12), center + new Vector2(0, -31), center + new Vector2(-21, -12) }, cream);
+                    break;
+                case "BOUNCER":
+                    DrawGroup(pixels, size, center, cream);
+                    break;
                 default:
                     DrawPassenger(pixels, size, center, cream);
                     break;
