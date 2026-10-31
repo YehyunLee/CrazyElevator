@@ -1261,7 +1261,6 @@ namespace CrazyElevator.Managers
             {
                 if (draggedRider != null) return;
                 if (selectedRider != null && selectedRider.Boarded) KickoutSelectedPublic();
-                else OpenBoardingDoor(selectedBoardingDoor);
                 return;
             }
             if (input.KickoutPressed) { KickoutSelectedPublic(); return; }
@@ -1449,7 +1448,7 @@ namespace CrazyElevator.Managers
             }
             else if (selectedRider == null)
             {
-                prompt = "CHOOSE LEFT / FRONT / RIGHT   ·   OPEN DOOR   ·   AUTO BOARD";
+                prompt = "LEFT / UP / RIGHT OPENS DOORS   ·   AUTO BOARD";
             }
             else
             {
@@ -1457,9 +1456,9 @@ namespace CrazyElevator.Managers
                     + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
                         : "   ·   BOARD   ·   DRAG IN");
             }
-            // C (or the seat-specific equivalent) confirms the highlighted
-            // passenger, boards waiting riders, and unloads boarded riders.
-            string footerKey = GameplayConfirmKey;
+            string footerKey = !DisplayBuildingView && selectedRider == null
+                ? (GameplayUsesKeyboard && Seat == 0 ? "W/A/D" : "←/↑/→")
+                : GameplayConfirmKey;
             DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
             Label(new Rect(76, screenHeight - 48, width - 76, 30),
                 DisplayBuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);

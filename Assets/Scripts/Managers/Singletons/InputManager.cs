@@ -469,7 +469,6 @@ namespace CrazyElevator.Managers
             Vector2 stick = leftStick + dpad;
             Vector2 navigation = stick + keys;
             Vector2 rightStick = pad == null ? Vector2.zero : pad.rightStick.ReadValue();
-            Vector2 selectionStick = rightStick.magnitude >= .55f ? rightStick : leftStick;
             Vector2 selection = rightStick.magnitude >= .55f ? rightStick + keys : navigation;
             bool playerTwoConfirm = keyboardAvailable
                 && (keyboard.periodKey.wasPressedThisFrame
@@ -540,18 +539,17 @@ namespace CrazyElevator.Managers
                 result.PointerHeld = mouse.leftButton.isPressed;
             }
             if (!ignoreTutorialRestrictions)
-                ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat),
-                    pad != null, selectionStick, keys);
+                ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat), pad != null);
             return result;
         }
 
         static void ApplyTutorialInputMode(ref SeatInput input, TutorialInputMode mode,
-            bool controllerAssigned, Vector2 selectionStick, Vector2 keyboardMove)
+            bool controllerAssigned)
         {
             if (mode == TutorialInputMode.Free) return;
 
             bool pause = input.PausePressed;
-            Vector2 select = controllerAssigned ? selectionStick : keyboardMove;
+            Vector2 select = input.Select;
             // Travel steps teach up/down only; a slightly diagonal stick must not
             // turn the car onto a floor rail or switch duel lanes.
             Vector2 move = new Vector2(0f, input.Move.y);
@@ -659,7 +657,7 @@ namespace CrazyElevator.Managers
                     || ActiveView == GameView.Pause))
                 pause = true;
             bool overlay = keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            // Confirm opens the chosen boarding door or stops during travel.
+            // Confirm stops during travel or kicks a selected onboard rider.
             // E / controller Y is the dedicated close-door input.
             bool closeDoors = (keyboard != null && keyboard.eKey.wasPressedThisFrame)
                 || pad != null && pad.buttonNorth.wasPressedThisFrame

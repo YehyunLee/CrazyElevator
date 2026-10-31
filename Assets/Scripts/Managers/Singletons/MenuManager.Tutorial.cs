@@ -556,7 +556,7 @@ namespace CrazyElevator.Managers
             {
                 switch (step)
                 {
-                    case 0: return "STICK";
+                    case 0: case 1: return "STICK";
                     case 2: return "Y";
                     case 3: return "STICK";
                     case 4: return "LB/RB";
@@ -570,7 +570,7 @@ namespace CrazyElevator.Managers
             {
                 switch (step)
                 {
-                    case 0: return "ARROWS";
+                    case 0: case 1: return "ARROWS";
                     case 2: return "/";
                     case 3: return "↑/↓";
                     case 4: return "RSHIFT";
@@ -582,7 +582,7 @@ namespace CrazyElevator.Managers
             }
             switch (step)
             {
-                case 0: return "WASD";
+                case 0: case 1: return "W/A/D";
                 case 2: return "E";
                 case 3: return "W/S";
                 case 4: return "SHIFT";
@@ -598,8 +598,8 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "PRACTICE SHIFT";
-                case 0: return "CHOOSE A DOOR";
-                case 1: return "OPEN & AUTO BOARD";
+                case 0: return "OPEN A DOOR";
+                case 1: return "BOARD 2 PASSENGERS";
                 case 2: return "CLOSE DOORS";
                 case 3: return "MOVE";
                 case 4: return "SPEED BOOST";
@@ -615,8 +615,8 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "TUTORIAL";
-                case 0: return "LEFT, UP OR RIGHT CHOOSES A DOOR.";
-                case 1: return "OPEN A DOOR. RIDERS BOARD AUTOMATICALLY. TRY ANOTHER DOOR TO PICK UP 2.";
+                case 0: return "PRESS LEFT, UP OR RIGHT.";
+                case 1: return "AUTO BOARD. TRY ANOTHER DOOR.";
                 case 2: return "CLOSE THE DOORS.";
                 case 3: return "HOLD UP OR DOWN.";
                 case 4: return "HOLD IT + UP OR DOWN.";

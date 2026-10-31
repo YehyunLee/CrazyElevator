@@ -1297,8 +1297,8 @@ namespace CrazyElevator.Managers
                 DrawBoardingDoorHint(BoardingDoorAtScreenSlot(slot), slot);
         }
 
-        // Selection uses screen-relative left / up / right, even when the
-        // cabin is viewed from the opposite side. Confirm opens that door.
+        // Screen-relative left / up / right open the corresponding door,
+        // even when the cabin is viewed from the opposite side.
         void DrawBoardingDoorHint(BoardingDoor door, int slot)
         {
             Vector3 anchor = BoardingDoorThreshold(door);
@@ -1328,15 +1328,9 @@ namespace CrazyElevator.Managers
             string direction = GameplayUsesKeyboard && Seat == 0
                 ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
                 : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
-            bool selected = door == selectedBoardingDoor;
+            bool open = openBoardingDoor == (int)door;
             DrawGameplayKeyHint(new Rect(cursor.x - size * .5f, cursor.y - size, size, size),
-                direction, selected ? Gold : Teal);
-            if (selected && openBoardingDoor != (int)door)
-            {
-                float confirmSize = size * .85f;
-                DrawGameplayKeyHint(new Rect(cursor.x - confirmSize * .5f, cursor.y + 4f,
-                    confirmSize, confirmSize), GameplayConfirmKey, Gold);
-            }
+                direction, open ? Gold : Teal);
         }
 
         void DrawMouseControl(Rect rect, string text, Color accent, string key)

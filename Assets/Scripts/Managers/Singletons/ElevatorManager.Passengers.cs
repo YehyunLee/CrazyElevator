@@ -153,18 +153,30 @@ namespace CrazyElevator.Managers
         BoardingDoor BoardingDoorAtScreenSlot(int slot)
             => (BoardingDoor)(BoardingDoorOrderReversed ? 2 - slot : slot);
 
+        // Discretize the stick so small analog fluctuations do not repeatedly
+        // reopen a door or keep resetting the automatic boarding delay.
+        static int BoardingDirection(Vector2 direction)
+        {
+            if (direction.magnitude < .55f) return -1;
+            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+                return direction.x < 0f ? 0 : 2;
+            return direction.y > 0f ? 1 : 3;
+        }
+
         void ReadBoardingDoorSelection(InputManager.SeatInput input)
         {
             if (phase != Phase.Boarding) return;
             Vector2 direction = input.Select;
-            if (direction.magnitude >= .55f && direction != lastSelectionDirection)
+            int slot = BoardingDirection(direction);
+            if (slot >= 0 && slot != BoardingDirection(lastSelectionDirection))
             {
-                if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-                    selectedBoardingDoor = BoardingDoorAtScreenSlot(direction.x < 0f ? 0 : 2);
-                else if (direction.y > 0f) selectedBoardingDoor = BoardingDoor.Front;
-                else { SelectInDirection(Vector2.down); lastSelectionDirection = direction; return; }
-                hasChosenBoardingDoor = true;
-                SelectRider(null);
+                if (slot == 3) SelectInDirection(Vector2.down);
+                else
+                {
+                    BoardingDoor door = BoardingDoorAtScreenSlot(slot);
+                    if (openBoardingDoor != (int)door) OpenBoardingDoor(door);
+                    else if (selectedRider != null) SelectRider(null);
+                }
             }
             lastSelectionDirection = direction;
         }
@@ -181,9 +193,8 @@ namespace CrazyElevator.Managers
         void TintBoardingDoorFrame(Renderer[] frame, BoardingDoor door, bool choosing)
         {
             if (frame == null) return;
-            bool selected = choosing && selectedRider == null && selectedBoardingDoor == door;
             bool open = choosing && openBoardingDoor == (int)door;
-            Color color = open ? Teal : selected ? Gold : DoorFrameIdle;
+            Color color = open ? Teal : DoorFrameIdle;
             if (doorFrameTint == null) doorFrameTint = new MaterialPropertyBlock();
             foreach (Renderer renderer in frame)
             {

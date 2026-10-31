@@ -836,12 +836,7 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(100, 34, 1500, 82),
                 KeyboardHintsEnabled ? "KEYBOARD CONTROLS" : "CONTROLLER CONTROLS", title);
             if (KeyboardHintsEnabled) DrawKeyboardInstructions();
-            else
-            {
-                Rect controllerImage = new Rect(0, 112, ArtWidth, 826);
-                if (controllerInstructions != null)
-                    GUI.DrawTexture(controllerImage, controllerInstructions, ScaleMode.ScaleToFit);
-            }
+            else DrawGamepadInstructions();
             Rect startButton = new Rect(610, 952, 480, 76);
             Panel(startButton, Teal);
             if (RequiresBothControllerInstructionConfirmations
@@ -872,11 +867,22 @@ namespace CrazyElevator.Managers
 
         string StartHintKey => KeyboardHintsEnabled ? "C" : "A";
 
+        void DrawGamepadInstructions()
+        {
+            DrawKeyboardHint(new Rect(210, 220, 380, 110), "STICK / D-PAD", "MOVE / OPEN DOOR");
+            DrawKeyboardHint(new Rect(660, 220, 380, 110), "A", "STOP / KICK");
+            DrawKeyboardHint(new Rect(1110, 220, 380, 110), "Y", "CLOSE DOORS");
+            DrawKeyboardHint(new Rect(210, 365, 380, 110), "DOWN", "SELECT PASSENGER");
+            DrawKeyboardHint(new Rect(660, 365, 380, 110), "RB", "REPAIR");
+            DrawKeyboardHint(new Rect(1110, 365, 380, 110), "LB / TRIGGER", "SPEED BOOST");
+            DrawKeyboardHint(new Rect(570, 510, 560, 110), "START", "PAUSE");
+        }
+
         void DrawKeyboardInstructions()
         {
             GUI.Label(new Rect(210, 126, 1280, 42), "PLAYER 1", caption);
-            DrawKeyboardHint(new Rect(210, 180, 380, 96), "W A S D", "MOVE / CHOOSE DOOR");
-            DrawKeyboardHint(new Rect(660, 180, 380, 96), "C", "OPEN DOOR / STOP");
+            DrawKeyboardHint(new Rect(210, 180, 380, 96), "W A S D", "MOVE / OPEN DOOR");
+            DrawKeyboardHint(new Rect(660, 180, 380, 96), "C", "STOP");
             DrawKeyboardHint(new Rect(1110, 180, 380, 96), "E", "CLOSE DOORS");
             DrawKeyboardHint(new Rect(210, 300, 380, 96), "I", "KICK");
             DrawKeyboardHint(new Rect(660, 300, 380, 96), "R", "REPAIR");
@@ -887,8 +893,8 @@ namespace CrazyElevator.Managers
                     && !GameManager.Instance.Player.Match.Rival.IsNpc)
             {
                 GUI.Label(new Rect(210, 426, 1280, 42), "PLAYER 2", caption);
-                DrawKeyboardHint(new Rect(210, 480, 380, 96), "ARROWS", "MOVE / CHOOSE DOOR");
-                DrawKeyboardHint(new Rect(660, 480, 380, 96), ".", "OPEN DOOR / STOP");
+                DrawKeyboardHint(new Rect(210, 480, 380, 96), "ARROWS", "MOVE / OPEN DOOR");
+                DrawKeyboardHint(new Rect(660, 480, 380, 96), ".", "STOP");
                 DrawKeyboardHint(new Rect(1110, 480, 380, 96), "/", "CLOSE DOORS");
                 DrawKeyboardHint(new Rect(210, 600, 380, 96), ",", "KICK");
                 DrawKeyboardHint(new Rect(660, 600, 380, 96), ";", "REPAIR");
@@ -919,7 +925,7 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                float keyWidth = Mathf.Clamp(28f + key.Length * 15f, 44f, 112f);
+                float keyWidth = Mathf.Clamp(28f + key.Length * 15f, 44f, rect.width - 20f);
                 DrawKeyboardKeycap(new Rect(rect.center.x - keyWidth * .5f, rect.y + 8f,
                     keyWidth, 32f), key);
             }
