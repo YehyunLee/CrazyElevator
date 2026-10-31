@@ -19,7 +19,10 @@ namespace CrazyElevator.Shared
         SpeedBoost = 1 << 6,
         SpeedSlow = 1 << 7,
         CryingBaby = 1 << 8,
-        CalmsBaby = 1 << 9
+        CalmsBaby = 1 << 9,
+        StunsMonster = 1 << 10,
+        BlocksTornado = 1 << 11,
+        StrongCollision = 1 << 12
     }
 }
 

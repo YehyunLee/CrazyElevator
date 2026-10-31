@@ -15,7 +15,6 @@ namespace CrazyElevator.Managers
         float dimensionRevealTime;
         float dimensionRevealExitTime = -1f;
         int dimensionRevealIndex = -1;
-        readonly bool[] dimensionRevealed = new bool[ElevatorRound.Dimensions];
         Phase dimensionResumePhase;
         float dimensionResumePhaseTime;
         float dimensionResumeDoors;
@@ -30,9 +29,8 @@ namespace CrazyElevator.Managers
 
         public void BeginDimensionReveal(int index)
         {
-            index = Mathf.Clamp(index, 1, ElevatorRound.Dimensions - 1);
+            index = Mathf.Clamp(index, 0, ElevatorRound.Dimensions - 1);
             if (dimensionRevealActive) return;
-            dimensionRevealed[index] = true;
             dimensionRevealIndex = index;
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
@@ -43,27 +41,19 @@ namespace CrazyElevator.Managers
             MarkDimensionPassengersIntroduced(index);
             PrepareDimensionPreview(DimensionWorld(index));
             PrepareDimensionLineup(DimensionWorld(index));
-            notice = DimensionWorld(index) == WorldBand.Candy
-                ? "NEW MULTIVERSE: COTTON CANDY"
-                : "NEW MULTIVERSE: UNDERWATER";
+            notice = "ROUND " + (session != null ? session.RoundNumber : 1)
+                + ": " + DimensionIntroTitle(DimensionWorld(index));
         }
 
         void MarkDimensionPassengersIntroduced(int index)
         {
-            // Those passenger types are covered by the dimension interlude, so
-            // their separate "NEW PASSENGER" cards must not appear later.
-            if (index == 1)
-            {
-                completedPassengerTutorials[Seat].Add("PREGNANT");
-                completedPassengerTutorials[Seat].Add("BOSS");
-                completedPassengerTutorials[Seat].Add("GROUP");
-                completedWorldTutorials[Seat].Add(WorldBand.Candy);
-            }
-            else if (index == 2)
-            {
-                completedPassengerTutorials[Seat].Add("HANDYMAN");
-                completedWorldTutorials[Seat].Add(WorldBand.Water);
-            }
+            // Cover the world's roster here so its round can run uninterrupted.
+            completedWorldTutorials[Seat].Add(DimensionWorld(index));
+            if (round == null) return;
+            foreach (var rider in round.Riders)
+                if (rider != null && !string.IsNullOrEmpty(rider.Kind)
+                    && rider.Origin / ElevatorRound.FloorsPerDimension == index)
+                    completedPassengerTutorials[Seat].Add(rider.Kind);
         }
 
         public void FinishDimensionReveal()
@@ -89,13 +79,13 @@ namespace CrazyElevator.Managers
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
-            for (int i = 0; i < dimensionRevealed.Length; i++) dimensionRevealed[i] = false;
             ClearEncounterPreviewModel();
             ClearDimensionLineup();
         }
 
         void TickDimensionReveal(float dt)
         {
+            if (paused || MenuManager.IsOpen || Match != null && Match.Paused) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
             float close = Mathf.Clamp01(dimensionRevealTime / DimensionDoorCloseSeconds);
             SetDoors(Mathf.Lerp(dimensionResumeDoors, 0f, close));
@@ -142,14 +132,41 @@ namespace CrazyElevator.Managers
         readonly bool[] dimensionLineupFilled = new bool[LineupSlots];
 
         // Same order as the reveal rows.
-        static string[] DimensionPassengerKinds(WorldBand world) => world == WorldBand.Candy
-            ? new[] { "PREGNANT", "BOSS", "GROUP" }
+        static string[] DimensionPassengerKinds(WorldBand world) => world == WorldBand.Office
+            ? new[] { "COURIER", "INTERVIEW", "ELDERLY" }
+            : world == WorldBand.Candy ? new[] { "PREGNANT", "BOSS", "GROUP" }
             : new[] { "HANDYMAN", "RUST", "REPAIR" };
+
+        public static string DimensionIntroTitle(WorldBand world) => world == WorldBand.Office ? "OFFICE"
+            : world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER";
+
+        public static Color DimensionIntroAccent(WorldBand world) => world == WorldBand.Office
+            ? new Color32(98, 132, 178, 255) : world == WorldBand.Candy
+                ? new Color32(236, 118, 188, 255) : new Color32(48, 196, 210, 255);
+
+        public static string DimensionIntroSummary(WorldBand world) => world == WorldBand.Office
+            ? "Plan your route. Keep your passengers happy."
+            : world == WorldBand.Candy ? "Bigger groups. Louder passengers. Faster rides."
+            : "Watch the rust. Keep your elevator moving.";
+
+        public static string[] DimensionIntroNames(WorldBand world) => world == WorldBand.Office
+            ? new[] { "COURIER", "INTERVIEW", "GRANDMA" }
+            : world == WorldBand.Candy ? new[] { "MOM + BABY", "THE BOSS", "THE TRIO" }
+            : new[] { "HANDYMAN", "RUST", "REPAIR" };
+
+        public static string[] DimensionIntroLines(WorldBand world) => world == WorldBand.Office
+            ? new[] { "Takes two spaces. Leave room for the box.", "Short patience. Make this stop a priority.",
+                "Wait for her to board. Slows the elevator." }
+            : world == WorldBand.Candy
+                ? new[] { "Crying drains patience. Grandma calms the baby.", "On-time delivery pays a bonus.",
+                    "Three spaces. Speeds the elevator up." }
+                : new[] { "Clears rust while aboard.", "Slows the elevator over time.", "Hold repair to patch it back up." };
 
         void PrepareDimensionLineup(WorldBand world)
         {
             ClearDimensionLineup();
-            if (IsNpc || sceneView == null || sceneView.passengers == null) return;
+            // The shared round preview also uses this car in CPU matchups.
+            if (sceneView == null || sceneView.passengers == null) return;
             string[] kinds = DimensionPassengerKinds(world);
             bool any = false;
             EnsureDimensionLineup();
@@ -165,8 +182,7 @@ namespace CrazyElevator.Managers
             }
             if (dimensionLineupCamera == null) return;
             // Transparent, but tinted like the reveal row in case alpha is dropped.
-            Color accent = world == WorldBand.Candy
-                ? new Color32(236, 118, 188, 255) : new Color32(48, 196, 210, 255);
+            Color accent = DimensionIntroAccent(world);
             Color row = Color.Lerp(Ink, accent, .22f);
             dimensionLineupCamera.backgroundColor = new Color(row.r, row.g, row.b, 0f);
             dimensionLineupCamera.enabled = any;
@@ -221,7 +237,7 @@ namespace CrazyElevator.Managers
             EnsureEncounterPreview();
             var stageObject = new GameObject("Dimension passenger lineup") { hideFlags = HideFlags.HideAndDontSave };
             dimensionLineupStage = stageObject.transform;
-            dimensionLineupStage.position = new Vector3(-10000f, -10000f, 10000f);
+            dimensionLineupStage.position = new Vector3(-10000f - Seat * 100f, -10000f, 10000f);
             for (int i = 0; i < LineupSlots; i++)
             {
                 var slot = new GameObject("Lineup slot " + i) { hideFlags = HideFlags.HideAndDontSave };
@@ -300,19 +316,6 @@ namespace CrazyElevator.Managers
             GUI.color = old;
         }
 
-        bool TryBeginSoloDimensionReveal()
-        {
-            if (round == null) return false;
-            for (int index = 1; index < ElevatorRound.Dimensions; index++)
-            {
-                if (dimensionRevealed[index]
-                    || round.Elapsed < ElevatorRound.DimensionUnlockAt(index)) continue;
-                BeginDimensionReveal(index);
-                return true;
-            }
-            return false;
-        }
-
         void DrawDimensionRevealOverlay(Rect view)
         {
             Styles();
@@ -321,9 +324,7 @@ namespace CrazyElevator.Managers
             if (contentAlpha <= .001f) return;
 
             WorldBand world = DimensionWorld(dimensionRevealIndex);
-            Color accent = world == WorldBand.Candy
-                ? new Color32(236, 118, 188, 255)
-                : new Color32(48, 196, 210, 255);
+            Color accent = DimensionIntroAccent(world);
             float width = Mathf.Min(view.width - 52f, 980f);
             float height = Mathf.Min(view.height - 120f, 620f);
             Rect card = new Rect(view.x + (view.width - width) * .5f,
@@ -335,7 +336,7 @@ namespace CrazyElevator.Managers
             if (DimensionRevealTexture != null)
             {
                 Rect image = new Rect(card.x + 22f, card.y + 18f,
-                    card.width - 44f, card.height * .29f);
+                    card.width - 44f, card.height * .26f);
                 Color old = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, contentAlpha);
                 GUI.DrawTexture(image, DimensionRevealTexture, ScaleMode.ScaleToFit, true);
@@ -345,42 +346,29 @@ namespace CrazyElevator.Managers
             Color oldText = title.normal.textColor;
             int oldSize = title.fontSize;
             TextAnchor oldAlign = title.alignment;
-            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .04f, 30f, 54f));
             title.alignment = TextAnchor.MiddleCenter;
+            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .015f, 14f, 20f));
+            title.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .30f, card.width - 48f, 26f),
+                "ROUND " + (session != null ? session.RoundNumber : 1), title);
+            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .04f, 30f, 54f));
             title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .36f,
-                card.width - 48f, 52f), world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER", title);
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .35f,
+                card.width - 48f, 52f), DimensionIntroTitle(world), title);
+            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .014f, 13f, 18f));
+            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .435f,
+                card.width - 48f, 28f), DimensionIntroSummary(world), title);
 
-            string[] names;
-            string[] lines;
-            if (world == WorldBand.Candy)
-            {
-                names = new[] { "MOM + BABY", "THE BOSS", "THE TRIO" };
-                lines = new[]
-                {
-                    "Crying drains patience. Grandma calms the baby.",
-                    "On-time delivery pays a bonus.",
-                    "Three spaces. Speeds the elevator up."
-                };
-            }
-            else
-            {
-                names = new[] { "HANDYMAN", "RUST", "REPAIR" };
-                lines = new[]
-                {
-                    "Clears rust while aboard.",
-                    "Slows the elevator over time.",
-                    "Hold to patch it back up."
-                };
-            }
+            string[] names = DimensionIntroNames(world);
+            string[] lines = DimensionIntroLines(world);
 
-            float rowTop = card.y + card.height * .47f;
+            float rowTop = card.y + card.height * .50f;
             float rowWidth = (card.width - 72f) / 3f;
             int nameSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .02f, 16f, 26f));
             int lineSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .014f, 13f, 18f));
             for (int i = 0; i < 3; i++)
             {
-                Rect row = new Rect(card.x + 24f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .40f);
+                Rect row = new Rect(card.x + 24f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .36f);
                 Panel(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
                 title.fontSize = nameSize;
                 title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
@@ -388,7 +376,7 @@ namespace CrazyElevator.Managers
                 title.fontSize = lineSize;
                 title.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
                 GUI.Label(new Rect(row.x + 10f, row.y + 42f, row.width - 20f, 66f), lines[i], title);
-                DrawDimensionPassenger(new Rect(row.x, row.y + 112f, row.width, row.height - 116f), i, contentAlpha);
+                DrawDimensionPassenger(new Rect(row.x, row.y + 104f, row.width, row.height - 108f), i, contentAlpha);
             }
 
             if (dimensionRevealExitTime < 0f)
@@ -396,8 +384,8 @@ namespace CrazyElevator.Managers
                 title.fontSize = nameSize;
                 title.normal.textColor = new Color(Gold.r, Gold.g, Gold.b,
                     contentAlpha * DimensionPromptAlpha(dimensionRevealTime));
-                GUI.Label(new Rect(card.x, rowTop + card.height * .40f + 4f, card.width,
-                    card.yMax - rowTop - card.height * .40f - 8f), "PRESS C / A TO CONTINUE", title);
+                GUI.Label(new Rect(card.x, rowTop + card.height * .36f + 4f, card.width,
+                    card.yMax - rowTop - card.height * .36f - 8f), "PRESS " + GameplayConfirmKey + " TO CONTINUE", title);
             }
 
             title.fontSize = oldSize;

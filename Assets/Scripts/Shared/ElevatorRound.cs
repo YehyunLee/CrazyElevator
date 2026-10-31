@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace CrazyElevator.Shared
 {
+    public enum BoardingDoor { Left, Front, Right }
+
     public sealed class Rider
     {
         // Optional ScriptableObject template; Kind string remains the runtime key.
@@ -32,13 +34,22 @@ namespace CrazyElevator.Shared
                 case PassengerFeature.SpeedSlow: return Kind == "ELDERLY";
                 case PassengerFeature.CryingBaby: return Kind == "PREGNANT";
                 case PassengerFeature.CalmsBaby: return Kind == "ELDERLY";
+                case PassengerFeature.StunsMonster: return Kind == "HUNTER";
+                case PassengerFeature.BlocksTornado: return Kind == "DIVER";
+                case PassengerFeature.StrongCollision: return Kind == "BOUNCER";
                 default: return false;
             }
         }
 
         // Route, occupied space, and existing delivery bonus.
+        // A stop is where on the floor the rider waits / wants to go (ElevatorRound.CenterStop = the shafts).
         public int Origin;
         public int Destination;
+        public int OriginStop = ElevatorRound.CenterStop;
+        public int DestinationStop = ElevatorRound.CenterStop;
+        public BoardingDoor PickupDoor = BoardingDoor.Front;
+        // Captured landing position, retained when earlier passengers leave.
+        public int PickupQueueSlot = -1;
         public int Space;
         public int Bonus;
 
@@ -54,7 +65,7 @@ namespace CrazyElevator.Shared
         public bool Boarded;
         // A shared passenger pool still needs to know which car holds a rider.
         public int BoardedBySeat = -1;
-        // Brief entry delay before a replacement rider joins the shared queue.
+        // Optional entry delay before a waiting rider can be shown.
         public float SpawnDelay;
         // Resolved riders cannot board or score again.
         public bool Resolved;
@@ -73,8 +84,14 @@ namespace CrazyElevator.Shared
         public const int Floors = 24;
         public const int Dimensions = 3;
         public const int FloorsPerDimension = Floors / Dimensions;
+        // Authored floor indices stay global; every world's signs start at 1.
+        public static int FloorNumber(int floor)
+        {
+            if (floor < 0 || floor >= Floors) throw new ArgumentOutOfRangeException(nameof(floor));
+            return floor % FloorsPerDimension + 1;
+        }
         public const int Capacity = 9;
-        public const float Duration = 180f;
+        public const float Duration = 60f;
         // Seconds into the shift when candy (1) and underwater (2) open.
         static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f };
         public static float DimensionUnlockAt(int dimension)
@@ -85,17 +102,41 @@ namespace CrazyElevator.Shared
         static readonly Random DestinationRandom = new Random();
         public List<Rider> Riders = new List<Rider>();
         public int Seat { get; private set; }
+        // -1 retains the full-building rules for previews and standalone rule checks.
+        public int ActiveDimension { get; private set; } = -1;
+        public int MinFloor => ActiveDimension < 0 ? 0 : ActiveDimension * FloorsPerDimension;
+        public int MaxFloor => ActiveDimension < 0 ? Floors - 1 : MinFloor + FloorsPerDimension - 1;
+        public bool ContainsFloor(int floor) => floor >= MinFloor && floor <= MaxFloor;
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
+        // Each floor has five stops, left to right. The car is parked at Stop on Floor.
+        public const int Stops = 5;
+        public const int CenterStop = 2;
+        public int Stop = CenterStop;
+        // The scene decides which stops a car can reach on each floor (floor, stop).
+        public Func<int, int, bool> StopOpen;
+        // The tutorial keeps every rider at the shafts.
+        public bool CenterStopsOnly;
+        // Office stays near the shafts; later worlds spread riders across the whole floor.
+        static readonly int[][] StopWeights =
+        {
+            new[] { 0, 2, 3, 2, 0 },
+            new[] { 1, 2, 2, 2, 1 },
+            new[] { 2, 2, 1, 2, 2 }
+        };
         public float PeakTime;
         public float TimeLeft = Duration;
         public float Elapsed => Duration - TimeLeft;
-        public int MaxUnlockedFloor => MaxUnlockedFloorAt(Elapsed);
+        public int MaxUnlockedFloor => ActiveDimension >= 0 ? MaxFloor : MaxUnlockedFloorAt(Elapsed);
         int TimeBasedPassengerOfferLimit => Elapsed < 30f ? 2
             : Elapsed < 70f ? 3
             : Elapsed < 110f ? 4 : 5;
-        public int PassengerOfferLimit => PassengerData.ThemeAtFloor(Floor) == PassengerTheme.Office
-            ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
-        bool RefillPassengerQueue;
+        public int PassengerOfferLimit => OfferLimitAt(Floor);
+        int OfferLimitAt(int floor) => ActiveDimension >= 0 ? 3
+            : PassengerData.ThemeAtFloor(floor) == PassengerTheme.Office
+                ? TimeBasedPassengerOfferLimit : Math.Min(3, TimeBasedPassengerOfferLimit);
+        // The first visible group at a landing is its finite roster for this shift.
+        // Both elevators share these identities, just as they share Riders.
+        Dictionary<int, HashSet<Rider>> revealedQueues = new Dictionary<int, HashSet<Rider>>();
         bool OwnsPassengerPoolClock = true;
         // Scene variants can opt out of the prototype's consolation points for
         // passengers whose patience has completely expired.
@@ -113,7 +154,7 @@ namespace CrazyElevator.Shared
                 return occupiedSpaces;
             }
         }
-        // Every round lasts three minutes. Reaching the top or clearing all
+        // Every round lasts one minute. Reaching the top or clearing all
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
 
@@ -156,6 +197,24 @@ namespace CrazyElevator.Shared
             if (seedDefaults) SeedDefaults();
         }
 
+        // Keep the authored world floors, but play and deliver only inside this
+        // round's dimension. Configure a fresh roster before assigning its stops.
+        public void ConfigureDimension(int dimension)
+        {
+            if (dimension < 0 || dimension >= Dimensions)
+                throw new ArgumentOutOfRangeException(nameof(dimension));
+            ActiveDimension = dimension;
+            Floor = PeakFloor = MinFloor;
+            Stop = CenterStop;
+            PeakTime = 0f;
+            TimeLeft = Duration;
+            revealedQueues.Clear();
+            Riders.RemoveAll(rider => rider == null || !ContainsFloor(rider.Origin));
+            foreach (Rider rider in Riders)
+                rider.Destination = MinFloor + DestinationFor(rider.Kind,
+                    rider.Origin - MinFloor, FloorsPerDimension - 1);
+        }
+
         void SeedDefaults()
         {
             for (int f = 0; f < Floors; f++)
@@ -167,8 +226,14 @@ namespace CrazyElevator.Shared
                     Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, 2, 42, 0, 1, 70);
                 if (world == PassengerTheme.Office)
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, 1, 13, 0, 2, 120);
+                if (world == PassengerTheme.Office && f % 3 == 1)
+                    Add("Hunter", "HUNTER", "Stuns monsters", "STUN", f, 1, 50, 0, 2, 100);
                 if (world == PassengerTheme.Candy)
                     Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
+                if (world == PassengerTheme.Candy && f % 3 == 0)
+                    Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
+                if (world == PassengerTheme.Underwater && f % 3 == 1)
+                    Add("Diver", "DIVER", "Blocks tornadoes", "SHIELD", f, 1, 60, 0, 4, 100);
                 Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
@@ -184,10 +249,14 @@ namespace CrazyElevator.Shared
                 Color = color, Badge = badge, Bonus = bonus });
         }
 
-        // Special passengers may request any other floor, including a floor in
-        // their own world. Skipping the origin prevents a zero-distance trip.
+        // Special passengers may request any other floor in their origin world.
+        // Skipping the origin prevents a zero-distance trip.
         public static int RandomDestination(int origin)
-            => RandomDestination(origin, Floors - 1);
+        {
+            if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
+            int firstFloor = origin / FloorsPerDimension * FloorsPerDimension;
+            return firstFloor + RandomDestination(origin - firstFloor, FloorsPerDimension - 1);
+        }
 
         static int RandomDestination(int origin, int highestFloor)
         {
@@ -213,8 +282,7 @@ namespace CrazyElevator.Shared
             if (source != this)
             {
                 Riders = source.Riders;
-                source.RefillPassengerQueue = true;
-                RefillPassengerQueue = true;
+                revealedQueues = source.revealedQueues;
                 OwnsPassengerPoolClock = false;
             }
             Seat = seat;
@@ -243,53 +311,89 @@ namespace CrazyElevator.Shared
         // Validate boarding; input code also checks physical fit.
         public bool Board(Rider p)
         {
-            if (p == null || Finished || p.Resolved || p.Boarded || p.Origin != Floor
-                || !IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
+            if (p == null || Finished || p.Resolved || p.Boarded || !ContainsFloor(p.Origin)
+                || !ContainsFloor(p.Destination) || p.Origin != Floor
+                || p.OriginStop != Stop) return false;
+            RevealQueue(Floor, Stop);
+            if (!IsOffered(p) || p.Arrival > 0 || !HasCapacityFor(p)) return false;
             p.Boarded = true;
             p.BoardedBySeat = Seat;
-            if (RefillPassengerQueue)
-            {
-                // A shared duel queue must stay stocked for both elevators.
-                // The solo queue uses the short walk-in delay, but delaying a
-                // duel replacement lets one player consume the entire visible
-                // offer before the other player can board anything.
-                Rider replacement = CreateReplacement(p);
-                replacement.SpawnDelay = 0f;
-                Riders.Add(replacement);
-            }
             return true;
         }
 
-        Rider CreateReplacement(Rider previous)
+        // ---------- Stops ----------
+        // Keep queues stable while doors open/close and between the two duel views.
+        public void AssignBoardingDoors()
         {
-            int destination = DestinationFor(previous.Kind, previous.Origin, Math.Max(MaxUnlockedFloor, previous.Origin));
-            Rider replacement = previous.Data != null
-                ? previous.Data.CreateRider(previous.Origin, destination)
-                : new Rider
-                {
-                    Name = previous.Name,
-                    Request = previous.Request,
-                    Kind = previous.Kind,
-                    Badge = previous.Badge,
-                    Color = previous.Color,
-                    Origin = previous.Origin,
-                    Destination = destination,
-                    Space = previous.Space,
-                    Patience = previous.Patience,
-                    Remaining = previous.Patience,
-                    Arrival = previous.Kind == "ELDERLY" ? ElderlyArrivalSeconds : 0,
-                    Bonus = previous.Bonus
-                };
-            replacement.SpawnDelay = 1f;
-            return replacement;
+            var queues = new Dictionary<int, int>();
+            foreach (Rider rider in Riders)
+            {
+                int key = rider.Origin * Stops + rider.OriginStop;
+                if (revealedQueues.ContainsKey(key) || rider.Resolved || rider.Boarded
+                    || rider.SpawnDelay > 0 || !IsPassengerTypeUnlocked(rider)) continue;
+                queues.TryGetValue(key, out int slot);
+                rider.PickupDoor = QueueDoor(rider.Origin, rider.OriginStop, slot);
+                rider.PickupQueueSlot = slot;
+                queues[key] = slot + 1;
+            }
+        }
+
+        // Even the first small group has someone at the front. Alternate the
+        // next side between landings; larger groups use all three entrances.
+        static BoardingDoor QueueDoor(int floor, int stop, int slot)
+        {
+            int entrance = slot % 3;
+            if (entrance == 0) return BoardingDoor.Front;
+            bool leftFirst = (floor + stop) % 2 == 0;
+            return (entrance == 1) == leftFirst ? BoardingDoor.Left : BoardingDoor.Right;
+        }
+
+        public bool WaitsHere(Rider p) => p != null && !p.Boarded && !p.Resolved
+            && ContainsFloor(p.Origin) && p.Origin == Floor && p.OriginStop == Stop;
+        public bool AtDestination(Rider p) => p != null && p.Destination == Floor && p.DestinationStop == Stop;
+
+        public int PickStop(int floor)
+        {
+            if (CenterStopsOnly) return CenterStop;
+            int[] weights = StopWeights[Math.Max(0, Math.Min(Dimensions - 1, floor / FloorsPerDimension))];
+            int total = 0;
+            for (int stop = 0; stop < Stops; stop++)
+                if (StopIsOpen(floor, stop)) total += weights[stop];
+            if (total <= 0) return CenterStop;
+            int roll = DestinationRandom.Next(total);
+            for (int stop = 0; stop < Stops; stop++)
+            {
+                if (!StopIsOpen(floor, stop)) continue;
+                roll -= weights[stop];
+                if (roll < 0) return stop;
+            }
+            return CenterStop;
+        }
+
+        bool StopIsOpen(int floor, int stop) => stop == CenterStop || StopOpen == null || StopOpen(floor, stop);
+
+        // Riders already aboard keep their stops; everyone else is (re)placed.
+        // keepFloor leaves the queue the car is looking at in place.
+        public void AssignStops(int keepFloor = -1)
+        {
+            // Tutorial transitions can move the other landings; keep the group
+            // currently in view and reveal the moved queues in their new places.
+            foreach (int key in new List<int>(revealedQueues.Keys))
+                if (key / Stops != keepFloor) revealedQueues.Remove(key);
+            foreach (var rider in Riders)
+            {
+                if (rider.Resolved || rider.Boarded || rider.Origin == keepFloor) continue;
+                rider.OriginStop = PickStop(rider.Origin);
+                rider.DestinationStop = PickStop(rider.Destination);
+            }
         }
 
         public static int DestinationFor(string kind, int origin)
         {
             if (origin < 0 || origin >= Floors) throw new ArgumentOutOfRangeException(nameof(origin));
-            // Initial rosters must be deliverable when their world first opens.
-            int worldCeiling = (origin / FloorsPerDimension + 1) * FloorsPerDimension - 1;
-            return DestinationFor(kind, origin, worldCeiling);
+            // Generate locally so a downward request cannot enter an earlier world.
+            int firstFloor = origin / FloorsPerDimension * FloorsPerDimension;
+            return firstFloor + DestinationFor(kind, origin - firstFloor, FloorsPerDimension - 1);
         }
 
         public static int DestinationFor(string kind, int origin, int highestFloor)
@@ -315,19 +419,21 @@ namespace CrazyElevator.Shared
         public bool IsPassengerTypeUnlocked(Rider rider)
         {
             if (rider == null) return false;
+            // Each one-minute round starts with its world's complete mechanics.
+            if (ActiveDimension >= 0) return ContainsFloor(rider.Origin);
             switch (rider.Kind)
             {
                 case "COURIER":
                 case "INTERVIEW":
                     return true;
                 case "ELDERLY":
-                    return Elapsed >= 30f || Floor >= FloorsPerDimension * 2;
+                    return Elapsed >= 30f || rider.Origin >= FloorsPerDimension * 2;
                 case "PREGNANT":
-                    return Elapsed >= 30f || Floor >= FloorsPerDimension;
+                    return Elapsed >= 30f || rider.Origin >= FloorsPerDimension;
                 case "BOSS":
                     return Elapsed >= 70f;
                 case "HANDYMAN":
-                    return Elapsed >= 90f || Floor >= FloorsPerDimension * 2;
+                    return Elapsed >= 90f || rider.Origin >= FloorsPerDimension * 2;
                 case "GROUP":
                     return Elapsed >= 110f;
                 default:
@@ -338,22 +444,54 @@ namespace CrazyElevator.Shared
         // Skip a waiting passenger with the existing penalty.
         public bool Reject(Rider p)
         {
-            if (Finished || p.Resolved || p.Boarded || p.Origin != Floor || !IsOffered(p)) return false;
+            if (Finished || !WaitsHere(p)) return false;
+            RevealQueue(Floor, Stop);
+            if (!IsOffered(p)) return false;
             p.Resolved = true; TurnedAway++; Score -= 15; return true;
         }
 
-        // Offer a progressively larger queue, filtering out passenger mechanics
-        // that have not reached their introduction point yet.
-        public bool IsOffered(Rider candidate)
+        // New landings introduce larger groups as the shift progresses.
+        // Once shown, a landing keeps those exact passengers until they leave.
+        public bool IsOffered(Rider candidate) => WaitsHere(candidate) && IsQueuedAtStop(candidate);
+
+        // Capture before showing a landing or changing its passengers. Merely
+        // querying an unseen stop (for example for CPU navigation) stays read-only.
+        public void RevealQueue(int floor, int stop)
+        {
+            if (!ContainsFloor(floor) || stop < 0 || stop >= Stops) return;
+            int key = floor * Stops + stop;
+            if (revealedQueues.ContainsKey(key)) return;
+            var queue = new HashSet<Rider>();
+            int limit = OfferLimitAt(floor);
+            foreach (Rider rider in Riders)
+            {
+                if (rider.Origin != floor || rider.OriginStop != stop || rider.Resolved
+                    || rider.Boarded || rider.SpawnDelay > 0 || !IsPassengerTypeUnlocked(rider)) continue;
+                // Capture doors together with the visible roster. Hidden or
+                // locked riders must not consume the front entrance's place.
+                rider.PickupDoor = QueueDoor(floor, stop, queue.Count);
+                rider.PickupQueueSlot = queue.Count;
+                queue.Add(rider);
+                if (queue.Count >= limit) break;
+            }
+            revealedQueues.Add(key, queue);
+        }
+
+        // Both camera views and boarding use the same remaining landing roster.
+        public bool IsQueuedAtStop(Rider candidate)
         {
             if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
-                || candidate.Origin != Floor || !IsPassengerTypeUnlocked(candidate)) return false;
+                || !ContainsFloor(candidate.Origin) || !ContainsFloor(candidate.Destination))
+                return false;
+            int key = candidate.Origin * Stops + candidate.OriginStop;
+            if (revealedQueues.TryGetValue(key, out HashSet<Rider> queue)) return queue.Contains(candidate);
+            if (!IsPassengerTypeUnlocked(candidate)) return false;
             int offered = 0;
             foreach (var p in Riders)
             {
-                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != Floor
-                    || !IsPassengerTypeUnlocked(p)) continue;
-                if (p == candidate) return offered < PassengerOfferLimit;
+                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != candidate.Origin
+                    || p.OriginStop != candidate.OriginStop || !IsPassengerTypeUnlocked(p)) continue;
+                if (p == candidate) return offered < OfferLimitAt(candidate.Origin);
                 offered++;
             }
             return false;
@@ -375,7 +513,7 @@ namespace CrazyElevator.Shared
             int missedHere = 0;
             foreach (var p in Riders)
             {
-                if (!Owns(p) || p.Destination != Floor) continue;
+                if (!Owns(p) || !AtDestination(p)) continue;
                 p.Mood = Math.Max(0, p.Mood - 1);
                 p.Status = "You passed my floor!";
                 Score -= 35; missedHere++;
@@ -387,10 +525,11 @@ namespace CrazyElevator.Shared
         public int Tick(float dt, bool stopped, bool tickWaiting = true)
         {
             if (Finished || dt <= 0) return 0;
+            if (stopped) RevealQueue(Floor, Stop);
             // A large frame must not simulate past the deadline.
             dt = Math.Min(dt, TimeLeft);
             TimeLeft = Math.Max(0, TimeLeft - dt);
-            if (RefillPassengerQueue && OwnsPassengerPoolClock)
+            if (OwnsPassengerPoolClock)
                 foreach (var rider in Riders)
                     if (!rider.Resolved && rider.SpawnDelay > 0)
                         rider.SpawnDelay = Math.Max(0, rider.SpawnDelay - dt);
@@ -400,7 +539,7 @@ namespace CrazyElevator.Shared
             {
                 if (p.Resolved) continue;
                 if (Owns(p)) p.Remaining = Math.Max(0, p.Remaining - dt * cabinPatienceMultiplier);
-                else if (!p.Boarded && tickWaiting && stopped && p.Origin == Floor && IsOffered(p))
+                else if (!p.Boarded && tickWaiting && stopped && IsOffered(p))
                 {
                     float waiting = dt;
                     if (p.Arrival > 0) { waiting = Math.Max(0, dt - p.Arrival); p.Arrival = Math.Max(0, p.Arrival - dt); }
@@ -424,10 +563,11 @@ namespace CrazyElevator.Shared
         // Arrival only opens the doors. Delivery is deliberately manual: the
         // player must drag each onboard party out to deliver them.
         // Change floors; delivery remains manual.
-        public int Arrive(int floor)
+        public int Arrive(int floor, int stop = CenterStop)
         {
-            if (floor < 0 || floor >= Floors) throw new ArgumentOutOfRangeException(nameof(floor));
+            if (!ContainsFloor(floor)) throw new ArgumentOutOfRangeException(nameof(floor));
             Floor = floor;
+            Stop = Math.Max(0, Math.Min(Stops - 1, stop));
             if (floor > PeakFloor)
             {
                 PeakFloor = floor;
@@ -436,7 +576,7 @@ namespace CrazyElevator.Shared
             int waitingToExit = 0;
             foreach (var p in Riders)
             {
-                if (Owns(p) && p.Destination == floor) waitingToExit++;
+                if (Owns(p) && AtDestination(p)) waitingToExit++;
             }
             return waitingToExit;
         }
@@ -446,7 +586,7 @@ namespace CrazyElevator.Shared
         {
             if (Finished || !Owns(p)) return OffboardResult.None;
             p.Boarded = false; p.BoardedBySeat = -1; p.Resolved = true; Delivered++;
-            if (p.Destination != Floor)
+            if (!AtDestination(p))
             {
                 p.Mood = 0; p.Status = "Wrong floor!"; Score -= 60;
                 return OffboardResult.WrongFloor;

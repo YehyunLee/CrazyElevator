@@ -55,6 +55,7 @@ namespace CrazyElevator.Managers
                 ? transfer.targetScale : figures[rider].localScale;
             repairProgress = 0;
             ElevatorSays("Those starfish damaged my gears. Please fix me!", 5f);
+            GameManager.Instance?.RequestAbilityIntro(this, "HANDYMAN");
         }
 
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)
@@ -73,7 +74,7 @@ namespace CrazyElevator.Managers
             float arrive = Mathf.SmoothStep(0, 1, t / .5f);
             float leave = Mathf.SmoothStep(0, 1, (t - RepairSweepEnd) / (HandymanRepairDuration - RepairSweepEnd));
             figure.localPosition = Vector3.Lerp(Vector3.Lerp(repairHome, work, arrive), repairHome, leave);
-            figure.localScale = Vector3.Lerp(repairScale, Vector3.one, arrive * (1 - leave));
+            figure.localScale = Vector3.Lerp(repairScale, Vector3.one * PassengerVisualScale, arrive * (1 - leave));
             float working = t >= .5f && t < RepairSweepStart ? Mathf.Sin((t - .5f) * 18f) : 0;
             figure.localRotation = Quaternion.Euler(working * 4, 0, working * 3);
             repairToolPivot.localRotation = Quaternion.Euler(-35 - working * 25, 0, -15);

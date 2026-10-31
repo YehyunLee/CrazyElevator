@@ -34,6 +34,7 @@ namespace CrazyElevator.Managers
         }
 
         public void OnboardPassenger() => Elevator?.OnboardSelectedPublic();
+        public void OpenDoor(BoardingDoor door) => Elevator?.OpenBoardingDoor(door);
         public void KickoutPassenger() => Elevator?.KickoutSelectedPublic();
         public void CloseDoor() => Elevator?.CloseAndTravelPublic();
         public void SpawnPassengersAvailable() => Elevator?.RefreshWaitingPublic();

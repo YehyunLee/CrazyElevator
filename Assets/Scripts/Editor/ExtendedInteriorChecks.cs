@@ -20,7 +20,20 @@ public static class ExtendedInteriorChecks
     const string Scene = "Assets/Scenes/Main.unity";
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
-    static object Get(Game game, string name) => typeof(Game).GetField(name, Flags).GetValue(game);
+    static object Get(Game game, string name)
+    {
+        object value = typeof(Game).GetField(name, Flags).GetValue(game);
+        // These checks cover the shaft-stop rules only: riders wait at the centre stop,
+        // shaft hazards stay out of the way, and stops are pressed manually.
+        if (value is Round round && !round.CenterStopsOnly)
+        {
+            round.CenterStopsOnly = true;
+            round.AssignStops();
+            Set(game, "hazardCooldown", 9999f);
+            Set(game, "autoStopAtDestinations", false);
+        }
+        return value;
+    }
     static void Set(Game game, string name, object value) => typeof(Game).GetField(name, Flags).SetValue(game, value);
     static void Call(Game game, string name, params object[] args) => typeof(Game).GetMethod(name, Flags).Invoke(game, args);
     static void Require(bool value, string message) { if (!value) throw new Exception(message); }
@@ -42,12 +55,26 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare")
         {
-            File.WriteAllText(request, "match-run");
+            bool singleDimension = action != "match-prepare";
+            File.WriteAllText(request, action == "bouncer-prepare" ? "bouncer-run"
+                : singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
                 .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
                 .SetValue(null, true);
+            // These exercise real rounds rather than the separate guided practice.
+            // Override this run only; leave the saved tutorial preference intact.
+            var menu = typeof(CrazyElevator.Managers.MenuManager);
+            var statics = BindingFlags.Static | BindingFlags.NonPublic;
+            menu.GetField("tutorialOnLoad", statics).SetValue(null, false);
+            menu.GetField("tutorialMode", statics).SetValue(null, false);
+            menu.GetField("tutorialModeLoaded", statics).SetValue(null, true);
+            if (singleDimension)
+            {
+                menu.GetField("playerTwoHumanOnLoad", statics).SetValue(null, true);
+                menu.GetField("playerOneCpuOnLoad", statics).SetValue(null, false);
+            }
             CrazyElevator.Managers.MenuManager.Close();
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
             return;
@@ -61,7 +88,11 @@ public static class ExtendedInteriorChecks
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
+            else if (action == "bouncer-run") RunBouncerChecks();
+            else if (action == "single-dimension-run") RunSingleDimensionMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
+            else if (action == "unified-cabin") RunUnifiedCabin(game);
+            else if (action == "camera-smoothing") RunCameraSmoothing(game);
             else if (action == "grid-checks") RunGridChecks(game);
             else if (action == "reward-preview") PreviewDeliveryReward(game);
             else if (action == "rust-inside" || action == "rust-outside")
@@ -70,7 +101,7 @@ public static class ExtendedInteriorChecks
                 int water = game.underwaterStartsAtFloor;
                 ((Round)Get(game, "round")).Floor = water;
                 Set(game, "rustExposure", game.secondsPerRustLevel * 2);
-                game.sceneView.floorDisplay.text = water.ToString();
+                Call(game, "SetFloorDisplayText", Round.FloorNumber(water).ToString());
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action == "rust-outside")
                 {
@@ -103,7 +134,7 @@ public static class ExtendedInteriorChecks
                 int previewFloor = water ? 8 : action.StartsWith("candy") ? 4 : 0;
                 string previewKind = water ? "HANDYMAN" : action.StartsWith("candy") ? "PREGNANT" : "COURIER";
                 ((Round)Get(game, "round")).Floor = previewFloor;
-                game.sceneView.floorDisplay.text = previewFloor.ToString();
+                Call(game, "SetFloorDisplayText", Round.FloorNumber(previewFloor).ToString());
                 Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
                 if (action.EndsWith("-transfer"))
                 {
@@ -131,7 +162,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "solo-basic" || action == "checks" || action == "boost-checks") && Application.isBatchMode)
+            if ((action == "match-run" || action == "bouncer-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -161,13 +192,14 @@ public static class ExtendedInteriorChecks
         foreach (string kind in kinds)
             for (int origin = 0; origin < Round.Floors; origin++)
             {
+                int first = origin / Round.FloorsPerDimension * Round.FloorsPerDimension;
                 int ceiling = (origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
                 for (int sample = 0; sample < 256; sample++)
                 {
                     int destination = Round.DestinationFor(kind, origin);
                     int distance = Math.Abs(destination - origin);
-                    Require(destination >= 0 && destination <= ceiling && distance > 0,
-                        kind + " requested its origin or a floor in a locked world.");
+                    Require(destination >= first && destination <= ceiling && distance > 0,
+                        kind + " requested its origin or a floor outside its world.");
                     if (kind == "INTERVIEW")
                         Require(distance <= 3, "An interview passenger received an excessively long trip.");
                     else if (kind != "BOSS" && kind != "HANDYMAN")
@@ -224,8 +256,8 @@ public static class ExtendedInteriorChecks
                 "A live request exceeded its unlocked ceiling.");
             reachedNewWorld |= destination > 7;
             int special = Round.RandomDestination(12);
-            Require(special >= 0 && special < Round.Floors && special != 12,
-                "Unrestricted special requests must remain valid.");
+            Require(special >= Round.FloorsPerDimension && special < Round.FloorsPerDimension * 2 && special != 12,
+                "Special requests must remain inside their origin world.");
         }
         Require(reachedNewWorld, "Live requests never reached the newly opened world.");
 
@@ -247,9 +279,10 @@ public static class ExtendedInteriorChecks
             catalog.types = new[] { type };
             foreach (SharedRider rider in Round.FromCatalog(catalog).Riders)
             {
+                int first = rider.Origin / Round.FloorsPerDimension * Round.FloorsPerDimension;
                 int ceiling = (rider.Origin / Round.FloorsPerDimension + 1) * Round.FloorsPerDimension - 1;
-                Require(rider.Destination >= 0 && rider.Destination <= ceiling && rider.Destination != rider.Origin,
-                    "A catalog passenger received an invalid or locked destination.");
+                Require(rider.Destination >= first && rider.Destination <= ceiling && rider.Destination != rider.Origin,
+                    "A catalog passenger received an invalid or cross-world destination.");
             }
         }
         finally
@@ -270,13 +303,10 @@ public static class ExtendedInteriorChecks
         rival.SharePassengerPoolWith(player, 1);
         Require(player.Board(upward) && !rival.Board(upward) && rival.Board(downward),
             "Mixed-direction requests did not preserve exclusive shared boarding.");
-        Require(player.Riders.Count == 4 && ReferenceEquals(player.Riders, rival.Riders),
-            "Shared boarding did not replenish the same passenger pool.");
-        foreach (SharedRider replacement in player.Riders)
-            if (!replacement.Boarded)
-                Require(replacement.Destination >= 0 && replacement.Destination <= 7
-                    && replacement.Destination != replacement.Origin,
-                    "A shared replacement requested a locked or zero-distance trip.");
+        Require(player.Riders.Count == 2 && rival.Riders.Count == 2
+            && ReferenceEquals(player.Riders, rival.Riders)
+            && player.Riders.TrueForAll(r => r.Boarded),
+            "Shared boarding created passengers beyond the two visible riders.");
         player.Arrive(upward.Destination);
         rival.Arrive(downward.Destination);
         Require(player.Offboard(upward) == CrazyElevator.Shared.OffboardResult.Happy
@@ -299,31 +329,23 @@ public static class ExtendedInteriorChecks
             && ReferenceEquals(player.Riders[0], rival.Riders[0]),
             "Both elevators must use the same rider objects.");
 
-        // A duel must replenish the shared queue immediately. Otherwise the
-        // first car can consume the only two floor-zero offers before the
-        // second car gets a chance to board.
+        // Both cars compete for the same finite group shown on the landing.
         var fairnessPlayer = new Round();
         var fairnessRival = new Round();
         fairnessRival.SharePassengerPoolWith(fairnessPlayer, 1);
+        fairnessPlayer.RevealQueue(0, Round.CenterStop);
+        int initialRiderCount = fairnessPlayer.Riders.Count;
         SharedRider first = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
         SharedRider second = fairnessPlayer.Riders.Find(r => r.Origin == 0 && r.Kind == "INTERVIEW");
-        Require(fairnessPlayer.Board(first) && fairnessPlayer.Board(second),
-            "The first elevator could not board the initial floor-zero offers.");
-        SharedRider third = fairnessPlayer.Riders.Find(r => r.Origin == 0
-            && !r.Boarded && !r.Resolved && r.Kind == "COURIER");
-        Require(third != null && fairnessPlayer.Board(third),
-            "The shared queue did not replenish after the first elevator boarded three.");
-        for (int i = 0; i < 2; i++)
-        {
-            SharedRider available = fairnessRival.Riders.Find(r => r.Origin == 0
-                && !r.Boarded && !r.Resolved && r.Kind != "ELDERLY");
-            Require(available != null && fairnessRival.Board(available),
-                "The second elevator could not claim its own shared-queue passenger.");
-        }
-        int fairnessPlayerLoad = fairnessPlayer.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 0).Count;
-        int fairnessRivalLoad = fairnessRival.Riders.FindAll(r => r.Boarded && r.BoardedBySeat == 1).Count;
-        Require(fairnessPlayerLoad == 3 && fairnessRivalLoad == 2,
-            "Shared passenger replenishment did not preserve both players' loads.");
+        Require(fairnessPlayer.Board(first) && !fairnessRival.Board(first)
+            && fairnessRival.Board(second) && !fairnessPlayer.Board(second),
+            "The two elevators did not claim distinct riders from the visible group.");
+        Require(fairnessPlayer.Riders.Count == initialRiderCount
+            && fairnessRival.Riders.Count == initialRiderCount
+            && fairnessPlayer.Riders.FindAll(fairnessPlayer.IsOffered).Count == 0
+            && fairnessRival.Riders.FindAll(fairnessRival.IsOffered).Count == 0
+            && fairnessPlayer.Load == first.Space && fairnessRival.Load == second.Space,
+            "The shared landing replenished or mixed the players' passenger loads.");
 
         Require(player.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
             && player.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
@@ -434,6 +456,22 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/request.txt", "match-prepare");
     }
 
+    [MenuItem("Tools/Crazy Elevator/Check Bouncer Stopped-Car Collisions")]
+    public static void RequestBouncerChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "bouncer-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
+    public static void RequestSingleDimensionMatch()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "single-dimension-prepare");
+    }
+
     [MenuItem("Tools/Crazy Elevator/Check Solo Layout and Passengers")]
     public static void RequestSoloBasic()
     {
@@ -448,6 +486,522 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "grid-checks");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Unified Cabin and Local Lobby")]
+    public static void RequestUnifiedCabin()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        CheckSavedCabinHierarchy();
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "unified-cabin");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Camera Smoothing")]
+    public static void RequestCameraSmoothing()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        CheckSavedCabinHierarchy();
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "camera-smoothing");
+    }
+
+    static void CheckSavedCabinHierarchy()
+    {
+        Require(!EditorApplication.isPlaying, "Check the saved cabin hierarchy before entering Play Mode.");
+        Game game = UnityEngine.Object.FindAnyObjectByType<Game>();
+        Require(game != null && game.gameObject.scene.path == Scene && game.sceneView != null,
+            "Main needs an assigned elevator scene before the cabin checks can run.");
+        var view = game.sceneView;
+        Require(view.exteriorCar != null && view.exteriorCar.name == "Gameplay elevator",
+            "The saved moving carrier must be named Gameplay elevator.");
+        Require(view.cabin != null && view.cabin.parent == view.exteriorCar
+            && view.cabinCamera != null && view.cabinCamera.transform.parent == view.cabin,
+            "Save the cabin under Gameplay elevator and its camera under the cabin before Play Mode.");
+        Require(!view.autoFrameCabin && !view.cabinCameraShake,
+            "Main should default to manual cabin camera framing and motion.");
+        foreach (string name in new[] { "Car body", "Car doors", "Door seam" })
+        {
+            Transform legacy = view.exteriorCar.Find(name);
+            Require(legacy != null && !legacy.gameObject.activeSelf,
+                "The saved legacy exterior geometry must be inactive: " + name + ".");
+        }
+        foreach (Renderer renderer in view.exteriorCar.GetComponentsInChildren<Renderer>(true))
+            if (!renderer.transform.IsChildOf(view.cabin))
+                Require(!renderer.enabled || !renderer.gameObject.activeInHierarchy,
+                    "An active legacy shell mesh surrounds the saved cabin: " + renderer.name + ".");
+    }
+
+    static object InvokeCameraHelper(Game game, string name, params object[] args)
+    {
+        MethodInfo method = typeof(Game).GetMethod(name, Flags | BindingFlags.Static);
+        Require(method != null, "The camera regression could not find " + name + ".");
+        return method.Invoke(method.IsStatic ? null : game, args);
+    }
+
+    static Renderer CabinFloor(Game game)
+    {
+        foreach (Renderer renderer in game.sceneView.cabin.GetComponentsInChildren<Renderer>(true))
+            if (renderer.name == "Cabin floor") return renderer;
+        throw new Exception("The cabin framing regression needs the authored Cabin floor renderer.");
+    }
+
+    static void CheckCabinRailClearance(Game game)
+    {
+        Bounds floor = CabinFloor(game).bounds;
+        int nearbyRails = 0;
+        foreach (GameObject root in game.gameObject.scene.GetRootGameObjects())
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy
+                    || renderer.transform.IsChildOf(game.sceneView.exteriorCar)
+                    || renderer.name != "Rail" && !renderer.name.EndsWith("guide rail", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Bounds rail = renderer.bounds;
+                // Horizontal supports below the walking surface belong under the cabin.
+                if (rail.max.y < floor.max.y + .05f || rail.min.y > floor.max.y
+                    || Mathf.Abs(rail.center.x - floor.center.x) > floor.size.x) continue;
+                nearbyRails++;
+                Require(floor.max.z + .05f < rail.min.z,
+                    "The cabin floor reaches into the nearby track: " + renderer.name + ".");
+            }
+        Require(nearbyRails > 0, "The cabin clearance regression found no nearby track rails.");
+    }
+
+    static void CheckCabinProjection(Game game)
+    {
+        Camera camera = game.sceneView.cabinCamera;
+        Renderer floor = CabinFloor(game);
+        Bounds floorBounds = floor.localBounds;
+        float originalAspect = camera.aspect, originalFov = camera.fieldOfView;
+        Vector3 originalPosition = camera.transform.localPosition;
+        Quaternion originalRotation = camera.transform.localRotation;
+        Vector3 originalHome = (Vector3)Get(game, "cabinCameraHome");
+        bool originalReady = (bool)Get(game, "cabinFramingReady");
+        bool originalAutoFrame = game.sceneView.autoFrameCabin;
+        try
+        {
+            game.sceneView.autoFrameCabin = true;
+            foreach (float aspect in new[] { 1f, 16f / 9f, 8f / 9f })
+            {
+                camera.aspect = aspect;
+                Set(game, "cabinFramingReady", false);
+                InvokeCameraHelper(game, "FrameCabinDoorways", 0f, aspect);
+                Call(game, "ResetCameraMotion");
+                Vector2 minimum = Vector2.one, maximum = Vector2.zero;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 local = floorBounds.center + Vector3.Scale(floorBounds.extents,
+                        new Vector3((corner & 1) == 0 ? -1f : 1f,
+                            (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f));
+                    Vector3 point = camera.WorldToViewportPoint(floor.transform.TransformPoint(local));
+                    Require(point.z > camera.nearClipPlane && point.x >= .02f && point.x <= .98f
+                        && point.y >= .02f && point.y <= .98f,
+                        "The playable cabin floor is clipped at aspect " + aspect + ".");
+                    minimum = Vector2.Min(minimum, point);
+                    maximum = Vector2.Max(maximum, point);
+                }
+                Require(maximum.x - minimum.x >= .4f && maximum.y - minimum.y >= .35f,
+                    "The cabin floor is too small to read at aspect " + aspect + ".");
+                Vector3[] entrances = { game.sceneView.leftSideDoorClosed,
+                    (game.sceneView.leftDoorClosed + game.sceneView.rightDoorClosed) * .5f,
+                    game.sceneView.rightSideDoorClosed };
+                foreach (Vector3 center in entrances)
+                    foreach (float height in new[] { .12f, 3.35f })
+                    {
+                        Vector3 local = new Vector3(center.x, height, center.z);
+                        Vector3 point = camera.WorldToViewportPoint(game.sceneView.cabin.TransformPoint(local));
+                        Require(point.z > camera.nearClipPlane && point.x >= .02f && point.x <= .98f
+                            && point.y >= .02f && point.y <= .98f,
+                            "An entrance or its selection cue is clipped at aspect " + aspect + ".");
+                    }
+            }
+        }
+        finally
+        {
+            camera.aspect = originalAspect;
+            camera.fieldOfView = originalFov;
+            camera.transform.localPosition = originalPosition;
+            camera.transform.localRotation = originalRotation;
+            Set(game, "cabinCameraHome", originalHome);
+            Set(game, "cabinFramingReady", originalReady);
+            game.sceneView.autoFrameCabin = originalAutoFrame;
+        }
+    }
+
+    static void CheckManualCabinCamera(Game game)
+    {
+        var view = game.sceneView;
+        Camera camera = view.cabinCamera, exterior = view.exteriorCamera;
+        bool originalAutoFrame = view.autoFrameCabin, originalShake = view.cabinCameraShake;
+        Vector3 originalPosition = camera.transform.localPosition;
+        Quaternion originalRotation = camera.transform.localRotation;
+        float originalFov = camera.fieldOfView, originalFar = camera.farClipPlane;
+        int originalMask = camera.cullingMask;
+        Rect originalRect = camera.rect, exteriorRect = exterior.rect;
+        float originalAspect = camera.aspect;
+        bool originalEnabled = camera.enabled, exteriorEnabled = exterior.enabled;
+        RenderTexture originalTexture = camera.targetTexture, exteriorTexture = exterior.targetTexture;
+        object originalPhase = Get(game, "phase");
+        Vector3 originalHome = (Vector3)Get(game, "cabinCameraHome");
+        Vector3 originalAuthoredHome = (Vector3)Get(game, "authoredCabinCameraHome");
+        Quaternion originalHomeRotation = (Quaternion)Get(game, "cabinCameraHomeRotation");
+        Vector3 carPosition = view.exteriorCar.localPosition;
+        Quaternion carRotation = view.exteriorCar.localRotation;
+        var match = game.GetComponent<CrazyElevator.Match.ElevatorMatch>();
+        bool originalHumanPlayer = false, originalHumanRival = false;
+        if (match != null)
+        {
+            originalHumanPlayer = (bool)match.GetType().GetField("humanPlayer", Flags).GetValue(match);
+            originalHumanRival = (bool)match.GetType().GetField("humanRival", Flags).GetValue(match);
+        }
+        try
+        {
+            view.autoFrameCabin = view.cabinCameraShake = false;
+            Vector3 manualPosition = originalPosition + new Vector3(.31f, .23f, -.27f);
+            Quaternion manualRotation = originalRotation * Quaternion.Euler(4f, -6f, 2f);
+            camera.transform.localPosition = manualPosition;
+            camera.transform.localRotation = manualRotation;
+            manualRotation = camera.transform.localRotation;
+            camera.fieldOfView = 57.5f;
+            camera.farClipPlane = 187f;
+            camera.cullingMask = originalMask ^ (1 << 28);
+            void Unchanged(string action)
+            {
+                Require(Vector3.Distance(camera.transform.localPosition, manualPosition) < .0001f
+                    && Mathf.Abs(Quaternion.Dot(camera.transform.localRotation, manualRotation)) >= .999999f,
+                    action + " overwrote the manually edited cabin camera Transform.");
+                Require(Mathf.Abs(camera.fieldOfView - 57.5f) < .0001f
+                    && Mathf.Abs(camera.farClipPlane - 187f) < .0001f
+                    && camera.cullingMask == (originalMask ^ (1 << 28)),
+                    action + " overwrote the manually edited cabin camera Lens or culling mask.");
+            }
+            foreach (string phase in new[] { "Boarding", "Moving" })
+            {
+                Phase(game, phase);
+                Call(game, "LateUpdate"); Unchanged(phase + " LateUpdate");
+                Call(game, "ResetCameraMotion"); Unchanged("ResetCameraMotion");
+                Call(game, "UpdateRideMotion", 1f / 60f); Unchanged("UpdateRideMotion");
+            }
+            Require(match != null, "Main needs its existing ElevatorMatch for the split-camera lens check.");
+            match.GetType().GetField("humanPlayer", Flags).SetValue(match, true);
+            match.GetType().GetField("humanRival", Flags).SetValue(match, true);
+            MethodInfo setRect = match.GetType().GetMethod("SetCameraRect", Flags);
+            Require(setRect != null, "The split-camera check could not find SetCameraRect.");
+            for (int seat = 0; seat < 2; seat++)
+            {
+                setRect.Invoke(match, new object[] { game, seat });
+                Require(camera.rect.width < 1f, "The camera lens check did not exercise split-screen setup.");
+                Unchanged("Player " + (seat + 1) + " split-camera setup");
+            }
+        }
+        finally
+        {
+            view.autoFrameCabin = originalAutoFrame;
+            view.cabinCameraShake = originalShake;
+            camera.transform.localPosition = originalPosition;
+            camera.transform.localRotation = originalRotation;
+            camera.fieldOfView = originalFov;
+            camera.farClipPlane = originalFar;
+            camera.cullingMask = originalMask;
+            camera.rect = originalRect; exterior.rect = exteriorRect;
+            camera.aspect = originalAspect;
+            camera.enabled = originalEnabled; exterior.enabled = exteriorEnabled;
+            camera.targetTexture = originalTexture; exterior.targetTexture = exteriorTexture;
+            view.exteriorCar.localPosition = carPosition;
+            view.exteriorCar.localRotation = carRotation;
+            Set(game, "phase", originalPhase);
+            Set(game, "cabinCameraHome", originalHome);
+            Set(game, "authoredCabinCameraHome", originalAuthoredHome);
+            Set(game, "cabinCameraHomeRotation", originalHomeRotation);
+            if (match != null)
+            {
+                match.GetType().GetField("humanPlayer", Flags).SetValue(match, originalHumanPlayer);
+                match.GetType().GetField("humanRival", Flags).SetValue(match, originalHumanRival);
+            }
+        }
+    }
+
+    static void RunCameraSmoothing(Game game)
+    {
+        Require(game.Match == null, "Run camera smoothing checks from solo Main.");
+        CrazyElevator.Managers.MenuManager.Close();
+        game.enabled = false;
+        bool originalAutoFrame = game.sceneView.autoFrameCabin;
+        try
+        {
+            Call(game, "Restart");
+            var round = (Round)Get(game, "round");
+            CheckManualCabinCamera(game);
+            Phase(game, "Opening");
+            CheckCabinProjection(game);
+
+            Vector3 Smooth(Vector3 from, Vector3 target, float dt) => (Vector3)InvokeCameraHelper(game,
+                "SmoothCabinHome", from, target, dt);
+            Vector3 start = new Vector3(-8f, 3f, 6f), goal = new Vector3(4f, 9f, 18f);
+            Vector3 next = Smooth(start, goal, 1f / 60f);
+            Require(Vector3.Distance(next, goal) < Vector3.Distance(start, goal)
+                && Vector3.Distance(next, start) > .001f && Vector3.Distance(next, goal) > .001f,
+                "Cabin framing snapped or failed to move toward its target.");
+            Require(Vector3.Distance(Smooth(next, goal, 0f), next) < .0001f,
+                "A paused camera continued reframing.");
+            Vector3 thirty = start, oneTwenty = start;
+            for (int frame = 0; frame < 15; frame++) thirty = Smooth(thirty, goal, 1f / 30f);
+            for (int frame = 0; frame < 60; frame++) oneTwenty = Smooth(oneTwenty, goal, 1f / 120f);
+            Require(Vector3.Distance(thirty, oneTwenty) < .001f,
+                "Cabin smoothing depends on frame rate.");
+
+            float View(bool travel, float dt) => (float)InvokeCameraHelper(game, "AdvanceCameraView", travel, dt);
+            Set(game, "cameraViewReady", false);
+            Require(Mathf.Abs(View(false, 0f)) < .0001f, "An initial inside view started as a travel preview.");
+            float partial = View(true, .1f);
+            Require(partial > 0f && partial < 1f, "The camera handoff jumped directly to its destination.");
+            Require(Mathf.Abs(View(true, 0f) - partial) < .0001f, "Pausing advanced a camera handoff.");
+            Require(View(false, .05f) < partial, "A reversed camera handoff did not reverse smoothly.");
+            Require(Mathf.Abs(View(true, 1f) - 1f) < .0001f && Mathf.Abs(View(false, 1f)) < .0001f,
+                "The camera handoff did not finish at the requested view.");
+            var full = new Rect(0f, 0f, .5f, 1f);
+            var preview = new Rect(.29f, .7f, .18f, .1f);
+            Rect Blend(float value) => (Rect)InvokeCameraHelper(game, "BlendCameraRect", full, preview, value);
+            bool SameRect(Rect a, Rect b) => Vector2.Distance(a.position, b.position) < .0001f
+                && Vector2.Distance(a.size, b.size) < .0001f;
+            Rect halfway = Blend(.5f);
+            Require(SameRect(Blend(0f), full) && SameRect(Blend(1f), preview)
+                && halfway.width > preview.width && halfway.width < full.width
+                && halfway.height > preview.height && halfway.height < full.height
+                && halfway.xMin >= full.xMin && halfway.xMax <= full.xMax,
+                "The animated cabin viewport jumped or spilled across a split-screen seat.");
+
+            // Exercise the real Main framing path with a multi-passenger landing.
+            // Removing one of its visible riders must not move the settled camera.
+            game.sceneView.autoFrameCabin = true;
+            Call(game, "Restart");
+            Phase(game, "Boarding");
+            round = (Round)Get(game, "round");
+            Call(game, "UpdateShaftCrowd", 0f);
+            Call(game, "SyncFigures", 0f);
+            Call(game, "LateUpdate");
+            Require(round.Riders.FindAll(round.IsOffered).Count > 1,
+                "The camera regression needs a landing with more than one passenger.");
+            float aspect = game.sceneView.cabinCamera.aspect;
+            InvokeCameraHelper(game, "FrameCabinDoorways", 10f, aspect);
+            Vector3 crowdedHome = (Vector3)Get(game, "cabinCameraHome");
+            SharedRider rider = round.Riders.Find(r => round.IsOffered(r) && r.Arrival <= 0f);
+            Require(rider != null && round.Board(rider), "The camera regression could not board a visible rider.");
+            Call(game, "AdoptWaitingFigure", rider);
+            InvokeCameraHelper(game, "FrameCabinDoorways", 10f, aspect);
+            Require(Vector3.Distance((Vector3)Get(game, "cabinCameraHome"), crowdedHome) < .001f,
+                "Boarding one passenger reframed a crowded floor.");
+            File.WriteAllText(Work + "/result.txt",
+                "PASS: manual camera Transform/Lens/culling edits survive runtime and split-screen setup; readable optional automatic framing in square, wide, and split-screen views; smooth and frame-rate-independent camera motion; paused camera freeze; reversible viewport handoffs; split-seat bounds; Main multi-passenger pickup stability.");
+        }
+        finally
+        {
+            game.sceneView.autoFrameCabin = originalAutoFrame;
+            Call(game, "Restart");
+            game.enabled = true;
+        }
+    }
+
+    // Camera transitions run independently of the gameplay phase. Tests settle
+    // only the presentation so legacy arrival/closing checks can inspect endpoints.
+    static void SettleCameraView(Game game, bool travelView)
+    {
+        InvokeCameraHelper(game, "AdvanceCameraView", travelView, 1f);
+        Call(game, "LateUpdate");
+    }
+
+    static void CheckDoorwayAccess(Game game, SharedRider rider, Transform figure)
+    {
+        Transform cabin = game.sceneView.cabin;
+        Vector3 saved = figure.position;
+        Vector3 left = game.sceneView.leftSideDoorClosed, right = game.sceneView.rightSideDoorClosed;
+        float front = (game.sceneView.leftDoorClosed.z + game.sceneView.rightDoorClosed.z) * .5f;
+        var cases = new[]
+        {
+            (position: new Vector3(0f, .12f, front - 1.15f), mask: 2),
+            (position: new Vector3(left.x - .75f, .12f, left.z), mask: 1),
+            (position: new Vector3(right.x + .75f, .12f, right.z), mask: 4),
+            (position: new Vector3(left.x - .75f, .12f, front - 1.15f), mask: 3),
+            (position: new Vector3(right.x + .75f, .12f, front - 1.15f), mask: 6)
+        };
+        MethodInfo canEnter = typeof(Game).GetMethod("CanBoardThroughDoor", Flags);
+        try
+        {
+            foreach (var test in cases)
+            {
+                figure.position = cabin.TransformPoint(test.position);
+                for (int door = 0; door < 3; door++)
+                {
+                    bool allowed = (bool)canEnter.Invoke(game,
+                        new object[] { rider, (CrazyElevator.Shared.BoardingDoor)door });
+                    Require(allowed == ((test.mask & (1 << door)) != 0),
+                        "A front, side, or corner passenger was assigned an implausible entrance.");
+                }
+            }
+        }
+        finally { figure.position = saved; }
+    }
+
+    static void CheckPhysicalWaitingQueues(Game game)
+    {
+        // Use a separate roster so testing a claimed front passenger cannot
+        // consume or rearrange the real solo/shared match passengers.
+        var roundField = typeof(Game).GetField("round", Flags);
+        object savedRound = roundField.GetValue(game);
+        Transform car = game.sceneView.exteriorCar;
+        Vector3 savedPosition = car.localPosition;
+        Quaternion savedRotation = car.localRotation;
+        var waitingPosition = typeof(Game).GetMethod("WaitingWorldPosition", Flags);
+        var cabinOrigin = typeof(Game).GetMethod("PhysicalCabinOrigin", Flags);
+        var canEnter = typeof(Game).GetMethod("CanBoardThroughDoor", Flags);
+        float leftX = (float)Property(game, "LeftShaftX"), rightX = (float)Property(game, "RightShaftX");
+        float scale = game.sceneView.cabin.localScale.x;
+        float halfWidth = Mathf.Max(Mathf.Abs(game.sceneView.leftSideDoorClosed.x),
+            Mathf.Abs(game.sceneView.rightSideDoorClosed.x)) * scale;
+        try
+        {
+            car.localRotation = Quaternion.identity;
+            foreach (int floor in new[] { 0, 1 })
+            {
+                var round = new Round { Floor = floor, TimeLeft = 60f, CenterStopsOnly = true };
+                round.Riders.Clear();
+                for (int slot = 0; slot < 5; slot++)
+                    round.Riders.Add(new SharedRider { Name = "Queue placement check", Kind = "COURIER",
+                        Origin = floor, Destination = floor + 1, Space = 1, Patience = 100f, Remaining = 100f });
+                round.AssignBoardingDoors();
+                round.RevealQueue(floor, Round.CenterStop);
+                roundField.SetValue(game, round);
+                Vector3 Position(SharedRider rider) => (Vector3)waitingPosition.Invoke(game, new object[] { rider });
+                Vector3 Origin(float x) => (Vector3)cabinOrigin.Invoke(game, new object[] { x, floor });
+                bool rightFirst = game.Match != null && floor % 2 != 0;
+                SharedRider front = round.Riders[0], nextFront = round.Riders[3];
+                Vector3 nextBefore = Position(nextFront);
+                Require(Mathf.Abs(Position(front).x - Origin(rightFirst ? rightX : leftX).x) < .001f
+                    && Mathf.Abs(nextBefore.x - Origin(rightFirst ? leftX : rightX).x) < .001f,
+                    "Front passengers stand between shafts instead of at the actual front entrances.");
+                foreach (SharedRider rider in round.Riders.GetRange(0, 3))
+                {
+                    Vector3 position = Position(rider);
+                    if (rider.PickupDoor != CrazyElevator.Shared.BoardingDoor.Front)
+                        Require(position.x < Origin(leftX).x - halfWidth
+                            || position.x > Origin(rightX).x + halfWidth,
+                            "A side queue stands inside one of the parked cabins.");
+                    float laneX = position.x < (leftX + rightX) * .5f ? leftX : rightX;
+                    car.localPosition = new Vector3(laneX, floor * Game.ShaftFloorHeight + 1.4f, -.8f);
+                    for (int door = 0; door < 3; door++)
+                        Require((bool)canEnter.Invoke(game, new object[] { rider,
+                            (CrazyElevator.Shared.BoardingDoor)door }) == (door == (int)rider.PickupDoor),
+                            "A physical front or side queue cannot use its corresponding entrance.");
+                }
+                Require(round.Board(front), "The queue check could not claim its first front passenger.");
+                Require(nextFront.PickupQueueSlot == 3 && Mathf.Abs(Position(nextFront).x - nextBefore.x) < .001f,
+                    "Claiming an earlier front passenger moved the next passenger to another shaft.");
+            }
+        }
+        finally
+        {
+            roundField.SetValue(game, savedRound);
+            car.localPosition = savedPosition;
+            car.localRotation = savedRotation;
+        }
+    }
+
+    static void RunUnifiedCabin(Game game)
+    {
+        Require(game.Match == null, "Run the unified cabin regression from the solo Main scene.");
+        CrazyElevator.Managers.MenuManager.Close();
+        game.enabled = false;
+        try
+        {
+            Call(game, "Restart");
+            Transform cabin = game.sceneView.cabin;
+            Transform car = game.sceneView.exteriorCar;
+            Camera camera = game.sceneView.cabinCamera;
+            Require(cabin.parent == car && camera.transform.parent == cabin,
+                "Inside and driving views do not observe the same moving cabin.");
+            CheckManualCabinCamera(game);
+            CheckCabinRailClearance(game);
+            CheckPhysicalWaitingQueues(game);
+            Require((camera.cullingMask & (1 << 31)) != 0
+                && (game.sceneView.exteriorCamera.cullingMask & (1 << 31)) != 0,
+                "A camera cannot render the physical cabin and floor passengers.");
+            Vector3 originalCar = car.position;
+            Vector3 originalCamera = camera.transform.position;
+            Vector3 originalCabin = cabin.position;
+            Vector3 offset = new Vector3(2f, 4f, .5f);
+            car.position += offset;
+            Require(Vector3.Distance(camera.transform.position, originalCamera + offset) < .001f
+                && Vector3.Distance(cabin.position, originalCabin + offset) < .001f,
+                "The cabin or inside camera stayed behind while the car moved.");
+            car.position = originalCar;
+
+            var round = (Round)Get(game, "round");
+            Call(game, "UpdateShaftCrowd", 0f);
+            Call(game, "SyncFigures", 0f);
+            SharedRider rider = round.Riders.Find(r => round.IsOffered(r) && r.Arrival <= 0f);
+            Require(rider != null, "The first floor has no ready waiting passenger.");
+            var crowd = (IDictionary)Get(game, "crowd");
+            var figures = (IDictionary)Get(game, "figures");
+            Require(crowd.Contains(rider), "The offered passenger is absent from the physical landing.");
+            object waiting = crowd[rider];
+            Transform figure = (Transform)waiting.GetType().GetField("Root").GetValue(waiting);
+            Require(ReferenceEquals(figures[rider], figure) && figure.parent != cabin,
+                "The cabin view created a different passenger from the landing view.");
+            CheckDoorwayAccess(game, rider, figure);
+            string number = figure.GetComponent<CrazyElevator.Shared.PassengerView>().destination.text;
+            Require(number == Game.DestinationTag(rider), "The landing destination number differs from rider state.");
+            Require(round.Board(rider), "The waiting passenger could not be boarded.");
+            Call(game, "AdoptWaitingFigure", rider);
+            Require(ReferenceEquals(figures[rider], figure) && figure.parent == cabin && !crowd.Contains(rider),
+                "Boarding cloned a passenger or left the same passenger on the landing.");
+            Vector3 threshold = game.sceneView.leftSideDoorClosed;
+            threshold.y = .12f;
+            Call(game, "BeginPersonaBoard", rider, threshold + Vector3.left * .8f,
+                new Vector3(0f, .12f, threshold.z), CrazyElevator.Shared.BoardingDoor.Left);
+            var transfers = (IDictionary)Get(game, "boardingTransfers");
+            object transfer = transfers[rider];
+            Type transferType = transfer.GetType();
+            Vector3 outside = (Vector3)transferType.GetField("outsideDoor").GetValue(transfer);
+            Vector3 inside = (Vector3)transferType.GetField("insideDoor").GetValue(transfer);
+            Require((CrazyElevator.Shared.BoardingDoor)transferType.GetField("entryDoor").GetValue(transfer)
+                    == CrazyElevator.Shared.BoardingDoor.Left
+                && outside.x < threshold.x && inside.x > threshold.x
+                && Mathf.Abs(outside.z - threshold.z) < .001f && Mathf.Abs(inside.z - threshold.z) < .001f,
+                "The boarding path did not cross the door actually chosen by the player.");
+            Call(game, "AnimatePersonaBoard", rider, figure, 2f);
+            Call(game, "SyncFigures", 0f);
+            Require(((TextMesh)((IDictionary)Get(game, "destinationTags"))[rider]).text == number,
+                "Boarding changed the passenger's destination number.");
+
+            var menu = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Managers.MenuManager>();
+            Require(menu != null, "The Main scene has no MenuManager.");
+            Type menuType = menu.GetType();
+            object Lobby(string field) => menuType.GetField(field, Flags).GetValue(menu);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            Require((bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
+                && (int)Lobby("playerOneCursor") == 2, "Local lobby does not start on Player 1 READY.");
+            menuType.GetField("transition", Flags).SetValue(menu, 10f);
+            MethodInfo tryStartLobby = menuType.GetMethod("TryStartReadyLobby", Flags);
+            menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+            Require(!(bool)tryStartLobby.Invoke(menu, null) && !(bool)Lobby("launching"),
+                "The lobby started before both human players were ready.");
+            menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 1 });
+            Require((bool)Lobby("playerOneReady") && (bool)Lobby("playerTwoReady")
+                && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
+                && (int)Lobby("playerOneCursor") == 4 && (int)Lobby("playerTwoCursor") == 4,
+                "Ready confirmations changed a human to CPU or failed to reach Start.");
+            Require((bool)tryStartLobby.Invoke(menu, null) && (bool)Lobby("launching")
+                && !(bool)tryStartLobby.Invoke(menu, null),
+                "The lobby did not start once when both players were ready.");
+            File.WriteAllText(Work + "/result.txt", "PASS: saved cabin hierarchy; manual camera Transform/Lens/culling edits survive runtime and split-screen setup; physical cabin and camera follow the driving car; both views render the landing; one waiting model boards without cloning; destination stays identical; both local lobby seats ready without switching to CPU.");
+        }
+        finally
+        {
+            CrazyElevator.Managers.MenuManager.Close();
+            Call(game, "Restart");
+            game.enabled = true;
+        }
     }
 
     static void RunGridChecks(Game game)
@@ -478,8 +1032,8 @@ public static class ExtendedInteriorChecks
 
         Call(game, "UpdateGridDestinations");
         var labels = game.sceneView.gridDestinations;
-        Require(labels.Length == 9 && labels[0].text == courier.Destination.ToString()
-            && labels[1].text == "+" && labels[2].text == single.Destination.ToString(),
+        Require(labels.Length == 9 && labels[0].text == Game.DestinationTag(courier)
+            && labels[1].text == "+" && labels[2].text == Game.DestinationTag(single),
             "The visible cell labels do not match the occupied footprints.");
         File.WriteAllText(Work + "/result.txt", "3x3 occupancy, adjacent placement, and floor labels passed.");
 
@@ -504,7 +1058,34 @@ public static class ExtendedInteriorChecks
     {
         Require(game.Match == null, "Solo mode unexpectedly created a rival elevator.");
         CrazyElevator.Managers.MenuManager.Close();
-        Call(game, "Restart");
+        game.StartSoloRound();
+        for (int dimension = 0; dimension < Round.Dimensions; dimension++)
+        {
+            var previewRound = (Round)Get(game, "round");
+            Require(game.DimensionRevealActive && game.DimensionRevealIndex == dimension && game.CountdownPlaying
+                && previewRound.TimeLeft == 60f && previewRound.Load == 0,
+                "Each solo round must introduce its world before the countdown.");
+            float patience = previewRound.Riders[0].Remaining;
+            Call(game, "Update");
+            Require(previewRound.TimeLeft == 60f && previewRound.Riders[0].Remaining == patience
+                && game.DimensionRevealActive && !game.NpcBoard(),
+                "The solo introduction consumed time or allowed boarding.");
+            float introTime = (float)Get(game, "dimensionRevealTime");
+            game.SetPausedPublic(true);
+            Call(game, "Update");
+            Require((float)Get(game, "dimensionRevealTime") == introTime,
+                "The solo introduction advanced while paused.");
+            game.SetPausedPublic(false);
+            Set(game, "dimensionRevealExitTime", 0f);
+            Call(game, "TickDimensionReveal", Game.DimensionRevealFadeSeconds);
+            FinishRoundCountdown(game);
+            if (dimension < Round.Dimensions - 1) Call(game, "StartOrContinue");
+        }
+        game.StartSoloRound();
+        Require(game.DimensionRevealActive && game.DimensionRevealIndex == 0,
+            "Restarting solo practice must introduce the office again.");
+        game.FinishDimensionReveal();
+        FinishRoundCountdown(game);
         Call(game, "LateUpdate");
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
@@ -525,18 +1106,23 @@ public static class ExtendedInteriorChecks
                 && Mathf.Abs(rightLanding.localPosition.y - landingHeight) < .02f,
                 "The taller shaft landings do not line up with the floors.");
         }
-        Require(round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
-            && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8)
-            && round.Riders.FindAll(r => r.Kind == "BOSS").Count == 4
-            && round.Riders.TrueForAll(r => r.Kind != "BOSS" || (r.Origin >= 4 && r.Origin <= 7)),
-            "Special passengers are waiting outside their assigned worlds.");
+        Require(round.ActiveDimension == 0 && round.Riders.Count > 0
+            && round.Riders.TrueForAll(r => round.ContainsFloor(r.Origin) && round.ContainsFloor(r.Destination))
+            && !round.Riders.Exists(r => r.Kind == "HANDYMAN" || r.Kind == "BOSS"),
+            "Solo passengers are waiting or requesting destinations outside the active office world.");
         var band = typeof(Game).GetMethod("BandForFloor", Flags);
         Require(band.Invoke(game, new object[] { 0f }).ToString() == "Office"
-            && band.Invoke(game, new object[] { 4f }).ToString() == "Candy"
-            && band.Invoke(game, new object[] { 8f }).ToString() == "Water",
+            && band.Invoke(game, new object[] { (float)Round.FloorsPerDimension }).ToString() == "Candy"
+            && band.Invoke(game, new object[] { (float)Round.FloorsPerDimension * 2 }).ToString() == "Water",
             "Office, candy, and underwater floors are out of order.");
 
+        round.CenterStopsOnly = true;
+        round.AssignStops();
+        round.AssignBoardingDoors();
+        Call(game, "SyncFigures", 0f);
         var rider = round.Riders.Find(r => r.Kind == "COURIER" && r.Origin == 0);
+        rider.Destination = 1;
+        rider.DestinationStop = Round.CenterStop;
         Require(round.Board(rider) && game.PassengerLoad == rider.Space
             && game.CurrentPassengers.Count == 1, "Solo boarding changed.");
         float before = round.TimeLeft;
@@ -557,8 +1143,317 @@ public static class ExtendedInteriorChecks
             && game.PassengerLoad == 0 && round.Delivered == 1,
             "Solo travel or delivery changed.");
         File.WriteAllText(Work + "/result.txt",
-            "PASS: solo car centred with a diagonal perspective camera; office/candy/water order; special origins; boarding, travel, timer, and delivery.");
+            "PASS: solo office/candy/water introductions before countdown; frozen intro timer, patience and boarding; pause and office restart; car and camera alignment; active-world passenger origins and destinations; boarding, travel, timer, and delivery.");
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
+    }
+
+    static void RequireLocalFloorDisplay(Game game, string number, int litSegments)
+    {
+        var sign = (TextMesh)Get(game, "floorSign");
+        var segments = (Renderer[])Get(game, "floorSegmentRenderers");
+        Color litColor = (Color)Get(game, "floorDisplayColor");
+        Require(sign != null && sign.text == number && segments != null && segments.Length >= 7,
+            "The cabin floor sign does not show local floor " + number + ".");
+        int lit = 0;
+        for (int segment = 0; segment < segments.Length; segment++)
+        {
+            Renderer led = segments[segment];
+            Require(led != null && led.enabled == (segment < 7),
+                "The cabin LED retained an extra digit or lost its local floor digit.");
+            if (led.enabled && led.sharedMaterial != null && led.sharedMaterial.color == litColor) lit++;
+        }
+        Require(lit == litSegments, "The cabin LED does not display local floor " + number + ".");
+    }
+
+    static void FinishRoundCountdown(Game game)
+    {
+        Require(game.CountdownPlaying && !game.DimensionRevealActive,
+            "The ready handoff must show the countdown before starting gameplay.");
+        float clock = game.SecondsLeft;
+        Set(game, "countdownTime", 4f);
+        Call(game, "Update");
+        Require(!game.CountdownPlaying && game.SecondsLeft == clock,
+            "The countdown handoff consumed round time.");
+    }
+
+    // Gameplay-only checks explicitly pass through the new ready break first.
+    static void FinishMatchRoundIntroduction(CrazyElevator.Match.ElevatorMatch match)
+    {
+        var type = typeof(CrazyElevator.Match.ElevatorMatch);
+        Require(match.DimensionRevealActive && match.player.DimensionRevealActive && match.Rival.DimensionRevealActive,
+            "A fresh match round must introduce its dimension to both cars.");
+        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
+        var human = type.GetMethod("DimensionRevealSeatHuman", Flags);
+        for (int seat = 0; seat < ready.Length; seat++)
+            ready[seat] = (bool)human.Invoke(match, new object[] { seat });
+        type.GetField("dimensionRevealTime", Flags).SetValue(match, Game.DimensionRevealSeconds);
+        var tick = type.GetMethod("UpdateDimensionReveal", Flags);
+        tick.Invoke(match, new object[] { 0f });
+        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        Require(!match.DimensionRevealActive && !match.player.DimensionRevealActive && !match.Rival.DimensionRevealActive,
+            "Ready players did not finish the dimension introduction together.");
+        FinishRoundCountdown(match.player);
+        FinishRoundCountdown(match.Rival);
+    }
+
+    static void CheckMatchRoundIntroduction(CrazyElevator.Match.ElevatorMatch match, int dimension)
+    {
+        var player = match.player;
+        var rival = match.Rival;
+        var round = (Round)Get(player, "round");
+        var other = (Round)Get(rival, "round");
+        Require(match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive
+            && player.DimensionRevealIndex == dimension && rival.DimensionRevealIndex == dimension
+            && player.CountdownPlaying && rival.CountdownPlaying,
+            "Every round, including office, must show its introduction before the countdown.");
+        var patience = new Dictionary<SharedRider, float[]>();
+        foreach (SharedRider rider in round.Riders)
+            patience[rider] = new[] { rider.Remaining, rider.Arrival, rider.SpawnDelay };
+        foreach (Game car in new[] { player, rival })
+        {
+            Call(car, "Update");
+            Call(car, "TickDimensionReveal", 2f);
+            car.OnboardSelectedPublic();
+            car.CloseAndTravelPublic();
+            car.SetTravelInput(1f, true);
+            Require(!car.NpcBoard() && !car.IsBoarding && car.PassengerLoad == 0 && car.CountdownPlaying,
+                "Passengers or navigation became active underneath the introduction.");
+        }
+        foreach (var saved in patience)
+            Require(saved.Key.Remaining == saved.Value[0] && saved.Key.Arrival == saved.Value[1]
+                && saved.Key.SpawnDelay == saved.Value[2] && !saved.Key.Boarded && !saved.Key.Resolved,
+                "An introduction consumed passenger patience, arrival time, or the waiting roster.");
+        Require(round.TimeLeft == 60f && other.TimeLeft == 60f && round.Score == 0 && other.Score == 0,
+            "An introduction consumed round time or changed the delivery score.");
+
+        var type = typeof(CrazyElevator.Match.ElevatorMatch);
+        var time = type.GetField("dimensionRevealTime", Flags);
+        var tick = type.GetMethod("UpdateDimensionReveal", Flags);
+        float beforePause = (float)time.GetValue(match);
+        match.TogglePause();
+        tick.Invoke(match, new object[] { 2f });
+        Require((float)time.GetValue(match) == beforePause && match.DimensionRevealActive,
+            "A paused introduction advanced its ready or fade clock.");
+        match.TogglePause();
+
+        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
+        Require(!ready[0] && !ready[1], "A new round retained another round's ready confirmations.");
+        var everyoneReady = type.GetMethod("DimensionRevealEveryoneReady", Flags);
+        time.SetValue(match, Game.DimensionRevealConfirmDelay + .01f);
+        ready[0] = true;
+        Require(!(bool)everyoneReady.Invoke(match, null),
+            "Player 1 skipped the introduction before Player 2 was ready.");
+        ready[1] = true;
+        Require((bool)everyoneReady.Invoke(match, null),
+            "Both human confirmations did not release the introduction.");
+        tick.Invoke(match, new object[] { 0f });
+        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        Require(!match.DimensionRevealActive && !player.DimensionRevealActive && !rival.DimensionRevealActive
+            && player.CountdownPlaying && rival.CountdownPlaying && round.TimeLeft == 60f && other.TimeLeft == 60f,
+            "The introduction must hand both cars to the countdown without consuming game time.");
+        FinishRoundCountdown(player);
+        FinishRoundCountdown(rival);
+    }
+
+    static void RunSingleDimensionMatch()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        var session = CrazyElevator.Managers.GameManager.Instance;
+        Require(match != null && match.player != null && match.Rival != null && session != null
+            && match.SplitScreen, "Main must create two human elevators for the round checks.");
+        foreach (Type type in new[] { typeof(CrazyElevator.Managers.GameManager),
+            typeof(CrazyElevator.Managers.InputManager), typeof(CrazyElevator.Managers.SfxManager),
+            typeof(CrazyElevator.Managers.MusicManager), typeof(CrazyElevator.Managers.MenuManager) })
+        {
+            var root = GameObject.Find(type.Name);
+            Require(root != null && root.GetComponent(type) != null && root.transform.parent == null,
+                "Main is missing the authored manager root " + type.Name + ".");
+        }
+        var player = match.player;
+        var rival = match.Rival;
+        bool playerEnabled = player.enabled, rivalEnabled = rival.enabled, matchEnabled = match.enabled;
+        player.enabled = rival.enabled = match.enabled = false;
+        CrazyElevator.Managers.MenuManager.Close();
+        var updateMatch = typeof(CrazyElevator.Match.ElevatorMatch).GetMethod("Update", Flags);
+        List<SharedRider> previousPool = null;
+        try
+        {
+            match.StartMatch();
+            for (int index = 0; index < 5; index++)
+            {
+                int dimension = index % Round.Dimensions;
+                int first = dimension * Round.FloorsPerDimension, last = first + Round.FloorsPerDimension - 1;
+                var round = (Round)Get(player, "round");
+                var other = (Round)Get(rival, "round");
+                Require(session.RoundNumber == index + 1 && session.ActiveDimension == dimension
+                    && round.Floor == first && other.Floor == first
+                    && player.ActiveMinFloor == first && player.ActiveMaxFloor == last
+                    && round.TimeLeft == 60f && other.TimeLeft == 60f
+                    && round.Score == 0 && other.Score == 0,
+                    "Round " + (index + 1) + " did not reset both cars to the active world's first floor and 60 seconds.");
+                RequireLocalFloorDisplay(player, "1", 2);
+                RequireLocalFloorDisplay(rival, "1", 2);
+                Require(Game.DestinationTag(new SharedRider
+                    { Destination = first + 1, DestinationStop = Round.CenterStop }) == "2",
+                    "The world's second authored floor must display destination 2.");
+                var bands = player.sceneView.exteriorCar.parent.Find("Shaft World Bands");
+                Require(bands != null, "The authored world bands are missing from Main.");
+                int activeBands = 0;
+                foreach (Transform band in bands)
+                {
+                    int bandDimension = band.name.StartsWith("Office Band") ? 0
+                        : band.name.StartsWith("Candy Band") ? 1 : band.name.StartsWith("Water Band") ? 2 : -1;
+                    if (bandDimension < 0) continue;
+                    Require(band.gameObject.activeSelf == (bandDimension == dimension),
+                        "The visible world did not switch with the round.");
+                    if (band.gameObject.activeSelf) activeBands++;
+                }
+                Require(activeBands > 0, "No authored world band is visible for this round.");
+                Require(ReferenceEquals(round.Riders, other.Riders)
+                    && !ReferenceEquals(round.Riders, previousPool) && round.Riders.Count > 0
+                    && round.Riders.TrueForAll(r => r.Origin >= first && r.Origin <= last
+                        && r.Destination >= first && r.Destination <= last && r.Origin != r.Destination
+                        && !r.Boarded && !r.Resolved),
+                    "New rounds must share a fresh, deliverable passenger pool within one world.");
+                Require(round.Riders.TrueForAll(r => Game.DestinationTag(r).Trim('\u2190', '\u2192')
+                    == (r.Destination - first + 1).ToString()),
+                    "Passenger destination badges must use this world's local floor numbers.");
+                previousPool = round.Riders;
+                CheckMatchRoundIntroduction(match, dimension);
+                match.TogglePause();
+                Call(player, "Update"); Call(rival, "Update");
+                Require(round.TimeLeft == 60f && other.TimeLeft == 60f && player.IsPaused && rival.IsPaused,
+                    "Pausing must freeze both clocks.");
+                match.TogglePause();
+                foreach (var gate in Game.TeleportGates)
+                {
+                    bool open = (bool)typeof(Game).GetMethod("TeleportGateOpen", Flags)
+                        .Invoke(player, new object[] { gate });
+                    Require(open == (gate.Floor >= first && gate.Floor <= last
+                        && gate.Target >= first && gate.Target <= last),
+                        "Teleport gates must never leave the active dimension.");
+                }
+                foreach (Game car in new[] { player, rival })
+                {
+                    Phase(car, "Moving");
+                    Set(car, "travelFloor", first + 1f); Set(car, "travelVelocity", 0f);
+                    Call(car, "AdvanceBuildingTravel", .001f);
+                    RequireLocalFloorDisplay(car, "2", 5);
+                    Require(((Round)Get(car, "round")).Floor == first,
+                        "Showing a passing local floor changed the internal stopped floor index.");
+                }
+                Phase(player, "Moving");
+                Set(player, "travelFloor", first + .1f); Set(player, "travelVelocity", -2f);
+                Set(player, "travelDirection", -1);
+                Call(player, "AdvanceBuildingTravel", 20f);
+                Require(player.CurrentFloor >= first && player.CurrentFloor <= last,
+                    "Travel escaped below the active world.");
+                Set(player, "travelFloor", last - .1f); Set(player, "travelVelocity", 2f);
+                Set(player, "travelDirection", 1);
+                Call(player, "AdvanceBuildingTravel", 20f);
+                Require(player.CurrentFloor >= first && player.CurrentFloor <= last,
+                    "Travel escaped above the active world.");
+                // P1, draw, P2, P1, P1 exercises rotation past round three and a 3-1 finish.
+                round.Score = index == 2 ? 50 : 100;
+                other.Score = index == 1 ? 100 : index == 2 ? 100 : 50;
+                round.TimeLeft = other.TimeLeft = 0f;
+                Call(player, "Update"); Call(rival, "Update");
+                // Update's enabled guard still applies to reflection; no frame is yielded here.
+                match.enabled = true;
+                updateMatch.Invoke(match, null);
+                int wins = session.PlayerOneWins + session.PlayerTwoWins;
+                updateMatch.Invoke(match, null);
+                match.enabled = false;
+                Require(session.RoundRecorded && session.PlayerOneWins + session.PlayerTwoWins == wins
+                    && round.Score == (index == 2 ? 50 : 100),
+                    "Results must lock the score and record each round only once.");
+                if (index == 1) Require(session.PlayerOneWins == 1 && session.PlayerTwoWins == 0,
+                    "A tied round awarded a win.");
+                if (index < 4) match.ContinueMatch();
+            }
+            Require(session.MatchFinished && session.PlayerOneWins == 3 && session.PlayerTwoWins == 1,
+                "The match must finish when one player wins three rounds.");
+            session.AdvanceRound();
+            Require(session.RoundNumber == 5, "A completed match advanced to another round.");
+            match.ContinueMatch();
+            Require(session.RoundNumber == 1 && !session.MatchFinished
+                && session.PlayerOneWins == 0 && session.PlayerTwoWins == 0
+                && player.DiscreteFloor == 0 && rival.DiscreteFloor == 0
+                && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
+                "Play Again must reset the series and introduce the office again.");
+            CheckMatchRoundIntroduction(match, 0);
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch office introduction.");
+            Debug.Log(File.ReadAllText(Work + "/result.txt"));
+        }
+        finally
+        {
+            CrazyElevator.Managers.MenuManager.ClosePause();
+            player.enabled = playerEnabled; rival.enabled = rivalEnabled; match.enabled = matchEnabled;
+        }
+    }
+
+    static void RunBouncerChecks()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        Require(match != null && match.Rival != null, "Bouncer checks need both elevators.");
+        var matchType = match.GetType();
+        var phase = typeof(Game).GetField("phase", Flags);
+        object moving = Enum.Parse(phase.FieldType, "Moving");
+        object boarding = Enum.Parse(phase.FieldType, "Boarding");
+        for (int seat = 0; seat < 2; seat++)
+        {
+            var attacker = seat == 0 ? match.player : match.Rival;
+            var victim = seat == 0 ? match.Rival : match.player;
+            for (int lateral = 0; lateral < 2; lateral++)
+            {
+                match.StartMatch();
+                FinishMatchRoundIntroduction(match);
+                var round = (Round)Get(attacker, "round");
+                round.Riders.Add(new SharedRider { Kind = "BOUNCER", Boarded = true,
+                    BoardedBySeat = attacker.Seat, Space = 1, Remaining = 100f });
+                Require(attacker.HasBouncer && !victim.HasBouncer, "Bouncer belongs to the wrong elevator.");
+                phase.SetValue(attacker, moving); phase.SetValue(victim, boarding);
+                ((Round)Get(victim, "round")).Floor = 4;
+                Set(attacker, "travelFloor", 3.4f); Set(attacker, "travelVelocity", 1.8f);
+                Set(attacker, "travelDirection", 1); Set(victim, "travelFloor", 4f);
+                Set(victim, "travelVelocity", 0f);
+                float x = match.ShaftX(0);
+                Set(attacker, "routeLateralReady", true); Set(victim, "routeLateralReady", true);
+                Set(attacker, "routeLateralX", x); Set(victim, "routeLateralX", x);
+                matchType.GetField("collisionCooldown", Flags).SetValue(match, 0f);
+                if (lateral == 0)
+                {
+                    Set(victim, "railRiding", true); // A stale rail state must not prevent vertical knockback.
+                    float incoming = 1.8f;
+                    match.ConstrainTravel(attacker, 3.4f, 3.9f, ref incoming);
+                    Require(victim.MovingInShaft && !(bool)Get(victim, "railRiding")
+                        && victim.TravelVelocity >= 3.2f && (float)Get(victim, "doors") == 0f,
+                        "Bouncer did not close and launch the stopped car vertically.");
+                    CrazyElevator.Managers.GameManager.Instance.ResetMatchProgress();
+                    float start = victim.CurrentFloor;
+                    Call(victim, "RequestFloorStop");
+                    Call(victim, "AdvanceBuildingTravel", .45f);
+                    Require(victim.MovingInShaft && victim.CurrentFloor > start + 1.3f,
+                        "Bouncer's vertical impact did not carry the stopped car far enough.");
+                }
+                else
+                {
+                    Set(attacker, "travelFloor", 4f); Set(attacker, "travelVelocity", 0f);
+                    Set(attacker, "railRiding", true); Set(attacker, "railVelocity", 1f);
+                    Set(victim, "routeLateralX", x + 1f);
+                    matchType.GetMethod("Update", Flags).Invoke(match, null);
+                    Require(victim.MovingInShaft && (bool)Get(victim, "railRiding")
+                        && victim.LateralTravelVelocity >= 3.2f && (float)Get(victim, "doors") == 0f,
+                        "Bouncer did not close and launch the stopped car sideways.");
+                    CrazyElevator.Managers.GameManager.Instance.ResetMatchProgress();
+                    float start = victim.RouteLateralX;
+                    Call(victim, "AdvanceBuildingTravel", .25f);
+                    Require(victim.RouteLateralX > start + 2f,
+                        "Bouncer's sideways impact did not carry the stopped car far enough.");
+                }
+            }
+        }
+        Debug.Log("PASS: Bouncer closes and knocks stopped cars away vertically and sideways for both player seats.");
     }
 
     static void RunMatch()
@@ -568,6 +1463,7 @@ public static class ExtendedInteriorChecks
             "1v1 did not create the NPC elevator.");
         var player = match.player;
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         var rival = match.Rival;
         var playerRound = (Round)Get(player, "round");
         var rivalRound = (Round)Get(rival, "round");
@@ -575,6 +1471,7 @@ public static class ExtendedInteriorChecks
             "1v1 elevators did not start with one shared passenger pool.");
         Require(Mathf.Abs(match.ShaftX(0) + match.ShaftX(1) - 2f * CrazyElevator.Match.ElevatorMatch.ShaftCenterX) < .001f,
             "1v1 tracks do not straddle the building centre.");
+        CheckPhysicalWaitingQueues(player);
 
         var matchType = typeof(CrazyElevator.Match.ElevatorMatch);
         var trackPositions = (float[])matchType.GetField("trackPosition", Flags).GetValue(match);
@@ -633,6 +1530,7 @@ public static class ExtendedInteriorChecks
             "The player kept showing the NPC's passenger after departure finished.");
 
         player.ResetRoundPublic();
+        FinishMatchRoundIntroduction(match);
         playerRound = (Round)Get(player, "round");
         rivalRound = (Round)Get(rival, "round");
         Require(ReferenceEquals(playerRound.Riders[0], rivalRound.Riders[0])
@@ -656,6 +1554,7 @@ public static class ExtendedInteriorChecks
         // A moving rival should knock it back into shaft travel and visibly
         // displace it away from the floor.
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         trackPositions[1] = trackPositions[0];
         phaseField.SetValue(player, moving);
         var stoppedRound = (Round)Get(rival, "round");
@@ -675,6 +1574,7 @@ public static class ExtendedInteriorChecks
         // The route remains a straight vertical shaft. Choosing the highlighted
         // express gate still grants one burst without changing the track path.
         match.StartMatch();
+        FinishMatchRoundIntroduction(match);
         phaseField.SetValue(player, moving);
         float junctionFloor = match.JunctionFloor(0);
         Set(player, "travelFloor", junctionFloor);
@@ -757,6 +1657,7 @@ public static class ExtendedInteriorChecks
         Require(Get(game, "phase").ToString() == "Opening" && game.sceneView.exteriorCamera.enabled,
             "Building view must stay visible while the stopped elevator opens its doors.");
         Set(game, "phaseTime", 1f); Call(game, "Update"); Call(game, "LateUpdate");
+        SettleCameraView(game, false);
         Require(Get(game, "phase").ToString() == "Boarding" && game.sceneView.cabinCamera.enabled && !game.sceneView.exteriorCamera.enabled,
             "The fully open elevator must return to the interior.");
     }
@@ -765,6 +1666,7 @@ public static class ExtendedInteriorChecks
         Call(game, "CloseAndTravel"); Call(game, "LateUpdate");
         Require(Get(game, "phase").ToString() == "Closing" && game.sceneView.cabinCamera.enabled, "The inside view should show the doors closing.");
         Set(game, "phaseTime", 1f); Call(game, "Update"); Call(game, "LateUpdate");
+        SettleCameraView(game, true);
         Require(Get(game, "phase").ToString() == "Moving" && game.sceneView.exteriorCamera.enabled
             && game.sceneView.cabinCamera.enabled && game.sceneView.cabinCamera.rect.width < game.sceneView.exteriorCamera.rect.width,
             "Closed doors must switch to shaft travel with a smaller cabin preview.");
@@ -885,7 +1787,7 @@ public static class ExtendedInteriorChecks
         Call(game, "Restart");
         var round = (Round)Get(game, "round");
         round.Floor = damaged ? game.underwaterStartsAtFloor : 0;
-        game.sceneView.floorDisplay.text = round.Floor.ToString();
+        Call(game, "SetFloorDisplayText", Round.FloorNumber(round.Floor).ToString());
         Set(game, "rustExposure", damaged ? game.secondsPerRustLevel * 2 : 0f);
         Call(game, "SyncFigures", 0f); Call(game, "UpdateInteriorPersona", 0f);
         Call(game, "LateUpdate"); Physics.SyncTransforms();

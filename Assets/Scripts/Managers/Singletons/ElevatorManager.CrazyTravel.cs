@@ -134,7 +134,7 @@ namespace CrazyElevator.Managers
         Quaternion CrazyTravelLocalRotation(float logicalFloor, float collisionKick)
         {
             return exteriorCarHomeRotation * Quaternion.Euler(
-                0f, 0f, collisionKick * (Seat == 0 ? -4.5f : 4.5f));
+                0f, CarSpinDegrees, collisionKick * (Seat == 0 ? -4.5f : 4.5f));
         }
 
         void ResetRouteLateral()
@@ -160,23 +160,23 @@ namespace CrazyElevator.Managers
         bool TryGetVerticalTrack(float x, float floor, out float trackX, out float bottom, out float top)
         {
             trackX = NearestShaftX(x);
-            bottom = 0f;
-            top = ElevatorRound.Floors - 1f;
+            bottom = MinTravelFloor;
+            top = MaxTravelFloor;
             if (OnMainShaft(x)) return true;
             foreach (SideTrack track in SideTracks)
             {
                 if (Mathf.Abs(x - track.X) > ShaftAlignReach) continue;
                 if (floor < track.Bottom - .02f || floor > track.Top + .02f) continue;
                 trackX = track.X;
-                bottom = track.Bottom;
-                top = track.Top;
-                return true;
+                bottom = Mathf.Max(track.Bottom, MinTravelFloor);
+                top = Mathf.Min(track.Top, MaxTravelFloor);
+                return bottom <= top && floor >= bottom - .02f && floor <= top + .02f;
             }
             return false;
         }
 
         static int AxisSign(float axis) => axis >= .5f ? 1 : axis <= -.5f ? -1 : 0;
-        int ClampRailFloor(float floor) => Mathf.Clamp(Mathf.RoundToInt(floor), 0, MaxTravelFloor);
+        int ClampRailFloor(float floor) => Mathf.Clamp(Mathf.RoundToInt(floor), MinTravelFloor, MaxTravelFloor);
         int TowardCentre => routeLateralX < ElevatorMatchType.ShaftCenterX ? 1 : -1;
         float RouteSpeed => railRiding ? Mathf.Abs(railVelocity) : Mathf.Abs(travelVelocity);
 
@@ -185,6 +185,7 @@ namespace CrazyElevator.Managers
         // A tap stays queued after release.
         void ReadRouteInput(float horizontal, float vertical, bool boost)
         {
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             routeSteer = horizontal;
             railBoost = boost;
             int h = AxisSign(horizontal), v = AxisSign(vertical);
@@ -254,6 +255,7 @@ namespace CrazyElevator.Managers
         // Same cruise / boost / instant-reverse rules as vertical travel (AdvanceTravelStep).
         void SteerRail(float dt)
         {
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             railVelocity = Mathf.Clamp(railVelocity, -SpeedLimit, SpeedLimit);
             int steer = AxisSign(routeSteer);
             if (steer != 0 && steer != railDirection)
@@ -281,16 +283,16 @@ namespace CrazyElevator.Managers
                 notice = "End of the rail. Steer back, or press W/S to take a track.";
             }
             CheckTeleportGates(before, routeLateralX);
-            if (pendingTrackDirection != 0) TryTurnOntoTrack(before, routeLateralX);
+            if (pendingTrackDirection != 0 && !(strongCollisionRecoil && collisionRecoilTimer > 0f))
+                TryTurnOntoTrack(before, routeLateralX);
             Match?.SyncTrackFromLateral(this, routeLateralX);
         }
 
         void TryTurnOntoTrack(float fromX, float toX)
         {
             if (Mathf.Abs(toX - trackCatchBlockX) > ShaftAlignReach) trackCatchBlockX = float.NaN;
-            int topFloor = ElevatorRound.Floors - 1;
-            bool found = TrackCatches(fromX, toX, LeftShaftX, 0, topFloor)
-                || TrackCatches(fromX, toX, RightShaftX, 0, topFloor);
+            bool found = TrackCatches(fromX, toX, LeftShaftX, MinTravelFloor, MaxTravelFloor)
+                || TrackCatches(fromX, toX, RightShaftX, MinTravelFloor, MaxTravelFloor);
             foreach (SideTrack track in SideTracks)
                 found = found || TrackCatches(fromX, toX, track.X, track.Bottom, track.Top);
             if (found) LeaveRailOntoTrack();
@@ -299,6 +301,8 @@ namespace CrazyElevator.Managers
         // The car passed (or is right at) a track that continues the queued way.
         bool TrackCatches(float fromX, float toX, float trackX, int bottom, int top)
         {
+            bottom = Mathf.Max(bottom, MinTravelFloor);
+            top = Mathf.Min(top, MaxTravelFloor);
             if (Mathf.Abs(trackX - trackCatchBlockX) <= ShaftAlignReach) return false;
             if (railFloor < bottom || railFloor > top) return false;
             bool continues = pendingTrackDirection > 0
@@ -315,7 +319,7 @@ namespace CrazyElevator.Managers
                 railCatchBlockFloor = -1;
             if (pendingRailDirection == 0) return false;
             int floor = Mathf.RoundToInt(floorPosition);
-            if (floor < 0 || floor > MaxTravelFloor || floor == railCatchBlockFloor
+            if (floor < MinTravelFloor || floor > MaxTravelFloor || floor == railCatchBlockFloor
                 || Mathf.Abs(floorPosition - floor) > RailCatchGrace)
                 return false;
             StartRailRide(floor, pendingRailDirection, Mathf.Abs(travelVelocity));
@@ -339,6 +343,7 @@ namespace CrazyElevator.Managers
                 StartRailRide(ClampRailFloor(before), TowardCentre, Mathf.Abs(velocity));
                 return before;
             }
+            bottom = Mathf.Max(bottom, MinTravelFloor);
             top = Mathf.Min(top, MaxTravelFloor);
             float clamped = Mathf.Clamp(candidate, bottom, top);
             if (TryTurnOntoRail(clamped)) return railFloor;
@@ -363,7 +368,8 @@ namespace CrazyElevator.Managers
         }
 
         bool TeleportGateOpen(TeleportGate gate) =>
-            gate.Floor <= MaxTravelFloor && gate.Target <= MaxTravelFloor;
+            gate.Floor >= MinTravelFloor && gate.Floor <= MaxTravelFloor
+            && gate.Target >= MinTravelFloor && gate.Target <= MaxTravelFloor;
 
         void CheckTeleportGates(float fromX, float toX)
         {
@@ -386,7 +392,7 @@ namespace CrazyElevator.Managers
             teleportFlash = TeleportFlashSeconds;
             teleportFlashTarget = gate.Target;
             routeBoostPulse = 1f;
-            notice = "TELEPORT! Warped to floor " + gate.Target + ".";
+            notice = "TELEPORT! Warped to floor " + ElevatorRound.FloorNumber(gate.Target) + ".";
             Play(chime, 1.05f);
         }
 
@@ -408,12 +414,14 @@ namespace CrazyElevator.Managers
                 Mathf.Lerp(.18f, 1f, Mathf.SmoothStep(0f, 1f, cameraFollowBlend)));
             // A short lag rounds off rail/track corners and turns a warp into a quick swoop.
             Vector2 framing = new Vector2(cameraX, carLocal.y);
-            bool snap = cameraFramingFrame != Time.frameCount - 1
+            bool snap = cameraFramingFrame < 0
                 || (framing - cameraFraming).sqrMagnitude > CameraSnapDistance * CameraSnapDistance;
             cameraFraming = snap ? framing
                 : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));
             cameraFramingFrame = Time.frameCount;
             cameraX = cameraFraming.x;
+            // Match main's wider shaft framing so the next floors and side
+            // routes are visible while retaining the smooth follow camera.
             Vector3 cameraLocal = new Vector3(
                 cameraX,
                 cameraFraming.y + 5.2f,
@@ -434,7 +442,136 @@ namespace CrazyElevator.Managers
             exteriorCamera.transform.rotation = Quaternion.LookRotation(
                 targetWorld - exteriorCamera.transform.position, world.up);
             exteriorCamera.orthographic = false;
-            exteriorCamera.fieldOfView = Mathf.Lerp(61f, 55f, routeBoostPulse);
+            UpdateSpeedFx(dt);
+            // The view widens as the car speeds up, so going fast reads at a glance.
+            exteriorCamera.fieldOfView = Mathf.Lerp(61f + SpeedFovWiden * speedFx, 55f, routeBoostPulse);
+        }
+
+        // ---------- Speed feedback ----------
+        // 0 at cruising speed, 1 at the speed limit. Drives the FOV, speed lines and car trail.
+        const float SpeedFovWiden = 10f;
+        float speedFx;
+        Renderer[] exteriorCarRenderers;
+
+        void UpdateSpeedFx(float dt)
+        {
+            float target = phase == Phase.Moving && !paused
+                ? Mathf.InverseLerp(CruiseSpeed * 1.08f, SpeedLimit, RouteSpeed) : 0f;
+            speedFx = Mathf.MoveTowards(speedFx, target, dt * (target > speedFx ? 3f : 1.6f));
+        }
+
+        static float Hash01(int n) => Mathf.Repeat(Mathf.Sin(n * 12.9898f) * 43758.5453f, 1f);
+
+        void DrawSpeedLines()
+        {
+            if (phase != Phase.Moving || speedFx <= .02f) return;
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
+            float size = Mathf.Max(1f, view.height / 900f);
+            bool sideways = railRiding;
+            int direction = sideways ? (railVelocity >= 0f ? 1 : -1) : (travelVelocity >= 0f ? 1 : -1);
+            DrawSpeedEdgeTint(view, sideways);
+            DrawSpeedStreaks(view, size, sideways, direction);
+            DrawCarTrail(view, size, sideways, direction);
+        }
+
+        // The world's colour creeps in from the edges the car is racing along.
+        void DrawSpeedEdgeTint(Rect view, bool sideways)
+        {
+            Color tint = WorldAccent(NearbyFloor);
+            tint.a = .08f * speedFx;
+            for (int band = 1; band <= 3; band++)
+            {
+                float depth = band * .045f;
+                if (sideways)
+                {
+                    Panel(new Rect(view.x, view.y, view.width, view.height * depth), tint);
+                    Panel(new Rect(view.x, view.yMax - view.height * depth, view.width, view.height * depth), tint);
+                }
+                else
+                {
+                    Panel(new Rect(view.x, view.y, view.width * depth, view.height), tint);
+                    Panel(new Rect(view.xMax - view.width * depth, view.y, view.width * depth, view.height), tint);
+                }
+            }
+        }
+
+        // Wind streaks in the outer bands stream past opposite to the motion.
+        void DrawSpeedStreaks(Rect view, float size, bool sideways, int direction)
+        {
+            int count = Mathf.RoundToInt(Mathf.Lerp(6f, 24f, speedFx));
+            float clock = Time.unscaledTime * Mathf.Lerp(1.1f, 3.4f, speedFx);
+            for (int i = 0; i < count; i++)
+            {
+                float lane = Hash01(i * 7 + 1);
+                float band = lane < .5f ? lane * .56f : .72f + (lane - .5f) * .56f;
+                float length = Mathf.Lerp(50f, 200f, speedFx) * Mathf.Lerp(.6f, 1.2f, Hash01(i * 3 + 2)) * size;
+                float t = Mathf.Repeat(Hash01(i * 13 + 5) + clock * Mathf.Lerp(.8f, 1.3f, lane), 1f);
+                Color streak = new Color(1f, 1f, 1f,
+                    speedFx * Mathf.Lerp(.2f, .55f, Hash01(i * 11 + 4)) * Mathf.Sin(t * Mathf.PI));
+                Rect line;
+                if (sideways)
+                {
+                    float travel = view.width + length;
+                    float x = direction > 0 ? view.xMax - t * travel : view.x - length + t * travel;
+                    line = new Rect(x, view.y + band * view.height, length, 3f * size);
+                }
+                else
+                {
+                    float travel = view.height + length;
+                    float y = direction > 0 ? view.y - length + t * travel : view.yMax - t * travel;
+                    line = new Rect(view.x + band * view.width, y, 3f * size, length);
+                }
+                ClippedPanel(line, view, streak);
+            }
+        }
+
+        // A few streaks trail off the back of the car itself.
+        void DrawCarTrail(Rect view, float size, bool sideways, int direction)
+        {
+            if (!TryGetCarScreenRect(out Rect car)) return;
+            float length = Mathf.Lerp(30f, 150f, speedFx) * size;
+            for (int i = 0; i < 4; i++)
+            {
+                float across = (i + .5f) / 4f;
+                float flicker = Mathf.Lerp(.65f, 1f, Hash01(i * 5 + Mathf.FloorToInt(Time.unscaledTime * 18f)));
+                float trail = length * flicker;
+                Color streak = new Color(Gold.r, Gold.g, Gold.b, .55f * speedFx);
+                Rect line = sideways
+                    ? new Rect(direction > 0 ? car.x - trail : car.xMax, car.y + across * car.height, trail, 4f * size)
+                    : new Rect(car.x + across * car.width, direction > 0 ? car.yMax : car.y - trail, 4f * size, trail);
+                ClippedPanel(line, view, streak);
+            }
+        }
+
+        bool TryGetCarScreenRect(out Rect rect)
+        {
+            rect = default;
+            if (exteriorCar == null || exteriorCamera == null) return false;
+            if (exteriorCarRenderers == null || exteriorCarRenderers.Length == 0)
+                exteriorCarRenderers = exteriorCar.GetComponentsInChildren<Renderer>();
+            bool any = false;
+            Bounds bounds = default;
+            foreach (Renderer part in exteriorCarRenderers)
+            {
+                if (part == null || !part.enabled || !part.gameObject.activeInHierarchy) continue;
+                if (!any) { bounds = part.bounds; any = true; }
+                else bounds.Encapsulate(part.bounds);
+            }
+            if (!any) return false;
+            Vector3 low = exteriorCamera.WorldToScreenPoint(bounds.min);
+            Vector3 high = exteriorCamera.WorldToScreenPoint(bounds.max);
+            if (low.z <= 0f || high.z <= 0f) return false;
+            rect = Rect.MinMaxRect(Mathf.Min(low.x, high.x), Screen.height - Mathf.Max(low.y, high.y),
+                Mathf.Max(low.x, high.x), Screen.height - Mathf.Min(low.y, high.y));
+            return true;
+        }
+
+        // Split-screen streaks must not spill into the other player's half.
+        void ClippedPanel(Rect rect, Rect view, Color colour)
+        {
+            Rect clipped = Rect.MinMaxRect(Mathf.Max(rect.xMin, view.xMin), Mathf.Max(rect.yMin, view.yMin),
+                Mathf.Min(rect.xMax, view.xMax), Mathf.Min(rect.yMax, view.yMax));
+            if (clipped.width > 0f && clipped.height > 0f) Panel(clipped, colour);
         }
 
         void EnsureCrazyRouteMap()
@@ -454,7 +591,7 @@ namespace CrazyElevator.Managers
             RefreshTeleportGateViews(world);
         }
 
-        // Gates to floors that are still locked stay hidden until that dimension opens.
+        // Only gates whose entrance and exit both belong to this round can open.
         void RefreshTeleportGateViews(Transform world)
         {
             if (teleportGateViews == null)
@@ -463,7 +600,13 @@ namespace CrazyElevator.Managers
                 Transform root = world.Find(TeleportGateRootName);
                 if (root != null)
                     for (int i = 0; i < TeleportGates.Length; i++)
+                    {
                         teleportGateViews[i] = root.Find(TeleportGateName(i));
+                        Transform destinationLabel = teleportGateViews[i] != null
+                            ? teleportGateViews[i].Find("Destination") : null;
+                        TextMesh label = destinationLabel != null ? destinationLabel.GetComponent<TextMesh>() : null;
+                        if (label != null) label.text = ElevatorRound.FloorNumber(TeleportGates[i].Target).ToString();
+                    }
             }
             for (int i = 0; i < teleportGateViews.Length; i++)
             {
@@ -487,7 +630,7 @@ namespace CrazyElevator.Managers
         void CreateRouteLine(string name, float x, float startFloor, float endFloor, Color colour)
         {
             var route = new GameObject(name);
-            route.layer = ExteriorLayer;
+            route.layer = 28; // Elevator tracks: independently hidden by the cabin camera.
             route.transform.SetParent(crazyRouteMap, false);
             var line = route.AddComponent<LineRenderer>();
             line.useWorldSpace = false;
@@ -506,14 +649,14 @@ namespace CrazyElevator.Managers
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
             if (teleportFlash > 0f)
             {
-                DrawRouteGuide(view, "TELEPORT!  >>  FLOOR " + teleportFlashTarget, Gold);
+                DrawRouteGuide(view, "TELEPORT!  >>  FLOOR " + ElevatorRound.FloorNumber(teleportFlashTarget), Gold);
                 return;
             }
             if (railRiding)
             {
                 DrawRouteGuide(view, pendingTrackDirection != 0
                     ? "TURNING " + (pendingTrackDirection > 0 ? "UP" : "DOWN") + " AT NEXT TRACK"
-                    : "FLOOR " + railFloor + " RAIL  ·  W/S TO TURN AT NEXT TRACK", Gold);
+                    : "FLOOR " + ElevatorRound.FloorNumber(railFloor) + " RAIL  ·  W/S TO TURN AT NEXT TRACK", Gold);
                 return;
             }
             if (pendingRailDirection != 0)
@@ -525,8 +668,9 @@ namespace CrazyElevator.Managers
             if (!OnMainShaft(routeLateralX)
                 && TryGetVerticalTrack(routeLateralX, travelFloor, out _, out float bottom, out float top))
             {
-                DrawRouteGuide(view, "SIDE TRACK  F" + bottom + "-F" + top + "  ·  ENDS AT F"
-                    + (travelDirection > 0 ? top : bottom), Teal);
+                DrawRouteGuide(view, "SIDE TRACK  F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(bottom))
+                    + "-F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(top)) + "  ·  ENDS AT F"
+                    + ElevatorRound.FloorNumber(Mathf.RoundToInt(travelDirection > 0 ? top : bottom)), Teal);
                 return;
             }
 
@@ -544,7 +688,7 @@ namespace CrazyElevator.Managers
                 if (!Match.TryGetUpcomingJunction(this, out int junction, out float distance)) return;
                 string direction = Match.ExpressTrack(junction) == 0 ? "LEFT" : "RIGHT";
                 int exitFloor = Mathf.CeilToInt(Match.JunctionFloor(junction));
-                message = "EXPRESS GATE F" + exitFloor + "  /  " + direction
+                message = "EXPRESS GATE F" + ElevatorRound.FloorNumber(exitFloor) + "  /  " + direction
                     + "  /  " + distance.ToString("0.0") + "F";
                 accent = Teal;
             }

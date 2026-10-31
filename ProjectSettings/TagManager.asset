@@ -33,10 +33,10 @@ TagManager:
   - 
   - 
   - 
-  - 
-  - 
-  - 
-  - 
+  - Elevator tracks
+  - Cabin cutaway
+  - Encounter preview
+  - Elevator world
   m_SortingLayers:
   - name: Default
     uniqueID: 0

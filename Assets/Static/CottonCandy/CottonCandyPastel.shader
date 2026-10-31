@@ -10,6 +10,10 @@ Shader "Crazy Elevator/Storybook Surface"
         _PatternStrength ("Paper pattern strength", Range(0,0.18)) = 0.045
         _PatternMode ("Pattern mode (0 lines, 1 dots)", Range(0,1)) = 0
         _ToonSteps ("Lighting steps", Range(2,5)) = 3
+        // Opaque by default; door material instances enable alpha blending.
+        [HideInInspector] _SrcBlend ("Source blend", Float) = 1
+        [HideInInspector] _DstBlend ("Destination blend", Float) = 0
+        [HideInInspector] _ZWrite ("Depth write", Float) = 1
     }
     SubShader
     {
@@ -17,6 +21,8 @@ Shader "Crazy Elevator/Storybook Surface"
         Pass
         {
             Tags { "LightMode"="UniversalForward" }
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -65,7 +71,7 @@ Shader "Crazy Elevator/Storybook Surface"
                 // Stepped cool shadows and warm highlights keep the geometry
                 // dimensional while reading like layered cut paper.
                 color *= lerp(half3(.76, .72, .84), half3(1.03, 1.01, .96), saturate(light));
-                return half4(MixFog(color, input.fog), 1);
+                return half4(MixFog(color, input.fog), _BaseColor.a);
             }
             ENDHLSL
         }

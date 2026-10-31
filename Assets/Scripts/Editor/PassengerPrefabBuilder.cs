@@ -77,10 +77,79 @@ namespace CrazyElevator.EditorTools
             BuildArtist("ATLANTEAN", ConceptPrefabFolder + "/Passenger-ATLANTEAN.prefab",
                 "SM_character_underwater_02.fbx", .6f, 2.12f);
 
+            BuildSpecialPassengers();
             BuildShowcase();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("Rebuilt art-team passenger prefabs. Procedural fallback passengers were left unchanged.");
+        }
+
+        [MenuItem("Tools/Crazy Elevator/Rebuild Special Passenger Prefabs")]
+        public static void RebuildSpecialPassengers()
+        {
+            EnsureFolder(MaterialFolder);
+            materials.Clear();
+            BuildSpecialPassengers();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        // Keep the team's character meshes intact and save the role-specific
+        // accessories as editable children on each passenger prefab.
+        static void BuildSpecialPassengers()
+        {
+            BuildSpecial("HUNTER", ResourcePrefabFolder + "/Passenger-INTERVIEW.prefab", root =>
+            {
+                Cylinder(root, "Hunter hat brim", V(0, 2.05f, 0), V(.72f, .045f, .60f), Navy);
+                Cylinder(root, "Hunter hat crown", V(0, 2.18f, .02f), V(.48f, .12f, .43f), Navy);
+                Cube(root, "Hunter hat band", V(0, 2.11f, -.24f), V(.48f, .09f, .06f), Gold);
+                Sphere(root, "Hunter scanner", V(.48f, 1.02f, -.25f), V(.26f, .42f, .24f), Navy);
+                Sphere(root, "Hunter scanner lens", V(.48f, 1.12f, -.39f), V(.15f, .15f, .07f), Aqua);
+            }, 2.42f);
+
+            BuildSpecial("DIVER", ConceptPrefabFolder + "/Passenger-ATLANTEAN.prefab", root =>
+            {
+                Sphere(root, "Diver mask frame", V(0, 1.57f, -.48f), V(.68f, .34f, .14f), OceanDark);
+                Sphere(root, "Diver mask glass", V(0, 1.58f, -.56f), V(.54f, .23f, .06f), Aqua);
+                Capsule(root, "Diver snorkel", V(.43f, 1.80f, -.10f), V(.09f, .32f, .09f), Yellow);
+                Sphere(root, "Diver snorkel tip", V(.43f, 2.12f, -.10f), V(.13f, .12f, .13f), Coral);
+                Capsule(root, "Diver air tank", V(0, .85f, .40f), V(.36f, .52f, .28f), Yellow);
+                Cube(root, "Diver tank strap", V(0, .85f, .55f), V(.38f, .10f, .05f), OceanDark);
+            }, 2.32f);
+
+            BuildSpecial("BOUNCER", ResourcePrefabFolder + "/Passenger-BOSS.prefab", root =>
+            {
+                Sphere(root, "Bouncer left glove", V(-.70f, .85f, -.22f), V(.45f, .43f, .38f), CandyPink);
+                Sphere(root, "Bouncer right glove", V(.70f, .85f, -.22f), V(.45f, .43f, .38f), CandyPink);
+                Cube(root, "Bouncer left cuff", V(-.51f, .77f, -.20f), V(.18f, .22f, .27f), White);
+                Cube(root, "Bouncer right cuff", V(.51f, .77f, -.20f), V(.18f, .22f, .27f), White);
+                Cube(root, "Bouncer champion belt", V(0, .67f, -.38f), V(.74f, .16f, .10f), Navy);
+                Sphere(root, "Bouncer belt buckle", V(0, .67f, -.45f), V(.25f, .25f, .07f), Gold);
+            }, 2.38f);
+        }
+
+        static void BuildSpecial(string kind, string sourcePath, Action<Transform> addAccessories,
+            float labelHeight)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(sourcePath);
+            try
+            {
+                root.name = "Passenger-" + kind;
+                PassengerView view = root.GetComponent<PassengerView>();
+                if (view == null) throw new InvalidOperationException("Missing PassengerView: " + sourcePath);
+                view.kind = kind;
+                view.data = null;
+                addAccessories(root.transform);
+                view.patienceBarHeight = labelHeight;
+                if (view.destination != null)
+                    view.destination.transform.localPosition = V(0, labelHeight + .12f, 0);
+                if (view.speech != null)
+                    view.speech.transform.localPosition = V(0, labelHeight + .42f, 0);
+                string path = PersonaFolder + "/Prefabs/Passenger-" + kind + ".prefab";
+                if (PrefabUtility.SaveAsPrefabAsset(root, path) == null)
+                    throw new InvalidOperationException("Could not save passenger prefab: " + path);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
         }
 
         [MenuItem("Tools/Crazy Elevator/Rebuild Mom and Baby Prefab")]
@@ -175,6 +244,9 @@ namespace CrazyElevator.EditorTools
                 ResourcePrefabFolder + "/Passenger-GROUP.prefab",
                 ConceptPrefabFolder + "/Passenger-ATLANTEAN.prefab",
                 PersonaFolder + "/Prefabs/Passenger-HANDYMAN.prefab",
+                PersonaFolder + "/Prefabs/Passenger-HUNTER.prefab",
+                PersonaFolder + "/Prefabs/Passenger-DIVER.prefab",
+                PersonaFolder + "/Prefabs/Passenger-BOUNCER.prefab",
                 ConceptPrefabFolder + "/Passenger-DOLPHIN.prefab"
             };
 

@@ -1,0 +1,24 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>../../Temp/GameplayChecks/obj/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>../../Temp/GameplayChecks/obj/</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <OutputPath>../../Temp/GameplayChecks/bin/</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <RestoreSources></RestoreSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="UnityDataStubs.cs" />
+    <Compile Include="../../Assets/Scripts/Shared/ElevatorRound.cs" Link="ElevatorRound.cs" />
+    <Compile Include="../../Assets/Scripts/Shared/PassengerData.cs" Link="PassengerData.cs" />
+    <Compile Include="../../Assets/Scripts/Shared/SessionTypes.cs" Link="SessionTypes.cs" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

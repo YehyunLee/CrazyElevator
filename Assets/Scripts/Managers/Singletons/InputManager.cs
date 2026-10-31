@@ -56,8 +56,8 @@ namespace CrazyElevator.Managers
         public bool PointerHeld { get; private set; }
 
         // Split-screen keyboard input is read per seat so Player 2 can play
-        // without stealing Player 1's WASD/actions. Player 1 uses WASD + V/E;
-        // Player 2 uses arrows + period/slash.
+        // without stealing Player 1's WASD/actions. Player 1 uses WASD + C/E;
+        // Player 2 uses arrows + period/slash, comma to kick, semicolon to repair.
         public struct SeatInput
         {
             public Vector2 Move;
@@ -147,7 +147,7 @@ namespace CrazyElevator.Managers
         }
 
         public bool HasController(int seat)
-            => seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0;
+            => JoinedGamepad(seat) != null;
 
         public bool HasInput(int seat)
             => HasController(seat) || keyboardMouseSeat == seat || ExistingPlayerInput(seat) != null;
@@ -156,7 +156,7 @@ namespace CrazyElevator.Managers
         // and Player 2 uses the arrow keys. It is not a second joined device,
         // but the lobby should still expose Player 2 as a valid choice.
         public bool CanUseSplitKeyboard
-            => keyboardModeSession && Keyboard.current != null;
+            => Keyboard.current != null && (keyboardModeSession || ActiveView == GameView.Menu);
 
         // Player 2 can be selected from the lobby with a mouse or controller,
         // then still use the shared keyboard in the duel. Keep that decision
@@ -277,14 +277,18 @@ namespace CrazyElevator.Managers
             else if (gamepadActivity) { menuInputSource = InputSource.Gamepad; menuGamepad = pad; }
         }
 
-        Gamepad GamepadActivityThisFrame()
+        Gamepad GamepadActivityThisFrame(bool unassignedOnly = false)
         {
             foreach (var pad in Gamepad.all)
+            {
+                if (unassignedOnly && (pad.deviceId == joinedGamepadIds[0]
+                    || pad.deviceId == joinedGamepadIds[1])) continue;
                 if (pad.leftStick.ReadValue().magnitude >= .2f
                     || pad.dpad.ReadValue().magnitude >= .2f
                     || pad.buttonSouth.wasPressedThisFrame
                     || pad.startButton.wasPressedThisFrame)
                     return pad;
+            }
             return null;
         }
 
@@ -292,9 +296,8 @@ namespace CrazyElevator.Managers
         {
             int seat = NextAvailableSeat;
             if (seat < 0) return;
-            var pad = GamepadActivityThisFrame();
+            var pad = GamepadActivityThisFrame(true);
             if (pad == null) return;
-            if (pad.deviceId == joinedGamepadIds[0] || pad.deviceId == joinedGamepadIds[1]) return;
             var playerInput = JoinGamepad(GetComponent<PlayerInputManager>(), seat, pad);
             if (playerInput != null) joinedGamepadIds[seat] = pad.deviceId;
         }
@@ -378,14 +381,21 @@ namespace CrazyElevator.Managers
             }
         }
 
-        Gamepad GamepadForSeat(int seat)
+        Gamepad JoinedGamepad(int seat)
         {
-            if (keyboardMouseSeat == seat) return null;
             if (seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0)
             {
                 foreach (var gamepad in Gamepad.all)
                     if (gamepad.deviceId == joinedGamepadIds[seat]) return gamepad;
             }
+            return null;
+        }
+
+        Gamepad GamepadForSeat(int seat)
+        {
+            if (keyboardMouseSeat == seat) return null;
+            var assigned = JoinedGamepad(seat);
+            if (assigned != null) return assigned;
             if (!controllerJoining && seat == 0 && menuInputSource == InputSource.Gamepad
                 && Gamepad.all.Count > 0) return Gamepad.all[0];
             return null;
@@ -458,6 +468,8 @@ namespace CrazyElevator.Managers
             Vector2 dpad = pad == null ? Vector2.zero : pad.dpad.ReadValue();
             Vector2 stick = leftStick + dpad;
             Vector2 navigation = stick + keys;
+            Vector2 rightStick = pad == null ? Vector2.zero : pad.rightStick.ReadValue();
+            Vector2 selection = rightStick.magnitude >= .55f ? rightStick + keys : navigation;
             bool playerTwoConfirm = keyboardAvailable
                 && (keyboard.periodKey.wasPressedThisFrame
                     || ActiveView == GameView.Menu && keyboard.slashKey.wasPressedThisFrame);
@@ -466,21 +478,18 @@ namespace CrazyElevator.Managers
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
             bool kickout = playerTwoKeyboard
-                ? false
+                ? keyboardAvailable && keyboard.commaKey.wasPressedThisFrame
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
                     || pad != null && pad.buttonEast.wasPressedThisFrame;
             bool pause = keyboardAvailable && keyboard.escapeKey.wasPressedThisFrame
                 || pad != null && pad.startButton.wasPressedThisFrame
-                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger
+                        || ActiveView == GameView.Pause);
             bool overlay = !playerTwoKeyboard && keyboardAvailable
                 && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            bool closeDoors = playerTwoKeyboard
-                ? keyboardAvailable && keyboard.slashKey.wasPressedThisFrame
-                : keyboardAvailable && keyboard.eKey.wasPressedThisFrame
-                    || pad != null && pad.buttonNorth.wasPressedThisFrame
-                        && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            bool closeDoors = confirm;
             bool repair = playerTwoKeyboard
-                ? false
+                ? keyboardAvailable && keyboard.semicolonKey.isPressed
                 : keyboardAvailable && keyboard.rKey.isPressed
                     || pad != null && pad.rightShoulder.isPressed;
             bool boost = playerTwoKeyboard
@@ -501,9 +510,9 @@ namespace CrazyElevator.Managers
             var result = new SeatInput
             {
                 Move = navigation,
-                Select = navigation,
+                Select = selection,
                 MovePressed = navigation.magnitude >= .55f,
-                SelectPressed = navigation.magnitude >= .55f,
+                SelectPressed = selection.magnitude >= .55f,
                 ConfirmPressed = confirm,
                 KickoutPressed = kickout,
                 PausePressed = pause,
@@ -526,23 +535,23 @@ namespace CrazyElevator.Managers
                 result.PointerHeld = mouse.leftButton.isPressed;
             }
             if (!ignoreTutorialRestrictions)
-                ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat),
-                    pad != null, leftStick, keys);
+                ApplyTutorialInputMode(ref result, GetTutorialInputMode(seat), pad != null);
             return result;
         }
 
         static void ApplyTutorialInputMode(ref SeatInput input, TutorialInputMode mode,
-            bool controllerAssigned, Vector2 leftStick, Vector2 keyboardMove)
+            bool controllerAssigned)
         {
             if (mode == TutorialInputMode.Free) return;
 
             bool pause = input.PausePressed;
-            Vector2 select = controllerAssigned ? leftStick : keyboardMove;
+            Vector2 select = input.Select;
             // Travel steps teach up/down only; a slightly diagonal stick must not
             // turn the car onto a floor rail or switch duel lanes.
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool confirm = input.ConfirmPressed;
+            bool kickout = input.KickoutPressed;
             bool closeDoors = input.CloseDoorsPressed;
             input = default;
             input.PausePressed = pause;
@@ -557,7 +566,7 @@ namespace CrazyElevator.Managers
                     if (mode == TutorialInputMode.HelpPassenger)
                         input.ConfirmPressed = confirm;
                     else if (mode == TutorialInputMode.Kickout)
-                        input.KickoutPressed = confirm;
+                        input.KickoutPressed = kickout;
                     break;
                 case TutorialInputMode.BoardPassengers:
                     input.Select = select;
@@ -636,14 +645,17 @@ namespace CrazyElevator.Managers
                 || (pad != null && pad.buttonEast.wasPressedThisFrame);
             bool pause = (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
                 || (pad != null && pad.startButton.wasPressedThisFrame
-                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger));
+                    && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger
+                        || ActiveView == GameView.Pause));
+            // Route either controller's pause through GameManager once.
+            var secondPad = GamepadForSeat(1);
+            if (secondPad != null && secondPad.startButton.wasPressedThisFrame
+                && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger
+                    || ActiveView == GameView.Pause))
+                pause = true;
             bool overlay = keyboard != null && (keyboard.yKey.wasPressedThisFrame || keyboard.tabKey.wasPressedThisFrame);
-            // Keyboard C is contextual: confirm the highlighted passenger, or
-            // close the doors when nobody is selected. ElevatorManager owns
-            // that choice. Controller Y remains a dedicated close-door input.
-            bool closeDoors = (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-                || pad != null && pad.buttonNorth.wasPressedThisFrame
-                && (ActiveView == GameView.ControlElevator || ActiveView == GameView.Passenger);
+            // The same action stops the car or closes its doors to travel.
+            bool closeDoors = confirm;
             bool repair = (keyboard != null && keyboard.rKey.isPressed)
                 || (pad != null && pad.rightShoulder.isPressed);
             bool boost = (keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed))
@@ -671,7 +683,7 @@ namespace CrazyElevator.Managers
                 PointerPressed = mouse.leftButton.wasPressedThisFrame;
                 PointerReleased = mouse.leftButton.wasReleasedThisFrame;
                 PointerHeld = mouse.leftButton.isPressed;
-                // Left click stays with passenger drag / HUD buttons; right click is kickout.
+                // Left click selects onboard passengers / door buttons; right click is kickout.
                 if (mouse.rightButton.wasPressedThisFrame)
                     KickoutPressed = true;
             }

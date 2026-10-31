@@ -21,6 +21,7 @@ namespace CrazyElevator.Managers
         public int TravelStartCount => travelStartCount;
         public int FloorStopCount => floorStopCount;
         public int DiscreteFloor => round != null ? round.Floor : 0;
+        public int DiscreteStop => round != null ? round.Stop : ElevatorRound.CenterStop;
         public int MaxCapacity => ElevatorRound.Capacity;
         public bool HasSelectedPassenger => selectedRider != null;
         public int PassengerExitCount => passengerExitCount;
@@ -53,7 +54,7 @@ namespace CrazyElevator.Managers
                 if (round == null) return System.Array.Empty<Rider>();
                 var waiting = new List<Rider>();
                 foreach (var rider in round.Riders)
-                    if (!rider.Boarded && !rider.Resolved && rider.Origin == round.Floor && round.IsOffered(rider))
+                    if (round.IsOffered(rider))
                         waiting.Add(rider);
                 return waiting;
             }
@@ -76,7 +77,7 @@ namespace CrazyElevator.Managers
                 passengerManager = gameObject.AddComponent<PassengerManager>();
             }
             passengerManager.Bind(this);
-            if (GameManager.Instance != null && !IsNpc)
+            if (GameManager.Instance != null && Seat == 0)
                 GameManager.Instance.BindPlayer(this);
         }
 
@@ -86,13 +87,14 @@ namespace CrazyElevator.Managers
         public void ResetRoundPublic()
         {
             if (Match != null) Match.StartMatch();
-            else Restart();
+            else StartSoloRound();
         }
         public void SetPausedPublic(bool value) => paused = value;
 
         public void SetTravelInput(float axis, bool boost)
         {
             if (phase != Phase.Moving) return;
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             boostAxis = Mathf.Abs(axis) > .25f ? Mathf.Clamp(axis, -1f, 1f) : 0f;
             if (boostAxis != 0)
             {
@@ -110,9 +112,7 @@ namespace CrazyElevator.Managers
 
         public void OnboardSelectedPublic()
         {
-            if (!CanSelect(selectedRider)) return;
-            if (selectedRider.Boarded) return;
-            ConfirmPassenger();
+            OpenBoardingDoor(selectedBoardingDoor);
         }
 
         public void KickoutSelectedPublic()

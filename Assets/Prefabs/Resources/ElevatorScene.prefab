@@ -528,6 +528,8 @@ MonoBehaviour:
   - {fileID: 6851122490747818158, guid: cd49af0b78b064c628cccff556deb642, type: 3}
   - {fileID: 5982294781572636572, guid: 730494cd0f6644681b531e5aac54dd39, type: 3}
   - {fileID: 7360044963061388723, guid: e18e6497dfcde46cfa7a2a8d7b0e19c5, type: 3}
+  tornado: {fileID: 100010, guid: 9d1d750bd76e48ae97d2f7eb13f1baf2, type: 3}
+  monster: {fileID: 100010, guid: b877a14800bf4db8a1d762bafed063f5, type: 3}
 --- !u!1001 &3672296175483465992
 PrefabInstance:
   m_ObjectHideFlags: 0

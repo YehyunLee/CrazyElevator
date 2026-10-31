@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7546689861689225370}
   - component: {fileID: 7776928413884220521}
   - component: {fileID: 8137958949499546603}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -101,7 +101,7 @@ GameObject:
   - component: {fileID: 5435959444618173780}
   - component: {fileID: 8849861132439850998}
   - component: {fileID: 9144492649785274088}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -207,8 +207,8 @@ Transform:
   m_GameObject: {fileID: 40875669954723176}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 250.8, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 250.8, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -281,7 +281,7 @@ GameObject:
   - component: {fileID: 1264064324187441892}
   - component: {fileID: 4149449107103395873}
   - component: {fileID: 3271374791845123496}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -387,8 +387,8 @@ Transform:
   m_GameObject: {fileID: 64156711500672154}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 224.4, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 224.4, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -461,7 +461,7 @@ GameObject:
   - component: {fileID: 7903734966995867384}
   - component: {fileID: 9082935834028024482}
   - component: {fileID: 1188695770187932896}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -549,7 +549,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 288321144620982345}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -602,8 +602,8 @@ Transform:
   m_GameObject: {fileID: 138447493134987661}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 158.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 158.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -676,7 +676,7 @@ GameObject:
   - component: {fileID: 261878165751569973}
   - component: {fileID: 7499571452070627753}
   - component: {fileID: 4674788531708947833}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -782,8 +782,8 @@ Transform:
   m_GameObject: {fileID: 167766443816719743}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 198, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 198, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -856,7 +856,7 @@ GameObject:
   - component: {fileID: 4836216563508772036}
   - component: {fileID: 7819721466217258084}
   - component: {fileID: 205414843354722805}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -946,7 +946,7 @@ GameObject:
   - component: {fileID: 921976653867058060}
   - component: {fileID: 488826312581989047}
   - component: {fileID: 3381144563310371874}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1052,8 +1052,8 @@ Transform:
   m_GameObject: {fileID: 307585506244142150}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 145.2, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 145.2, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -1126,7 +1126,7 @@ GameObject:
   - component: {fileID: 9039807025121154305}
   - component: {fileID: 376937660248714132}
   - component: {fileID: 7981440284309733410}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1320,7 +1320,7 @@ GameObject:
   - component: {fileID: 936210032022789677}
   - component: {fileID: 4122455474915905474}
   - component: {fileID: 6091332160134889369}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1410,7 +1410,7 @@ GameObject:
   - component: {fileID: 6975219726775417316}
   - component: {fileID: 1716999491758665295}
   - component: {fileID: 6245849407619007513}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1516,8 +1516,8 @@ Transform:
   m_GameObject: {fileID: 408063154422500101}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 171.59999, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 171.59999, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -1590,7 +1590,7 @@ GameObject:
   - component: {fileID: 5348799200269454634}
   - component: {fileID: 1794359852351973663}
   - component: {fileID: 4759140161099809972}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1696,8 +1696,8 @@ Transform:
   m_GameObject: {fileID: 424698393107765088}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 290.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 290.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -1770,7 +1770,7 @@ GameObject:
   - component: {fileID: 4887348789402973715}
   - component: {fileID: 883924513534899137}
   - component: {fileID: 3766445648828260073}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1860,7 +1860,7 @@ GameObject:
   - component: {fileID: 3426932961306736563}
   - component: {fileID: 7273669306956452383}
   - component: {fileID: 3373699184289107342}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1948,7 +1948,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 499416789537156883}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1985,7 +1985,7 @@ GameObject:
   - component: {fileID: 3149379270523978308}
   - component: {fileID: 4766271312990317037}
   - component: {fileID: 3200916761992022718}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2073,7 +2073,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 522822495861424304}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2126,8 +2126,8 @@ Transform:
   m_GameObject: {fileID: 544618274996485850}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 118.799995, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 118.799995, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -2200,7 +2200,7 @@ GameObject:
   - component: {fileID: 261088166235069738}
   - component: {fileID: 567598847888224264}
   - component: {fileID: 7511587834484855798}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2306,8 +2306,8 @@ Transform:
   m_GameObject: {fileID: 578873850129351783}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 264, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 264, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -2380,7 +2380,7 @@ GameObject:
   - component: {fileID: 4551174619349881866}
   - component: {fileID: 159015555179940632}
   - component: {fileID: 7436758557337770921}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2574,7 +2574,7 @@ GameObject:
   - component: {fileID: 2194346800733295397}
   - component: {fileID: 8169881557471202860}
   - component: {fileID: 2013894182717477494}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2680,8 +2680,8 @@ Transform:
   m_GameObject: {fileID: 619177529486866709}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 303.6, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 303.6, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -2754,7 +2754,7 @@ GameObject:
   - component: {fileID: 4361956737484117083}
   - component: {fileID: 8314507465996313767}
   - component: {fileID: 233465437724253604}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2964,8 +2964,8 @@ Transform:
   m_GameObject: {fileID: 693301637590427465}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 184.8, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 184.8, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -3054,8 +3054,8 @@ Transform:
   m_GameObject: {fileID: 704053878116919681}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 224.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 224.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -3126,7 +3126,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8440771798105117122}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3179,8 +3179,8 @@ Transform:
   m_GameObject: {fileID: 734370579014155076}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 303.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 303.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -3253,7 +3253,7 @@ GameObject:
   - component: {fileID: 719893180374309346}
   - component: {fileID: 6641230586221264592}
   - component: {fileID: 7939223195033251200}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3341,7 +3341,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8136279852228881015}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3394,8 +3394,8 @@ Transform:
   m_GameObject: {fileID: 761603216482508292}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 264, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 264, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -3484,8 +3484,8 @@ Transform:
   m_GameObject: {fileID: 786126615405143229}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 39.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 39.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -3648,7 +3648,7 @@ GameObject:
   - component: {fileID: 2575687355342941740}
   - component: {fileID: 6969370457419819571}
   - component: {fileID: 2343072808355201404}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3738,7 +3738,7 @@ GameObject:
   - component: {fileID: 7624366578979795961}
   - component: {fileID: 5457444763596889162}
   - component: {fileID: 1393153907553419057}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3828,7 +3828,7 @@ GameObject:
   - component: {fileID: 3751791884888100525}
   - component: {fileID: 3115830121690859930}
   - component: {fileID: 226142075456539243}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3916,7 +3916,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1667331463863675769}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3969,8 +3969,8 @@ Transform:
   m_GameObject: {fileID: 898501734863061874}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 13.2, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 13.2, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4059,8 +4059,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000001}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 0, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 0, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4149,8 +4149,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000005}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 13.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 13.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4239,8 +4239,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000009}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 26.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 26.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4329,8 +4329,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000013}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 39.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 39.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4419,8 +4419,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000017}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 52.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 52.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4509,8 +4509,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000021}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 66, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 66, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4599,8 +4599,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000025}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 79.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 79.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4689,8 +4689,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000029}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 92.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 92.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4779,8 +4779,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000033}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 105.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 105.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4869,8 +4869,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000037}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 118.799995, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 118.799995, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -4959,8 +4959,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000041}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 132, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 132, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -5049,8 +5049,8 @@ Transform:
   m_GameObject: {fileID: 900000000000000045}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 145.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 145.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -5139,8 +5139,8 @@ Transform:
   m_GameObject: {fileID: 908161941875394510}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 52.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 52.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -5317,7 +5317,7 @@ GameObject:
   - component: {fileID: 91808462222234024}
   - component: {fileID: 6295893638531072518}
   - component: {fileID: 929160528257836662}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5407,7 +5407,7 @@ GameObject:
   - component: {fileID: 82726143957463370}
   - component: {fileID: 6725455277689263978}
   - component: {fileID: 382189106238643637}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5497,7 +5497,7 @@ GameObject:
   - component: {fileID: 8807269977762839964}
   - component: {fileID: 6630779180293428079}
   - component: {fileID: 5681066207279550214}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5587,7 +5587,7 @@ GameObject:
   - component: {fileID: 3424517826927146714}
   - component: {fileID: 7734073711694068270}
   - component: {fileID: 4687065947783588280}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5693,8 +5693,8 @@ Transform:
   m_GameObject: {fileID: 996399017426033952}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 145.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 145.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -5869,7 +5869,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4085015779939183736}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5906,7 +5906,7 @@ GameObject:
   - component: {fileID: 4746811081746839736}
   - component: {fileID: 2249837441604029585}
   - component: {fileID: 7274214468658805274}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5996,7 +5996,7 @@ GameObject:
   - component: {fileID: 6676856717160966445}
   - component: {fileID: 917629512557069990}
   - component: {fileID: 1187978919103121835}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6086,7 +6086,7 @@ GameObject:
   - component: {fileID: 3360839236047852023}
   - component: {fileID: 3928160234002047116}
   - component: {fileID: 2801330432567243373}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6176,7 +6176,7 @@ GameObject:
   - component: {fileID: 5604019004160813825}
   - component: {fileID: 6266014903457530746}
   - component: {fileID: 8902499981929215939}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6266,7 +6266,7 @@ GameObject:
   - component: {fileID: 5852405822693740521}
   - component: {fileID: 8145320877919887701}
   - component: {fileID: 3154193885207939574}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6372,8 +6372,8 @@ Transform:
   m_GameObject: {fileID: 1149054577439270738}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 132, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 132, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -6550,7 +6550,7 @@ GameObject:
   - component: {fileID: 5270524870232407852}
   - component: {fileID: 3725891228680812411}
   - component: {fileID: 1826276173460330904}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6646,7 +6646,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &6442892538288147945
 Transform:
   m_ObjectHideFlags: 0
@@ -6730,7 +6730,7 @@ GameObject:
   - component: {fileID: 2487976476277623480}
   - component: {fileID: 2109267297464405418}
   - component: {fileID: 1954738715118498519}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6922,7 +6922,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1985746139930439494}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7063,7 +7063,7 @@ GameObject:
   - component: {fileID: 4152756725440554851}
   - component: {fileID: 4918719759701880776}
   - component: {fileID: 3448643253739975907}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7169,8 +7169,8 @@ Transform:
   m_GameObject: {fileID: 1381351162951773013}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 0, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 0, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -7345,7 +7345,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 665678767375962853}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 1 F5-F8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7383,7 +7383,7 @@ GameObject:
   - component: {fileID: 8297713869415372420}
   - component: {fileID: 6190522480418742413}
   - component: {fileID: 7148595946189349175}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7473,7 +7473,7 @@ GameObject:
   - component: {fileID: 2970240794801910145}
   - component: {fileID: 22457975673604252}
   - component: {fileID: 353098668971838202}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7579,8 +7579,8 @@ Transform:
   m_GameObject: {fileID: 1478174984656424199}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 158.4, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 158.4, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -7743,7 +7743,7 @@ GameObject:
   - component: {fileID: 5568638067239429616}
   - component: {fileID: 2007487895310448235}
   - component: {fileID: 4170914522665716673}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7923,7 +7923,7 @@ GameObject:
   - component: {fileID: 5856827717068032463}
   - component: {fileID: 2351643458538786546}
   - component: {fileID: 8374054000049175558}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8013,7 +8013,7 @@ GameObject:
   - component: {fileID: 7702298140643913608}
   - component: {fileID: 6734304559744724187}
   - component: {fileID: 9130190460447065256}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8140,7 +8140,7 @@ GameObject:
   - component: {fileID: 1131790454947406518}
   - component: {fileID: 7965628491485573822}
   - component: {fileID: 8020128807763161893}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8246,8 +8246,8 @@ Transform:
   m_GameObject: {fileID: 1755994058444474317}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 184.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 184.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -8320,7 +8320,7 @@ GameObject:
   - component: {fileID: 1979714562722330879}
   - component: {fileID: 5464382313953397000}
   - component: {fileID: 389919876156599005}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8410,7 +8410,7 @@ GameObject:
   - component: {fileID: 7293322607189922224}
   - component: {fileID: 3428076889645925228}
   - component: {fileID: 7731254310644456989}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8500,7 +8500,7 @@ GameObject:
   - component: {fileID: 694678761441503923}
   - component: {fileID: 7872272637897640211}
   - component: {fileID: 6497024031776626219}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8590,7 +8590,7 @@ GameObject:
   - component: {fileID: 535837810870538329}
   - component: {fileID: 8595762647328333618}
   - component: {fileID: 2696279566928587927}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8964,7 +8964,7 @@ GameObject:
   - component: {fileID: 7205812217305953399}
   - component: {fileID: 3875156813263134890}
   - component: {fileID: 8223030026838233925}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9070,8 +9070,8 @@ Transform:
   m_GameObject: {fileID: 1942526616733019676}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 171.59999, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 171.59999, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -9144,7 +9144,7 @@ GameObject:
   - component: {fileID: 8208966064258174711}
   - component: {fileID: 2496209209339626582}
   - component: {fileID: 8510491298339193212}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9271,7 +9271,7 @@ GameObject:
   - component: {fileID: 3973035213774267121}
   - component: {fileID: 3127309183307070157}
   - component: {fileID: 2461839329452605133}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9361,7 +9361,7 @@ GameObject:
   - component: {fileID: 6757105150859848285}
   - component: {fileID: 9105965138728252998}
   - component: {fileID: 4264318869151024657}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9467,8 +9467,8 @@ Transform:
   m_GameObject: {fileID: 2100439274103960667}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 237.59999, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 237.59999, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -9645,7 +9645,7 @@ GameObject:
   - component: {fileID: 4072917048333997054}
   - component: {fileID: 4151174412042059159}
   - component: {fileID: 5847030215810916793}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9735,7 +9735,7 @@ GameObject:
   - component: {fileID: 2929161069403619380}
   - component: {fileID: 2108690559329588901}
   - component: {fileID: 2986314459066488151}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9841,8 +9841,8 @@ Transform:
   m_GameObject: {fileID: 2231193829646211025}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 264, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 264, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -9915,7 +9915,7 @@ GameObject:
   - component: {fileID: 6545658047271160740}
   - component: {fileID: 236741870159401492}
   - component: {fileID: 7935438574948821596}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10005,7 +10005,7 @@ GameObject:
   - component: {fileID: 1668216838075939458}
   - component: {fileID: 2564778473671051187}
   - component: {fileID: 8695425271961828811}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10095,7 +10095,7 @@ GameObject:
   - component: {fileID: 5459792924225104420}
   - component: {fileID: 6999993159590055734}
   - component: {fileID: 613622107715218672}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10305,8 +10305,8 @@ Transform:
   m_GameObject: {fileID: 2359429386552773084}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 184.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 184.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -10379,7 +10379,7 @@ GameObject:
   - component: {fileID: 8024943013281149592}
   - component: {fileID: 6520748335487784859}
   - component: {fileID: 1378869050381610518}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10469,7 +10469,7 @@ GameObject:
   - component: {fileID: 304346075051292487}
   - component: {fileID: 2042329946779105503}
   - component: {fileID: 4690332332659159629}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10575,8 +10575,8 @@ Transform:
   m_GameObject: {fileID: 2481867597483142425}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 26.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 26.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -10647,7 +10647,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2999692431772397024}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10774,7 +10774,7 @@ GameObject:
   - component: {fileID: 3427865559472838183}
   - component: {fileID: 1449929593092064123}
   - component: {fileID: 6301848008935833607}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10954,7 +10954,7 @@ GameObject:
   - component: {fileID: 5538122798404725069}
   - component: {fileID: 4931416828542414541}
   - component: {fileID: 5044225557082604647}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11044,7 +11044,7 @@ GameObject:
   - component: {fileID: 5009158369450311478}
   - component: {fileID: 977793454875168602}
   - component: {fileID: 1206948165983651544}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11224,7 +11224,7 @@ GameObject:
   - component: {fileID: 1333538967315666705}
   - component: {fileID: 4798263140876247064}
   - component: {fileID: 2102101642376586149}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11314,7 +11314,7 @@ GameObject:
   - component: {fileID: 8932892084009666739}
   - component: {fileID: 6462418236999535779}
   - component: {fileID: 1517391226045777733}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11494,7 +11494,7 @@ GameObject:
   - component: {fileID: 7638211193609432650}
   - component: {fileID: 6267094249180627927}
   - component: {fileID: 658541228560123474}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11600,8 +11600,8 @@ Transform:
   m_GameObject: {fileID: 2855447136235379489}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 79.2, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 79.2, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -11690,8 +11690,8 @@ Transform:
   m_GameObject: {fileID: 2866745499441901871}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 277.19998, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 277.19998, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -11762,7 +11762,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1089120386341776591}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 13 F21-F23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11816,8 +11816,8 @@ Transform:
   m_GameObject: {fileID: 2944750986881675845}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 66, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 66, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -11888,7 +11888,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1571104720049093080}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11925,7 +11925,7 @@ GameObject:
   - component: {fileID: 4908745525671642165}
   - component: {fileID: 7996706959943378388}
   - component: {fileID: 2774331635683282149}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12015,7 +12015,7 @@ GameObject:
   - component: {fileID: 1679920511712387198}
   - component: {fileID: 3194895897624762356}
   - component: {fileID: 6175999714591278172}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right guide rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12105,7 +12105,7 @@ GameObject:
   - component: {fileID: 7019785895716844267}
   - component: {fileID: 1930856412537389970}
   - component: {fileID: 7931781081255970653}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12373,7 +12373,7 @@ GameObject:
   - component: {fileID: 7151241577153619004}
   - component: {fileID: 8684648541368087625}
   - component: {fileID: 6554595329550555615}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12461,7 +12461,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2124640620907612937}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12498,7 +12498,7 @@ GameObject:
   - component: {fileID: 606178175664483000}
   - component: {fileID: 2785856618171739202}
   - component: {fileID: 5620467727378226227}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12588,7 +12588,7 @@ GameObject:
   - component: {fileID: 1107650931929882204}
   - component: {fileID: 548693720068669516}
   - component: {fileID: 8489945678443644164}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12694,8 +12694,8 @@ Transform:
   m_GameObject: {fileID: 3204014005459300173}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 211.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 211.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -12874,8 +12874,8 @@ Transform:
   m_GameObject: {fileID: 3220580767133204377}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 250.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 250.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -12948,7 +12948,7 @@ GameObject:
   - component: {fileID: 1308253633196312568}
   - component: {fileID: 7497413953138696524}
   - component: {fileID: 6783938975197925557}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13038,7 +13038,7 @@ GameObject:
   - component: {fileID: 3811596037170429291}
   - component: {fileID: 8655015388613710809}
   - component: {fileID: 6607430972981927502}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13412,7 +13412,7 @@ GameObject:
   - component: {fileID: 5188428783608365224}
   - component: {fileID: 9005212712650468979}
   - component: {fileID: 6962003095120886422}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13502,7 +13502,7 @@ GameObject:
   - component: {fileID: 296964603870802622}
   - component: {fileID: 8903780884703023995}
   - component: {fileID: 3097883680799613864}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13592,7 +13592,7 @@ GameObject:
   - component: {fileID: 5346628430845900738}
   - component: {fileID: 562293946837822334}
   - component: {fileID: 4804849929450918653}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13682,7 +13682,7 @@ GameObject:
   - component: {fileID: 6512905957165612736}
   - component: {fileID: 2922510301325915048}
   - component: {fileID: 4878284935107512133}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13876,7 +13876,7 @@ GameObject:
   - component: {fileID: 5081872349675920663}
   - component: {fileID: 2928540723930413248}
   - component: {fileID: 5597808866389880198}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13964,7 +13964,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8461682307160754667}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14001,7 +14001,7 @@ GameObject:
   - component: {fileID: 7116485443489778870}
   - component: {fileID: 5191645660478316214}
   - component: {fileID: 3754541722949067268}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14091,7 +14091,7 @@ GameObject:
   - component: {fileID: 1641031404284796424}
   - component: {fileID: 3148529701376575556}
   - component: {fileID: 5322010238733210800}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14197,8 +14197,8 @@ Transform:
   m_GameObject: {fileID: 3669250021656122638}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 211.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 211.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -14375,7 +14375,7 @@ GameObject:
   - component: {fileID: 2835675855465850385}
   - component: {fileID: 6017968470932719864}
   - component: {fileID: 7393936098525690456}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14569,7 +14569,7 @@ GameObject:
   - component: {fileID: 7255664666604116013}
   - component: {fileID: 4487032815110573913}
   - component: {fileID: 2167577303473561613}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14761,7 +14761,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5083414240128495249}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 14 F3-F6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14799,7 +14799,7 @@ GameObject:
   - component: {fileID: 2380384174103450057}
   - component: {fileID: 3636686016560560282}
   - component: {fileID: 7440488421113631348}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14889,7 +14889,7 @@ GameObject:
   - component: {fileID: 496825696408357404}
   - component: {fileID: 2362054502287404188}
   - component: {fileID: 3610212279342453893}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14979,7 +14979,7 @@ GameObject:
   - component: {fileID: 2844600381547351987}
   - component: {fileID: 5237715207526603916}
   - component: {fileID: 8980745935551980392}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15175,8 +15175,8 @@ Transform:
   m_GameObject: {fileID: 3964224996264346648}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 105.6, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 105.6, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -15249,7 +15249,7 @@ GameObject:
   - component: {fileID: 7649684478556500420}
   - component: {fileID: 9088999277592021142}
   - component: {fileID: 6571175313535531090}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15427,7 +15427,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7380903659973258236}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 4 F20-F23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15463,7 +15463,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3607740315329981932}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15516,8 +15516,8 @@ Transform:
   m_GameObject: {fileID: 4138715559820092735}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 237.59999, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 237.59999, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -15588,7 +15588,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3235991177245495380}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 9 F1-F4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15626,7 +15626,7 @@ GameObject:
   - component: {fileID: 63079860772428024}
   - component: {fileID: 2182282422857926707}
   - component: {fileID: 2751910775464544739}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15716,7 +15716,7 @@ GameObject:
   - component: {fileID: 8003350387133844027}
   - component: {fileID: 4120686808649569296}
   - component: {fileID: 1668110858412149233}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15822,8 +15822,8 @@ Transform:
   m_GameObject: {fileID: 4215936601939298963}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 224.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 224.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -15896,7 +15896,7 @@ GameObject:
   - component: {fileID: 6420984815552953073}
   - component: {fileID: 9073171620910797689}
   - component: {fileID: 8956508677070218810}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16002,8 +16002,8 @@ Transform:
   m_GameObject: {fileID: 4225953792861082824}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 277.19998, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 277.19998, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -16117,7 +16117,7 @@ GameObject:
   - component: {fileID: 5823107898376886925}
   - component: {fileID: 853035486440763445}
   - component: {fileID: 8094463502455464414}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16297,7 +16297,7 @@ GameObject:
   - component: {fileID: 8827845076039565344}
   - component: {fileID: 1604025170805973818}
   - component: {fileID: 1779022638803180700}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16403,8 +16403,8 @@ Transform:
   m_GameObject: {fileID: 4369415281437701835}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 171.59999, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 171.59999, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -16477,7 +16477,7 @@ GameObject:
   - component: {fileID: 7263718538618809877}
   - component: {fileID: 7082128528719921706}
   - component: {fileID: 4866283936726165143}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16567,7 +16567,7 @@ GameObject:
   - component: {fileID: 88006618230227224}
   - component: {fileID: 6335587916061658267}
   - component: {fileID: 2894816565712308104}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16761,7 +16761,7 @@ GameObject:
   - component: {fileID: 2802146770973557253}
   - component: {fileID: 5089069417775783022}
   - component: {fileID: 2037157181457048846}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16953,7 +16953,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3587092942666951018}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 8 F17-F20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16991,7 +16991,7 @@ GameObject:
   - component: {fileID: 8452198902914419130}
   - component: {fileID: 4201649618398109080}
   - component: {fileID: 2012597350494212286}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17171,7 +17171,7 @@ GameObject:
   - component: {fileID: 1747737858932933717}
   - component: {fileID: 1567028688403728504}
   - component: {fileID: 3802402751480029769}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17259,7 +17259,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 820453048604298883}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side Tracks
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17310,7 +17310,7 @@ GameObject:
   - component: {fileID: 7874585893491576980}
   - component: {fileID: 5676943798785386732}
   - component: {fileID: 297469376445818994}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17400,7 +17400,7 @@ GameObject:
   - component: {fileID: 4241152831659284297}
   - component: {fileID: 6157927780615724573}
   - component: {fileID: 6517166315203456995}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17490,7 +17490,7 @@ GameObject:
   - component: {fileID: 8473584556511792843}
   - component: {fileID: 3358661624341949772}
   - component: {fileID: 8884765142550918694}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17580,7 +17580,7 @@ GameObject:
   - component: {fileID: 4640609771050292459}
   - component: {fileID: 8405204170846072979}
   - component: {fileID: 6158149296367582689}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17676,7 +17676,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &7564934187810540404
 Transform:
   m_ObjectHideFlags: 0
@@ -17758,7 +17758,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2474755218297064678}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 17 F18-F21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17812,8 +17812,8 @@ Transform:
   m_GameObject: {fileID: 4820005055162010291}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 92.4, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 92.4, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -17884,7 +17884,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4876089914587572458}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 2 F10-F13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18055,7 +18055,7 @@ GameObject:
   - component: {fileID: 1476886680757420599}
   - component: {fileID: 5276791692254262891}
   - component: {fileID: 4698939629129110105}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18144,7 +18144,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7512233579431840688}
   m_Layer: 0
-  m_Name: Exterior elevator car
+  m_Name: Gameplay elevator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18179,7 +18179,7 @@ GameObject:
   - component: {fileID: 3906246656974580606}
   - component: {fileID: 7689943181533857244}
   - component: {fileID: 458109775341412039}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18269,7 +18269,7 @@ GameObject:
   - component: {fileID: 44352755794966436}
   - component: {fileID: 7571874266154055195}
   - component: {fileID: 7092584543524584750}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18375,8 +18375,8 @@ Transform:
   m_GameObject: {fileID: 5027788780188934771}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 66, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 66, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -18465,8 +18465,8 @@ Transform:
   m_GameObject: {fileID: 5051368661060283499}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 105.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 105.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -18539,7 +18539,7 @@ GameObject:
   - component: {fileID: 765850810132726461}
   - component: {fileID: 905119519329080891}
   - component: {fileID: 5190228385026698080}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18786,8 +18786,8 @@ Transform:
   m_GameObject: {fileID: 5080698937535557984}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 39.6, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 39.6, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -18876,8 +18876,8 @@ Transform:
   m_GameObject: {fileID: 5113252039362404391}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 290.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 290.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -19040,7 +19040,7 @@ GameObject:
   - component: {fileID: 2296995648697298557}
   - component: {fileID: 2550555096850862325}
   - component: {fileID: 4947916916270914902}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19130,7 +19130,7 @@ GameObject:
   - component: {fileID: 4406065911930979812}
   - component: {fileID: 6269698431314169714}
   - component: {fileID: 5877588582380698079}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19340,8 +19340,8 @@ Transform:
   m_GameObject: {fileID: 5242696494332973470}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 237.59999, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 237.59999, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -19414,7 +19414,7 @@ GameObject:
   - component: {fileID: 2501296632710048830}
   - component: {fileID: 58034099966608317}
   - component: {fileID: 5249273822239989315}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19504,7 +19504,7 @@ GameObject:
   - component: {fileID: 9181408186083512249}
   - component: {fileID: 8860420198601417562}
   - component: {fileID: 5388388914350295821}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19592,7 +19592,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 94049498266309557}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 3 F15-F18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19628,7 +19628,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7217556348776186436}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 15 F8-F11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19666,7 +19666,7 @@ GameObject:
   - component: {fileID: 4901304574337554185}
   - component: {fileID: 1663229108277469532}
   - component: {fileID: 3595056910219257692}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19772,8 +19772,8 @@ Transform:
   m_GameObject: {fileID: 5365778578580142046}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 277.19998, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 277.19998, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -19862,8 +19862,8 @@ Transform:
   m_GameObject: {fileID: 5380255130880630103}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 158.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 158.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -20130,7 +20130,7 @@ GameObject:
   - component: {fileID: 4865792695867829933}
   - component: {fileID: 7942490704340000385}
   - component: {fileID: 2148512245374552209}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20220,7 +20220,7 @@ GameObject:
   - component: {fileID: 1690374962210265997}
   - component: {fileID: 1970325801104251207}
   - component: {fileID: 5083087323372873234}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20310,7 +20310,7 @@ GameObject:
   - component: {fileID: 7356714433385297813}
   - component: {fileID: 6291896355991340324}
   - component: {fileID: 8838908048246672149}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20400,7 +20400,7 @@ GameObject:
   - component: {fileID: 8475234924794526798}
   - component: {fileID: 6398446084608753843}
   - component: {fileID: 5055635311029801920}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20490,7 +20490,7 @@ GameObject:
   - component: {fileID: 8982163704355984857}
   - component: {fileID: 4816657001683439859}
   - component: {fileID: 3615534079449336791}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20580,7 +20580,7 @@ GameObject:
   - component: {fileID: 8980714194182872435}
   - component: {fileID: 2074221213949544206}
   - component: {fileID: 2334945580070308440}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20878,7 +20878,7 @@ GameObject:
   - component: {fileID: 6904712628021557193}
   - component: {fileID: 1852178583006888567}
   - component: {fileID: 7535691453555563287}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21072,7 +21072,7 @@ GameObject:
   - component: {fileID: 7092743535518337954}
   - component: {fileID: 185422933579935822}
   - component: {fileID: 7504273443135588242}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21168,7 +21168,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &356341167493716955
 Transform:
   m_ObjectHideFlags: 0
@@ -21356,7 +21356,7 @@ GameObject:
   - component: {fileID: 4111774195644145103}
   - component: {fileID: 2172389589738709773}
   - component: {fileID: 3805102590618730774}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21462,8 +21462,8 @@ Transform:
   m_GameObject: {fileID: 5733271016265729802}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 118.799995, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 118.799995, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -21536,7 +21536,7 @@ GameObject:
   - component: {fileID: 4556362311402633954}
   - component: {fileID: 8703491703976747637}
   - component: {fileID: 2149121154739562943}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21624,7 +21624,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5086943653722837931}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 10 F6-F9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21752,7 +21752,7 @@ GameObject:
   - component: {fileID: 4898495948893455577}
   - component: {fileID: 8702299794763683809}
   - component: {fileID: 8040709370731548021}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21842,7 +21842,7 @@ GameObject:
   - component: {fileID: 3303342567580910129}
   - component: {fileID: 4604152657909544471}
   - component: {fileID: 4737306977656606292}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21948,8 +21948,8 @@ Transform:
   m_GameObject: {fileID: 5817470105321274055}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 198, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 198, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -22022,7 +22022,7 @@ GameObject:
   - component: {fileID: 483583533571186424}
   - component: {fileID: 203833934051307068}
   - component: {fileID: 2740967985019248443}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22112,7 +22112,7 @@ GameObject:
   - component: {fileID: 7148600933193364428}
   - component: {fileID: 9122602588302479654}
   - component: {fileID: 3049451373334236939}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22218,8 +22218,8 @@ Transform:
   m_GameObject: {fileID: 5870136842315068211}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 198, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: 24, y: 198, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -22292,7 +22292,7 @@ GameObject:
   - component: {fileID: 5731762628550063019}
   - component: {fileID: 7648484522735413819}
   - component: {fileID: 8238473281290650246}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22398,8 +22398,8 @@ Transform:
   m_GameObject: {fileID: 5923784251408326447}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 0, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 0, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -22470,7 +22470,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5340985367924414632}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22507,7 +22507,7 @@ GameObject:
   - component: {fileID: 2878534835667802223}
   - component: {fileID: 5183103081472286557}
   - component: {fileID: 2793272127078827236}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22699,7 +22699,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2711183547172611798}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor Rails
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22756,7 +22756,7 @@ GameObject:
   - component: {fileID: 5121282115636761770}
   - component: {fileID: 3488350381707236344}
   - component: {fileID: 9012663660367610005}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22950,7 +22950,7 @@ GameObject:
   - component: {fileID: 7538298766889681485}
   - component: {fileID: 8298699181757108750}
   - component: {fileID: 8736390276436273707}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23056,8 +23056,8 @@ Transform:
   m_GameObject: {fileID: 6115498687504964372}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 290.4, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 290.4, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -23128,7 +23128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 343865891302755186}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23345,7 +23345,7 @@ GameObject:
   - component: {fileID: 9053243106740250685}
   - component: {fileID: 617788858074723242}
   - component: {fileID: 1611012623915345348}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23435,7 +23435,7 @@ GameObject:
   - component: {fileID: 7406069168695152408}
   - component: {fileID: 1585802608440064548}
   - component: {fileID: 6686759738013025475}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23523,7 +23523,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7210225819473069667}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 7 F12-F15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23688,7 +23688,7 @@ GameObject:
   - component: {fileID: 2923040397316885365}
   - component: {fileID: 7816952174877501037}
   - component: {fileID: 7221944370695820533}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23915,7 +23915,7 @@ GameObject:
   - component: {fileID: 8760620167763109555}
   - component: {fileID: 4368064621373780277}
   - component: {fileID: 3951869577609377062}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24021,8 +24021,8 @@ Transform:
   m_GameObject: {fileID: 6343244249925835574}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 26.4, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 26.4, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -24095,7 +24095,7 @@ GameObject:
   - component: {fileID: 2131914330953446378}
   - component: {fileID: 1655651614919490679}
   - component: {fileID: 472479388875960984}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24326,7 +24326,7 @@ GameObject:
   - component: {fileID: 5045304976376665692}
   - component: {fileID: 585282292903337171}
   - component: {fileID: 1982666176523468472}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24610,7 +24610,7 @@ GameObject:
   - component: {fileID: 4755698584011223411}
   - component: {fileID: 4456230063403770577}
   - component: {fileID: 5967031301160230617}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24716,8 +24716,8 @@ Transform:
   m_GameObject: {fileID: 6500936435231905724}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 52.8, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 52.8, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -24790,7 +24790,7 @@ GameObject:
   - component: {fileID: 5213301244175538312}
   - component: {fileID: 6040185809245614124}
   - component: {fileID: 4883487919310522763}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24984,7 +24984,7 @@ GameObject:
   - component: {fileID: 2597517921018945654}
   - component: {fileID: 7273487027453498291}
   - component: {fileID: 8135906344298974669}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25074,7 +25074,7 @@ GameObject:
   - component: {fileID: 6173812735846822940}
   - component: {fileID: 939258652583573544}
   - component: {fileID: 1742136310338115315}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25254,7 +25254,7 @@ GameObject:
   - component: {fileID: 77351712640467926}
   - component: {fileID: 8725484885407104761}
   - component: {fileID: 1785849814152939149}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25446,7 +25446,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1470782546166992519}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25483,7 +25483,7 @@ GameObject:
   - component: {fileID: 5745871978454783634}
   - component: {fileID: 6675324441245239741}
   - component: {fileID: 7241353028889080237}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25604,7 +25604,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8271308688430713458}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 12 F16-F19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25658,8 +25658,8 @@ Transform:
   m_GameObject: {fileID: 6734320764771724086}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 132, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 132, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -25732,7 +25732,7 @@ GameObject:
   - component: {fileID: 3670126036563380205}
   - component: {fileID: 5710686821961433913}
   - component: {fileID: 3741983689632444777}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26000,7 +26000,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3922395582036709656}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26037,7 +26037,7 @@ GameObject:
   - component: {fileID: 8641139884716129352}
   - component: {fileID: 4331016414217316625}
   - component: {fileID: 5332208837512293988}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26127,7 +26127,7 @@ GameObject:
   - component: {fileID: 5107719268913641003}
   - component: {fileID: 6545040127795643110}
   - component: {fileID: 7333419182846155225}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26217,7 +26217,7 @@ GameObject:
   - component: {fileID: 3561412905736237328}
   - component: {fileID: 3670211735509269389}
   - component: {fileID: 7869485645050381624}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26305,7 +26305,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1875738459721034795}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 6 F7-F10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26433,7 +26433,7 @@ GameObject:
   - component: {fileID: 3060008004525007201}
   - component: {fileID: 4676280600951840214}
   - component: {fileID: 2992598124056215515}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26613,7 +26613,7 @@ GameObject:
   - component: {fileID: 6483006810260993161}
   - component: {fileID: 1735248241856160197}
   - component: {fileID: 1708129280156958660}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26740,7 +26740,7 @@ GameObject:
   - component: {fileID: 2749879348413503022}
   - component: {fileID: 5667154248133943044}
   - component: {fileID: 3303640216202051382}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26830,7 +26830,7 @@ GameObject:
   - component: {fileID: 7022696308020177496}
   - component: {fileID: 442612490890788569}
   - component: {fileID: 7530949120674186929}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26920,7 +26920,7 @@ GameObject:
   - component: {fileID: 4880508170571495406}
   - component: {fileID: 5053875102019061561}
   - component: {fileID: 7551371737825113894}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27204,7 +27204,7 @@ GameObject:
   - component: {fileID: 8407870486050201063}
   - component: {fileID: 1835204669795512111}
   - component: {fileID: 247017545538575561}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27294,7 +27294,7 @@ GameObject:
   - component: {fileID: 805566916853340638}
   - component: {fileID: 7648979405642281741}
   - component: {fileID: 3155276638515863724}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27384,7 +27384,7 @@ GameObject:
   - component: {fileID: 972721030600128516}
   - component: {fileID: 6412032866708757699}
   - component: {fileID: 1127655697769516489}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27564,7 +27564,7 @@ GameObject:
   - component: {fileID: 3534457227723520119}
   - component: {fileID: 4570394822875273541}
   - component: {fileID: 777324829663435774}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27654,7 +27654,7 @@ GameObject:
   - component: {fileID: 6234389132900486614}
   - component: {fileID: 3402894881893088044}
   - component: {fileID: 5958820062183158971}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27952,7 +27952,7 @@ GameObject:
   - component: {fileID: 2205028924902333270}
   - component: {fileID: 3083512279537005888}
   - component: {fileID: 1342822808500656723}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28040,7 +28040,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6657857986988993339}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28077,7 +28077,7 @@ GameObject:
   - component: {fileID: 44489051088653197}
   - component: {fileID: 7788251519583607771}
   - component: {fileID: 5672223182040462934}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28255,7 +28255,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2706299701884818182}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28292,7 +28292,7 @@ GameObject:
   - component: {fileID: 4794314604357020082}
   - component: {fileID: 6040862764759238933}
   - component: {fileID: 4200381184834587116}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28380,7 +28380,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8047772572029486268}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 16 F13-F16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28418,7 +28418,7 @@ GameObject:
   - component: {fileID: 5807595544073349496}
   - component: {fileID: 721551263081732833}
   - component: {fileID: 1656885266723201553}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28506,7 +28506,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8885002816982184638}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 5 F2-F5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28544,7 +28544,7 @@ GameObject:
   - component: {fileID: 4594155812531903367}
   - component: {fileID: 7565314711768644832}
   - component: {fileID: 8912886267861687428}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28634,7 +28634,7 @@ GameObject:
   - component: {fileID: 2600911583664265651}
   - component: {fileID: 390246859168133710}
   - component: {fileID: 128853788769901085}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28740,8 +28740,8 @@ Transform:
   m_GameObject: {fileID: 7688269286161019072}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 13.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 13.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -28830,8 +28830,8 @@ Transform:
   m_GameObject: {fileID: 7717329519904044074}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 303.6, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 303.6, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -29008,7 +29008,7 @@ GameObject:
   - component: {fileID: 2708199242287319214}
   - component: {fileID: 691220124101830052}
   - component: {fileID: 7497734967625083501}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29292,7 +29292,7 @@ GameObject:
   - component: {fileID: 7469496403946081131}
   - component: {fileID: 6220512500609139472}
   - component: {fileID: 9222519098820803590}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29382,7 +29382,7 @@ GameObject:
   - component: {fileID: 3740226156335173918}
   - component: {fileID: 5430785656687107669}
   - component: {fileID: 8244528796462907248}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29472,7 +29472,7 @@ GameObject:
   - component: {fileID: 4104654517341214526}
   - component: {fileID: 823315091838611730}
   - component: {fileID: 5653550332823385669}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29742,7 +29742,7 @@ GameObject:
   - component: {fileID: 6463277185853566700}
   - component: {fileID: 2535313306825776745}
   - component: {fileID: 6896128352726182503}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29848,8 +29848,8 @@ Transform:
   m_GameObject: {fileID: 8027463560835731541}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 9, y: 211.2, z: 1}
-  m_LocalScale: {x: 8, y: 0.12, z: 4}
+  m_LocalPosition: {x: 9, y: 211.2, z: 0.1}
+  m_LocalScale: {x: 8, y: 0.12, z: 5.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -30012,7 +30012,7 @@ GameObject:
   - component: {fileID: 2929105321684803662}
   - component: {fileID: 1520228029915026812}
   - component: {fileID: 3332565047836859160}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30102,7 +30102,7 @@ GameObject:
   - component: {fileID: 3366339564965723400}
   - component: {fileID: 4506936552299897814}
   - component: {fileID: 8265473465811179696}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30296,7 +30296,7 @@ GameObject:
   - component: {fileID: 6760708729579495179}
   - component: {fileID: 6860054809190644027}
   - component: {fileID: 8249308341543266553}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30386,7 +30386,7 @@ GameObject:
   - component: {fileID: 2380634075757512186}
   - component: {fileID: 84327079293842628}
   - component: {fileID: 5338136711158893539}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30476,7 +30476,7 @@ GameObject:
   - component: {fileID: 9105027484896335798}
   - component: {fileID: 7080985066184416940}
   - component: {fileID: 850938793774236987}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30566,7 +30566,7 @@ GameObject:
   - component: {fileID: 7454978286595128884}
   - component: {fileID: 3490319320601736884}
   - component: {fileID: 3865497744222529577}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30746,7 +30746,7 @@ GameObject:
   - component: {fileID: 2584761262807385207}
   - component: {fileID: 6053291162349432448}
   - component: {fileID: 6414953385542035958}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30836,7 +30836,7 @@ GameObject:
   - component: {fileID: 3815678845855404637}
   - component: {fileID: 7062063906876579955}
   - component: {fileID: 7061957055538288481}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30926,7 +30926,7 @@ GameObject:
   - component: {fileID: 8524180208218137622}
   - component: {fileID: 2265246952353168348}
   - component: {fileID: 6497694846319484174}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31016,7 +31016,7 @@ GameObject:
   - component: {fileID: 3740132822405218703}
   - component: {fileID: 1428979687853601133}
   - component: {fileID: 8240549754501203434}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31268,7 +31268,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 134958088584984204}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31409,7 +31409,7 @@ GameObject:
   - component: {fileID: 5872323597755195574}
   - component: {fileID: 5426332702088330382}
   - component: {fileID: 1237463139134540456}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Girder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31497,7 +31497,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1611383994654592403}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 11 F11-F14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31639,7 +31639,7 @@ GameObject:
   - component: {fileID: 3144738221757126706}
   - component: {fileID: 9163012011193645636}
   - component: {fileID: 6210069320243078939}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Top bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31745,8 +31745,8 @@ Transform:
   m_GameObject: {fileID: 8441173473700036226}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 79.2, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 79.2, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -31819,7 +31819,7 @@ GameObject:
   - component: {fileID: 3396062438181609880}
   - component: {fileID: 2248084153828640251}
   - component: {fileID: 2325465514801759073}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31909,7 +31909,7 @@ GameObject:
   - component: {fileID: 5147398125229972534}
   - component: {fileID: 3777452168021301865}
   - component: {fileID: 1764091979196651227}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31997,7 +31997,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7145768400505557616}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Side track 0 F0-F3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32051,8 +32051,8 @@ Transform:
   m_GameObject: {fileID: 8509560792491715877}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 250.8, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 250.8, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}
@@ -32125,7 +32125,7 @@ GameObject:
   - component: {fileID: 7835295641527661798}
   - component: {fileID: 3721829050359313342}
   - component: {fileID: 6138351019566438653}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Right post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32213,7 +32213,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5895185670781812884}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32444,7 +32444,7 @@ GameObject:
   - component: {fileID: 4992476721360331579}
   - component: {fileID: 8922718716080500872}
   - component: {fileID: 5568436683001111041}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32638,7 +32638,7 @@ GameObject:
   - component: {fileID: 9183253927872261292}
   - component: {fileID: 1052806129033174495}
   - component: {fileID: 6819531142314175493}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Spine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32728,7 +32728,7 @@ GameObject:
   - component: {fileID: 7078763800099411968}
   - component: {fileID: 9134972545996307905}
   - component: {fileID: 2424923150595773229}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32818,7 +32818,7 @@ GameObject:
   - component: {fileID: 3274558252581421907}
   - component: {fileID: 6526646734707206150}
   - component: {fileID: 393167126497312397}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Bottom bumper
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32998,7 +32998,7 @@ GameObject:
   - component: {fileID: 7123500297858440012}
   - component: {fileID: 2624367319585840539}
   - component: {fileID: 641753208288815823}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33192,7 +33192,7 @@ GameObject:
   - component: {fileID: 7319821920072741237}
   - component: {fileID: 8906641531874315158}
   - component: {fileID: 7322680126458687768}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33462,7 +33462,7 @@ GameObject:
   - component: {fileID: 6990578814341789281}
   - component: {fileID: 1478213091315459961}
   - component: {fileID: 9222564982721746397}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33552,7 +33552,7 @@ GameObject:
   - component: {fileID: 2173233550628048851}
   - component: {fileID: 8259435097489343445}
   - component: {fileID: 3336576357375901513}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33640,7 +33640,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4787115853031934719}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33677,7 +33677,7 @@ GameObject:
   - component: {fileID: 2643418690027338659}
   - component: {fileID: 6660306968202408228}
   - component: {fileID: 632959845196292921}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33767,7 +33767,7 @@ GameObject:
   - component: {fileID: 1574831586522645273}
   - component: {fileID: 2370078978174790590}
   - component: {fileID: 4415002658276312764}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left guide rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33855,7 +33855,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8601108914510842742}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33892,7 +33892,7 @@ GameObject:
   - component: {fileID: 6354957608489144392}
   - component: {fileID: 7632583740278555885}
   - component: {fileID: 3393533188417089231}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Rail
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33982,7 +33982,7 @@ GameObject:
   - component: {fileID: 4179163068457982718}
   - component: {fileID: 921214425884872649}
   - component: {fileID: 8871058268953786505}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Stop left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -34070,7 +34070,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4317490203900484751}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Floor rail 10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -34107,7 +34107,7 @@ GameObject:
   - component: {fileID: 7643170799219013682}
   - component: {fileID: 1752042124929461692}
   - component: {fileID: 4827345488802421408}
-  m_Layer: 31
+  m_Layer: 28
   m_Name: Left post
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -34213,8 +34213,8 @@ Transform:
   m_GameObject: {fileID: 9222157774140243411}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -6, y: 92.4, z: 1}
-  m_LocalScale: {x: 22, y: 0.18, z: 6}
+  m_LocalPosition: {x: -6, y: 92.4, z: 0.6}
+  m_LocalScale: {x: 22, y: 0.18, z: 6.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2666054377352836774}

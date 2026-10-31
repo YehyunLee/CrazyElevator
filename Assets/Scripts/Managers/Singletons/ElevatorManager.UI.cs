@@ -33,8 +33,8 @@ namespace CrazyElevator.Managers
         float encounterCardTime;
         int encounterConfirmationConsumedFrame = -1;
         const int EncounterPreviewLayer = 30;
-        const int EncounterPreviewWidth = 640;
-        const int EncounterPreviewHeight = 360;
+        const int EncounterPreviewWidth = 1920;
+        const int EncounterPreviewHeight = 1080;
         Transform encounterPreviewStage;
         Transform encounterPreviewPivot;
         Camera encounterPreviewCamera;
@@ -193,6 +193,9 @@ namespace CrazyElevator.Managers
         // Summarize a passenger type for the UI.
         string ShortRequest(Rider p)
         {
+            if (p.Kind == "HUNTER") return "Stuns monsters";
+            if (p.Kind == "DIVER") return "Blocks tornadoes";
+            if (p.Kind == "BOUNCER") return "Stronger collisions";
             if (p.Kind == "HANDYMAN") return "Full power while aboard";
             if (p.Kind == "COURIER") return "2 spaces • 1 floor";
             if (p.Kind == "PREGNANT") return "Baby cries • 2 spaces";
@@ -270,8 +273,8 @@ namespace CrazyElevator.Managers
 
         void QueuePassengerDiscoveryCard(Rider rider)
         {
-            // Passenger types are introduced on the full-screen dimension reveal
-            // at each minute mark, not as a card when the shift or a world starts.
+            // Passenger types are covered by the full-screen preview before
+            // every round, keeping the active round free of tutorial popups.
             _ = rider;
         }
 
@@ -328,20 +331,16 @@ namespace CrazyElevator.Managers
         // unified screen instead of one card per player.
         public void PrepareDimensionPreview(WorldBand world)
         {
-            Color accent = world == WorldBand.Candy
-                ? new Color32(236, 118, 188, 255)
-                : world == WorldBand.Water
-                    ? new Color32(48, 196, 210, 255)
-                    : new Color32(98, 132, 178, 255);
+            Color accent = DimensionIntroAccent(world);
             GameObject source = FindWorldPreviewSource(world);
-            float yaw = world == WorldBand.Candy ? 18f : -20f;
+            float yaw = world == WorldBand.Office ? -12f : world == WorldBand.Candy ? 18f : -20f;
             // The art-team FBX dioramas face +Z (Maya front view) with single-sided
             // planes; turn them toward the preview camera and keep only a slight angle.
             if (source != null && source.name.StartsWith("BG_")) yaw = 180f + yaw * .4f;
             EncounterCard card = new EncounterCard
             {
-                Kicker = "NEW MULTIVERSE",
-                Title = world == WorldBand.Candy ? "COTTON CANDY" : world == WorldBand.Water ? "UNDERWATER" : "OFFICE",
+                Kicker = "ROUND PREVIEW",
+                Title = DimensionIntroTitle(world),
                 Description = string.Empty,
                 Badge = string.Empty,
                 Accent = accent,
@@ -362,7 +361,7 @@ namespace CrazyElevator.Managers
 
             GameObject stageObject = new GameObject("Encounter 3D preview stage");
             stageObject.hideFlags = HideFlags.HideAndDontSave;
-            stageObject.transform.position = new Vector3(10000f, -10000f, 10000f);
+            stageObject.transform.position = new Vector3(10000f + Seat * 100f, -10000f, 10000f);
             encounterPreviewStage = stageObject.transform;
 
             GameObject pivotObject = new GameObject("Preview model pivot");
@@ -673,16 +672,29 @@ namespace CrazyElevator.Managers
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
             if (round == null || eye == null || MenuManager.IsOpen) return;
-            if (phase == Phase.Countdown)
+            if (paused && Match == null && !MenuManager.TutorialActive)
             {
-                if (Match == null || !IsNpc) DrawNoTutorialCountdown();
+                Styles();
+                scale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
+                offsetX = (Screen.width - 1440 * scale) / 2; offsetY = (Screen.height - 900 * scale) / 2;
+                GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, Vector3.one * scale);
+                Overlay();
+                GUI.matrix = Matrix4x4.identity;
                 return;
             }
-            if (dimensionRevealActive && Match == null)
+            if (dimensionRevealActive)
             {
-                GUI.matrix = Matrix4x4.identity;
-                DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height));
-                DrawSessionFade(sessionFadeAlpha);
+                if (Match == null)
+                {
+                    GUI.matrix = Matrix4x4.identity;
+                    DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height));
+                    DrawSessionFade(sessionFadeAlpha);
+                }
+                return;
+            }
+            if (phase == Phase.Countdown)
+            {
+                if (!paused && (Match == null || !IsNpc)) DrawNoTutorialCountdown();
                 return;
             }
             if (Match != null || MenuManager.FullScreenOverlayActive) return;
@@ -787,6 +799,30 @@ namespace CrazyElevator.Managers
             title.normal.textColor = Cream;
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
                 countdown, title);
+            var progress = GameManager.Instance;
+            string roundLabel = "ROUND " + (progress != null ? progress.RoundNumber : 1);
+            string worldName = progress != null ? progress.ActiveDimensionName : "OFFICE";
+            float uiScale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
+            float badgeHeight = Mathf.Clamp(34f * uiScale, 22f, 40f);
+            float worldHeight = Mathf.Clamp(64f * uiScale, 30f, 76f);
+            float gap = Mathf.Max(4f, 10f * uiScale);
+            float headerY = Screen.height * .22f - (badgeHeight + gap + worldHeight) * .5f;
+            int previousBodySize = body.fontSize;
+            TextAnchor previousBodyAlignment = body.alignment;
+            Color previousBodyColour = body.normal.textColor;
+            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(18f * uiScale), 12, 22);
+            body.alignment = TextAnchor.MiddleCenter;
+            Color accent = WorldAccent(round != null ? round.Floor : 0);
+            body.normal.textColor = accent;
+            float badgeWidth = body.CalcSize(new GUIContent(roundLabel)).x + 28f;
+            Rect badge = new Rect((Screen.width - badgeWidth) * .5f, headerY, badgeWidth, badgeHeight);
+            FramedPanel(badge, accent, 2f);
+            GUI.Label(badge, roundLabel, body);
+            title.fontSize = Mathf.Clamp(Mathf.RoundToInt(44f * uiScale), 24, 54);
+            GUI.Label(new Rect(16f, badge.yMax + gap, Screen.width - 32f, worldHeight), worldName, title);
+            body.fontSize = previousBodySize;
+            body.alignment = previousBodyAlignment;
+            body.normal.textColor = previousBodyColour;
             title.fontSize = previousSize;
             title.alignment = previousAlignment;
             title.normal.textColor = previousTextColor;
@@ -937,7 +973,8 @@ namespace CrazyElevator.Managers
             Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
             float cursor = x;
             DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
-                WorldName(round.Floor), "F" + round.Floor); cursor += 152;
+                "ROUND " + (session != null ? session.RoundNumber : 1) + " / " + WorldName(round.Floor),
+                "F" + ElevatorRound.FloorNumber(round.Floor)); cursor += 152;
             DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
             DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
@@ -960,7 +997,7 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in visible)
                 if (rider.Boarded && (rider.HasFeature(PassengerFeature.CryingBaby)
                     || rider.Remaining <= rider.Patience * .25f
-                    || rider.Destination == round.Floor || !string.IsNullOrEmpty(rider.Status)))
+                    || round.AtDestination(rider) || !string.IsNullOrEmpty(rider.Status)))
                 { speaker = rider; break; }
             if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
 
@@ -992,7 +1029,7 @@ namespace CrazyElevator.Managers
                     int previousNumberSize = calloutNumber.fontSize;
                     calloutNumber.fontSize = 32;
                     OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
-                        rider.Destination.ToString(), calloutNumber);
+                        DestinationTag(rider), calloutNumber);
                     calloutNumber.fontSize = previousNumberSize;
                 }
 
@@ -1004,19 +1041,19 @@ namespace CrazyElevator.Managers
                     Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
                     OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
 
-                    // Keep the confirm action beside the selected passenger so
+                    // Keep the kick action beside the selected passenger so
                     // it remains visible even when the lower HUD is covered by
                     // the travel/door controls.
-                    if (rider == selectedRider && draggedRider == null && phase == Phase.Boarding)
+                    if (rider == selectedRider && rider.Boarded && draggedRider == null && phase == Phase.Boarding)
                     {
                         float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 110f);
                         float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
                         Rect hint = new Rect(hintX, hintY, 42f, 42f);
-                        DrawGameplayKeyHint(hint, GameplayConfirmKey);
+                        DrawGameplayKeyHint(hint, GameplayKickoutKey);
                         Color previousHintText = calloutText.normal.textColor;
                         calloutText.normal.textColor = UiWhite;
                         GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
-                            rider.Boarded ? "KICK" : "BOARD", calloutText);
+                            "KICK", calloutText);
                         calloutText.normal.textColor = previousHintText;
                     }
                 }
@@ -1024,6 +1061,9 @@ namespace CrazyElevator.Managers
                 string cue = PassengerVisualCue(rider, selected);
                 if (!string.IsNullOrEmpty(cue))
                 {
+                    if (rider.Kind == "HUNTER" || rider.Kind == "DIVER" || rider.Kind == "BOUNCER")
+                        DrawPassengerBadgeIcon(new Rect(Mathf.Clamp(headX - 20f, 8f, viewWidth - 48f),
+                            Mathf.Max(72f, headY - 46f), 40f, 40f), rider.Kind, Teal);
                     float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
                     float cueX = headX + 22f + cueWidth <= viewWidth - 8f
                         ? headX + 22f : headX - cueWidth - 22f;
@@ -1060,6 +1100,9 @@ namespace CrazyElevator.Managers
 
         string PassengerVisualCue(Rider rider, bool selected)
         {
+            if (rider.Kind == "HUNTER") return "MONSTER STUN";
+            if (rider.Kind == "DIVER") return "TORNADO SHIELD";
+            if (rider.Kind == "BOUNCER") return "BUMP ↑";
             if (!rider.Boarded)
                 return selected && rider.Space > 1 ? rider.Space + " TILES" : null;
             if (!round.Owns(rider)) return null;
@@ -1105,7 +1148,7 @@ namespace CrazyElevator.Managers
                 }
                 occupiedBadges.Add(badge);
                 FramedPanel(badge, new Color32(145, 153, 166, 255), 2f);
-                OutlinedLabel(badge, rider.Destination.ToString(), calloutNumber);
+                OutlinedLabel(badge, DestinationTag(rider), calloutNumber);
             }
 
             calloutNumber.fontSize = previousSize;
@@ -1117,7 +1160,7 @@ namespace CrazyElevator.Managers
             if (rider.Boarded && !string.IsNullOrEmpty(rider.Status)
                 && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return "MISSED MY FLOOR!";
-            if (rider.Boarded && rider.Destination == round.Floor) return "MY STOP!";
+            if (rider.Boarded && round.AtDestination(rider)) return "MY STOP!";
             if (rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby))
                 return round.BabyCalmedByGrandma ? "CALM! PATIENCE x0.5" : "WAAAH! PATIENCE x1.6";
             if (rider.Boarded && rider.Remaining <= rider.Patience * .25f) return "PLEASE HURRY!";
@@ -1228,14 +1271,66 @@ namespace CrazyElevator.Managers
         void DrawMouseControls()
         {
             if (!extendedInterior || IsNpc) return;
+            DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
             DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
             DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
-            DrawMouseControl(stop, CanStopAtFloor ? "STOP HERE" : "STOP • ALIGN FLOOR", Gold,
+            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP", Gold,
                 GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
             DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
+        }
+
+        bool ReadDoorClick(InputManager.SeatInput input)
+        {
+            if (!input.PointerPressed || draggedRider != null || IsOverMouseControl(input.Pointer, false)
+                || !TryPickBoardingDoor(input.Pointer, out BoardingDoor door)) return false;
+            OpenBoardingDoor(door);
+            return true;
+        }
+
+        void DrawBoardingDoorCue()
+        {
+            if (phase != Phase.Boarding || round.Finished || paused || selectedRider != null) return;
+            for (int slot = 0; slot < 3; slot++)
+                DrawBoardingDoorHint(BoardingDoorAtScreenSlot(slot), slot);
+        }
+
+        // Screen-relative left / up / right open the corresponding door,
+        // even when the cabin is viewed from the opposite side.
+        void DrawBoardingDoorHint(BoardingDoor door, int slot)
+        {
+            Vector3 anchor = BoardingDoorThreshold(door);
+            anchor.y = 3.35f;
+            Vector3 point = eye.WorldToScreenPoint(stage.TransformPoint(anchor));
+            Vector2 cursor;
+            if (point.z > 0f)
+            {
+                cursor = new Vector2(point.x, Screen.height - point.y);
+                if (Match != null) cursor -= Match.ViewRect(Seat).position;
+            }
+            else
+            {
+                // A doorway behind the camera still needs a selectable hint.
+                cursor = new Vector2(ViewWidth * (slot == 0 ? .1f : slot == 1 ? .5f : .9f),
+                    ViewHeight * .5f);
+            }
+            float size = Mathf.Clamp(ViewHeight * .042f, 28f, 38f);
+            float inset = size * 1.15f;
+            // Side doorways may be partially offscreen. Keep their direction
+            // hints visible at the corresponding edge of this player's pane.
+            float minX = slot == 0 ? inset : slot == 1 ? ViewWidth * .36f : ViewWidth * .70f;
+            float maxX = slot == 0 ? ViewWidth * .30f : slot == 1 ? ViewWidth * .64f : ViewWidth - inset;
+            cursor.x = Mathf.Clamp(cursor.x, minX, maxX);
+            cursor.y = Mathf.Clamp(cursor.y, 70f + size, ViewHeight - size * 2f);
+
+            string direction = GameplayUsesKeyboard && Seat == 0
+                ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
+                : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
+            bool open = openBoardingDoor == (int)door;
+            DrawGameplayKeyHint(new Rect(cursor.x - size * .5f, cursor.y - size, size, size),
+                direction, open ? Gold : Teal);
         }
 
         void DrawMouseControl(Rect rect, string text, Color accent, string key)
@@ -1294,8 +1389,8 @@ namespace CrazyElevator.Managers
         string GameplayConfirmKey => GameplayUsesKeyboard ? (Seat == 1 ? "." : "C") : "A";
         string GameplayUpKey => GameplayUsesKeyboard ? (Seat == 1 ? "↑" : "W") : "↑";
         string GameplayDownKey => GameplayUsesKeyboard ? (Seat == 1 ? "↓" : "S") : "↓";
-        string GameplayCloseKey => GameplayUsesKeyboard ? (Seat == 1 ? "/" : "E") : "Y";
-        string GameplayKickoutKey => GameplayUsesKeyboard ? "I" : "B";
+        string GameplayCloseKey => GameplayConfirmKey;
+        string GameplayKickoutKey => GameplayUsesKeyboard ? (Seat == 1 ? "," : "I") : "B";
         string GameplayRepairKey => GameplayUsesKeyboard ? "R" : "RB";
 
         void DrawGameplayKeyHint(Rect rect, string key)
@@ -1450,14 +1545,15 @@ namespace CrazyElevator.Managers
             Panel(new Rect(308, 162, 824, 590), UiBlack);
             Panel(new Rect(308, 162, 824, 7), Teal);
             AccentBar(new Rect(304, 186, 9, 522), Teal);
-            string heading = paused ? "TAKE A BREATHER" : "SHIFT COMPLETE";
+            string heading = paused ? "TAKE A BREATHER" : "ROUND COMPLETE";
             Label(new Rect(354, 196, 700, 52), heading, title);
             string copy = paused
                 ? "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu."
                 : "FINAL SCORE: " + round.Score
                     + "\nHappy riders: " + round.Happy + "  •  Drop-offs: " + round.Delivered
                     + "\nMissed riders: " + round.Missed + "  •  Turned away: " + round.TurnedAway
-                    + "\n\nYour 3-minute shift is over. Try again for a better mix!";
+                    + "\n\nNext world: "
+                    + (session != null ? session.NextDimensionName : "CANDY") + ".";
             Label(new Rect(356, 292, 690, 240), copy, body);
             if (paused)
             {
@@ -1477,7 +1573,7 @@ namespace CrazyElevator.Managers
             }
             else
             {
-                if (Button(new Rect(350, 700, 724, 48), "TRY AGAIN  /  CLICK or ENTER", Teal))
+                if (Button(new Rect(350, 700, 724, 48), "NEXT ROUND  /  CLICK or ENTER", Teal))
                     StartOrContinue();
             }
         }

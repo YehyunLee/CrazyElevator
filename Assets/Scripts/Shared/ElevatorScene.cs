@@ -8,6 +8,15 @@ namespace CrazyElevator.Shared
         [Header("Cabin")]
         public Transform cabin;
         public Transform leftDoor, rightDoor, passingLights;
+        [Header("Side boarding doors")]
+        public Transform leftSideDoor, rightSideDoor;
+        public Vector3 leftSideDoorClosed = new Vector3(-2.9f, 1.5f, 2.58f);
+        public Vector3 rightSideDoorClosed = new Vector3(2.9f, 1.5f, 2.58f);
+        public float sideDoorTravel = 3.2f;
+        [Header("Door selection")]
+        public Renderer[] frontDoorFrame;
+        public Renderer[] leftDoorFrame;
+        public Renderer[] rightDoorFrame;
         public TextMesh floorDisplay;
         // Nine editable labels, ordered front-to-back and left-to-right.
         public TextMesh[] gridDestinations;
@@ -21,6 +30,10 @@ namespace CrazyElevator.Shared
 
         [Header("Cameras and lights")]
         public Camera cabinCamera;
+        [Tooltip("When off, the cabin Camera Transform and Lens settings are used as authored. Enable to fit the floor and doorways automatically.")]
+        public bool autoFrameCabin = false;
+        [Tooltip("Add ride and arrival motion when Auto Frame Cabin is enabled. Manual mode always preserves the Camera Transform.")]
+        public bool cabinCameraShake = false;
         public Camera exteriorCamera;
         public Camera clearCamera;
         public Light[] lights;
@@ -30,5 +43,9 @@ namespace CrazyElevator.Shared
 
         [Header("Passenger art (one prefab per kind)")]
         public PassengerView[] passengers;
+
+        [Header("Shaft hazards (moved by ElevatorManager.Hazards)")]
+        public GameObject tornado;
+        public GameObject monster;
     }
 }
