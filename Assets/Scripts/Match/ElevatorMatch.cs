@@ -165,9 +165,9 @@ namespace CrazyElevator.Match
             // impact must be caused by a car that is actually travelling or
             // changing tracks; the other car may be stopped and valid target.
             bool playerTravelling = player.MovingInShaft
-                && Mathf.Abs(player.TravelVelocity) > .05f;
+                && (Mathf.Abs(player.TravelVelocity) > .05f || Mathf.Abs(player.LateralTravelVelocity) > .05f);
             bool rivalTravelling = Rival != null && Rival.MovingInShaft
-                && Mathf.Abs(Rival.TravelVelocity) > .05f;
+                && (Mathf.Abs(Rival.TravelVelocity) > .05f || Mathf.Abs(Rival.LateralTravelVelocity) > .05f);
             if (Running && !Paused && (playerTravelling || rivalTravelling
                     || playerWasSwitching || rivalWasSwitching)
                 && CarsOverlap(player, Rival))
@@ -569,19 +569,33 @@ namespace CrazyElevator.Match
                 bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
                 bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
                 if (first != tutorialTarget && !TutorialInputLocked(first))
-                    ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f));
+                    ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f), secondBoost);
                 if (second != tutorialTarget && !TutorialInputLocked(second))
-                    ApplyCollisionResponse(second, verticalDirection * rebound * (firstBoost ? 1.5f : 1f));
+                    ApplyCollisionResponse(second, verticalDirection * rebound * (firstBoost ? 1.5f : 1f), firstBoost);
                 if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
                 if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
             }
             else
             {
                 // A lane-change bump still jolts both cars, but does not reverse their vertical travel.
+                bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
+                bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
+                float separation = ShaftX(second) - ShaftX(first);
+                int direction = separation > .01f ? 1 : separation < -.01f ? -1
+                    : first != null && Mathf.Abs(first.LateralTravelVelocity) > .05f
+                        ? (first.LateralTravelVelocity > 0f ? 1 : -1) : 1;
                 if (first != tutorialTarget && !TutorialInputLocked(first))
-                    first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                {
+                    if (secondBoost) first?.ApplyMatchLateralBounce(collisionSlowSeconds, -direction);
+                    else first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                }
                 if (second != tutorialTarget && !TutorialInputLocked(second))
-                    second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                {
+                    if (firstBoost) second?.ApplyMatchLateralBounce(collisionSlowSeconds, direction);
+                    else second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
+                }
+                if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
+                if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
             }
             if (first != null && second != null)
                 EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
@@ -613,14 +627,14 @@ namespace CrazyElevator.Match
                 && actor.DiscreteFloor == 0
                 && Mathf.Abs(actor.TravelVelocity) <= .05f;
 
-        void ApplyCollisionResponse(Game actor, float reboundVelocity)
+        void ApplyCollisionResponse(Game actor, float reboundVelocity, bool strong)
         {
             if (actor == null) return;
             // The opening tutorial position is a stationary staging point. It
             // can still be hit, but must not inherit a rebound or momentum.
             if (TutorialStartingFloorStationary(actor))
                 actor.ApplyMatchCollision(collisionSlowSeconds, 1f);
-            else actor.ApplyMatchBounce(collisionSlowSeconds, reboundVelocity);
+            else actor.ApplyMatchBounce(collisionSlowSeconds, reboundVelocity, strong);
         }
 
         ParticleSystem CreateCollisionParticles(Transform parent)

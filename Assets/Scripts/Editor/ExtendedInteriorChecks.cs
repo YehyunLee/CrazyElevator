@@ -55,10 +55,11 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare")
         {
-            bool singleDimension = action == "single-dimension-prepare";
-            File.WriteAllText(request, singleDimension ? "single-dimension-run" : "match-run");
+            bool singleDimension = action != "match-prepare";
+            File.WriteAllText(request, action == "bouncer-prepare" ? "bouncer-run"
+                : singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
                 .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
                 .SetValue(null, true);
@@ -87,6 +88,7 @@ public static class ExtendedInteriorChecks
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
+            else if (action == "bouncer-run") RunBouncerChecks();
             else if (action == "single-dimension-run") RunSingleDimensionMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "unified-cabin") RunUnifiedCabin(game);
@@ -160,7 +162,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
+            if ((action == "match-run" || action == "bouncer-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -452,6 +454,14 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "match-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Bouncer Stopped-Car Collisions")]
+    public static void RequestBouncerChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "bouncer-prepare");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
@@ -1380,6 +1390,70 @@ public static class ExtendedInteriorChecks
             CrazyElevator.Managers.MenuManager.ClosePause();
             player.enabled = playerEnabled; rival.enabled = rivalEnabled; match.enabled = matchEnabled;
         }
+    }
+
+    static void RunBouncerChecks()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        Require(match != null && match.Rival != null, "Bouncer checks need both elevators.");
+        var matchType = match.GetType();
+        var phase = typeof(Game).GetField("phase", Flags);
+        object moving = Enum.Parse(phase.FieldType, "Moving");
+        object boarding = Enum.Parse(phase.FieldType, "Boarding");
+        for (int seat = 0; seat < 2; seat++)
+        {
+            var attacker = seat == 0 ? match.player : match.Rival;
+            var victim = seat == 0 ? match.Rival : match.player;
+            for (int lateral = 0; lateral < 2; lateral++)
+            {
+                match.StartMatch();
+                FinishMatchRoundIntroduction(match);
+                var round = (Round)Get(attacker, "round");
+                round.Riders.Add(new SharedRider { Kind = "BOUNCER", Boarded = true,
+                    BoardedBySeat = attacker.Seat, Space = 1, Remaining = 100f });
+                Require(attacker.HasBouncer && !victim.HasBouncer, "Bouncer belongs to the wrong elevator.");
+                phase.SetValue(attacker, moving); phase.SetValue(victim, boarding);
+                ((Round)Get(victim, "round")).Floor = 4;
+                Set(attacker, "travelFloor", 3.4f); Set(attacker, "travelVelocity", 1.8f);
+                Set(attacker, "travelDirection", 1); Set(victim, "travelFloor", 4f);
+                Set(victim, "travelVelocity", 0f);
+                float x = match.ShaftX(0);
+                Set(attacker, "routeLateralReady", true); Set(victim, "routeLateralReady", true);
+                Set(attacker, "routeLateralX", x); Set(victim, "routeLateralX", x);
+                matchType.GetField("collisionCooldown", Flags).SetValue(match, 0f);
+                if (lateral == 0)
+                {
+                    Set(victim, "railRiding", true); // A stale rail state must not prevent vertical knockback.
+                    float incoming = 1.8f;
+                    match.ConstrainTravel(attacker, 3.4f, 3.9f, ref incoming);
+                    Require(victim.MovingInShaft && !(bool)Get(victim, "railRiding")
+                        && victim.TravelVelocity >= 3.2f && (float)Get(victim, "doors") == 0f,
+                        "Bouncer did not close and launch the stopped car vertically.");
+                    CrazyElevator.Managers.GameManager.Instance.ResetMatchProgress();
+                    float start = victim.CurrentFloor;
+                    Call(victim, "RequestFloorStop");
+                    Call(victim, "AdvanceBuildingTravel", .45f);
+                    Require(victim.MovingInShaft && victim.CurrentFloor > start + 1.3f,
+                        "Bouncer's vertical impact did not carry the stopped car far enough.");
+                }
+                else
+                {
+                    Set(attacker, "travelFloor", 4f); Set(attacker, "travelVelocity", 0f);
+                    Set(attacker, "railRiding", true); Set(attacker, "railVelocity", 1f);
+                    Set(victim, "routeLateralX", x + 1f);
+                    matchType.GetMethod("Update", Flags).Invoke(match, null);
+                    Require(victim.MovingInShaft && (bool)Get(victim, "railRiding")
+                        && victim.LateralTravelVelocity >= 3.2f && (float)Get(victim, "doors") == 0f,
+                        "Bouncer did not close and launch the stopped car sideways.");
+                    CrazyElevator.Managers.GameManager.Instance.ResetMatchProgress();
+                    float start = victim.RouteLateralX;
+                    Call(victim, "AdvanceBuildingTravel", .25f);
+                    Require(victim.RouteLateralX > start + 2f,
+                        "Bouncer's sideways impact did not carry the stopped car far enough.");
+                }
+            }
+        }
+        Debug.Log("PASS: Bouncer closes and knocks stopped cars away vertically and sideways for both player seats.");
     }
 
     static void RunMatch()

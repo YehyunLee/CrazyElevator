@@ -771,6 +771,7 @@ namespace CrazyElevator.Managers
                     {
                         PlayPassengerBoardingVoice(rider);
                         BeginHandymanRepair(rider);
+                        IntroduceBoardedPassenger(rider);
                     }
                     SelectRider(null);
                     SetControlStatus(draggedWasBoarded ? "REARRANGED" : "ON BOARD");

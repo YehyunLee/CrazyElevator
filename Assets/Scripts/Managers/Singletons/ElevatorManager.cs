@@ -170,6 +170,7 @@ namespace CrazyElevator.Managers
             float dt = Time.deltaTime;
             collisionSlowTimer = Mathf.Max(0f, collisionSlowTimer - dt);
             collisionRecoilTimer = Mathf.Max(0f, collisionRecoilTimer - dt);
+            if (collisionRecoilTimer <= 0f) strongCollisionRecoil = false;
             collisionImpact = Mathf.Max(0f, collisionImpact - dt * 1.8f);
             TickHazardTimers(dt);
             UpdateShaftHazards(dt);
@@ -462,6 +463,7 @@ namespace CrazyElevator.Managers
         int travelDirection = 1;
         float travelVelocity, boostAxis;
         float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
+        bool strongCollisionRecoil;
         bool tutorialPassengerView;
         bool boostHeld;
         readonly HashSet<int> passedFloors = new HashSet<int>();
@@ -523,6 +525,7 @@ namespace CrazyElevator.Managers
         void RequestFloorStop()
         {
             if (phase != Phase.Moving) return;
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             int target = GlideStopFloor();
             if (!MenuManager.TutorialAllowsStopAt(this, target))
             {
@@ -587,7 +590,8 @@ namespace CrazyElevator.Managers
             AccumulateRust(dt);
             if (railRiding) { AdvanceRailStep(dt); return; }
             float before = travelFloor;
-            float oldVelocity = Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
+            float oldVelocity = collisionRecoilTimer > 0f && strongCollisionRecoil
+                ? travelVelocity : Mathf.Clamp(travelVelocity, -SpeedLimit, SpeedLimit);
             if (collisionRecoilTimer > 0f)
                 travelVelocity = oldVelocity; // Let the cars visibly separate before player/NPC thrust resumes.
             else if (boostHeld && Mathf.Abs(boostAxis) > .25f)
@@ -625,6 +629,7 @@ namespace CrazyElevator.Managers
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
             routeBoostPulse = 0f;
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
+            strongCollisionRecoil = false;
             hazardCooldown = carSpin = abilityFeedbackTime = 0f;
             if (WorldOwner == this)
                 foreach (var hazard in hazards) hazard.Stunned = 0f;
@@ -1300,6 +1305,7 @@ namespace CrazyElevator.Managers
                 cabinPositions[rider] = spot;
                 RememberCabinTileRun(rider, spot);
                 BeginPersonaBoard(rider, figure.localPosition, spot, entryDoor);
+                IntroduceBoardedPassenger(rider);
                 notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
                 return;
             }
@@ -2399,7 +2405,7 @@ namespace CrazyElevator.Managers
             notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE LEFT / RIGHT OR A / D TO SWITCH TRACKS";
         }
 
-        public void ApplyMatchBounce(float slowSeconds, float reboundVelocity)
+        public void ApplyMatchBounce(float slowSeconds, float reboundVelocity, bool strong = false)
         {
             bool knockedFromStop = phase != Phase.Moving;
             // Once a tutorial player is viewing the passengers, collisions may
@@ -2410,14 +2416,36 @@ namespace CrazyElevator.Managers
                 && (tutorialPassengerView || !BuildingView);
             ApplyMatchCollision(slowSeconds, 1f);
             if (!EnterMatchKnockbackTravel()) return;
+            // A docked car may retain a previous floor-rail state. A vertical
+            // hit must actually put it back on the vertical travel path.
+            railRiding = false;
+            railVelocity = 0f;
+            ClearRouteTurns();
             tutorialPassengerView = keepPassengerView;
             travelDirection = reboundVelocity >= 0f ? 1 : -1;
-            travelVelocity = reboundVelocity;
-            collisionRecoilTimer = knockedFromStop ? .62f : .48f;
+            travelVelocity = strong ? travelDirection * Mathf.Max(3.2f, Mathf.Abs(reboundVelocity)) : reboundVelocity;
+            strongCollisionRecoil = strong;
+            collisionRecoilTimer = strong ? 1f : knockedFromStop ? .62f : .48f;
             RetargetNpcAfterCollision();
             notice = knockedFromStop
                 ? (IsNpc ? "KNOCKED OFF THE FLOOR!" : "KNOCKED OFF YOUR STOP — RECOVER!")
                 : (IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS");
+        }
+
+        public float LateralTravelVelocity => railRiding ? railVelocity : 0f;
+
+        public void ApplyMatchLateralBounce(float slowSeconds, int direction)
+        {
+            bool knockedFromStop = phase != Phase.Moving;
+            ApplyMatchCollision(slowSeconds, 1f);
+            if (!EnterMatchKnockbackTravel()) return;
+            int floor = Mathf.Clamp(Mathf.RoundToInt(travelFloor), MinTravelFloor, MaxTravelFloor);
+            StartRailRide(floor, direction, 3.2f);
+            railVelocity = (direction >= 0 ? 1f : -1f) * 3.2f;
+            strongCollisionRecoil = true;
+            collisionRecoilTimer = 1f;
+            if (knockedFromStop) RetargetNpcAfterCollision();
+            notice = IsNpc ? "KNOCKED AWAY!" : "KNOCKED AWAY — RECOVER!";
         }
 
         void RetargetNpcAfterCollision()

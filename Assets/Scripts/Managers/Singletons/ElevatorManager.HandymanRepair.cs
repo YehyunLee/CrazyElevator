@@ -55,6 +55,7 @@ namespace CrazyElevator.Managers
                 ? transfer.targetScale : figures[rider].localScale;
             repairProgress = 0;
             ElevatorSays("Those starfish damaged my gears. Please fix me!", 5f);
+            GameManager.Instance?.RequestAbilityIntro(this, "HANDYMAN");
         }
 
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)

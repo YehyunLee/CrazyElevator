@@ -94,6 +94,7 @@ namespace CrazyElevator.Managers
         public void SetTravelInput(float axis, bool boost)
         {
             if (phase != Phase.Moving) return;
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             boostAxis = Mathf.Abs(axis) > .25f ? Mathf.Clamp(axis, -1f, 1f) : 0f;
             if (boostAxis != 0)
             {

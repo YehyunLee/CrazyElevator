@@ -33,8 +33,8 @@ namespace CrazyElevator.Managers
         float encounterCardTime;
         int encounterConfirmationConsumedFrame = -1;
         const int EncounterPreviewLayer = 30;
-        const int EncounterPreviewWidth = 640;
-        const int EncounterPreviewHeight = 360;
+        const int EncounterPreviewWidth = 1920;
+        const int EncounterPreviewHeight = 1080;
         Transform encounterPreviewStage;
         Transform encounterPreviewPivot;
         Camera encounterPreviewCamera;

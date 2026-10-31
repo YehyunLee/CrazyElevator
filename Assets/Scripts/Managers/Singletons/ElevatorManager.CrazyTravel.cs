@@ -185,6 +185,7 @@ namespace CrazyElevator.Managers
         // A tap stays queued after release.
         void ReadRouteInput(float horizontal, float vertical, bool boost)
         {
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             routeSteer = horizontal;
             railBoost = boost;
             int h = AxisSign(horizontal), v = AxisSign(vertical);
@@ -254,6 +255,7 @@ namespace CrazyElevator.Managers
         // Same cruise / boost / instant-reverse rules as vertical travel (AdvanceTravelStep).
         void SteerRail(float dt)
         {
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             railVelocity = Mathf.Clamp(railVelocity, -SpeedLimit, SpeedLimit);
             int steer = AxisSign(routeSteer);
             if (steer != 0 && steer != railDirection)
@@ -281,7 +283,8 @@ namespace CrazyElevator.Managers
                 notice = "End of the rail. Steer back, or press W/S to take a track.";
             }
             CheckTeleportGates(before, routeLateralX);
-            if (pendingTrackDirection != 0) TryTurnOntoTrack(before, routeLateralX);
+            if (pendingTrackDirection != 0 && !(strongCollisionRecoil && collisionRecoilTimer > 0f))
+                TryTurnOntoTrack(before, routeLateralX);
             Match?.SyncTrackFromLateral(this, routeLateralX);
         }
 

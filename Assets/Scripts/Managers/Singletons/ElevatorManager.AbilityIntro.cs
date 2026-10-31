@@ -15,11 +15,15 @@ namespace CrazyElevator.Managers
         public bool PrepareAbilityIntro(string kind)
         {
             if (sceneView == null || sceneView.passengers == null) return false;
-            GameObject passenger = FindPassengerTemplate(kind);
+            string passengerKind = kind == "CALM" ? "ELDERLY" : kind;
+            GameObject passenger = FindPassengerTemplate(passengerKind);
             GameObject opponent = kind == "HUNTER" ? sceneView.monster
                 : kind == "DIVER" ? sceneView.tornado
-                : kind == "BOUNCER" && sceneView.exteriorCar != null
-                    ? sceneView.exteriorCar.gameObject : null;
+                : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
+                : kind == "CALM" ? FindPassengerTemplate("PREGNANT")
+                : kind == "PREGNANT" ? FindPassengerTemplate("BOSS")
+                : (kind == "BOUNCER" || kind == "GROUP" || kind == "ELDERLY")
+                    && sceneView.exteriorCar != null ? sceneView.exteriorCar.gameObject : null;
             if (passenger == null || opponent == null) return false;
 
             ClearEncounterPreviewModel();
@@ -40,8 +44,8 @@ namespace CrazyElevator.Managers
             abilityIntroKind = kind;
             if (kind == "DIVER" && abilityIntroShield == null)
                 abilityIntroShield = PassengerIconLibrary.CreatePassengerBadge("DIVER", Teal, Ink, Cream);
-            encounterPreviewCamera.backgroundColor = kind == "HUNTER" ? new Color(.12f, .17f, .26f)
-                : kind == "DIVER" ? new Color(.04f, .24f, .30f) : new Color(.30f, .16f, .27f);
+            encounterPreviewCamera.backgroundColor = kind == "HUNTER" || kind == "ELDERLY" ? new Color(.12f, .17f, .26f)
+                : kind == "DIVER" || kind == "HANDYMAN" ? new Color(.04f, .24f, .30f) : new Color(.30f, .16f, .27f);
             encounterPreviewCamera.nearClipPlane = .03f;
             encounterPreviewCamera.farClipPlane = 80f;
             encounterPreviewCamera.enabled = true;
@@ -57,6 +61,12 @@ namespace CrazyElevator.Managers
             var model = Instantiate(source, slot.transform, false);
             model.name = label + " ability preview";
             model.SetActive(true);
+            var stars = model.GetComponent<StarfishImpairmentView>();
+            if (stars != null)
+            {
+                stars.SetSeverity(3);
+                model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            }
             MakeStillPreviewModel(model, Teal);
             if (!TryGetEncounterPreviewBounds(model, out Bounds bounds)) return null;
             float size = Mathf.Max(bounds.size.y, Mathf.Max(bounds.size.x * .75f, bounds.size.z * .75f));
@@ -80,10 +90,15 @@ namespace CrazyElevator.Managers
                 abilityIntroOwnCar.localPosition = new Vector3(-1.25f + impact * .32f, -.15f, .9f);
                 abilityIntroOwnCar.localRotation = Quaternion.Euler(0f, 0f, -impact * 5f);
             }
-            abilityIntroOpponent.localPosition = new Vector3(2.2f - approach * .75f + recoil * .5f, impact * .12f, 0f);
+            bool speed = abilityIntroKind == "GROUP" || abilityIntroKind == "ELDERLY";
+            float opponentX = speed ? (abilityIntroKind == "GROUP" ? Mathf.Lerp(.7f, 2.1f, approach)
+                : Mathf.Lerp(1f, 1.3f, approach)) : 2.2f - approach * .75f + recoil * .5f;
+            abilityIntroOpponent.localPosition = new Vector3(opponentX, impact * .12f, 0f);
             abilityIntroOpponent.localRotation = abilityIntroKind == "DIVER"
                 ? Quaternion.Euler(0f, time * 260f, impact * 18f)
-                : Quaternion.Euler(0f, -12f, recoil * 22f);
+                : Quaternion.Euler(0f, -12f, speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
+            if (abilityIntroKind == "HANDYMAN")
+                abilityIntroOpponent.localScale = Vector3.one * (1f - recoil * .85f);
             // Start on the passenger, then pivot/zoom out to reveal the threat.
             float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.25f, 1.2f, time));
             encounterPreviewCamera.orthographicSize = Mathf.Lerp(1.2f, 2.1f, reveal);
@@ -133,20 +148,50 @@ namespace CrazyElevator.Managers
                 GUI.DrawTexture(new Rect(frame.center.x - frame.width * .12f, frame.center.y - 5f,
                     frame.width * .25f, 10f), Texture2D.whiteTexture);
             }
+            else if (effect > 0f && (abilityIntroKind == "CALM" || abilityIntroKind == "PREGNANT"))
+            {
+                GameTypography.ApplyToSkin(GUI.skin);
+                Styles();
+                var symbol = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter,
+                    fontSize = Mathf.Clamp(Mathf.RoundToInt(frame.height * .20f), 28, 110) };
+                symbol.normal.textColor = abilityIntroKind == "CALM" ? Coral : Gold;
+                GUI.color = new Color(1f, 1f, 1f, effect * fade);
+                GUI.Label(new Rect(frame.center.x - frame.width * .1f, frame.y, frame.width * .2f, frame.height * .55f),
+                    abilityIntroKind == "CALM" ? "♥" : "!", symbol);
+            }
             GUI.color = new Color(1f, 1f, 1f, fade);
             GameTypography.ApplyToSkin(GUI.skin);
             Styles();
             var textStyle = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter,
                 fontSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(view.height * .038f, view.width * .048f)), 18, 42), wordWrap = false };
             string message = abilityIntroKind == "HUNTER" ? "STUNS MONSTERS"
-                : abilityIntroKind == "DIVER" ? "BLOCKS TORNADOES" : "STRONGER BUMPS";
+                : abilityIntroKind == "DIVER" ? "BLOCKS TORNADOES"
+                : abilityIntroKind == "BOUNCER" ? "STRONGER BUMPS"
+                : abilityIntroKind == "GROUP" ? "SPEED BOOST"
+                : abilityIntroKind == "ELDERLY" ? "SLOWS ELEVATOR"
+                : abilityIntroKind == "PREGNANT" ? "PATIENCE DRAINS FASTER"
+                : abilityIntroKind == "CALM" ? "CALMS THE BABY" : "CLEARS RUST";
             GUI.Label(new Rect(view.x, frame.yMax, view.width, view.yMax - frame.yMax), message, textStyle);
             textStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.height * .022f), 14, 24);
             string heading = showPlayer ? (IsNpc ? "CPU  ·  " : "PLAYER " + (Seat + 1) + "  ·  ") : "";
-            GUI.Label(new Rect(view.x, view.y, view.width, frame.y - view.y), heading + abilityIntroKind, textStyle);
+            string name = abilityIntroKind == "GROUP" ? "THE TRIO" : abilityIntroKind == "ELDERLY" ? "GRANDMA"
+                : abilityIntroKind == "PREGNANT" ? "MOM + BABY" : abilityIntroKind == "CALM" ? "GRANDMA + BABY"
+                : abilityIntroKind;
+            GUI.Label(new Rect(view.x, view.y, view.width, frame.y - view.y), heading + name, textStyle);
             GUI.color = old;
             GUI.matrix = oldMatrix;
             GUI.depth = oldDepth;
+        }
+
+        void IntroduceBoardedPassenger(CrazyElevator.Shared.Rider rider)
+        {
+            if (rider == null || round == null || !round.Owns(rider)) return;
+            string kind = round.BabyCalmedByGrandma
+                && (rider.HasFeature(PassengerFeature.CryingBaby) || rider.HasFeature(PassengerFeature.CalmsBaby))
+                ? "CALM" : rider.HasFeature(PassengerFeature.CryingBaby) ? "PREGNANT"
+                : rider.HasFeature(PassengerFeature.SpeedSlow) ? "ELDERLY"
+                : rider.HasFeature(PassengerFeature.SpeedBoost) ? "GROUP" : null;
+            if (kind != null) GameManager.Instance?.RequestAbilityIntro(this, kind);
         }
 
         public void FinishAbilityIntro()

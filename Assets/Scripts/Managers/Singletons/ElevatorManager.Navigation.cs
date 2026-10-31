@@ -568,6 +568,7 @@ namespace CrazyElevator.Managers
 
         public void NpcDriveToStop()
         {
+            if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             if (phase != Phase.Moving || round == null || npcTargetFloor < 0) return;
             float targetX = StopX(npcTargetStop);
             if (railRiding)
