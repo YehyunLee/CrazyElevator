@@ -72,6 +72,9 @@ namespace CrazyElevator.Managers
             abilityFeedbackPosition = worldPosition;
             abilityFeedbackOrigin = exteriorCar != null ? exteriorCar.position : worldPosition;
             abilityFeedbackTime = 1.4f;
+            string kind = label == "STUN!" ? "HUNTER" : label == "BLOCK!" ? "DIVER"
+                : label == "BUMP!" ? "BOUNCER" : null;
+            if (kind != null) GameManager.Instance?.RequestAbilityIntro(this, kind);
         }
 
         float CarSpinDegrees => carSpin > 0f ? Mathf.SmoothStep(0f, 720f, 1f - carSpin) : 0f;

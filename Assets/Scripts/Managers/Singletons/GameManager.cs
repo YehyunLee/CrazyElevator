@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using CrazyElevator.Shared;
 
@@ -32,6 +33,15 @@ namespace CrazyElevator.Managers
         public bool IsPaused => Player != null && Player.IsPaused;
 
         readonly MatchProgress matchProgress = new MatchProgress();
+        const float AbilityIntroSeconds = 3.5f;
+        readonly HashSet<string> introducedAbilities = new HashSet<string>();
+        readonly Queue<(ElevatorManager actor, string kind)> pendingAbilityIntros =
+            new Queue<(ElevatorManager actor, string kind)>();
+        ElevatorManager abilityIntroActor;
+        string abilityIntroKind;
+        bool abilityIntroActive;
+        float abilityIntroTime, abilityIntroPreviousTimeScale = 1f;
+        public bool AbilityIntroActive => abilityIntroActive;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
         public int RoundNumber => matchProgress.RoundNumber;
         public int ActiveDimension => matchProgress.ActiveDimension;
@@ -46,7 +56,62 @@ namespace CrazyElevator.Managers
         static string DimensionName(int dimension) => dimension == 0 ? "OFFICE"
             : dimension == 1 ? "CANDY" : "UNDERWATER";
 
-        public void ResetMatchProgress() => matchProgress.Reset();
+        public void ResetMatchProgress()
+        {
+            StopAbilityIntro();
+            pendingAbilityIntros.Clear();
+            introducedAbilities.Clear();
+            matchProgress.Reset();
+        }
+
+        public void RequestAbilityIntro(ElevatorManager actor, string kind)
+        {
+            if (actor == null || MenuManager.TutorialActive || string.IsNullOrEmpty(kind)) return;
+            // A CPU-only pane is invisible in solo-versus-CPU. Its personal
+            // effects should not interrupt the human player's view.
+            if (kind != "BOUNCER" && actor.Match != null && !actor.Match.IsVisibleSeat(actor.Seat)) return;
+            string seenKey = kind != "BOUNCER" && actor.Match != null && actor.Match.SplitScreen
+                ? kind + ":" + actor.Seat : kind;
+            if (!introducedAbilities.Add(seenKey)) return;
+            pendingAbilityIntros.Enqueue((actor, kind));
+            if (!AbilityIntroActive) StartNextAbilityIntro();
+        }
+
+        void StartNextAbilityIntro()
+        {
+            while (pendingAbilityIntros.Count > 0)
+            {
+                var next = pendingAbilityIntros.Dequeue();
+                if (next.actor == null) continue;
+                try
+                {
+                    if (!next.actor.PrepareAbilityIntro(next.kind)) continue;
+                }
+                catch (System.Exception error)
+                {
+                    Debug.LogWarning("Could not show " + next.kind + " ability introduction: " + error.Message);
+                    next.actor.FinishAbilityIntro();
+                    continue;
+                }
+                abilityIntroActor = next.actor;
+                abilityIntroKind = next.kind;
+                abilityIntroActive = true;
+                abilityIntroTime = 0f;
+                abilityIntroPreviousTimeScale = Time.timeScale;
+                Time.timeScale = 0f;
+                return;
+            }
+        }
+
+        void StopAbilityIntro()
+        {
+            if (!abilityIntroActive) return;
+            if (abilityIntroActor != null) abilityIntroActor.FinishAbilityIntro();
+            abilityIntroActor = null;
+            abilityIntroKind = null;
+            abilityIntroActive = false;
+            Time.timeScale = abilityIntroPreviousTimeScale;
+        }
         public void RecordRoundResult(int playerOneScore, int playerTwoScore)
             => matchProgress.RecordResult(playerOneScore, playerTwoScore);
         public void AdvanceRound() => matchProgress.AdvanceRound();
@@ -60,6 +125,7 @@ namespace CrazyElevator.Managers
 
         void OnDestroy()
         {
+            StopAbilityIntro();
             if (Instance == this) Instance = null;
         }
 
@@ -155,6 +221,23 @@ namespace CrazyElevator.Managers
 
         void Update()
         {
+            if (AbilityIntroActive)
+            {
+                if (abilityIntroActor == null)
+                {
+                    StopAbilityIntro();
+                    StartNextAbilityIntro();
+                    return;
+                }
+                abilityIntroTime += Time.unscaledDeltaTime;
+                abilityIntroActor.AnimateAbilityIntro(abilityIntroTime);
+                if (abilityIntroTime >= AbilityIntroSeconds)
+                {
+                    StopAbilityIntro();
+                    StartNextAbilityIntro();
+                }
+                return;
+            }
             if (Player == null) return;
             if (MenuManager.IsOpen)
             {
@@ -178,6 +261,25 @@ namespace CrazyElevator.Managers
             }
             if (input.OverlayPressed) TogglePassengerOverlay();
             if (input.MutePressed) MusicManager.Instance?.ToggleMute();
+        }
+
+        void OnGUI()
+        {
+            if (AbilityIntroActive && abilityIntroActor != null)
+            {
+                var match = abilityIntroActor.Match;
+                bool shared = abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen;
+                abilityIntroActor.DrawAbilityIntro(abilityIntroTime, AbilityIntroView(),
+                    shared && match != null, !shared);
+            }
+        }
+
+        Rect AbilityIntroView()
+        {
+            var match = abilityIntroActor != null ? abilityIntroActor.Match : null;
+            return abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen
+                ? new Rect(0f, 0f, Screen.width, Screen.height)
+                : match.ViewRect(abilityIntroActor.Seat);
         }
     }
 }

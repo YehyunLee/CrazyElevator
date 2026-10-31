@@ -141,6 +141,7 @@ namespace CrazyElevator.Match
         void Update()
         {
             if (!enabled || player == null) return;
+            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
             if (Paused || MenuManager.IsOpen) return;
             float dt = Time.unscaledDeltaTime;
             if (dimensionRevealActive)

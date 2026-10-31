@@ -95,6 +95,7 @@ namespace CrazyElevator.Managers
         // Advance gameplay each frame; menus and pause stop the clock.
         void Update()
         {
+            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
             if (MenuManager.IsOpen) return;
             RefreshCabinCameraHome();
             sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
@@ -2260,6 +2261,7 @@ namespace CrazyElevator.Managers
 
         void OnDestroy()
         {
+            ReleaseAbilityIntro();
             ReleaseCabinPreview();
             ReleaseEncounterPreview();
             foreach (var m in materials.Values) Destroy(m);
