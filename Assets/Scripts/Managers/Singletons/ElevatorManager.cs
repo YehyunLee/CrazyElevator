@@ -1306,6 +1306,7 @@ namespace CrazyElevator.Managers
                 RememberCabinTileRun(rider, spot);
                 BeginPersonaBoard(rider, figure.localPosition, spot, entryDoor);
                 IntroduceBoardedPassenger(rider);
+                Match?.PassengerBoarded(this, rider);
                 notice = FriendlyInterior ? "Come on in. I'll give you a hand!" : "In you go! Cough... salt water in my gears again.";
                 return;
             }

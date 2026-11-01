@@ -59,6 +59,8 @@ namespace CrazyElevator.Managers
         readonly List<ShaftHazard> hazards = new List<ShaftHazard>();
         Transform hazardRoot;
         float hazardCooldown, carSpin;
+        ShaftHazard eventHazard;
+        float eventHazardTime;
         float abilityFeedbackTime;
         string abilityFeedback;
         Vector3 abilityFeedbackPosition;
@@ -94,6 +96,7 @@ namespace CrazyElevator.Managers
         {
             if (WorldOwner != this || exteriorCar == null || sceneView == null) return;
             if (hazardRoot == null) SpawnHazards();
+            eventHazardTime = Mathf.Max(0f, eventHazardTime - dt);
             foreach (ShaftHazard hazard in hazards)
             {
                 hazard.Live = HazardOpen(hazard.Spec);
@@ -108,12 +111,33 @@ namespace CrazyElevator.Managers
                 hazard.Clock += dt;
                 float left = ElevatorMatchType.ShaftCenterX + hazard.Spec.Left;
                 float right = ElevatorMatchType.ShaftCenterX + hazard.Spec.Right;
-                hazard.X += hazard.Direction * hazard.Spec.Speed * dt;
+                hazard.X += hazard.Direction * hazard.Spec.Speed * (hazard == eventHazard && eventHazardTime > 0f ? 2f : 1f) * dt;
                 if (hazard.X >= right) { hazard.X = right; hazard.Direction = -1; }
                 else if (hazard.X <= left) { hazard.X = left; hazard.Direction = 1; }
                 PoseHazard(hazard);
             }
         }
+
+        // One visible shared hazard speeds up briefly for both elevators.
+        public string StartSharedHazardEvent()
+        {
+            if (WorldOwner != this) return WorldOwner.StartSharedHazardEvent();
+            if (hazardRoot == null) SpawnHazards();
+            eventHazard = null;
+            foreach (var hazard in hazards)
+            {
+                if (!HazardOpen(hazard.Spec)) continue;
+                if (eventHazard == null || hazard.Spec.Kind == HazardKind.Tornado) eventHazard = hazard;
+                if (hazard.Spec.Kind == HazardKind.Tornado) break;
+            }
+            if (eventHazard == null) return null;
+            eventHazardTime = 8f;
+            int floor = Mathf.Clamp(Mathf.FloorToInt(eventHazard.Spec.Floor), MinTravelFloor, MaxTravelFloor);
+            return (eventHazard.Spec.Kind == HazardKind.Tornado ? "TORNADO" : "MONSTER")
+                + " SURGE · F" + ElevatorRound.FloorNumber(floor);
+        }
+
+        public void ResetSharedHazardEvent() { eventHazard = null; eventHazardTime = 0f; }
 
         void SpawnHazards()
         {

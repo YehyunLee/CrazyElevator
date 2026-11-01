@@ -167,7 +167,7 @@ namespace CrazyElevator.Managers
             string message = abilityIntroKind == "HUNTER" ? "STUNS MONSTERS"
                 : abilityIntroKind == "DIVER" ? "BLOCKS TORNADOES"
                 : abilityIntroKind == "BOUNCER" ? "STRONGER BUMPS"
-                : abilityIntroKind == "GROUP" ? "SPEED BOOST"
+                : abilityIntroKind == "GROUP" ? "SPEED + STICKY TRAIL"
                 : abilityIntroKind == "ELDERLY" ? "SLOWS ELEVATOR"
                 : abilityIntroKind == "PREGNANT" ? "PATIENCE DRAINS FASTER"
                 : abilityIntroKind == "CALM" ? "CALMS THE BABY" : "CLEARS RUST";

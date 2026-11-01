@@ -63,6 +63,37 @@ namespace CrazyElevator.Managers
         public IReadOnlyList<Rider> AllRiders =>
             round != null ? round.Riders : (IReadOnlyList<Rider>)System.Array.Empty<Rider>();
 
+        // Select from the real, shared landing queues; do not spawn a duplicate passenger.
+        public Rider ChooseMatchVip()
+        {
+            if (round == null) return null;
+            Rider best = null;
+            float bestCost = float.MaxValue;
+            foreach (var rider in round.Riders)
+            {
+                if (!round.IsQueuedAtStop(rider) || rider.Space > 2) continue;
+                float cost = Mathf.Abs(rider.Origin - (round.MinFloor + 3))
+                    + Mathf.Abs(rider.OriginStop - ElevatorRound.CenterStop) * 1.5f;
+                if (cost >= bestCost) continue;
+                best = rider; bestCost = cost;
+            }
+            if (best != null) { best.IsVip = true; best.Bonus += 250; }
+            return best;
+        }
+
+        public bool HasCandyTrail => round != null && round.HasOnboardFeature(PassengerFeature.GroupParty);
+
+        public void ApplyCandyTrail()
+        {
+            collisionSlowTimer = Mathf.Max(collisionSlowTimer, 2f);
+            travelVelocity *= .45f;
+            railVelocity *= .45f;
+            boostAxis = 0f; boostHeld = false;
+            collisionImpact = .7f;
+            notice = "STICKY CANDY!";
+            Play(buzz);
+        }
+
         public void BindSession(GameManager manager) => session = manager;
 
         void EnsureManagers()

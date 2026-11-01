@@ -55,10 +55,11 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare")
         {
             bool singleDimension = action != "match-prepare";
-            File.WriteAllText(request, action == "bouncer-prepare" ? "bouncer-run"
+            File.WriteAllText(request, action == "interaction-prepare" ? "interaction-run"
+                : action == "bouncer-prepare" ? "bouncer-run"
                 : singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
                 .GetField("startDuelOnLoad", BindingFlags.Static | BindingFlags.NonPublic)
@@ -89,6 +90,7 @@ public static class ExtendedInteriorChecks
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
             else if (action == "bouncer-run") RunBouncerChecks();
+            else if (action == "interaction-run") RunInteractionChecks();
             else if (action == "single-dimension-run") RunSingleDimensionMatch();
             else if (action == "solo-basic") RunSoloBasic(game);
             else if (action == "unified-cabin") RunUnifiedCabin(game);
@@ -162,7 +164,7 @@ public static class ExtendedInteriorChecks
                 EditorApplication.isPaused = false;
                 EditorApplication.isPlaying = false;
             }
-            if ((action == "match-run" || action == "bouncer-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
+            if ((action == "match-run" || action == "bouncer-run" || action == "interaction-run" || action == "single-dimension-run" || action == "solo-basic" || action == "checks" || action == "boost-checks" || action == "unified-cabin" || action == "camera-smoothing") && Application.isBatchMode)
                 EditorApplication.Exit(exitCode);
         }
     }
@@ -462,6 +464,14 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "bouncer-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Rival Interactions")]
+    public static void RequestInteractionChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "interaction-prepare");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
@@ -1390,6 +1400,60 @@ public static class ExtendedInteriorChecks
             CrazyElevator.Managers.MenuManager.ClosePause();
             player.enabled = playerEnabled; rival.enabled = rivalEnabled; match.enabled = matchEnabled;
         }
+    }
+
+    static void RunInteractionChecks()
+    {
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        Require(match != null && match.Rival != null, "Interaction checks need both elevators.");
+        var type = match.GetType();
+        var roundField = typeof(Game).GetField("round", Flags);
+        var phase = typeof(Game).GetField("phase", Flags);
+        for (int seat = 0; seat < 2; seat++)
+        {
+            match.StartMatch();
+            FinishMatchRoundIntroduction(match);
+            Game actor = seat == 0 ? match.player : match.Rival;
+            Game rival = seat == 0 ? match.Rival : match.player;
+            var round = (Round)roundField.GetValue(actor);
+            var other = (Round)roundField.GetValue(rival);
+            var vip = (SharedRider)type.GetField("matchVip", Flags).GetValue(match);
+            Require(vip != null && vip.IsVip && round.Riders.Contains(vip) && other.Riders.Contains(vip)
+                && round.IsQueuedAtStop(vip), "VIP must be a real rider shared by both queues.");
+            round.Floor = other.Floor = vip.Origin;
+            round.Stop = other.Stop = vip.OriginStop;
+            vip.Arrival = 0f;
+            Require(round.Board(vip) && !other.Board(vip), "Only one elevator can claim the VIP.");
+            match.PassengerBoarded(actor, vip);
+            var messages = (string[])type.GetField("contestMessages", Flags).GetValue(match);
+            Require(messages[seat] == "VIP ON BOARD!" && messages[1 - seat] == "RIVAL GOT THE VIP!",
+                "Both players should see who claimed the VIP.");
+            round.Floor = vip.Destination; round.Stop = vip.DestinationStop;
+            vip.Remaining = vip.Patience;
+            int before = round.Score;
+            Require(round.Offboard(vip) == CrazyElevator.Shared.OffboardResult.Happy
+                && round.Score - before >= 400, "An on-time VIP delivery must award the bonus.");
+            ((Round)roundField.GetValue(match.player)).TimeLeft = 39f;
+            type.GetMethod("UpdateRivalInteractions", Flags).Invoke(match, new object[] { .1f });
+            Require((bool)type.GetField("hazardEventStarted", Flags).GetValue(match)
+                && !string.IsNullOrEmpty((string)type.GetField("eventMessage", Flags).GetValue(match)),
+                "The timed shared hazard event did not start.");
+            round.Riders.Add(new SharedRider { Kind = "GROUP", Space = 3, Boarded = true,
+                BoardedBySeat = seat, Remaining = 30f });
+            phase.SetValue(actor, Enum.Parse(phase.FieldType, "Moving"));
+            phase.SetValue(rival, Enum.Parse(phase.FieldType, "Moving"));
+            actor.sceneView.exteriorCar.position = Vector3.zero;
+            rival.sceneView.exteriorCar.position = new Vector3(30f, 0f, 0f);
+            var tick = type.GetMethod("UpdateRivalInteractions", Flags);
+            for (int i = 0; i < 52; i++) tick.Invoke(match, new object[] { .1f });
+            var trails = (IList)type.GetField("candyTrails", Flags).GetValue(match);
+            Require(trails.Count == 1, "The Trio did not leave candy behind.");
+            rival.sceneView.exteriorCar.position = Vector3.zero;
+            for (int i = 0; i < 7; i++) tick.Invoke(match, new object[] { .1f });
+            Require((float)Get(rival, "collisionSlowTimer") > 0f && trails.Count == 0,
+                "The rival did not consume the trail and slow down.");
+        }
+        Debug.Log("PASS: Shared VIP, exclusive claim, bonus, hazard event, and candy trail for both seats.");
     }
 
     static void RunBouncerChecks()

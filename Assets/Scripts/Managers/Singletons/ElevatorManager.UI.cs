@@ -1022,7 +1022,7 @@ namespace CrazyElevator.Managers
                 if (!rider.Boarded && !rider.Resolved && round.IsOffered(rider))
                 {
                     Rect badge = new Rect(headX - 26f, Mathf.Max(8f, headY - 74f), 52f, 42f);
-                    Color badgeBorder = selected
+                    Color badgeBorder = rider.IsVip ? Gold : selected
                         ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
                         : Teal;
                     FramedPanel(badge, badgeBorder, 3f);
@@ -1031,6 +1031,8 @@ namespace CrazyElevator.Managers
                     OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
                         DestinationTag(rider), calloutNumber);
                     calloutNumber.fontSize = previousNumberSize;
+                    if (rider.IsVip)
+                        OutlinedLabel(new Rect(badge.x - 12f, badge.y - 25f, badge.width + 24f, 24f), "VIP", small, Gold);
                 }
 
                 // The selection arrow belongs above the passenger, not above

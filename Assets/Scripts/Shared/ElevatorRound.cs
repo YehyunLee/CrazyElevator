@@ -62,6 +62,8 @@ namespace CrazyElevator.Shared
         // Seconds until a slow waiting rider reaches the door.
         public float Arrival;
 
+        // A match can designate one existing visible passenger as a shared VIP.
+        public bool IsVip;
         public bool Boarded;
         // A shared passenger pool still needs to know which car holds a rider.
         public int BoardedBySeat = -1;
