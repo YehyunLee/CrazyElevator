@@ -23,6 +23,9 @@ namespace CrazyElevator.Match
         [Tooltip("How much of the closing speed becomes a short rebound after a vertical hit.")]
         [Range(.15f, 1.1f)] public float collisionBounceStrength = .55f;
         [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.35f;
+        [Header("Elevator trim materials")]
+        [SerializeField] Material playerOneCarTrim;
+        [SerializeField] Material playerTwoCarTrim;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
@@ -136,7 +139,26 @@ namespace CrazyElevator.Match
             Rival.ConfigureMatch(this, 1, !humanRival);
             if (!humanRival) actor.AddComponent<NpcElevator>().game = Rival;
             actor.SetActive(true);
+            ApplyCarTrim(source, playerOneCarTrim);
+            ApplyCarTrim(rivalView, playerTwoCarTrim);
             ConfigureCameras();
+        }
+
+        // The cabin prefab supplies these editable frame renderers. Each match
+        // car gets its own authored material; no cabin geometry is duplicated in code.
+        static void ApplyCarTrim(ElevatorScene view, Material material)
+        {
+            if (view == null || material == null) return;
+            SetFrameMaterial(view.frontDoorFrame, material);
+            SetFrameMaterial(view.leftDoorFrame, material);
+            SetFrameMaterial(view.rightDoorFrame, material);
+        }
+
+        static void SetFrameMaterial(Renderer[] frame, Material material)
+        {
+            if (frame == null) return;
+            foreach (Renderer part in frame)
+                if (part != null) part.sharedMaterial = material;
         }
 
         void Update()

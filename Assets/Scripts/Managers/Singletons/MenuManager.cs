@@ -45,7 +45,6 @@ namespace CrazyElevator.Managers
             new Rect(620f, 730f, 460f, 90f)
         };
         const string InputHintsPreference = "CrazyElevator.InputHints.Keyboard";
-        const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
         [Header("First menu buttons")]
         [SerializeField] CanvasGroup titleButtons;
         [System.Serializable]
@@ -105,7 +104,6 @@ namespace CrazyElevator.Managers
         static bool keyboardHints;
         static bool inputHintsLoaded;
         static bool tutorialMode = true;
-        static bool tutorialModeLoaded;
         bool horizontalHeld;
         bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
@@ -155,27 +153,13 @@ namespace CrazyElevator.Managers
             }
         }
 
-        public static bool TutorialModeEnabled
-        {
-            get
-            {
-                LoadTutorialModePreference();
-                return tutorialMode;
-            }
-        }
+        public static bool TutorialModeEnabled => tutorialMode;
 
         static void LoadInputHintsPreference()
         {
             if (inputHintsLoaded) return;
             keyboardHints = PlayerPrefs.GetInt(InputHintsPreference, 0) == 1;
             inputHintsLoaded = true;
-        }
-
-        static void LoadTutorialModePreference()
-        {
-            if (tutorialModeLoaded) return;
-            tutorialMode = PlayerPrefs.GetInt(TutorialModePreference, 1) == 1;
-            tutorialModeLoaded = true;
         }
 
         static void SetKeyboardHints(bool enabled)
@@ -189,9 +173,6 @@ namespace CrazyElevator.Managers
         static void SetTutorialMode(bool enabled)
         {
             tutorialMode = enabled;
-            tutorialModeLoaded = true;
-            PlayerPrefs.SetInt(TutorialModePreference, enabled ? 1 : 0);
-            PlayerPrefs.Save();
         }
 
         // Enter Play Mode Options can skip Domain Reload; reset statics manually.
@@ -215,7 +196,7 @@ namespace CrazyElevator.Managers
             TutorialActive = false;
             overlayGame = null;
             inputHintsLoaded = false;
-            tutorialModeLoaded = false;
+            tutorialMode = true;
         }
 
         void Awake()
@@ -224,7 +205,6 @@ namespace CrazyElevator.Managers
             menuFadeAlpha = fadeMenuOnLoad ? 1f : 0f;
             fadeMenuOnLoad = false;
             LoadInputHintsPreference();
-            LoadTutorialModePreference();
             // Scene object in Main — do not spawn a hidden DDOL menu.
             if (!sessionReady)
             {
@@ -795,6 +775,7 @@ namespace CrazyElevator.Managers
                 if (showingControllerInstructions)
                 {
                     DrawControllerInstructions();
+                    DrawTutorialSkip();
                     DrawMenuFade();
                     return;
                 }
@@ -805,6 +786,7 @@ namespace CrazyElevator.Managers
                 else
                     DrawTutorialOverlay();
                 GUI.depth = previousDepth;
+                DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
             }
@@ -817,6 +799,22 @@ namespace CrazyElevator.Managers
             if (menuFadeAlpha <= .001f) return;
             Panel(new Rect(0, 0, Screen.width, Screen.height),
                 new Color(0f, 0f, 0f, menuFadeAlpha));
+        }
+
+        void DrawTutorialSkip()
+        {
+            if (!tutorialActive || tutorialGame == null) return;
+            int previousDepth = GUI.depth;
+            GUI.depth = -1001;
+            Rect button = new Rect(Screen.width - 220f, 18f, 200f, 48f);
+            Panel(button, Cream);
+            if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
+            Color previousCaption = caption.normal.textColor;
+            caption.normal.textColor = Cream;
+            GUI.Label(new Rect(button.x, button.yMax + 3f, button.width, 22f),
+                "TAB / VIEW", caption);
+            caption.normal.textColor = previousCaption;
+            GUI.depth = previousDepth;
         }
 
         void DrawControllerInstructions()

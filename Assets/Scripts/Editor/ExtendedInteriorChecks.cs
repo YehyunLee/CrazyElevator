@@ -69,7 +69,6 @@ public static class ExtendedInteriorChecks
             var statics = BindingFlags.Static | BindingFlags.NonPublic;
             menu.GetField("tutorialOnLoad", statics).SetValue(null, false);
             menu.GetField("tutorialMode", statics).SetValue(null, false);
-            menu.GetField("tutorialModeLoaded", statics).SetValue(null, true);
             if (singleDimension)
             {
                 menu.GetField("playerTwoHumanOnLoad", statics).SetValue(null, true);
@@ -1489,8 +1488,14 @@ public static class ExtendedInteriorChecks
         trackPositions[1] = 1f;
 
         var rider = playerRound.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
+        Require(rival.ApproachingPickup(rider),
+            "A rival already waiting at the shared landing was not treated as a contested pickup.");
         Require(playerRound.Board(rider) && !rivalRound.Board(rider),
             "Both elevators boarded the same floor-zero passenger.");
+        match.NotifyPassengerBoarded(player, rider);
+        Require((string)Get(player, "actionFeedbackText") == "STOLEN!"
+            && (string)Get(rival, "actionFeedbackText") == "TOO LATE!",
+            "A contested passenger did not show steal feedback in both cars.");
         Require(player.PassengerLoad == rider.Space && rival.PassengerLoad == 0
             && player.CurrentPassengers.Count == 1 && rival.CurrentPassengers.Count == 0,
             "A boarded passenger appeared inside both elevators.");
