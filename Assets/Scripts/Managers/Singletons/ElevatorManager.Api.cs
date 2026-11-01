@@ -28,6 +28,27 @@ namespace CrazyElevator.Managers
         public int KickoutCount => kickoutCount;
         public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
         public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
+        // Only show a steal when the rival can still claim this landing.
+        public bool ApproachingPickup(Rider rider)
+        {
+            if (rider == null || round == null || round.Finished || !round.HasCapacityFor(rider))
+                return false;
+            // Both cars can already be at the same shared queue. This is the
+            // most common steal, and it used to miss the arrival-only check.
+            if (phase == Phase.Boarding || phase == Phase.Opening)
+                return round.Floor == rider.Origin && round.Stop == rider.OriginStop;
+            if (phase == Phase.Docking)
+                return destination == rider.Origin && dockingStop == rider.OriginStop;
+
+            // The CPU picks a specific landing before travel. Catch its final
+            // approach too: a car already boarding can collide with it before docking.
+            if (phase != Phase.Moving || !IsNpc || strongCollisionRecoil
+                || npcTargetFloor != rider.Origin || npcTargetStop != rider.OriginStop)
+                return false;
+            float remaining = rider.Origin - travelFloor;
+            return remaining * travelVelocity > 0f
+                && Mathf.Abs(remaining) <= Mathf.Abs(travelVelocity) * 1.5f;
+        }
         public AudioClip DingClip => ding;
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;
