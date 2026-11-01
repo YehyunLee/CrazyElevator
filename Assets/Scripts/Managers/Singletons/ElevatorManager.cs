@@ -172,6 +172,7 @@ namespace CrazyElevator.Managers
             collisionRecoilTimer = Mathf.Max(0f, collisionRecoilTimer - dt);
             if (collisionRecoilTimer <= 0f) strongCollisionRecoil = false;
             collisionImpact = Mathf.Max(0f, collisionImpact - dt * 1.8f);
+            bouncerImpact = Mathf.Max(0f, bouncerImpact - dt * 3.5f);
             TickHazardTimers(dt);
             UpdateShaftHazards(dt);
             UpdateShaftCrowd(dt);
@@ -188,8 +189,13 @@ namespace CrazyElevator.Managers
                 ElevatorManager other = IsNpc ? Match.player : Match.Rival;
                 if (other != null && other.AtStop && other.DiscreteFloor == round.Floor
                     && other.DiscreteStop == round.Stop)
+                {
                     other.round.AddWaitingMisses(waitingMisses);
+                    other.ShowActionFeedback("PASSENGER LEFT  -" + 20 * waitingMisses, false);
+                }
             }
+            if (waitingMisses > 0)
+                ShowActionFeedback("PASSENGER LEFT  -" + 20 * waitingMisses, false);
             elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
             // End before accepting another drop-off, even if an exit animation
             // is still running. The score is locked when the clock reaches zero.
@@ -290,6 +296,7 @@ namespace CrazyElevator.Managers
             SetFloorDisplayText(ElevatorRound.FloorNumber(round.Floor).ToString());
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
+            ClearActionFeedback();
             ResetBuildingTravel();
             SyncRoundWorldVisibility();
             cabinFramingReady = cameraViewReady = false;
@@ -462,7 +469,7 @@ namespace CrazyElevator.Managers
         float autoDropOffWait;
         int travelDirection = 1;
         float travelVelocity, boostAxis;
-        float collisionSlowTimer, collisionRecoilTimer, collisionImpact;
+        float collisionSlowTimer, collisionRecoilTimer, collisionImpact, bouncerImpact;
         bool strongCollisionRecoil;
         bool tutorialPassengerView;
         bool boostHeld;
@@ -495,7 +502,9 @@ namespace CrazyElevator.Managers
         void BeginBuildingTravel()
         {
             passedFloors.Clear(); passedFloors.Add(round.Floor);
-            round.LeaveFloor();
+            int missed = round.LeaveFloor();
+            if (missed > 0)
+                ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
             travelFloor = round.Floor;
             // Depart at the world's normal cruising speed. Boost should feel
             // like extra acceleration, not a requirement to overcome a sluggish launch.
@@ -617,8 +626,11 @@ namespace CrazyElevator.Managers
                 bool crossed = motionDirection > 0 ? before <= edge && travelFloor > edge : before >= edge && travelFloor < edge;
                 if (!crossed || !passedFloors.Add(floor) || passingStop < 0) continue;
                 int dockedFloor = round.Floor, dockedStop = round.Stop;
-                round.Floor = floor; round.Stop = passingStop; round.LeaveFloor();
+                round.Floor = floor; round.Stop = passingStop;
+                int missed = round.LeaveFloor();
                 round.Floor = dockedFloor; round.Stop = dockedStop;
+                if (missed > 0)
+                    ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
             }
             if (!railRiding && Mathf.Approximately(before, travelFloor))
                 notice = "End of track. Press A/D to take this floor's rail, confirm to stop, or reverse.";
@@ -628,7 +640,7 @@ namespace CrazyElevator.Managers
             travelFloor = round.Floor; travelDirection = 1; destination = -1; passedFloors.Clear();
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
             routeBoostPulse = 0f;
-            collisionSlowTimer = collisionRecoilTimer = collisionImpact = 0;
+            collisionSlowTimer = collisionRecoilTimer = collisionImpact = bouncerImpact = 0;
             strongCollisionRecoil = false;
             hazardCooldown = carSpin = abilityFeedbackTime = 0f;
             if (WorldOwner == this)
@@ -861,6 +873,8 @@ namespace CrazyElevator.Managers
             if (destination < 0 || destination == round.Floor) return;
             origin = round.Floor;
             int missed = round.LeaveFloor();
+            if (missed > 0)
+                ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
             travelDuration = 1.1f + Mathf.Abs(destination - origin) * .8f;
             phase = Phase.Moving; phaseTime = 0;
             SetControlStatus("GOING " + ElevatorRound.FloorNumber(destination));
@@ -1294,12 +1308,15 @@ namespace CrazyElevator.Managers
                 string unit = rider.Space == 1 ? " space" : " spaces";
                 SetControlStatus("OVERLOADED");
                 notice = "ELEVATOR OVERLOADED! " + rider.Name + " needs " + rider.Space + unit + "; only " + available + " left.";
+                ShowActionFeedback("NO ROOM!", false);
                 Play(buzz);
                 return;
             }
             if (TryCabinTilePlacement(rider, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
             {
                 if (!round.Board(rider)) return;
+                ShowActionFeedback("ON BOARD!", true);
+                Match?.NotifyPassengerBoarded(this, rider);
                 AdoptWaitingFigure(rider);
                 PlayPassengerBoardingVoice(rider);
                 cabinPositions[rider] = spot;
@@ -1312,6 +1329,7 @@ namespace CrazyElevator.Managers
             SetControlStatus("NO OPEN TILES");
             notice = rider.Name + " needs " + rider.Space + " adjacent open tile"
                 + (rider.Space == 1 ? "." : "s.") + " Rearrange or unload someone first.";
+            ShowActionFeedback("NO OPEN TILES!", false);
             Play(buzz);
         }
 
@@ -1822,6 +1840,12 @@ namespace CrazyElevator.Managers
             Vector3 carLocal = CrazyTravelLocalPosition(carX, travelFloor);
             carLocal += new Vector3(outward * collisionKick * .42f,
                 Mathf.Abs(collisionKick) * .17f, 0f);
+            if (bouncerImpact > 0f)
+            {
+                float elapsed = 1f - bouncerImpact;
+                carLocal += new Vector3(Mathf.Sin(elapsed * 39f) * .17f,
+                    Mathf.Sin(elapsed * 51f) * .10f, 0f) * bouncerImpact;
+            }
             exteriorCar.localPosition = carLocal;
             exteriorCar.localRotation = CrazyTravelLocalRotation(travelFloor, collisionKick);
             if (!sceneView.autoFrameCabin)
@@ -2405,6 +2429,13 @@ namespace CrazyElevator.Managers
             notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE LEFT / RIGHT OR A / D TO SWITCH TRACKS";
         }
 
+        // Move the authored car and its cabin together for a short Bouncer hit.
+        public void PulseMatchImpact(bool strong)
+        {
+            collisionImpact = Mathf.Max(collisionImpact, 1f);
+            if (strong) bouncerImpact = 1f;
+        }
+
         public void ApplyMatchBounce(float slowSeconds, float reboundVelocity, bool strong = false)
         {
             bool knockedFromStop = phase != Phase.Moving;
@@ -2488,7 +2519,9 @@ namespace CrazyElevator.Managers
             if (!alreadyLeftFloor)
             {
                 travelFloor = round.Floor;
-                round.LeaveFloor();
+                int missed = round.LeaveFloor();
+                if (missed > 0)
+                    ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
             }
             passedFloors.Clear();
             passedFloors.Add(round.Floor);

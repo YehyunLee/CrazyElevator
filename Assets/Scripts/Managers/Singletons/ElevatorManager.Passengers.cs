@@ -89,6 +89,7 @@ namespace CrazyElevator.Managers
             if (!HasBoardingSpace(next))
             {
                 notice = "NO ROOM FOR THIS PARTY. Choose another door or close & travel.";
+                ShowActionFeedback(round.HasCapacityFor(next) ? "NO OPEN TILES!" : "NO ROOM!", false);
                 return;
             }
             BoardPassengerWithPersona(next);
@@ -761,6 +762,7 @@ namespace CrazyElevator.Managers
                     figure.localPosition = dragStart;
                     SetControlStatus("NO SPACE HERE"); Play(buzz);
                     notice = "This passenger needs an open cabin space and enough capacity.";
+                    ShowActionFeedback("NO SPACE HERE!", false);
                     return;
                 }
                 if (draggedWasBoarded || round.Board(rider))
@@ -769,6 +771,8 @@ namespace CrazyElevator.Managers
                     RememberCabinTileRun(rider, released);
                     if (!draggedWasBoarded)
                     {
+                        ShowActionFeedback("ON BOARD!", true);
+                        Match?.NotifyPassengerBoarded(this, rider);
                         PlayPassengerBoardingVoice(rider);
                         BeginHandymanRepair(rider);
                         IntroduceBoardedPassenger(rider);
@@ -1135,12 +1139,17 @@ namespace CrazyElevator.Managers
             int scoreBefore = round.Score;
             OffboardResult result = round.Offboard(rider);
             if (result == OffboardResult.None) return;
+            int points = round.Score - scoreBefore;
             passengerExitCount++;
             if (rider == repairingHandyman) ClearHandymanRepair();
             exitStarts[rider] = start; exiting[rider] = 0;
-            BeginKick(rider, figure, start, result, round.Score - scoreBefore);
+            BeginKick(rider, figure, start, result, points);
             phaseTime = 0;
-            PlayDeliveryReaction(rider, result, round.Score - scoreBefore);
+            if (result == OffboardResult.WrongFloor)
+                ShowActionFeedback("WRONG FLOOR  " + points, false, true);
+            else if (result == OffboardResult.Late)
+                ShowActionFeedback("UNHAPPY DROP", false);
+            PlayDeliveryReaction(rider, result, points);
         }
     }
 }

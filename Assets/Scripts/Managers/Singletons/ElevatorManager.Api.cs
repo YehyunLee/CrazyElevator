@@ -28,6 +28,23 @@ namespace CrazyElevator.Managers
         public int KickoutCount => kickoutCount;
         public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
         public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
+        // A confirmed stop is a real close call; merely passing nearby is not.
+        public bool ApproachingPickup(Rider rider)
+        {
+            if (rider == null || round == null || round.Finished) return false;
+            if (phase == Phase.Docking)
+                return destination == rider.Origin && dockingStop == rider.OriginStop
+                    && dockingSeconds - phaseTime <= .65f;
+
+            // The CPU picks a specific landing before travel. Catch its final
+            // approach too: a car already boarding can collide with it before docking.
+            if (phase != Phase.Moving || !IsNpc || strongCollisionRecoil
+                || npcTargetFloor != rider.Origin || npcTargetStop != rider.OriginStop)
+                return false;
+            float remaining = rider.Origin - travelFloor;
+            return remaining * travelVelocity > 0f
+                && Mathf.Abs(remaining) <= Mathf.Abs(travelVelocity) * .8f;
+        }
         public AudioClip DingClip => ding;
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;

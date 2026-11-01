@@ -13,10 +13,14 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
-            rewardPoints, rewardCaption, calloutNumber, calloutText, selectionArrow,
+            rewardPoints, rewardCaption, actionWord, calloutNumber, calloutText, selectionArrow,
             encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
+        const float ActionFeedbackSeconds = 1.2f;
+        string actionFeedbackText;
+        float actionFeedbackAt = -100f;
+        bool actionFeedbackPositive, actionFeedbackEmphasized;
         readonly HashSet<WorldBand> encounteredWorlds = new HashSet<WorldBand>();
         readonly HashSet<string> encounteredPassengerKinds = new HashSet<string>();
         static readonly HashSet<WorldBand>[] completedWorldTutorials =
@@ -95,6 +99,9 @@ namespace CrazyElevator.Managers
             GameTypography.Apply(rewardPoints, true);
             rewardCaption = new GUIStyle(buttonStyle) { fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             GameTypography.Apply(rewardCaption, true);
+            actionWord = new GUIStyle(buttonStyle) { fontSize = 24, alignment = TextAnchor.MiddleCenter,
+                wordWrap = false, clipping = TextClipping.Clip };
+            GameTypography.Apply(actionWord, true);
             calloutNumber = new GUIStyle(buttonStyle) { fontSize = 25, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(calloutNumber, true);
             calloutNumber.normal.textColor = UiWhite;
@@ -766,6 +773,7 @@ namespace CrazyElevator.Managers
                 DrawMouseControls();
                 DrawDeliveryPopups(Screen.width, Screen.height);
                 DrawEncounterCard(Screen.width, Screen.height);
+                DrawActionFeedback(Screen.width, Screen.height);
             }
             DrawSessionFade(sessionFadeAlpha);
         }
@@ -842,6 +850,7 @@ namespace CrazyElevator.Managers
                 if (extendedInterior) DrawElevatorSpeech(npcView.height, npcView.width);
                 if (extendedInterior) DrawPassengerCallouts();
                 DrawDeliveryPopups(npcView.width, npcView.height);
+                DrawActionFeedback(npcView.width, npcView.height);
                 GUI.matrix = npcMatrix;
                 return;
             }
@@ -854,7 +863,62 @@ namespace CrazyElevator.Managers
             DrawMouseControls();
             DrawDeliveryPopups(view.width, view.height);
             DrawEncounterCard(view.width, view.height);
+            DrawActionFeedback(view.width, view.height);
             GUI.matrix = previous;
+        }
+
+        // One short cue per car, so mistakes and steals stay readable in split screen.
+        public void ShowActionFeedback(string label, bool positive, bool emphasized = false)
+        {
+            if (string.IsNullOrEmpty(label) || round == null || round.Finished) return;
+            // Ability introductions pause game time; keep the cue for the first playable frame after them.
+            float now = Time.time;
+            float age = now - actionFeedbackAt;
+            if (actionFeedbackEmphasized && age < .7f && !emphasized) return;
+            bool automaticBoardingBlocked = label == "NO ROOM!" || label == "NO OPEN TILES!";
+            float repeatDelay = automaticBoardingBlocked ? 2.2f : .4f;
+            if (actionFeedbackText == label && age < repeatDelay) return;
+            actionFeedbackText = label;
+            actionFeedbackPositive = positive;
+            actionFeedbackEmphasized = emphasized;
+            actionFeedbackAt = now;
+        }
+
+        void ClearActionFeedback()
+        {
+            actionFeedbackText = null;
+            actionFeedbackAt = -100f;
+            actionFeedbackEmphasized = false;
+        }
+
+        void DrawActionFeedback(float viewWidth, float viewHeight)
+        {
+            if (string.IsNullOrEmpty(actionFeedbackText) || Event.current.type != EventType.Repaint) return;
+            float age = Time.time - actionFeedbackAt;
+            if (age < 0f || age >= ActionFeedbackSeconds) return;
+
+            float scale = Mathf.Clamp(viewHeight / 900f, .7f, 1.1f);
+            float entrance = EaseOut(Mathf.Clamp01(age / .15f));
+            float alpha = Mathf.Clamp01((ActionFeedbackSeconds - age) / .27f) * entrance;
+            float width = Mathf.Min(viewWidth - 24f, (actionFeedbackEmphasized ? 330f : 270f) * scale);
+            float height = (actionFeedbackEmphasized ? 56f : 44f) * scale;
+            // Clear the match collision banner and any passenger introduction card.
+            float minimumY = activeEncounterCard != null ? 260f : 154f;
+            float y = Mathf.Max(minimumY, viewHeight * .18f) + (1f - entrance) * 12f * scale;
+            Rect cue = new Rect((viewWidth - width) * .5f, y, width, height);
+            Color accent = actionFeedbackPositive ? Teal : Coral;
+            Panel(cue, new Color(UiBlack.r, UiBlack.g, UiBlack.b, .84f * alpha));
+            Panel(new Rect(cue.x, cue.y, cue.width, 4f * scale),
+                new Color(accent.r, accent.g, accent.b, alpha));
+            if (actionFeedbackEmphasized)
+                Panel(new Rect(cue.x + 4f * scale, cue.yMax - 4f * scale,
+                    cue.width - 8f * scale, 2f * scale),
+                    new Color(accent.r, accent.g, accent.b, .7f * alpha));
+
+            actionWord.fontSize = Mathf.RoundToInt((actionFeedbackEmphasized ? 26f : 21f) * scale);
+            actionWord.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, alpha);
+            GUI.Label(new Rect(cue.x + 8f * scale, cue.y + 4f * scale,
+                cue.width - 16f * scale, cue.height - 8f * scale), actionFeedbackText, actionWord);
         }
 
         // Screen-space points stay readable while the 3D passenger exits.
