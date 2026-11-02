@@ -482,7 +482,7 @@ namespace CrazyElevator.Managers
             if (view.destination != null)
             {
                 view.destination.gameObject.SetActive(true);
-                view.destination.text = DestinationTag(rider);
+                view.destination.text = rider.IsVip ? "VIP " + DestinationTag(rider) : DestinationTag(rider);
                 view.destination.transform.position = figure.Root.TransformPoint(new Vector3(0f, 2.65f, 0f));
                 Camera camera = exteriorCamera;
                 if (InPassengerStop && round.IsOffered(rider)) camera = eye;
@@ -637,6 +637,7 @@ namespace CrazyElevator.Managers
                     || riderFloor == round.Floor && riderStop == round.Stop) continue;
                 float cost = Mathf.Abs(riderFloor - round.Floor)
                     + Mathf.Abs(StopOffsets[riderStop] - StopOffsets[round.Stop]) / 11f;
+                if (rider.IsVip && !rider.Boarded) cost -= 3f;
                 if (cost >= best) continue;
                 best = cost;
                 floor = riderFloor;

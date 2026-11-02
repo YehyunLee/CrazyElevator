@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 using CrazyElevator.Managers;
 using CrazyElevator.Shared;
 using Game = CrazyElevator.Managers.ElevatorManager;
+using SharedRider = CrazyElevator.Shared.Rider;
 
 namespace CrazyElevator.Match
 {
@@ -41,6 +43,21 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        SharedRider matchVip;
+        bool hazardEventStarted;
+        bool vipRevealStarted;
+        float eventMessageTime;
+        string eventMessage;
+        readonly float[] candyCooldown = { 5f, 5f };
+        readonly List<CandyTrail> candyTrails = new List<CandyTrail>();
+        sealed class CandyTrail
+        {
+            public int Seat;
+            public Vector3 Position;
+            public float Life;
+        }
+        readonly string[] contestMessages = new string[2];
+        readonly float[] contestMessageTimes = new float[2];
         int collisionCount;
         static readonly float[] JunctionFloorPositions = { 5.5f, 12.5f, 19.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
@@ -203,6 +220,11 @@ namespace CrazyElevator.Match
 
             if (player.IntroPlaying || Rival.IntroPlaying || player.CountdownPlaying
                 || Rival.CountdownPlaying || MenuManager.IsOpen) return;
+            if (Running && !Finished && !MenuManager.TutorialActive)
+            {
+                UpdateRivalInteractions(Time.deltaTime);
+                if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
+            }
             var input = InputManager.Instance;
             if (input == null) return;
 
@@ -267,11 +289,86 @@ namespace CrazyElevator.Match
             expressFlash[0] = expressFlash[1] = 0f;
             player.StartMatchShift(countdown: !practice);
             Rival.StartMatchShift(player, countdown: !practice);
+            // Promote one waiting passenger to VIP halfway through the live shift.
+            matchVip = null;
+            vipRevealStarted = false;
+            hazardEventStarted = false;
+            eventMessageTime = 0f;
+            eventMessage = null;
+            candyTrails.Clear();
+            candyCooldown[0] = candyCooldown[1] = 5f;
+            contestMessageTimes[0] = contestMessageTimes[1] = 0f;
+            player.ResetSharedHazardEvent();
             player.GetComponent<NpcElevator>()?.ResetDecisions();
             Rival.GetComponent<NpcElevator>()?.ResetDecisions();
             Running = true;
             Paused = false;
             if (!practice) BeginRoundIntroduction();
+        }
+
+        // Boarding is reported only after the shared rider was claimed successfully.
+        public void PassengerBoarded(Game actor, SharedRider rider)
+        {
+            if (!Running || MenuManager.TutorialActive || actor == null || rider == null) return;
+            Game other = Other(actor);
+            bool close = other != null && Mathf.Abs(other.CollisionFloor - rider.Origin) <= 1.1f
+                && Mathf.Abs(ShaftX(other) - ShaftX(actor)) <= 14f;
+            if (!rider.IsVip && !close) return;
+            int winner = SeatOf(actor), loser = 1 - winner;
+            contestMessages[winner] = rider.IsVip ? "VIP ON BOARD!" : "PASSENGER CLAIMED!";
+            contestMessages[loser] = rider.IsVip ? "RIVAL GOT THE VIP!" : "TOO LATE!";
+            contestMessageTimes[winner] = contestMessageTimes[loser] = 2.5f;
+        }
+
+        void UpdateRivalInteractions(float dt)
+        {
+            eventMessageTime = Mathf.Max(0f, eventMessageTime - dt);
+            for (int seat = 0; seat < 2; seat++)
+            {
+                contestMessageTimes[seat] = Mathf.Max(0f, contestMessageTimes[seat] - dt);
+                candyCooldown[seat] = Mathf.Max(0f, candyCooldown[seat] - dt);
+                Game actor = seat == 0 ? player : Rival;
+                if (actor.HasCandyTrail && actor.MovingInShaft && candyCooldown[seat] <= 0f)
+                {
+                    candyTrails.Add(new CandyTrail { Seat = seat, Position = actor.ShaftWorldPosition, Life = 5f });
+                    actor.ShowPassengerAbility("CANDY!", actor.ShaftWorldPosition + Vector3.up * 3f);
+                    candyCooldown[seat] = 7f;
+                }
+            }
+            for (int i = candyTrails.Count - 1; i >= 0; i--)
+            {
+                CandyTrail trail = candyTrails[i];
+                trail.Life -= dt;
+                Game target = trail.Seat == 0 ? Rival : player;
+                Vector3 delta = target.ShaftWorldPosition - trail.Position;
+                // Give the rival half a second to see the candy before it can trigger.
+                if (trail.Life < 4.5f && target.MovingInShaft
+                    && Mathf.Abs(delta.x) < 3f && Mathf.Abs(delta.y) < 3f)
+                {
+                    target.ApplyCandyTrail();
+                    contestMessages[1 - trail.Seat] = "STICKY CANDY!";
+                    contestMessages[trail.Seat] = "RIVAL SLOWED!";
+                    contestMessageTimes[0] = contestMessageTimes[1] = 2f;
+                    candyTrails.RemoveAt(i);
+                }
+                else if (trail.Life <= 0f) candyTrails.RemoveAt(i);
+            }
+            if (!vipRevealStarted && player.SecondsLeft <= ElevatorRound.Duration * .5f)
+            {
+                SharedRider arrivingVip = player.ChooseMatchVip();
+                if (arrivingVip != null)
+                {
+                    matchVip = arrivingVip;
+                    vipRevealStarted = true;
+                    GameManager.Instance?.RequestVipIntro(player, matchVip);
+                }
+            }
+            if (!hazardEventStarted && player.SecondsLeft <= 40f)
+            {
+                hazardEventStarted = true;
+                eventMessage = player.StartSharedHazardEvent();
+                if (!string.IsNullOrEmpty(eventMessage)) eventMessageTime = 3.5f;
+            }
         }
 
         void BeginRoundIntroduction()
@@ -1005,6 +1102,7 @@ namespace CrazyElevator.Match
         {
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
+            DrawRivalInteractions(actor, seat, view);
             DrawPlayerScreenBorder(view, colour);
             float availableWidth = SplitScreen ? view.width - SharedClockWidth * .5f - 16f
                 : (view.width - SharedClockWidth) * .5f - 16f;
@@ -1019,6 +1117,56 @@ namespace CrazyElevator.Match
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
                 colour, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(actor.CurrentFloor),
                     actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString());
+        }
+
+        void DrawRivalInteractions(Game actor, int seat, Rect view)
+        {
+            if (MenuManager.TutorialActive || Finished || actor.IntroPlaying || actor.CountdownPlaying) return;
+            Game rival = seat == 0 ? Rival : player;
+            var label = new GUIStyle(centred) { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };
+            Color rivalColor = seat == 0 ? Teal : Coral;
+            float delta = rival.CurrentFloor - actor.CurrentFloor;
+            if (Mathf.Abs(delta) <= 3f)
+            {
+                string arrow = delta > .45f ? "↑" : delta < -.45f ? "↓" : "↔";
+                Rect marker = new Rect(view.xMax - 154f, view.y + 78f, 146f, 28f);
+                Fill(marker, new Color(Ink.r, Ink.g, Ink.b, .88f));
+                label.normal.textColor = rivalColor;
+                GUI.Label(marker, arrow + (rival.IsNpc ? " CPU " : " RIVAL ")
+                    + "F" + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor), rival.ActiveMinFloor, rival.ActiveMaxFloor)), label);
+            }
+            if (matchVip != null && !matchVip.Boarded && !matchVip.Resolved)
+            {
+                Rect vip = new Rect(view.x + 8f, view.y + 78f, Mathf.Min(270f, view.width * .55f), 28f);
+                Fill(vip, new Color(Ink.r, Ink.g, Ink.b, .9f));
+                label.normal.textColor = Gold;
+                string side = matchVip.OriginStop < ElevatorRound.CenterStop ? " L" : matchVip.OriginStop > ElevatorRound.CenterStop ? " R" : " MID";
+                GUI.Label(vip, "VIP F" + ElevatorRound.FloorNumber(matchVip.Origin) + side
+                    + " → F" + ElevatorRound.FloorNumber(matchVip.Destination) + " +250", label);
+            }
+            if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
+            {
+                Rect message = new Rect(view.x + view.width * .15f, view.y + view.height * .18f, view.width * .7f, 38f);
+                Fill(message, new Color(Ink.r, Ink.g, Ink.b, .88f));
+                label.normal.textColor = contestMessageTimes[seat] > 0f ? Gold : Coral;
+                GUI.Label(message, contestMessageTimes[seat] > 0f ? contestMessages[seat] : eventMessage, label);
+            }
+            Camera camera = actor.sceneView != null ? actor.sceneView.exteriorCamera : null;
+            if (camera == null || !camera.enabled) return;
+            foreach (CandyTrail trail in candyTrails)
+            {
+                Vector3 point = camera.WorldToScreenPoint(trail.Position);
+                float x = point.x, y = Screen.height - point.y;
+                if (point.z <= 0f || x < view.x + 20f || x > view.xMax - 20f || y < view.y + 60f || y > view.yMax - 25f) continue;
+                var candy = new GUIStyle(centred) { fontSize = 38, alignment = TextAnchor.MiddleCenter };
+                candy.normal.textColor = trail.Seat == seat ? Gold : Coral;
+                GUI.Label(new Rect(x - 24f, y - 19f, 48f, 42f), "●", candy);
+                Rect tag = new Rect(x - 43f, y - 35f, 86f, 22f);
+                Fill(tag, new Color(Ink.r, Ink.g, Ink.b, .9f));
+                label.normal.textColor = candy.normal.textColor;
+                label.fontSize = 13;
+                GUI.Label(tag, "STICKY", label);
+            }
         }
 
         // Both seats read GameManager's round clock; draw it once across the split.
@@ -1078,18 +1226,23 @@ namespace CrazyElevator.Match
         void DrawCollisionFeedback()
         {
             if (collisionFlash <= 0f) return;
-            float alpha = Mathf.Clamp01(collisionFlash / .62f);
-            Color flash = new Color(1f, .35f, .18f, alpha * .9f);
-            const float edge = 7f;
-            Fill(new Rect(0, 0, Screen.width, edge), flash);
-            Fill(new Rect(0, Screen.height - edge, Screen.width, edge), flash);
-            Fill(new Rect(0, 0, edge, Screen.height), flash);
-            Fill(new Rect(Screen.width - edge, 0, edge, Screen.height), flash);
-            float width = Mathf.Min(430f, Screen.width - 24f);
-            Rect banner = new Rect((Screen.width - width) * .5f, 102f, width, 44f);
-            Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
-            Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
-            GUI.Label(banner, "BOUNCE!  SWITCH TRACKS", collisionWord);
+            for (int seat = 0; seat < 2; seat++)
+            {
+                if (!IsVisibleSeat(seat)) continue;
+                Rect view = ViewRect(seat);
+                float alpha = Mathf.Clamp01(collisionFlash / .62f);
+                Color flash = new Color(1f, .35f, .18f, alpha * .9f);
+                const float edge = 7f;
+                Fill(new Rect(view.x, view.y, view.width, edge), flash);
+                Fill(new Rect(view.x, view.yMax - edge, view.width, edge), flash);
+                Fill(new Rect(view.x, view.y, edge, view.height), flash);
+                Fill(new Rect(view.xMax - edge, view.y, edge, view.height), flash);
+                float width = Mathf.Min(330f, view.width - 24f);
+                Rect banner = new Rect(view.center.x - width * .5f, view.y + 112f, width, 40f);
+                Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
+                Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
+                GUI.Label(banner, "COLLISION!", collisionWord);
+            }
         }
 
         void DrawResultReveal()
