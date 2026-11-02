@@ -84,6 +84,24 @@ namespace CrazyElevator.Managers
         public IReadOnlyList<Rider> AllRiders =>
             round != null ? round.Riders : (IReadOnlyList<Rider>)System.Array.Empty<Rider>();
 
+        public bool TryGetWaitingPassengerWorldPosition(Rider rider, out Vector3 position)
+        {
+            ElevatorManager owner = WorldOwner;
+            if (rider == null || owner == null || owner.exteriorCar == null
+                || owner.exteriorCar.parent == null)
+            {
+                position = Vector3.zero;
+                return false;
+            }
+            if (owner.crowd.TryGetValue(rider, out CrowdFigure figure) && figure.Root != null)
+            {
+                position = figure.Root.position;
+                return true;
+            }
+            position = owner.exteriorCar.parent.TransformPoint(owner.WaitingWorldPosition(rider));
+            return true;
+        }
+
         // Select from the real, shared landing queues; do not spawn a duplicate passenger.
         public Rider ChooseMatchVip()
         {

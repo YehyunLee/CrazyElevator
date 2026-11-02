@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CrazyElevator.Shared;
 using SharedRider = CrazyElevator.Shared.Rider;
 using UnityEngine;
@@ -12,21 +13,41 @@ namespace CrazyElevator.Managers
         string abilityIntroKind;
         SharedRider abilityIntroVip;
         Texture2D abilityIntroShield;
+        Camera abilityIntroVipCamera;
+        RenderTexture abilityIntroVipTexture;
+        Texture2D abilityIntroVipShade;
+        Transform abilityIntroVipFigure;
+        Transform abilityIntroVipDestination;
+        Quaternion abilityIntroVipDestinationRotation;
+        Bounds abilityIntroVipBounds;
+        Vector3 abilityIntroVipFocus;
+        Transform abilityIntroVipWorld;
+        bool abilityIntroVipFigureWasActive;
+        readonly List<Renderer> abilityIntroVipOccluders = new List<Renderer>();
+        readonly List<bool> abilityIntroVipOccluderStates = new List<bool>();
 
         // Reuse the existing offscreen preview camera and the editable game
         // prefabs, so this animation never touches the live car or passengers.
         public bool PrepareAbilityIntro(string kind, SharedRider vip = null)
         {
             if (sceneView == null || sceneView.passengers == null) return false;
-            string passengerKind = kind == "CALM" ? "ELDERLY" : kind;
-            GameObject passenger = kind == "VIP" ? FindPassengerPreviewSource(vip) : FindPassengerTemplate(passengerKind);
-            // Keep the same fallback art as the physical waiting passenger in older scenes.
-            if (kind == "VIP" && passenger == null && vip != null)
+            ReleaseVipLocationShot();
+            if (kind == "VIP")
             {
-                string fallback = vip.Kind == "HUNTER" ? "INTERVIEW" : vip.Kind == "DIVER" ? "HANDYMAN"
-                    : vip.Kind == "BOUNCER" ? "BOSS" : vip.Kind;
-                passenger = FindPassengerTemplate(fallback);
+                ClearEncounterPreviewModel();
+                abilityIntroKind = kind;
+                abilityIntroVip = vip;
+                if (!PrepareVipLocationShot(vip))
+                {
+                    FinishAbilityIntro();
+                    return false;
+                }
+                AnimateAbilityIntro(0f);
+                return true;
             }
+
+            string passengerKind = kind == "CALM" ? "ELDERLY" : kind;
+            GameObject passenger = FindPassengerTemplate(passengerKind);
             GameObject opponent = kind == "HUNTER" ? sceneView.monster
                 : kind == "DIVER" ? sceneView.tornado
                 : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
@@ -42,7 +63,7 @@ namespace CrazyElevator.Managers
             encounterPreviewModel.hideFlags = HideFlags.HideAndDontSave;
             encounterPreviewModel.transform.SetParent(encounterPreviewPivot, false);
             encounterPreviewPivot.localRotation = Quaternion.identity;
-            Color passengerColor = kind == "VIP" && vip != null ? Palette[vip.Color % Palette.Length] : Teal;
+            Color passengerColor = Teal;
             abilityIntroPassenger = CreateAbilityIntroModel(passenger, "Passenger", 2.3f, passengerColor);
             abilityIntroOpponent = opponent != null
                 ? CreateAbilityIntroModel(opponent, "Opponent", kind == "BOUNCER" ? 2.5f : 2.3f) : null;
@@ -54,7 +75,7 @@ namespace CrazyElevator.Managers
                 return false;
             }
             abilityIntroKind = kind;
-            abilityIntroVip = kind == "VIP" ? vip : null;
+            abilityIntroVip = null;
             if (kind == "DIVER" && abilityIntroShield == null)
                 abilityIntroShield = PassengerIconLibrary.CreatePassengerBadge("DIVER", Teal, Ink, Cream);
             encounterPreviewCamera.backgroundColor = kind == "HUNTER" || kind == "ELDERLY" ? new Color(.12f, .17f, .26f)
@@ -89,24 +110,247 @@ namespace CrazyElevator.Managers
             return slot.transform;
         }
 
+        bool PrepareVipLocationShot(SharedRider vip)
+        {
+            ElevatorManager owner = WorldOwner;
+            if (vip == null || owner == null || owner.exteriorCamera == null
+                || owner.exteriorCar == null || owner.exteriorCar.parent == null) return false;
+
+            abilityIntroVipWorld = owner.exteriorCar.parent;
+            bool hadFigure = owner.crowd.TryGetValue(vip, out CrowdFigure existing)
+                && existing.Root != null;
+            abilityIntroVipFigureWasActive = hadFigure && existing.Root.gameObject.activeSelf;
+            PassengerView passenger = owner.WaitingPassengerView(vip);
+            if (passenger == null) return false;
+            abilityIntroVipFigure = passenger.transform;
+            CacheVipCinematicRenderers(owner, abilityIntroVipFigure);
+            if (passenger.destination != null)
+            {
+                abilityIntroVipDestination = passenger.destination.transform;
+                abilityIntroVipDestinationRotation = abilityIntroVipDestination.rotation;
+            }
+            abilityIntroVipFigure.gameObject.SetActive(true);
+            abilityIntroVipFocus = abilityIntroVipFigure.position + abilityIntroVipWorld.up * 1.1f;
+            abilityIntroVipBounds = new Bounds(abilityIntroVipFocus, new Vector3(1.4f, 2.2f, 1.4f));
+
+            int textureWidth = Mathf.Clamp(Mathf.Max(1920, Screen.width), 1920, 2560);
+            int textureHeight = Mathf.RoundToInt(textureWidth * 9f / 16f);
+            abilityIntroVipTexture = new RenderTexture(textureWidth, textureHeight, 24,
+                RenderTextureFormat.ARGB32)
+            {
+                name = "VIP shaft cinematic",
+                antiAliasing = 2,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            abilityIntroVipTexture.Create();
+
+            GameObject cameraObject = new GameObject("VIP shaft focus camera")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            abilityIntroVipCamera = cameraObject.AddComponent<Camera>();
+            abilityIntroVipCamera.CopyFrom(owner.exteriorCamera);
+            abilityIntroVipCamera.enabled = false;
+            abilityIntroVipCamera.targetTexture = abilityIntroVipTexture;
+            abilityIntroVipCamera.rect = new Rect(0f, 0f, 1f, 1f);
+            abilityIntroVipCamera.aspect = (float)textureWidth / textureHeight;
+            abilityIntroVipCamera.orthographic = false;
+            abilityIntroVipCamera.nearClipPlane = .05f;
+            abilityIntroVipCamera.farClipPlane = Mathf.Max(owner.exteriorCamera.farClipPlane, 120f);
+
+            abilityIntroVipShade = CreateVipSpotlightTexture();
+            return abilityIntroVipShade != null;
+        }
+
+        void CacheVipCinematicRenderers(ElevatorManager owner, Transform vipFigure)
+        {
+            abilityIntroVipOccluders.Clear();
+            AddVipElevatorRenderers(abilityIntroVipWorld, vipFigure);
+            AddVipElevatorRenderers(owner.exteriorCar, vipFigure);
+            if (owner.Match != null && owner.Match.Rival != null)
+                AddVipElevatorRenderers(owner.Match.Rival.exteriorCar, vipFigure);
+        }
+
+        void AddVipElevatorRenderers(Transform root, Transform vipFigure)
+        {
+            if (root == null) return;
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+                if (renderer != null && !renderer.transform.IsChildOf(vipFigure)
+                    && !abilityIntroVipOccluders.Contains(renderer))
+                    abilityIntroVipOccluders.Add(renderer);
+        }
+
+        Texture2D CreateVipSpotlightTexture()
+        {
+            const int width = 512;
+            const int height = 288;
+            float frameHeight = Mathf.Max(1f, Screen.height * .79f);
+            float aspect = Screen.width / frameHeight;
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "VIP focus shade",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var pixels = new Color[width * height];
+            for (int y = 0; y < height; y++)
+            {
+                float ny = (y + .5f) / height - .5f;
+                for (int x = 0; x < width; x++)
+                {
+                    float nx = ((x + .5f) / width - .5f) * aspect;
+                    float distance = Mathf.Sqrt(nx * nx + ny * ny);
+                    float shade = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.22f, .28f, distance)) * .70f;
+                    pixels[y * width + x] = new Color(0f, 0f, 0f, shade);
+                }
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        void AnimateVipLocationShot(float time)
+        {
+            if (abilityIntroVipCamera == null || abilityIntroVipWorld == null
+                || abilityIntroVipTexture == null) return;
+
+            float zoom = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.15f, 1.15f, time));
+            const float exteriorDistance = 36f;
+            Vector3 cameraPosition = abilityIntroVipFocus
+                - abilityIntroVipWorld.forward * exteriorDistance
+                + abilityIntroVipWorld.up * (exteriorDistance * .12f);
+            abilityIntroVipCamera.transform.SetPositionAndRotation(cameraPosition,
+                Quaternion.LookRotation(abilityIntroVipFocus - cameraPosition, abilityIntroVipWorld.up));
+            abilityIntroVipCamera.fieldOfView = Mathf.Lerp(55f, 12f, zoom);
+            abilityIntroVipCamera.ResetProjectionMatrix();
+            if (abilityIntroVipDestination != null)
+                abilityIntroVipDestination.rotation = Quaternion.LookRotation(
+                    abilityIntroVipDestination.position - cameraPosition, abilityIntroVipWorld.up);
+            Ray shot = new Ray(cameraPosition, abilityIntroVipFocus - cameraPosition);
+            float targetDistance = Vector3.Distance(cameraPosition, abilityIntroVipFocus);
+            Transform rivalCar = Match != null && Match.Rival != null
+                ? Match.Rival.exteriorCar : null;
+            abilityIntroVipOccluderStates.Clear();
+            foreach (Renderer renderer in abilityIntroVipOccluders)
+            {
+                bool wasEnabled = renderer != null && renderer.enabled;
+                abilityIntroVipOccluderStates.Add(wasEnabled);
+                if (renderer == null || !wasEnabled) continue;
+
+                // The landing and car can sit directly between the cinematic
+                // camera and the highlighted passenger. Hide only geometry
+                // crossed by this shot, rather than letting a wall or platform
+                // fill the VIP spotlight. All renderers are restored below.
+                if (IsVipElevatorRenderer(renderer.transform, exteriorCar)
+                    || IsVipElevatorRenderer(renderer.transform, rivalCar)
+                    || (renderer.bounds.IntersectRay(shot, out float hitDistance)
+                        && hitDistance < targetDistance - .02f))
+                    renderer.enabled = false;
+            }
+            try
+            {
+                abilityIntroVipCamera.Render();
+            }
+            finally
+            {
+                for (int i = 0; i < abilityIntroVipOccluders.Count; i++)
+                    if (abilityIntroVipOccluders[i] != null)
+                        abilityIntroVipOccluders[i].enabled = abilityIntroVipOccluderStates[i];
+            }
+        }
+
+        static bool IsVipElevatorRenderer(Transform renderer, Transform car)
+            => renderer != null && car != null && renderer.IsChildOf(car);
+
+        void DrawVipSpotlight(Rect frame, float time, float fade)
+        {
+            if (abilityIntroVipCamera == null || abilityIntroVipTexture == null
+                || abilityIntroVipShade == null) return;
+
+            Color oldColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            GUI.DrawTexture(frame, abilityIntroVipShade, ScaleMode.StretchToFill, true);
+
+            float scale = Mathf.Max(frame.width / abilityIntroVipTexture.width,
+                frame.height / abilityIntroVipTexture.height);
+            float drawWidth = abilityIntroVipTexture.width * scale;
+            float drawHeight = abilityIntroVipTexture.height * scale;
+            float drawX = frame.center.x - drawWidth * .5f;
+            float drawY = frame.center.y - drawHeight * .5f;
+            Vector3[] corners =
+            {
+                abilityIntroVipBounds.min,
+                abilityIntroVipBounds.max,
+                new Vector3(abilityIntroVipBounds.min.x, abilityIntroVipBounds.min.y, abilityIntroVipBounds.max.z),
+                new Vector3(abilityIntroVipBounds.min.x, abilityIntroVipBounds.max.y, abilityIntroVipBounds.min.z),
+                new Vector3(abilityIntroVipBounds.max.x, abilityIntroVipBounds.min.y, abilityIntroVipBounds.min.z),
+                new Vector3(abilityIntroVipBounds.max.x, abilityIntroVipBounds.max.y, abilityIntroVipBounds.min.z),
+                new Vector3(abilityIntroVipBounds.max.x, abilityIntroVipBounds.min.y, abilityIntroVipBounds.max.z),
+                new Vector3(abilityIntroVipBounds.min.x, abilityIntroVipBounds.max.y, abilityIntroVipBounds.max.z)
+            };
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+            foreach (Vector3 corner in corners)
+            {
+                Vector3 point = abilityIntroVipCamera.WorldToViewportPoint(corner);
+                if (point.z <= 0f) continue;
+                float x = drawX + point.x * drawWidth;
+                float y = drawY + (1f - point.y) * drawHeight;
+                minX = Mathf.Min(minX, x); maxX = Mathf.Max(maxX, x);
+                minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y);
+            }
+            if (minX != float.MaxValue)
+            {
+                float diameter = Mathf.Clamp(Mathf.Max(maxX - minX, maxY - minY) * 1.3f + 24f,
+                    frame.height * .13f, frame.height * .48f);
+                Rect ring = new Rect((minX + maxX - diameter) * .5f,
+                    (minY + maxY - diameter) * .5f, diameter, diameter);
+                float pulse = 1f + Mathf.Sin(time * 4.5f) * .025f;
+                ring = new Rect(ring.center.x - diameter * pulse * .5f,
+                    ring.center.y - diameter * pulse * .5f, diameter * pulse, diameter * pulse);
+                float ringFade = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.65f, 1.15f, time));
+                DrawVipFocusRing(ring, Gold, fade * ringFade);
+            }
+            GUI.color = oldColor;
+        }
+
+        static void DrawVipFocusRing(Rect bounds, Color color, float alpha)
+        {
+            const int segments = 64;
+            float radius = bounds.width * .5f;
+            float thickness = Mathf.Clamp(bounds.width * .018f, 2f, 6f);
+            Vector2 centre = bounds.center;
+            Matrix4x4 oldMatrix = GUI.matrix;
+            Color oldColor = GUI.color;
+            GUI.color = new Color(color.r, color.g, color.b, alpha);
+            for (int i = 0; i < segments; i++)
+            {
+                float a0 = (i / (float)segments) * Mathf.PI * 2f;
+                float a1 = ((i + 1) / (float)segments) * Mathf.PI * 2f;
+                Vector2 from = centre + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * radius;
+                Vector2 to = centre + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * radius;
+                Vector2 midpoint = (from + to) * .5f;
+                float length = Vector2.Distance(from, to) + 1f;
+                float angle = Mathf.Atan2(to.y - from.y, to.x - from.x) * Mathf.Rad2Deg;
+                GUIUtility.RotateAroundPivot(angle, midpoint);
+                GUI.DrawTexture(new Rect(midpoint.x - length * .5f,
+                    midpoint.y - thickness * .5f, length, thickness), Texture2D.whiteTexture);
+                GUI.matrix = oldMatrix;
+            }
+            GUI.color = oldColor;
+        }
+
         public void AnimateAbilityIntro(float time)
         {
-            if (abilityIntroPassenger == null || encounterPreviewCamera == null) return;
             if (abilityIntroKind == "VIP")
             {
-                // The actual VIP enters, settles, then turns toward both drivers.
-                float arrive = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.2f, 1.35f, time));
-                float bob = Mathf.Sin(time * 7f) * .06f * (1f - arrive)
-                    + Mathf.Sin(time * 2.4f) * .035f * arrive;
-                abilityIntroPassenger.localPosition = new Vector3(Mathf.Lerp(-2.8f, 0f, arrive), bob, 0f);
-                abilityIntroPassenger.localRotation = Quaternion.Euler(0f,
-                    Mathf.Lerp(-38f, 0f, arrive) + Mathf.Sin(time * 1.6f) * 4f * arrive, bob * 25f);
-                encounterPreviewCamera.orthographicSize = Mathf.Lerp(2.1f, 1.65f, arrive)
-                    - .1f * Mathf.InverseLerp(1.35f, VipIntroDuration, time);
-                encounterPreviewCamera.transform.localPosition = new Vector3(0f, 0f, -12f);
-                encounterPreviewCamera.transform.localRotation = Quaternion.identity;
+                AnimateVipLocationShot(time);
                 return;
             }
+            if (abilityIntroPassenger == null || encounterPreviewCamera == null) return;
             if (abilityIntroOpponent == null) return;
             float approach = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.75f, 1.5f, time));
             float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(1.5f, 2.15f, time)) * Mathf.PI);
@@ -140,7 +384,9 @@ namespace CrazyElevator.Managers
 
         public void DrawAbilityIntro(float time, Rect view, bool showPlayer, bool playerPane)
         {
-            if (encounterPreviewTexture == null) return;
+            Texture introTexture = abilityIntroKind == "VIP"
+                ? abilityIntroVipTexture : encounterPreviewTexture;
+            if (introTexture == null) return;
             float duration = abilityIntroKind == "VIP" ? VipIntroDuration : AbilityIntroDuration;
             float fade = Mathf.Min(Mathf.Clamp01(time / .25f), Mathf.Clamp01((duration - time) / .35f));
             Color old = GUI.color;
@@ -161,8 +407,10 @@ namespace CrazyElevator.Managers
             }
             else frame = new Rect(view.x, view.y + bar, view.width, view.height - bar * 2f);
             GUI.color = new Color(1f, 1f, 1f, fade);
-            GUI.DrawTexture(frame, encounterPreviewTexture,
+            GUI.DrawTexture(frame, introTexture,
                 playerPane ? ScaleMode.ScaleToFit : ScaleMode.ScaleAndCrop);
+            if (abilityIntroKind == "VIP")
+                DrawVipSpotlight(frame, time, fade);
 
             // A visible strike/shield complements the moving 3D characters.
             float effect = Mathf.Clamp01(Mathf.Min((time - 1.35f) / .15f, (2.25f - time) / .25f));
@@ -194,8 +442,8 @@ namespace CrazyElevator.Managers
             Styles();
             var textStyle = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter,
                 fontSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(view.height * .038f, view.width * .048f)), 18, 42), wordWrap = false };
-            string vipSide = abilityIntroVip == null ? "" : abilityIntroVip.OriginStop < ElevatorRound.CenterStop ? " LEFT"
-                : abilityIntroVip.OriginStop > ElevatorRound.CenterStop ? " RIGHT" : " MIDDLE";
+            string vipSide = abilityIntroVip == null ? "" : abilityIntroVip.OriginStop == ElevatorRound.CenterStop
+                ? " MIDDLE" : " " + StopSide(abilityIntroVip.OriginStop).Trim();
             string message = abilityIntroKind == "VIP" && abilityIntroVip != null
                 ? "PICK UP: F" + ElevatorRound.FloorNumber(abilityIntroVip.Origin) + vipSide + "    ·    ON-TIME +250"
                 : abilityIntroKind == "HUNTER" ? "STUNS MONSTERS"
@@ -230,6 +478,7 @@ namespace CrazyElevator.Managers
 
         public void FinishAbilityIntro()
         {
+            ReleaseVipLocationShot();
             abilityIntroPassenger = abilityIntroOpponent = abilityIntroOwnCar = null;
             abilityIntroKind = null;
             abilityIntroVip = null;
@@ -238,8 +487,38 @@ namespace CrazyElevator.Managers
 
         void ReleaseAbilityIntro()
         {
+            ReleaseVipLocationShot();
             if (abilityIntroShield != null) Destroy(abilityIntroShield);
             abilityIntroShield = null;
+        }
+
+        void ReleaseVipLocationShot()
+        {
+            if (abilityIntroVipFigure != null)
+                abilityIntroVipFigure.gameObject.SetActive(abilityIntroVipFigureWasActive);
+            abilityIntroVipFigure = null;
+            abilityIntroVipOccluders.Clear();
+            abilityIntroVipOccluderStates.Clear();
+            if (abilityIntroVipDestination != null)
+                abilityIntroVipDestination.rotation = abilityIntroVipDestinationRotation;
+            abilityIntroVipDestination = null;
+            abilityIntroVipDestinationRotation = Quaternion.identity;
+            abilityIntroVipWorld = null;
+            abilityIntroVipFocus = Vector3.zero;
+            abilityIntroVipBounds = default;
+            abilityIntroVipFigureWasActive = false;
+
+            if (abilityIntroVipCamera != null)
+                Destroy(abilityIntroVipCamera.gameObject);
+            abilityIntroVipCamera = null;
+            if (abilityIntroVipTexture != null)
+            {
+                abilityIntroVipTexture.Release();
+                Destroy(abilityIntroVipTexture);
+            }
+            abilityIntroVipTexture = null;
+            if (abilityIntroVipShade != null) Destroy(abilityIntroVipShade);
+            abilityIntroVipShade = null;
         }
     }
 }

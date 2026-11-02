@@ -285,18 +285,6 @@ namespace CrazyElevator.Managers
             _ = rider;
         }
 
-        GameObject FindPassengerPreviewSource(Rider rider)
-        {
-            if (rider == null) return null;
-            if (rider.Data != null && rider.Data.prefab != null)
-                return rider.Data.prefab.gameObject;
-            if (sceneView == null || sceneView.passengers == null) return null;
-            foreach (PassengerView passenger in sceneView.passengers)
-                if (passenger != null && passenger.ResolvedKind == rider.Kind)
-                    return passenger.gameObject;
-            return null;
-        }
-
         GameObject FindWorldPreviewSource(WorldBand world)
         {
             // Prefer the art-team FBX backgrounds shipped for dimension intros.

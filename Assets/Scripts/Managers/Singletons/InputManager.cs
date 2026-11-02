@@ -65,6 +65,9 @@ namespace CrazyElevator.Managers
             public bool MovePressed;
             public bool SelectPressed;
             public bool ConfirmPressed;
+            public bool BoardingLeftPressed;
+            public bool BoardingFrontPressed;
+            public bool BoardingRightPressed;
             public bool KickoutPressed;
             public bool PausePressed;
             public bool OverlayPressed;
@@ -473,6 +476,24 @@ namespace CrazyElevator.Managers
             bool playerTwoConfirm = keyboardAvailable
                 && (keyboard.periodKey.wasPressedThisFrame
                     || ActiveView == GameView.Menu && keyboard.slashKey.wasPressedThisFrame);
+            bool boardingLeft = keyboardAvailable && (playerTwoKeyboard
+                ? keyboard.leftArrowKey.wasPressedThisFrame
+                : keyboard.aKey.wasPressedThisFrame
+                    || !splitKeyboard && keyboard.leftArrowKey.wasPressedThisFrame);
+            bool boardingFront = keyboardAvailable && (playerTwoKeyboard
+                ? keyboard.upArrowKey.wasPressedThisFrame
+                : keyboard.wKey.wasPressedThisFrame
+                    || !splitKeyboard && keyboard.upArrowKey.wasPressedThisFrame);
+            bool boardingRight = keyboardAvailable && (playerTwoKeyboard
+                ? keyboard.rightArrowKey.wasPressedThisFrame
+                : keyboard.dKey.wasPressedThisFrame
+                    || !splitKeyboard && keyboard.rightArrowKey.wasPressedThisFrame);
+            if (pad != null)
+            {
+                boardingLeft |= pad.dpad.left.wasPressedThisFrame;
+                boardingFront |= pad.dpad.up.wasPressedThisFrame;
+                boardingRight |= pad.dpad.right.wasPressedThisFrame;
+            }
             bool confirm = playerTwoKeyboard
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
@@ -514,6 +535,9 @@ namespace CrazyElevator.Managers
                 MovePressed = navigation.magnitude >= .55f,
                 SelectPressed = selection.magnitude >= .55f,
                 ConfirmPressed = confirm,
+                BoardingLeftPressed = boardingLeft,
+                BoardingFrontPressed = boardingFront,
+                BoardingRightPressed = boardingRight,
                 KickoutPressed = kickout,
                 PausePressed = pause,
                 OverlayPressed = overlay,
@@ -551,6 +575,9 @@ namespace CrazyElevator.Managers
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool confirm = input.ConfirmPressed;
+            bool boardingLeft = input.BoardingLeftPressed;
+            bool boardingFront = input.BoardingFrontPressed;
+            bool boardingRight = input.BoardingRightPressed;
             bool kickout = input.KickoutPressed;
             bool closeDoors = input.CloseDoorsPressed;
             input = default;
@@ -563,6 +590,9 @@ namespace CrazyElevator.Managers
                 case TutorialInputMode.Kickout:
                     input.Select = select;
                     input.SelectPressed = select.magnitude >= .55f;
+                    input.BoardingLeftPressed = boardingLeft;
+                    input.BoardingFrontPressed = boardingFront;
+                    input.BoardingRightPressed = boardingRight;
                     if (mode == TutorialInputMode.HelpPassenger)
                         input.ConfirmPressed = confirm;
                     else if (mode == TutorialInputMode.Kickout)
@@ -572,6 +602,9 @@ namespace CrazyElevator.Managers
                     input.Select = select;
                     input.SelectPressed = select.magnitude >= .55f;
                     input.ConfirmPressed = confirm;
+                    input.BoardingLeftPressed = boardingLeft;
+                    input.BoardingFrontPressed = boardingFront;
+                    input.BoardingRightPressed = boardingRight;
                     break;
                 case TutorialInputMode.CloseDoors:
                     input.CloseDoorsPressed = closeDoors;
