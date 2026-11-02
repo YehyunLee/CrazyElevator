@@ -216,6 +216,7 @@ namespace CrazyElevator.Managers
             overlayGame = null;
             inputHintsLoaded = false;
             tutorialModeLoaded = false;
+            tutorialMode = true;
         }
 
         void Awake()
@@ -224,7 +225,6 @@ namespace CrazyElevator.Managers
             menuFadeAlpha = fadeMenuOnLoad ? 1f : 0f;
             fadeMenuOnLoad = false;
             LoadInputHintsPreference();
-            LoadTutorialModePreference();
             // Scene object in Main — do not spawn a hidden DDOL menu.
             if (!sessionReady)
             {
@@ -795,6 +795,7 @@ namespace CrazyElevator.Managers
                 if (showingControllerInstructions)
                 {
                     DrawControllerInstructions();
+                    DrawTutorialSkip();
                     DrawMenuFade();
                     return;
                 }
@@ -805,6 +806,7 @@ namespace CrazyElevator.Managers
                 else
                     DrawTutorialOverlay();
                 GUI.depth = previousDepth;
+                DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
             }
@@ -817,6 +819,22 @@ namespace CrazyElevator.Managers
             if (menuFadeAlpha <= .001f) return;
             Panel(new Rect(0, 0, Screen.width, Screen.height),
                 new Color(0f, 0f, 0f, menuFadeAlpha));
+        }
+
+        void DrawTutorialSkip()
+        {
+            if (!tutorialActive || tutorialGame == null) return;
+            int previousDepth = GUI.depth;
+            GUI.depth = -1001;
+            Rect button = new Rect(Screen.width - 220f, 18f, 200f, 48f);
+            Panel(button, Cream);
+            if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
+            Color previousCaption = caption.normal.textColor;
+            caption.normal.textColor = Cream;
+            GUI.Label(new Rect(button.x, button.yMax + 3f, button.width, 22f),
+                "TAB / VIEW", caption);
+            caption.normal.textColor = previousCaption;
+            GUI.depth = previousDepth;
         }
 
         void DrawControllerInstructions()

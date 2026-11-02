@@ -1163,6 +1163,8 @@ MonoBehaviour:
   collisionPadding: 0.72
   collisionBounceStrength: 0.55
   collisionSlowSeconds: 1.35
+  playerOneCarTrim: {fileID: 2100000, guid: 7ca29614b19cc44019ca0fb108376914, type: 2}
+  playerTwoCarTrim: {fileID: 2100000, guid: 9714f11e0c96a4a90ba582c483f47ffd, type: 2}
 --- !u!114 &787388488
 MonoBehaviour:
   m_ObjectHideFlags: 0

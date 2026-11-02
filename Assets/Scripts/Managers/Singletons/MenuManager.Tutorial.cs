@@ -185,6 +185,20 @@ namespace CrazyElevator.Managers
         {
             if (!tutorialActive) return;
             TutorialActive = true;
+            InputManager inputManager = InputManager.Instance;
+            InputManager.SeatInput input = inputManager != null
+                ? inputManager.ReadForSeat(0, true) : default;
+            InputManager.SeatInput secondInput = inputManager != null && tutorialActors[1] != null
+                ? inputManager.ReadForSeat(1, true) : default;
+            bool skipKey = Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame;
+            bool skipController = false;
+            foreach (Gamepad pad in Gamepad.all)
+                if (pad.selectButton.wasPressedThisFrame) skipController = true;
+            if (skipKey || skipController)
+            {
+                SkipTutorial();
+                return;
+            }
             if (showingControllerInstructions)
             {
                 if (ControllerInstructionsConfirmed())
@@ -200,11 +214,6 @@ namespace CrazyElevator.Managers
                     tutorialActors[i]?.SuppressEncounterCards();
             }
 
-            InputManager inputManager = InputManager.Instance;
-            InputManager.SeatInput input = inputManager != null
-                ? inputManager.ReadForSeat(0, true) : default;
-            InputManager.SeatInput secondInput = inputManager != null && tutorialActors[1] != null
-                ? inputManager.ReadForSeat(1, true) : default;
             // Esc always exits, even when seat 0 plays on a controller and its
             // seat input ignores the keyboard.
             bool escape = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
@@ -547,6 +556,12 @@ namespace CrazyElevator.Managers
             }
             menuFadeAlpha = 1f;
             InputManager.Instance?.SetView(GameView.ControlElevator);
+        }
+
+        void SkipTutorial()
+        {
+            if (!tutorialActive || tutorialGame == null) return;
+            FinishTutorial();
         }
 
         string TutorialKey(int step, int seat)

@@ -25,6 +25,9 @@ namespace CrazyElevator.Match
         [Tooltip("How much of the closing speed becomes a short rebound after a vertical hit.")]
         [Range(.15f, 1.1f)] public float collisionBounceStrength = .55f;
         [Range(.4f, 2.5f)] public float collisionSlowSeconds = 1.35f;
+        [Header("Elevator trim materials")]
+        [SerializeField] Material playerOneCarTrim;
+        [SerializeField] Material playerTwoCarTrim;
         public Game Rival { get; private set; }
         public bool Running { get; private set; }
         public bool Paused { get; private set; }
@@ -43,6 +46,7 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        bool bouncerCollision;
         SharedRider matchVip;
         bool hazardEventStarted;
         bool vipRevealStarted;
@@ -152,7 +156,26 @@ namespace CrazyElevator.Match
             Rival.ConfigureMatch(this, 1, !humanRival);
             if (!humanRival) actor.AddComponent<NpcElevator>().game = Rival;
             actor.SetActive(true);
+            ApplyCarTrim(source, playerOneCarTrim);
+            ApplyCarTrim(rivalView, playerTwoCarTrim);
             ConfigureCameras();
+        }
+
+        // The cabin prefab supplies these editable frame renderers. Each match
+        // car gets its own authored material; no cabin geometry is duplicated in code.
+        static void ApplyCarTrim(ElevatorScene view, Material material)
+        {
+            if (view == null || material == null) return;
+            SetFrameMaterial(view.frontDoorFrame, material);
+            SetFrameMaterial(view.leftDoorFrame, material);
+            SetFrameMaterial(view.rightDoorFrame, material);
+        }
+
+        static void SetFrameMaterial(Renderer[] frame, Material material)
+        {
+            if (frame == null) return;
+            foreach (Renderer part in frame)
+                if (part != null) part.sharedMaterial = material;
         }
 
         void Update()
@@ -280,6 +303,7 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            bouncerCollision = false;
             collisionCount = 0;
             int firstExpressTrack = Random.Range(0, 2);
             expressTrack[0] = firstExpressTrack;
@@ -649,6 +673,20 @@ namespace CrazyElevator.Match
             => PlayCollision(first, second, direction, closingSpeed,
                 MenuManager.TutorialActive ? second : null);
 
+        // Both cars share the same rider. A pickup is a close call only when
+        // the other car has already committed to this rider's landing.
+        public void NotifyPassengerBoarded(Game actor, CrazyElevator.Shared.Rider rider)
+        {
+            if (!Running || Paused || MenuManager.TutorialActive || actor == null || rider == null
+                || (actor != player && actor != Rival) || rider.BoardedBySeat != actor.Seat)
+                return;
+            Game other = actor == player ? Rival : player;
+            if (other == null || !other.ApproachingPickup(rider)) return;
+
+            actor.ShowActionFeedback("STOLEN!", true, true);
+            other.ShowActionFeedback("TOO LATE!", false, true);
+        }
+
         void PlayCollision(Game first, Game second, float verticalDirection,
             float closingSpeed, Game tutorialTarget = null)
         {
@@ -656,6 +694,9 @@ namespace CrazyElevator.Match
             collisionCooldown = .48f;
             collisionFlash = .72f;
             collisionCount++;
+            bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
+            bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
+            bouncerCollision = firstBoost || secondBoost;
             // A tutorial collision can still show feedback and stop the
             // incoming elevator, but it must not move the elevator that was
             // hit. Otherwise a passenger-view tutorial card can unexpectedly
@@ -663,8 +704,6 @@ namespace CrazyElevator.Match
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
-                bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
-                bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
                 if (first != tutorialTarget && !TutorialInputLocked(first))
                     ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f), secondBoost);
                 if (second != tutorialTarget && !TutorialInputLocked(second))
@@ -675,8 +714,6 @@ namespace CrazyElevator.Match
             else
             {
                 // A lane-change bump still jolts both cars, but does not reverse their vertical travel.
-                bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
-                bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
                 float separation = ShaftX(second) - ShaftX(first);
                 int direction = separation > .01f ? 1 : separation < -.01f ? -1
                     : first != null && Mathf.Abs(first.LateralTravelVelocity) > .05f
@@ -697,6 +734,25 @@ namespace CrazyElevator.Match
             if (first != null && second != null)
                 EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
+            if (!bouncerCollision) return;
+
+            first?.PulseMatchImpact(true);
+            second?.PulseMatchImpact(true);
+            if (firstBoost && secondBoost)
+            {
+                first.ShowActionFeedback("BOUNCER CLASH!", true, true);
+                second.ShowActionFeedback("BOUNCER CLASH!", true, true);
+            }
+            else if (firstBoost)
+            {
+                first.ShowActionFeedback("BOUNCER HIT!", true, true);
+                second?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
+            }
+            else
+            {
+                second.ShowActionFeedback("BOUNCER HIT!", true, true);
+                first?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
+            }
         }
 
         static Game TutorialCollisionTarget(Game first, Game second)
@@ -1241,7 +1297,7 @@ namespace CrazyElevator.Match
                 Rect banner = new Rect(view.center.x - width * .5f, view.y + 112f, width, 40f);
                 Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
                 Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
-                GUI.Label(banner, "COLLISION!", collisionWord);
+                GUI.Label(banner, bouncerCollision ? "BOUNCER IMPACT!" : "BOUNCE!  SWITCH TRACKS", collisionWord);
             }
         }
 
