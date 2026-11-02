@@ -31,7 +31,7 @@ namespace CrazyElevator.Managers
                 : kind == "DIVER" ? sceneView.tornado
                 : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
                 : kind == "CALM" ? FindPassengerTemplate("PREGNANT")
-                : kind == "PREGNANT" ? FindPassengerTemplate("BOSS")
+                : kind == "PREGNANT" ? FindPassengerTemplate("ELDERLY")
                 : (kind == "BOUNCER" || kind == "GROUP" || kind == "ELDERLY")
                     && sceneView.exteriorCar != null ? sceneView.exteriorCar.gameObject : null;
             if (passenger == null || (kind != "VIP" && opponent == null)) return false;
@@ -141,7 +141,7 @@ namespace CrazyElevator.Managers
         public void DrawAbilityIntro(float time, Rect view, bool showPlayer, bool playerPane)
         {
             if (encounterPreviewTexture == null) return;
-            float duration = abilityIntroKind == "VIP" ? VipIntroDuration : AbilityIntroDuration;
+            float duration = abilityIntroKind == "VIP" ? VipIntroDuration : abilityIntroKind == "HANDYMAN" ? 1.6f : AbilityIntroDuration;
             float fade = Mathf.Min(Mathf.Clamp01(time / .25f), Mathf.Clamp01((duration - time) / .35f));
             Color old = GUI.color;
             Matrix4x4 oldMatrix = GUI.matrix;

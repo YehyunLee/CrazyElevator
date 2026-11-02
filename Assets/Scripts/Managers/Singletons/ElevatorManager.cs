@@ -1508,7 +1508,7 @@ namespace CrazyElevator.Managers
     {
         [Header("Rust and handyman")]
         public StarfishImpairmentView impairmentGaugePrefab;
-        [Min(1)] public float secondsPerRustLevel = 10f;
+        [Min(1)] public float secondsPerRustLevel = 25f;
         [Range(.1f, .9f)] public float underwaterSpeedMultiplier = .58f;
         [Range(.1f, .9f)] public float underwaterAccelerationMultiplier = .45f;
         [Header("Passenger speed effects")]
@@ -1628,7 +1628,7 @@ namespace CrazyElevator.Managers
                 var floorRiders = targetRound.Riders.FindAll(rider => rider.Origin == floor);
                 if (floorRiders.Count == 0) continue;
                 string repeatKind = floor < candyStartsAtFloor ? "INTERVIEW"
-                    : floor < underwaterStartsAtFloor ? "PREGNANT" : "DIVER";
+                    : floor < underwaterStartsAtFloor ? "PREGNANT" : (floor % 2 == 0 ? "HANDYMAN" : "DIVER");
                 Rider template = floorRiders.Find(rider => rider.Kind == repeatKind)
                     ?? floorRiders.Find(rider => rider.Kind != "BOSS"
                         && rider.Kind != "HANDYMAN" && rider.Kind != "GROUP")

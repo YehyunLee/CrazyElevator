@@ -8,9 +8,9 @@ namespace CrazyElevator.Managers
 
     public sealed partial class ElevatorManager
     {
-        const float RepairSweepStart = 1.6f;
-        const float RepairSweepEnd = 3.2f;
-        const float HandymanRepairDuration = 4.2f;
+        const float RepairSweepStart = .6f;
+        const float RepairSweepEnd = 1.2f;
+        const float HandymanRepairDuration = 1.6f;
 
         [Header("Handyman cleaning animation")]
         public Transform handymanShovelPrefab;
@@ -46,18 +46,14 @@ namespace CrazyElevator.Managers
                 || !round.Owns(rider) || HandymanRepairActive || !figures.ContainsKey(rider)
                 || VisibleStarfishLevel == 0) return;
 
-            repairingHandyman = rider;
-            handymanRepairTime = 0;
-            handymanRepairFinished = false;
-            repairStarfishLevel = VisibleStarfishLevel;
-            repairHome = RiderPosition(rider);
-            repairScale = boardingTransfers.TryGetValue(rider, out var transfer)
-                ? transfer.targetScale : figures[rider].localScale;
+            rustExposure = 0;
             repairProgress = 0;
-            ElevatorSays("Those starfish damaged my gears. Please fix me!", 5f);
+            UpdateImpairmentIndicators();
+            ElevatorSays("Starfish gone, gears fixed. Thanks, Casey!", 1.6f);
             GameManager.Instance?.RequestAbilityIntro(this, "HANDYMAN");
+            SetControlStatus("REPAIRED");
+            Play(ding);
         }
-
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)
         {
             if (rider != repairingHandyman) return false;
@@ -111,7 +107,7 @@ namespace CrazyElevator.Managers
                 if (exteriorImpairment) exteriorImpairment.AnimateRemoval(1);
                 handymanRepairFinished = true;
                 UpdateImpairmentIndicators();
-                ElevatorSays("Ahh, much better. Starfish gone, gears fixed. Thanks, Casey!", 5f);
+                ElevatorSays("Ahh, much better. Starfish gone, gears fixed. Thanks, Casey!", 1.6f);
                 Play(ding);
             }
             if (t >= HandymanRepairDuration)

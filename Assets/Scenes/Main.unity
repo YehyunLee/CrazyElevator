@@ -1096,7 +1096,7 @@ MonoBehaviour:
   candyStartsAtFloor: 4
   underwaterStartsAtFloor: 8
   impairmentGaugePrefab: {fileID: 1004, guid: a28a526a065e598d9ed0c54a4cb147e8, type: 3}
-  secondsPerRustLevel: 10
+  secondsPerRustLevel: 25
   underwaterSpeedMultiplier: 0.58
   underwaterAccelerationMultiplier: 0.45
   clownSpeedMultiplier: 2
