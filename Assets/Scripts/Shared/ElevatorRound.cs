@@ -234,9 +234,10 @@ namespace CrazyElevator.Shared
                     Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
                 if (world == PassengerTheme.Candy && f % 3 == 0)
                     Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
-                if (world == PassengerTheme.Underwater && f % 3 == 1)
+                if (world == PassengerTheme.Underwater)
                     Add("Diver", "DIVER", "Blocks tornadoes", "SHIELD", f, 1, 60, 0, 4, 100);
-                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
+                if (world != PassengerTheme.Underwater || (f - FloorsPerDimension * 2) % 4 == 0)
+                    Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
             }

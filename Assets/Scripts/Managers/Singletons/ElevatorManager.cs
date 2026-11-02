@@ -1628,7 +1628,7 @@ namespace CrazyElevator.Managers
                 var floorRiders = targetRound.Riders.FindAll(rider => rider.Origin == floor);
                 if (floorRiders.Count == 0) continue;
                 string repeatKind = floor < candyStartsAtFloor ? "INTERVIEW"
-                    : floor < underwaterStartsAtFloor ? "PREGNANT" : "ELDERLY";
+                    : floor < underwaterStartsAtFloor ? "PREGNANT" : "DIVER";
                 Rider template = floorRiders.Find(rider => rider.Kind == repeatKind)
                     ?? floorRiders.Find(rider => rider.Kind != "BOSS"
                         && rider.Kind != "HANDYMAN" && rider.Kind != "GROUP")
