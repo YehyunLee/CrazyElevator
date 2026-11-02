@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using CrazyElevator.Shared;
+using SharedRider = CrazyElevator.Shared.Rider;
 
 namespace CrazyElevator.Managers
 {
@@ -35,8 +36,8 @@ namespace CrazyElevator.Managers
         readonly MatchProgress matchProgress = new MatchProgress();
         const float AbilityIntroSeconds = 3.5f;
         readonly HashSet<string> introducedAbilities = new HashSet<string>();
-        readonly Queue<(ElevatorManager actor, string kind)> pendingAbilityIntros =
-            new Queue<(ElevatorManager actor, string kind)>();
+        readonly Queue<(ElevatorManager actor, string kind, SharedRider rider)> pendingAbilityIntros =
+            new Queue<(ElevatorManager actor, string kind, SharedRider rider)>();
         ElevatorManager abilityIntroActor;
         string abilityIntroKind;
         bool abilityIntroActive;
@@ -73,7 +74,16 @@ namespace CrazyElevator.Managers
             string seenKey = kind != "BOUNCER" && actor.Match != null && actor.Match.SplitScreen
                 ? kind + ":" + actor.Seat : kind;
             if (!introducedAbilities.Add(seenKey)) return;
-            pendingAbilityIntros.Enqueue((actor, kind));
+            pendingAbilityIntros.Enqueue((actor, kind, null));
+            if (!AbilityIntroActive) StartNextAbilityIntro();
+        }
+
+        // The VIP is shared by both players and changes every round, so it is
+        // intentionally not part of the per-match ability-introduction set.
+        public void RequestVipIntro(ElevatorManager actor, SharedRider rider)
+        {
+            if (actor == null || rider == null || MenuManager.TutorialActive) return;
+            pendingAbilityIntros.Enqueue((actor, "VIP", rider));
             if (!AbilityIntroActive) StartNextAbilityIntro();
         }
 
@@ -85,7 +95,7 @@ namespace CrazyElevator.Managers
                 if (next.actor == null) continue;
                 try
                 {
-                    if (!next.actor.PrepareAbilityIntro(next.kind)) continue;
+                    if (!next.actor.PrepareAbilityIntro(next.kind, next.rider)) continue;
                 }
                 catch (System.Exception error)
                 {
@@ -231,7 +241,7 @@ namespace CrazyElevator.Managers
                 }
                 abilityIntroTime += Time.unscaledDeltaTime;
                 abilityIntroActor.AnimateAbilityIntro(abilityIntroTime);
-                if (abilityIntroTime >= AbilityIntroSeconds)
+                if (abilityIntroTime >= (abilityIntroKind == "VIP" ? ElevatorManager.VipIntroDuration : AbilityIntroSeconds))
                 {
                     StopAbilityIntro();
                     StartNextAbilityIntro();
@@ -268,16 +278,16 @@ namespace CrazyElevator.Managers
             if (AbilityIntroActive && abilityIntroActor != null)
             {
                 var match = abilityIntroActor.Match;
-                bool shared = abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen;
+                bool shared = abilityIntroKind == "VIP" || abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen;
                 abilityIntroActor.DrawAbilityIntro(abilityIntroTime, AbilityIntroView(),
-                    shared && match != null, !shared);
+                    shared && match != null && abilityIntroKind != "VIP", !shared);
             }
         }
 
         Rect AbilityIntroView()
         {
             var match = abilityIntroActor != null ? abilityIntroActor.Match : null;
-            return abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen
+            return abilityIntroKind == "VIP" || abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen
                 ? new Rect(0f, 0f, Screen.width, Screen.height)
                 : match.ViewRect(abilityIntroActor.Seat);
         }

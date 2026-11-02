@@ -45,6 +45,7 @@ namespace CrazyElevator.Match
         float collisionFlash;
         SharedRider matchVip;
         bool hazardEventStarted;
+        bool vipRevealStarted;
         float eventMessageTime;
         string eventMessage;
         readonly float[] candyCooldown = { 5f, 5f };
@@ -219,7 +220,11 @@ namespace CrazyElevator.Match
 
             if (player.IntroPlaying || Rival.IntroPlaying || player.CountdownPlaying
                 || Rival.CountdownPlaying || MenuManager.IsOpen) return;
-            if (Running && !Finished && !MenuManager.TutorialActive) UpdateRivalInteractions(Time.deltaTime);
+            if (Running && !Finished && !MenuManager.TutorialActive)
+            {
+                UpdateRivalInteractions(Time.deltaTime);
+                if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
+            }
             var input = InputManager.Instance;
             if (input == null) return;
 
@@ -284,7 +289,9 @@ namespace CrazyElevator.Match
             expressFlash[0] = expressFlash[1] = 0f;
             player.StartMatchShift(countdown: !practice);
             Rival.StartMatchShift(player, countdown: !practice);
-            matchVip = practice ? null : player.ChooseMatchVip();
+            // Promote one waiting passenger to VIP halfway through the live shift.
+            matchVip = null;
+            vipRevealStarted = false;
             hazardEventStarted = false;
             eventMessageTime = 0f;
             eventMessage = null;
@@ -345,6 +352,16 @@ namespace CrazyElevator.Match
                     candyTrails.RemoveAt(i);
                 }
                 else if (trail.Life <= 0f) candyTrails.RemoveAt(i);
+            }
+            if (!vipRevealStarted && player.SecondsLeft <= ElevatorRound.Duration * .5f)
+            {
+                SharedRider arrivingVip = player.ChooseMatchVip();
+                if (arrivingVip != null)
+                {
+                    matchVip = arrivingVip;
+                    vipRevealStarted = true;
+                    GameManager.Instance?.RequestVipIntro(player, matchVip);
+                }
             }
             if (!hazardEventStarted && player.SecondsLeft <= 40f)
             {

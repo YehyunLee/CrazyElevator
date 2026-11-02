@@ -1,4 +1,5 @@
 using CrazyElevator.Shared;
+using SharedRider = CrazyElevator.Shared.Rider;
 using UnityEngine;
 
 namespace CrazyElevator.Managers
@@ -6,17 +7,26 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         const float AbilityIntroDuration = 3.5f;
+        public const float VipIntroDuration = 4.5f;
         Transform abilityIntroPassenger, abilityIntroOpponent, abilityIntroOwnCar;
         string abilityIntroKind;
+        SharedRider abilityIntroVip;
         Texture2D abilityIntroShield;
 
         // Reuse the existing offscreen preview camera and the editable game
         // prefabs, so this animation never touches the live car or passengers.
-        public bool PrepareAbilityIntro(string kind)
+        public bool PrepareAbilityIntro(string kind, SharedRider vip = null)
         {
             if (sceneView == null || sceneView.passengers == null) return false;
             string passengerKind = kind == "CALM" ? "ELDERLY" : kind;
-            GameObject passenger = FindPassengerTemplate(passengerKind);
+            GameObject passenger = kind == "VIP" ? FindPassengerPreviewSource(vip) : FindPassengerTemplate(passengerKind);
+            // Keep the same fallback art as the physical waiting passenger in older scenes.
+            if (kind == "VIP" && passenger == null && vip != null)
+            {
+                string fallback = vip.Kind == "HUNTER" ? "INTERVIEW" : vip.Kind == "DIVER" ? "HANDYMAN"
+                    : vip.Kind == "BOUNCER" ? "BOSS" : vip.Kind;
+                passenger = FindPassengerTemplate(fallback);
+            }
             GameObject opponent = kind == "HUNTER" ? sceneView.monster
                 : kind == "DIVER" ? sceneView.tornado
                 : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
@@ -24,7 +34,7 @@ namespace CrazyElevator.Managers
                 : kind == "PREGNANT" ? FindPassengerTemplate("BOSS")
                 : (kind == "BOUNCER" || kind == "GROUP" || kind == "ELDERLY")
                     && sceneView.exteriorCar != null ? sceneView.exteriorCar.gameObject : null;
-            if (passenger == null || opponent == null) return false;
+            if (passenger == null || (kind != "VIP" && opponent == null)) return false;
 
             ClearEncounterPreviewModel();
             EnsureEncounterPreview();
@@ -32,16 +42,19 @@ namespace CrazyElevator.Managers
             encounterPreviewModel.hideFlags = HideFlags.HideAndDontSave;
             encounterPreviewModel.transform.SetParent(encounterPreviewPivot, false);
             encounterPreviewPivot.localRotation = Quaternion.identity;
-            abilityIntroPassenger = CreateAbilityIntroModel(passenger, "Passenger", 2.3f);
-            abilityIntroOpponent = CreateAbilityIntroModel(opponent, "Opponent", kind == "BOUNCER" ? 2.5f : 2.3f);
+            Color passengerColor = kind == "VIP" && vip != null ? Palette[vip.Color % Palette.Length] : Teal;
+            abilityIntroPassenger = CreateAbilityIntroModel(passenger, "Passenger", 2.3f, passengerColor);
+            abilityIntroOpponent = opponent != null
+                ? CreateAbilityIntroModel(opponent, "Opponent", kind == "BOUNCER" ? 2.5f : 2.3f) : null;
             if (kind == "BOUNCER")
                 abilityIntroOwnCar = CreateAbilityIntroModel(sceneView.exteriorCar.gameObject, "Your elevator", 2.5f);
-            if (abilityIntroPassenger == null || abilityIntroOpponent == null)
+            if (abilityIntroPassenger == null || (kind != "VIP" && abilityIntroOpponent == null))
             {
                 FinishAbilityIntro();
                 return false;
             }
             abilityIntroKind = kind;
+            abilityIntroVip = kind == "VIP" ? vip : null;
             if (kind == "DIVER" && abilityIntroShield == null)
                 abilityIntroShield = PassengerIconLibrary.CreatePassengerBadge("DIVER", Teal, Ink, Cream);
             encounterPreviewCamera.backgroundColor = kind == "HUNTER" || kind == "ELDERLY" ? new Color(.12f, .17f, .26f)
@@ -53,7 +66,7 @@ namespace CrazyElevator.Managers
             return true;
         }
 
-        Transform CreateAbilityIntroModel(GameObject source, string label, float height)
+        Transform CreateAbilityIntroModel(GameObject source, string label, float height, Color? accent = null)
         {
             var slot = new GameObject(label + " ability animation");
             slot.hideFlags = HideFlags.HideAndDontSave;
@@ -67,7 +80,7 @@ namespace CrazyElevator.Managers
                 stars.SetSeverity(3);
                 model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             }
-            MakeStillPreviewModel(model, Teal);
+            MakeStillPreviewModel(model, accent ?? Teal);
             if (!TryGetEncounterPreviewBounds(model, out Bounds bounds)) return null;
             float size = Mathf.Max(bounds.size.y, Mathf.Max(bounds.size.x * .75f, bounds.size.z * .75f));
             model.transform.localScale *= height / Mathf.Max(.01f, size);
@@ -78,7 +91,23 @@ namespace CrazyElevator.Managers
 
         public void AnimateAbilityIntro(float time)
         {
-            if (abilityIntroPassenger == null || abilityIntroOpponent == null || encounterPreviewCamera == null) return;
+            if (abilityIntroPassenger == null || encounterPreviewCamera == null) return;
+            if (abilityIntroKind == "VIP")
+            {
+                // The actual VIP enters, settles, then turns toward both drivers.
+                float arrive = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.2f, 1.35f, time));
+                float bob = Mathf.Sin(time * 7f) * .06f * (1f - arrive)
+                    + Mathf.Sin(time * 2.4f) * .035f * arrive;
+                abilityIntroPassenger.localPosition = new Vector3(Mathf.Lerp(-2.8f, 0f, arrive), bob, 0f);
+                abilityIntroPassenger.localRotation = Quaternion.Euler(0f,
+                    Mathf.Lerp(-38f, 0f, arrive) + Mathf.Sin(time * 1.6f) * 4f * arrive, bob * 25f);
+                encounterPreviewCamera.orthographicSize = Mathf.Lerp(2.1f, 1.65f, arrive)
+                    - .1f * Mathf.InverseLerp(1.35f, VipIntroDuration, time);
+                encounterPreviewCamera.transform.localPosition = new Vector3(0f, 0f, -12f);
+                encounterPreviewCamera.transform.localRotation = Quaternion.identity;
+                return;
+            }
+            if (abilityIntroOpponent == null) return;
             float approach = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.75f, 1.5f, time));
             float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(1.5f, 2.15f, time)) * Mathf.PI);
             float recoil = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.55f, 2.2f, time));
@@ -112,7 +141,8 @@ namespace CrazyElevator.Managers
         public void DrawAbilityIntro(float time, Rect view, bool showPlayer, bool playerPane)
         {
             if (encounterPreviewTexture == null) return;
-            float fade = Mathf.Min(Mathf.Clamp01(time / .25f), Mathf.Clamp01((AbilityIntroDuration - time) / .35f));
+            float duration = abilityIntroKind == "VIP" ? VipIntroDuration : AbilityIntroDuration;
+            float fade = Mathf.Min(Mathf.Clamp01(time / .25f), Mathf.Clamp01((duration - time) / .35f));
             Color old = GUI.color;
             Matrix4x4 oldMatrix = GUI.matrix;
             int oldDepth = GUI.depth;
@@ -164,7 +194,11 @@ namespace CrazyElevator.Managers
             Styles();
             var textStyle = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter,
                 fontSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(view.height * .038f, view.width * .048f)), 18, 42), wordWrap = false };
-            string message = abilityIntroKind == "HUNTER" ? "STUNS MONSTERS"
+            string vipSide = abilityIntroVip == null ? "" : abilityIntroVip.OriginStop < ElevatorRound.CenterStop ? " LEFT"
+                : abilityIntroVip.OriginStop > ElevatorRound.CenterStop ? " RIGHT" : " MIDDLE";
+            string message = abilityIntroKind == "VIP" && abilityIntroVip != null
+                ? "PICK UP: F" + ElevatorRound.FloorNumber(abilityIntroVip.Origin) + vipSide + "    ·    ON-TIME +250"
+                : abilityIntroKind == "HUNTER" ? "STUNS MONSTERS"
                 : abilityIntroKind == "DIVER" ? "BLOCKS TORNADOES"
                 : abilityIntroKind == "BOUNCER" ? "STRONGER BUMPS"
                 : abilityIntroKind == "GROUP" ? "SPEED + STICKY TRAIL"
@@ -174,7 +208,7 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(view.x, frame.yMax, view.width, view.yMax - frame.yMax), message, textStyle);
             textStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.height * .022f), 14, 24);
             string heading = showPlayer ? (IsNpc ? "CPU  ·  " : "PLAYER " + (Seat + 1) + "  ·  ") : "";
-            string name = abilityIntroKind == "GROUP" ? "THE TRIO" : abilityIntroKind == "ELDERLY" ? "GRANDMA"
+            string name = abilityIntroKind == "VIP" ? "VIP PASSENGER" : abilityIntroKind == "GROUP" ? "THE TRIO" : abilityIntroKind == "ELDERLY" ? "GRANDMA"
                 : abilityIntroKind == "PREGNANT" ? "MOM + BABY" : abilityIntroKind == "CALM" ? "GRANDMA + BABY"
                 : abilityIntroKind;
             GUI.Label(new Rect(view.x, view.y, view.width, frame.y - view.y), heading + name, textStyle);
@@ -198,6 +232,7 @@ namespace CrazyElevator.Managers
         {
             abilityIntroPassenger = abilityIntroOpponent = abilityIntroOwnCar = null;
             abilityIntroKind = null;
+            abilityIntroVip = null;
             ClearEncounterPreviewModel();
         }
 
