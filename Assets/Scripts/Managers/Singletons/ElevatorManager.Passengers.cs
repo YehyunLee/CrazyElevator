@@ -11,7 +11,8 @@ namespace CrazyElevator.Managers
     {
         readonly Dictionary<Rider, Vector3> cabinPositions = new Dictionary<Rider, Vector3>();
         BoardingDoor selectedBoardingDoor = BoardingDoor.Front;
-        int openBoardingDoor = -1;
+        readonly bool[] boardingDoorOpen = new bool[3];
+        int nextAutoBoardDoor;
         bool hasChosenBoardingDoor;
         float autoBoardWait;
         readonly float[] boardingDoorOpenness = new float[3];
@@ -27,22 +28,27 @@ namespace CrazyElevator.Managers
             if ((int)door < 0 || (int)door >= boardingDoorOpenness.Length) return;
             selectedBoardingDoor = door;
             hasChosenBoardingDoor = true;
-            openBoardingDoor = (int)door;
-            autoBoardWait = .25f;
+            bool newlyOpened = !boardingDoorOpen[(int)door];
+            boardingDoorOpen[(int)door] = true;
+            if (newlyOpened) autoBoardWait = .25f;
             SelectRider(null);
             notice = ((BoardingDoor)BoardingDoorScreenSlot(door)).ToString().ToUpperInvariant()
-                + " DOOR: passengers board automatically.";
-            Play(click);
+                + " DOOR OPEN. Passengers board automatically.";
+            if (newlyOpened) Play(click);
         }
 
         void ResetBoardingDoors()
         {
             selectedBoardingDoor = BoardingDoor.Front;
-            openBoardingDoor = -1;
+            CloseRequestedBoardingDoors();
+            nextAutoBoardDoor = 0;
             hasChosenBoardingDoor = false;
             autoBoardWait = 0f;
             System.Array.Clear(boardingDoorOpenness, 0, boardingDoorOpenness.Length);
         }
+
+        void CloseRequestedBoardingDoors()
+            => System.Array.Clear(boardingDoorOpen, 0, boardingDoorOpen.Length);
 
         void TickBoardingDoors(float dt)
         {
@@ -53,7 +59,7 @@ namespace CrazyElevator.Managers
                     if (round.Owns(rider) && round.AtDestination(rider)) { droppingOff = true; break; }
             for (int door = 0; door < boardingDoorOpenness.Length; door++)
             {
-                bool needed = atFloor && (openBoardingDoor == door
+                bool needed = atFloor && (boardingDoorOpen[door]
                     || door == (int)BoardingDoor.Front && droppingOff);
                 // Finish crossing the threshold before shutting a previous door.
                 if (atFloor && !needed)
@@ -71,28 +77,42 @@ namespace CrazyElevator.Managers
 
         void TickAutoBoarding(float dt)
         {
-            if (phase != Phase.Boarding || openBoardingDoor < 0 || PersonaBusy) return;
+            if (phase != Phase.Boarding || PersonaBusy) return;
             if (MenuManager.TutorialActive && InputManager.Instance != null
                 && (InputManager.Instance.IsTutorialInputLocked(Seat)
                     || InputManager.Instance.GetTutorialInputMode(Seat) != InputManager.TutorialInputMode.BoardPassengers)) return;
-            if (boardingDoorOpenness[openBoardingDoor] < .98f) return;
             autoBoardWait -= dt;
             if (autoBoardWait > 0f) return;
-            autoBoardWait = .45f;
-            // Find the head of this door's finite queue before boarding it.
-            // A party that cannot fit keeps its place; choose another door instead.
+
+            int entryDoor = -1;
             Rider next = null;
-            foreach (Rider rider in round.Riders)
-                if (round.IsOffered(rider) && CanBoardThroughDoor(rider, (BoardingDoor)openBoardingDoor))
-                { next = rider; break; }
-            if (next == null || !CanBoardAutomatically(next)) return;
+            for (int offset = 0; offset < boardingDoorOpen.Length; offset++)
+            {
+                int door = (nextAutoBoardDoor + offset) % boardingDoorOpen.Length;
+                if (!boardingDoorOpen[door] || boardingDoorOpenness[door] < .98f) continue;
+                foreach (Rider rider in round.Riders)
+                {
+                    if (!round.IsOffered(rider)
+                        || !CanBoardThroughDoor(rider, (BoardingDoor)door)) continue;
+                    if (!CanBoardAutomatically(rider)) break;
+                    next = rider;
+                    entryDoor = door;
+                    break;
+                }
+                if (next != null) break;
+            }
+            if (next == null) return;
+
+            autoBoardWait = .45f;
+            nextAutoBoardDoor = (entryDoor + 1) % boardingDoorOpen.Length;
+            // Each open door serves its own finite queue in turn.
             if (!HasBoardingSpace(next))
             {
                 notice = "NO ROOM FOR THIS PARTY. Choose another door or close & travel.";
                 ShowActionFeedback(round.HasCapacityFor(next) ? "NO OPEN TILES!" : "NO ROOM!", false);
                 return;
             }
-            BoardPassengerWithPersona(next);
+            BoardPassengerWithPersona(next, (BoardingDoor)entryDoor);
         }
 
         Vector3 WaitingPositionInCabin(Rider rider)
@@ -154,6 +174,21 @@ namespace CrazyElevator.Managers
         BoardingDoor BoardingDoorAtScreenSlot(int slot)
             => (BoardingDoor)(BoardingDoorOrderReversed ? 2 - slot : slot);
 
+        bool TryGetOpenBoardingDoor(Rider rider, out BoardingDoor door)
+        {
+            int preferred = (int)selectedBoardingDoor;
+            for (int offset = 0; offset < boardingDoorOpen.Length; offset++)
+            {
+                int candidate = (preferred + offset) % boardingDoorOpen.Length;
+                if (!boardingDoorOpen[candidate]
+                    || !CanBoardThroughDoor(rider, (BoardingDoor)candidate)) continue;
+                door = (BoardingDoor)candidate;
+                return true;
+            }
+            door = BoardingDoor.Front;
+            return false;
+        }
+
         // Discretize the stick so small analog fluctuations do not repeatedly
         // reopen a door or keep resetting the automatic boarding delay.
         static int BoardingDirection(Vector2 direction)
@@ -175,7 +210,7 @@ namespace CrazyElevator.Managers
                 else
                 {
                     BoardingDoor door = BoardingDoorAtScreenSlot(slot);
-                    if (openBoardingDoor != (int)door) OpenBoardingDoor(door);
+                    if (!boardingDoorOpen[(int)door]) OpenBoardingDoor(door);
                     else if (selectedRider != null) SelectRider(null);
                 }
             }
@@ -194,7 +229,7 @@ namespace CrazyElevator.Managers
         void TintBoardingDoorFrame(Renderer[] frame, BoardingDoor door, bool choosing)
         {
             if (frame == null) return;
-            bool open = choosing && openBoardingDoor == (int)door;
+            bool open = choosing && boardingDoorOpen[(int)door];
             Color color = open ? Teal : DoorFrameIdle;
             if (doorFrameTint == null) doorFrameTint = new MaterialPropertyBlock();
             foreach (Renderer renderer in frame)

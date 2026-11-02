@@ -1394,7 +1394,7 @@ namespace CrazyElevator.Managers
             string direction = GameplayUsesKeyboard && Seat == 0
                 ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
                 : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
-            bool open = openBoardingDoor == (int)door;
+            bool open = boardingDoorOpen[(int)door];
             DrawGameplayKeyHint(new Rect(cursor.x - size * .5f, cursor.y - size, size, size),
                 direction, open ? Gold : Teal);
         }

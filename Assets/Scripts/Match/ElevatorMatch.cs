@@ -334,13 +334,12 @@ namespace CrazyElevator.Match
         public void PassengerBoarded(Game actor, SharedRider rider)
         {
             if (!Running || MenuManager.TutorialActive || actor == null || rider == null) return;
-            Game other = Other(actor);
-            bool close = other != null && Mathf.Abs(other.CollisionFloor - rider.Origin) <= 1.1f
-                && Mathf.Abs(ShaftX(other) - ShaftX(actor)) <= 14f;
-            if (!rider.IsVip && !close) return;
+            // Regular boarding already has immediate per-car feedback. Reserve
+            // the shared rivalry banner for VIPs to avoid repeating "ON BOARD!".
+            if (!rider.IsVip) return;
             int winner = SeatOf(actor), loser = 1 - winner;
-            contestMessages[winner] = rider.IsVip ? "VIP ON BOARD!" : "PASSENGER CLAIMED!";
-            contestMessages[loser] = rider.IsVip ? "RIVAL GOT THE VIP!" : "TOO LATE!";
+            contestMessages[winner] = "VIP ON BOARD!";
+            contestMessages[loser] = "RIVAL GOT THE VIP!";
             contestMessageTimes[winner] = contestMessageTimes[loser] = 2.5f;
         }
 

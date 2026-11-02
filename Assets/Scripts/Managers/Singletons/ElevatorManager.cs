@@ -304,7 +304,7 @@ namespace CrazyElevator.Managers
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
             travelStartCount = floorStopCount = 0;
-            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Choose LEFT / FRONT / RIGHT, then open that door. Passengers board automatically.";
+            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Open any combination of doors. Passengers board automatically.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
 
@@ -489,7 +489,7 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Boarding) return;
             // Nobody rides past their own floor: send any remaining riders out first.
             while (DropOffNextRider(true)) { }
-            openBoardingDoor = -1;
+            CloseRequestedBoardingDoors();
             travelStartCount++;
             SelectRider(null);
             travelFloor = round.Floor;
@@ -574,7 +574,7 @@ namespace CrazyElevator.Managers
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Choose a door to open. Passengers board automatically.";
+                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Open any combination of doors. Passengers board automatically.";
                     UpdateInteriorPersona(0);
                 }
                 return;
@@ -819,6 +819,7 @@ namespace CrazyElevator.Managers
         {
             if (phase != Phase.Boarding) return;
             selectedFloor = -1; destination = -1; RefreshFloorButtons();
+            CloseRequestedBoardingDoors();
             phase = Phase.Closing; phaseTime = 0; SetControlStatus("CLOSING"); Play(click);
         }
 
@@ -854,6 +855,7 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Boarding) return;
             int next = AutomaticNextFloor();
             selectedFloor = next; destination = next; RefreshFloorButtons();
+            CloseRequestedBoardingDoors();
             phase = Phase.Closing; phaseTime = 0;
             SetControlStatus("AUTO " + ElevatorRound.FloorNumber(next)); Play(click);
             notice = "Doors timed out. Continuing to " + FloorNames[next] + ".";
@@ -894,7 +896,12 @@ namespace CrazyElevator.Managers
             selectedFloor = floor; destination = floor; RefreshFloorButtons();
             SetControlStatus("GOING " + ElevatorRound.FloorNumber(destination)); Play(click);
             if (phase == Phase.Closed) StartMoving();
-            else if (phase == Phase.Boarding) { phase = Phase.Closing; phaseTime = 0; }
+            else if (phase == Phase.Boarding)
+            {
+                CloseRequestedBoardingDoors();
+                phase = Phase.Closing;
+                phaseTime = 0;
+            }
         }
 
     }
@@ -1299,9 +1306,14 @@ namespace CrazyElevator.Managers
 
         void BoardPassengerWithPersona(Rider rider)
         {
+            if (TryGetOpenBoardingDoor(rider, out BoardingDoor entryDoor))
+                BoardPassengerWithPersona(rider, entryDoor);
+        }
+
+        void BoardPassengerWithPersona(Rider rider, BoardingDoor entryDoor)
+        {
             if (!CanBoardAutomatically(rider) || !figures.TryGetValue(rider, out var figure)) return;
-            if (openBoardingDoor < 0 || !CanBoardThroughDoor(rider, (BoardingDoor)openBoardingDoor)) return;
-            BoardingDoor entryDoor = (BoardingDoor)openBoardingDoor;
+            if (!boardingDoorOpen[(int)entryDoor] || !CanBoardThroughDoor(rider, entryDoor)) return;
             if (!round.HasCapacityFor(rider))
             {
                 int available = Mathf.Max(0, ElevatorRound.Capacity - round.Load);
@@ -1455,7 +1467,7 @@ namespace CrazyElevator.Managers
             {
                 Panel(new Rect(12, 42, Mathf.Min(width, 500), 97), new Color(Ink.r, Ink.g, Ink.b, .88f));
                 Label(new Rect(24, 49, 444, 25), WorldStatusLine(round.Floor), body);
-                Label(new Rect(24, 77, 444, 24), "FLOOR " + ElevatorRound.FloorNumber(round.Floor) + "  |  Choose a door for automatic boarding", small);
+                Label(new Rect(24, 77, 444, 24), "FLOOR " + ElevatorRound.FloorNumber(round.Floor) + "  |  Open multiple doors", small);
                 Label(new Rect(24, 106, 476, 24), ImpairmentDescription, small);
             }
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
@@ -2513,6 +2525,7 @@ namespace CrazyElevator.Managers
             SelectRider(null);
             ClearHandymanRepair();
             ClearInteriorTransfers();
+            CloseRequestedBoardingDoors();
             // A collision owns the stop transition. Do not leave a selected
             // destination or passenger-stop animation able to
             // reopen/continue after the struck elevator is knocked away.
