@@ -15,6 +15,8 @@ namespace CrazyElevator.Managers
         public ElevatorScene sceneView;
         // The phase controls input, animation, and whether the round clock runs.
         enum Phase { Intro, Countdown, Boarding, Closing, Closed, Moving, Docking, Opening, Results }
+        const float DoorAnimationSeconds = .2f;
+        const float PassengerBoardingSeconds = .2f;
         static readonly Color Ink = new Color32(43, 48, 78, 255);
         static readonly Color Teal = new Color32(75, 226, 202, 255);
         static readonly Color Cream = new Color32(255, 250, 234, 255);
@@ -230,13 +232,13 @@ namespace CrazyElevator.Managers
                 phaseTime += dt;
                 if (phase == Phase.Closing)
                 {
-                    doors = 1 - Mathf.Clamp01(phaseTime / .65f);
-                    if (phaseTime >= .65f) { doors = 0; BeginBuildingTravel(); }
+                    doors = 1 - Mathf.Clamp01(phaseTime / DoorAnimationSeconds);
+                    if (phaseTime >= DoorAnimationSeconds) { doors = 0; BeginBuildingTravel(); }
                 }
                 else if (phase == Phase.Opening)
                 {
-                    doors = Mathf.Clamp01(phaseTime / .65f);
-                    if (phaseTime >= .65f) { phase = Phase.Boarding; phaseTime = 0; destination = -1; }
+                    doors = Mathf.Clamp01(phaseTime / DoorAnimationSeconds);
+                    if (phaseTime >= DoorAnimationSeconds) { phase = Phase.Boarding; phaseTime = 0; destination = -1; }
                 }
                 else if (phase == Phase.Boarding) TickAutoDropOff(dt);
             }
@@ -1371,7 +1373,7 @@ namespace CrazyElevator.Managers
         bool AnimatePersonaBoard(Rider rider, Transform figure, float dt)
         {
             if (!boardingTransfers.TryGetValue(rider, out var transfer)) return false;
-            transfer.time += dt / (transfer.gentle ? 1.35f : .78f);
+            transfer.time += dt / PassengerBoardingSeconds;
             // Preserve the personality hop, but carry it along the selected
             // doorway's approach and crossing instead of cutting through a wall.
             ElevatorPersonaRig.PassengerPose(Vector3.zero, Vector3.forward, transfer.time, transfer.gentle,

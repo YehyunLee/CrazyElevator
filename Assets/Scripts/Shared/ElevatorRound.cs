@@ -93,7 +93,7 @@ namespace CrazyElevator.Shared
             return floor % FloorsPerDimension + 1;
         }
         public const int Capacity = 9;
-        public const float Duration = 60f;
+        public const float Duration = 90f;
         // Seconds into the shift when candy (1) and underwater (2) open.
         static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f };
         public static float DimensionUnlockAt(int dimension)
