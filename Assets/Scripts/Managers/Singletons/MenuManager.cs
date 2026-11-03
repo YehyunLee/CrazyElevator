@@ -132,6 +132,7 @@ namespace CrazyElevator.Managers
         static bool pauseMoveHeld;
         static bool pauseOpen;
         static int pauseOpenedFrame = -1;
+        static float pauseRepeatTimer;
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
         float menuFadeAlpha;
@@ -149,7 +150,7 @@ namespace CrazyElevator.Managers
                 MenuManager menu = FindAnyObjectByType<MenuManager>();
                 if (menu == null) menu = Current;
                 return menu != null
-                    && (menu.showingControllerInstructions
+                    && (pauseOpen || menu.showingControllerInstructions
                         || menu.tutorialActive
                             && menu.tutorialFinalePhase != TutorialFinalePhase.None);
             }
@@ -737,6 +738,7 @@ namespace CrazyElevator.Managers
             pauseOpenedFrame = Time.frameCount;
             pauseSelection = 0;
             pauseMoveHeld = false;
+            pauseRepeatTimer = 0f;
             InputManager.Instance?.SetView(GameView.Pause);
         }
 
@@ -744,6 +746,7 @@ namespace CrazyElevator.Managers
         {
             pauseOpen = false;
             pauseMoveHeld = false;
+            pauseRepeatTimer = 0f;
         }
 
         public static int PauseSelection => pauseSelection;
@@ -753,31 +756,51 @@ namespace CrazyElevator.Managers
             // Opening pause changes the input view earlier in this frame.
             // Navigation starts on the next frame so that press is consumed once.
             if (Time.frameCount == pauseOpenedFrame) return;
-            var input = InputManager.Instance;
-            if (input == null) return;
             Vector2 navigation = Vector2.zero;
-            bool confirm = false;
-            for (int seat = 0; seat < 2; seat++)
+            bool confirm = false, back = false;
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null)
             {
-                if (!input.HasLobbyInput(seat)) continue;
-                var frame = input.ReadForSeat(seat, true);
-                if (Mathf.Abs(navigation.y) < .55f) navigation = frame.Move;
-                confirm |= frame.ConfirmPressed;
+                navigation.y = (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1f : 0f)
+                    - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1f : 0f);
+                confirm = keyboard.cKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame
+                    || keyboard.spaceKey.wasPressedThisFrame;
+                back = keyboard.escapeKey.wasPressedThisFrame;
             }
+            foreach (Gamepad pad in Gamepad.all)
+            {
+                if (pad == null) continue;
+                Vector2 padMove = pad.leftStick.ReadValue() + pad.dpad.ReadValue();
+                if (Mathf.Abs(padMove.y) > Mathf.Abs(navigation.y)) navigation.y = padMove.y;
+                confirm |= pad.buttonSouth.wasPressedThisFrame;
+                back |= pad.buttonEast.wasPressedThisFrame;
+            }
+
             bool moving = Mathf.Abs(navigation.y) >= .55f;
-            if (moving && !pauseMoveHeld)
-                pauseSelection = (pauseSelection + (navigation.y < 0 ? 1 : 2)) % 3;
-            pauseMoveHeld = moving;
-            if (!confirm) return;
-            if (pauseSelection == 0)
+            pauseRepeatTimer -= Time.unscaledDeltaTime;
+            if (moving && (!pauseMoveHeld || pauseRepeatTimer <= 0f))
             {
-                var game = GameManager.Instance;
-                if (game != null && game.Player != null && game.Player.Match != null)
-                    game.Player.Match.TogglePause();
-                else game?.TogglePause();
+                pauseSelection = (pauseSelection + (navigation.y < 0 ? 1 : 2)) % 3;
+                pauseRepeatTimer = pauseMoveHeld ? .12f : .28f;
             }
+            pauseMoveHeld = moving;
+            if (back)
+            {
+                ResumeFromPause();
+                return;
+            }
+            if (!confirm) return;
+            if (pauseSelection == 0) ResumeFromPause();
             else if (pauseSelection == 1) ReturnToLobby();
             else ReturnToMainMenu();
+        }
+
+        static void ResumeFromPause()
+        {
+            var game = GameManager.Instance;
+            if (game != null && game.Player != null && game.Player.Match != null)
+                game.Player.Match.TogglePause();
+            else game?.TogglePause();
         }
         public static void TogglePassengerOverlay(bool visible, ElevatorManager game)
         {
@@ -827,6 +850,11 @@ namespace CrazyElevator.Managers
                 else if (showingOptions) DrawOptionsScreen();
                 else DrawModeSelect();
                 DrawMenuFade();
+                return;
+            }
+            if (pauseOpen)
+            {
+                DrawPauseScreen();
                 return;
             }
             if (tutorialActive)

@@ -946,7 +946,6 @@ namespace CrazyElevator.Match
             if (dimensionRevealActive)
             {
                 DrawDimensionReveal();
-                if (Paused) DrawPauseOverlay();
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -958,7 +957,6 @@ namespace CrazyElevator.Match
             DrawSharedRoundHUD();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
-            else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
             DrawSessionFade(player.SessionFadeAlpha);
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
