@@ -1,6 +1,7 @@
 using UnityEngine;
 
-// Three authored starfish communicate the same rust level in both camera views.
+// The legacy class/field names preserve existing prefab and scene references.
+// Three authored gears communicate rust through color, cracks, and a repair tool.
 public sealed class StarfishImpairmentView : MonoBehaviour
 {
     public Transform[] starfish;
@@ -35,8 +36,15 @@ public sealed class StarfishImpairmentView : MonoBehaviour
         {
             starfish[i].localPosition = restingPositions[i];
             starfish[i].localRotation = restingRotations[i];
+            foreach (Transform part in starfish[i])
+                if (part.name.StartsWith("Repair wrench")) part.gameObject.SetActive(level == 3 && i == 2);
             foreach (var surface in starfish[i].GetComponentsInChildren<MeshRenderer>(true))
-                if (!surface.name.StartsWith("Eye")) surface.sharedMaterial = i < level ? severityMaterials[level - 1] : inactiveMaterial;
+            {
+                if (surface.name.StartsWith("Gear metal"))
+                    surface.sharedMaterial = i < level ? severityMaterials[level - 1] : inactiveMaterial;
+                else if (surface.name.StartsWith("Damage crack"))
+                    surface.gameObject.SetActive(i < level);
+            }
             float size = level == 0 && i < removedStarfishCount ? 0 : i < level ? 1 : .72f;
             starfish[i].localScale = Vector3.one * size;
         }

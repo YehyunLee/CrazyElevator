@@ -574,7 +574,7 @@ namespace CrazyElevator.Managers
                     case 0: case 1: return "STICK";
                     case 2: return "A";
                     case 3: return "STICK";
-                    case 4: return "LB/RB";
+                    case 4: return "LB / LT / RT";
                     case 5: return "A";
                     case 7: return "B";
                     case 8: return "A/D";
@@ -634,7 +634,9 @@ namespace CrazyElevator.Managers
                 case 1: return "AUTO BOARD. TRY ANOTHER DOOR.";
                 case 2: return "CLOSE THE DOORS.";
                 case 3: return "HOLD UP OR DOWN.";
-                case 4: return "HOLD IT + UP OR DOWN.";
+                case 4: return KeyboardHintsEnabled
+                    ? "HOLD " + TutorialKey(step, seat) + " + UP OR DOWN."
+                    : "HOLD STICK UP/DOWN\n+ LB OR EITHER TRIGGER.";
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0
@@ -642,7 +644,8 @@ namespace CrazyElevator.Managers
                         : "STOP AT PASSENGER FLOOR.";
                 case 6: return "RIDERS GET OFF BY THEMSELVES.";
                 case 7:
-                    return "KICK A PASSENGER OUT.";
+                    return KeyboardHintsEnabled ? "KICK A PASSENGER OUT."
+                        : "STICK DOWN TO SELECT.\nPRESS B TO KICK.";
                 default: return "START YOUR SHIFT.";
             }
         }
@@ -737,7 +740,7 @@ namespace CrazyElevator.Managers
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .06f), 34, 48);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .034f), 19, 28);
             body.alignment = TextAnchor.MiddleLeft;
-            body.wordWrap = false;
+            body.wordWrap = true;
             GUI.Label(new Rect(card.x + 30f, card.y + 17f, card.width - 60f, 24f),
                 "TUTORIAL", caption);
             GUI.Label(new Rect(card.x + 30f, card.y + 44f, card.width - 60f, 58f),
@@ -746,10 +749,14 @@ namespace CrazyElevator.Managers
             float rowY = card.y + 120f;
             if (step >= 0)
             {
-                const float keySize = 68f;
-                DrawTutorialKeyHint(new Rect(card.x + 30f, rowY, keySize, keySize),
-                    TutorialKey(step, inputSeat));
-                GUI.Label(new Rect(card.x + 116f, rowY + 10f, card.width - 146f, 48f),
+                float hintWidth = KeyboardHintsEnabled || step == 6 ? 68f : Mathf.Min(190f, card.width * .32f);
+                if (!KeyboardHintsEnabled && step != 6)
+                    DrawTutorialController(new Rect(card.x + 24f, rowY - 15f, hintWidth, 100f), step, accent);
+                else
+                    DrawTutorialKeyHint(new Rect(card.x + 30f, rowY, hintWidth, 68f),
+                        TutorialKey(step, inputSeat));
+                float textX = card.x + 48f + hintWidth;
+                GUI.Label(new Rect(textX, rowY - 4f, card.xMax - textX - 24f, 78f),
                     TutorialBody(step, index), body);
             }
             else
@@ -911,6 +918,79 @@ namespace CrazyElevator.Managers
             cardTitle.wordWrap = previousWordWrap;
             cardTitle.normal.textColor = previousTextColor;
             GUI.matrix = previousMatrix;
+        }
+
+        // Draw in a fixed local space so the same demonstration fits both player panes.
+        // Unscaled time keeps the demonstration moving while tutorial gameplay is paused.
+        void DrawTutorialController(Rect rect, int step, Color accent)
+        {
+            Matrix4x4 previous = GUI.matrix;
+            GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y, 0f),
+                Quaternion.identity, new Vector3(rect.width / 200f, rect.height / 110f, 1f));
+            float cycle = Mathf.Repeat(Time.unscaledTime, 2.4f);
+            bool pressed = cycle < 1.65f;
+            Color shell = new Color32(104, 119, 136, 255);
+            Color idle = new Color32(38, 48, 63, 255);
+            Color active = Color.Lerp(accent, Cream, .15f + .2f * Mathf.Sin(Time.unscaledTime * 6f));
+
+            // Rounded shoulders, central body and angled grips form a gamepad silhouette.
+            TutorialControllerOval(new Rect(12, 23, 68, 81), shell);
+            TutorialControllerOval(new Rect(120, 23, 68, 81), shell);
+            TutorialControllerOval(new Rect(22, 19, 156, 65), shell);
+            Panel(new Rect(45, 28, 110, 49), shell);
+            bool boost = step == 4 && pressed;
+            DrawKeyboardKeycap(new Rect(29, 0, 41, 19), "LT");
+            DrawKeyboardKeycap(new Rect(130, 0, 41, 19), "RT");
+            Panel(new Rect(29, 19, 41, 5), boost ? active : idle);
+            Panel(new Rect(130, 19, 41, 5), boost ? active : idle);
+            Panel(new Rect(24, 26, 45, 7), boost ? active : idle);
+            GUI.Label(new Rect(77, 28, 46, 20), boost ? "HOLD" : "", new GUIStyle(caption)
+                { fontSize = 11, alignment = TextAnchor.MiddleCenter });
+
+            bool useStick = step == 0 || step == 1 || step == 3 || step == 4 || step == 7;
+            Vector2 offset = Vector2.zero;
+            if (useStick && pressed)
+            {
+                if (step <= 1)
+                {
+                    int direction = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 3;
+                    offset = direction == 0 ? Vector2.left : direction == 1 ? Vector2.up : Vector2.right;
+                }
+                else if (step == 7) offset = Vector2.down;
+                else offset = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 2 == 0 ? Vector2.up : Vector2.down;
+            }
+            TutorialControllerOval(new Rect(33, 36, 38, 38), useStick ? accent : idle);
+            TutorialControllerOval(new Rect(37 + offset.x * 9f, 40 - offset.y * 9f, 30, 30), idle);
+            TutorialControllerOval(new Rect(42 + offset.x * 9f, 45 - offset.y * 9f, 20, 20),
+                useStick && pressed ? active : shell);
+            Panel(new Rect(72, 70, 9, 25), idle);
+            Panel(new Rect(64, 78, 25, 9), idle);
+            TutorialControllerOval(new Rect(110, 70, 25, 25), idle);
+            TutorialControllerButton(new Rect(145, 61, 21, 21), "A", (step == 2 || step == 5) && pressed, active);
+            TutorialControllerButton(new Rect(166, 42, 21, 21), "B", step == 7 && cycle >= 1.65f, active);
+            TutorialControllerButton(new Rect(124, 42, 21, 21), "X", false, active);
+            TutorialControllerButton(new Rect(145, 23, 21, 21), "Y", false, active);
+            GUI.matrix = previous;
+        }
+
+        void TutorialControllerButton(Rect rect, string label, bool pressed, Color accent)
+        {
+            TutorialControllerOval(rect, pressed ? accent : Ink);
+            GUIStyle style = new GUIStyle(caption) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
+            style.normal.textColor = pressed ? Ink : Cream;
+            GUI.Label(rect, label, style);
+        }
+
+        void TutorialControllerOval(Rect rect, Color color)
+        {
+            // Horizontal strips avoid allocating textures or meshes during GUI repaint.
+            for (float y = 0; y < rect.height; y += 2f)
+            {
+                float normalized = (y + 1f) / rect.height * 2f - 1f;
+                float halfWidth = rect.width * .5f * Mathf.Sqrt(Mathf.Max(0f, 1f - normalized * normalized));
+                Panel(new Rect(rect.center.x - halfWidth, rect.y + y, halfWidth * 2f,
+                    Mathf.Min(2f, rect.height - y)), color);
+            }
         }
 
         void DrawTutorialKeyHint(Rect rect, string key)

@@ -49,6 +49,157 @@ namespace CrazyElevator.EditorTools
         static readonly Color Sand = C(215, 202, 162);
         static readonly Color Gold = C(218, 170, 69);
 
+        // Editor-only authoring: gameplay and tutorials reuse this saved geometry.
+        [MenuItem("Tools/Crazy Elevator/Rebuild Gear Rust Gauge")]
+        public static void RebuildGearGauge()
+        {
+            const string meshFolder = PersonaFolder + "/Meshes";
+            const string prefabPath = PersonaFolder + "/Prefabs/StarfishImpairmentGauge.prefab";
+            EnsureFolder(meshFolder);
+            Material dormant = GearMaterial("Dormant", C(97, 125, 136));
+            Material mild = GearMaterial("Mild", C(247, 190, 48));
+            Material worn = GearMaterial("Worn", C(243, 119, 39));
+            Material severe = GearMaterial("Severe", C(226, 67, 55));
+            Material ink = GearMaterial("Crack", Ink);
+            Material tool = GearMaterial("Wrench", White);
+            Mesh ring = BuildGaugeGearMesh();
+            string meshPath = meshFolder + "/RustGear.asset";
+            Mesh savedMesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (savedMesh)
+            {
+                EditorUtility.CopySerialized(ring, savedMesh);
+                UnityEngine.Object.DestroyImmediate(ring);
+            }
+            else { AssetDatabase.CreateAsset(ring, meshPath); savedMesh = ring; }
+
+            // Load the original asset to retain its component IDs and all scene references.
+            GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                var gauge = root.GetComponent<StarfishImpairmentView>();
+                root.name = "Gear rust indicator";
+                gauge.inactiveMaterial = dormant;
+                gauge.severityMaterials = new[] { mild, worn, severe };
+                for (int i = 0; i < gauge.starfish.Length; i++)
+                {
+                    Transform gear = gauge.starfish[i];
+                    gear.name = "Gear " + (i + 1);
+                    while (gear.childCount > 0)
+                        UnityEngine.Object.DestroyImmediate(gear.GetChild(0).gameObject);
+                    var metal = new GameObject("Gear metal");
+                    metal.transform.SetParent(gear, false);
+                    metal.AddComponent<MeshFilter>().sharedMesh = savedMesh;
+                    var renderer = metal.AddComponent<MeshRenderer>();
+                    renderer.sharedMaterial = dormant;
+                    renderer.shadowCastingMode = ShadowCastingMode.Off;
+                    renderer.receiveShadows = false;
+                    // A dark zigzag fracture is authored on both sides for both cameras.
+                    for (int side = -1; side <= 1; side += 2)
+                    {
+                        Vector2[] crack = { new Vector2(.047f, .055f), new Vector2(.095f, .09f),
+                            new Vector2(.08f, .135f), new Vector2(.13f, .17f), new Vector2(.132f, .184f) };
+                        for (int segment = 0; segment < crack.Length - 1; segment++)
+                        {
+                            Vector2 from = crack[segment], to = crack[segment + 1];
+                            Vector2 mid = (from + to) * .5f;
+                            Transform cut = GaugePart(gear, "Damage crack " + side + " " + segment,
+                                new Vector3(mid.x, mid.y, side * .034f),
+                                new Vector3(.018f, (to - from).magnitude + .008f, .004f), ink);
+                            cut.localRotation = Quaternion.Euler(0, 0,
+                                -Mathf.Atan2(to.x - from.x, to.y - from.y) * Mathf.Rad2Deg);
+                            cut.gameObject.SetActive(false);
+                        }
+                        if (i != 2) continue;
+                        var wrench = new GameObject("Repair wrench " + side).transform;
+                        wrench.SetParent(gear, false);
+                        wrench.localPosition = new Vector3(.125f, -.12f, side * .055f);
+                        wrench.localRotation = Quaternion.Euler(0, 0, -35f);
+                        GaugePart(wrench, "Handle", new Vector3(0, -.035f, 0), new Vector3(.045f, .20f, .015f), tool);
+                        GaugePart(wrench, "Jaw base", new Vector3(0, .065f, 0), new Vector3(.12f, .05f, .015f), tool);
+                        GaugePart(wrench, "Jaw left", new Vector3(-.045f, .105f, 0), new Vector3(.03f, .07f, .015f), tool);
+                        GaugePart(wrench, "Jaw right", new Vector3(.045f, .105f, 0), new Vector3(.03f, .07f, .015f), tool);
+                        wrench.gameObject.SetActive(false);
+                    }
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+            AssetDatabase.SaveAssets();
+            Debug.Log("Saved the editable damaged gear gauge; scene references preserved.");
+        }
+
+        static Material GearMaterial(string name, Color color)
+        {
+            string path = PersonaFolder + "/Materials/Gear" + name + ".mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!material)
+            {
+                material = new Material(Shader.Find(StorybookShaderName));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.SetColor("_BaseColor", color);
+            material.SetColor("_Color", color);
+            material.SetColor("_PatternColor", color * .7f);
+            material.SetFloat("_PatternStrength", 0);
+            material.SetFloat("_Metallic", 0);
+            material.SetFloat("_Smoothness", 0);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static Transform GaugePart(Transform parent, string name, Vector3 position, Vector3 scale, Material material)
+        {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
+            UnityEngine.Object.DestroyImmediate(part.GetComponent<Collider>());
+            var renderer = part.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            return part.transform;
+        }
+
+        static Mesh BuildGaugeGearMesh()
+        {
+            // Eight broad teeth, a genuine axle hole, and flat front/back surfaces.
+            const int segments = 32;
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            for (int i = 0; i < segments; i++)
+            {
+                int next = (i + 1) % segments;
+                float a = (i + .5f) * Mathf.PI * 2 / segments;
+                float b = (next + .5f) * Mathf.PI * 2 / segments;
+                float ra = i % 4 == 1 || i % 4 == 2 ? .25f : .195f;
+                float rb = next % 4 == 1 || next % 4 == 2 ? .25f : .195f;
+                Vector3 outerA = new Vector3(Mathf.Cos(a) * ra, Mathf.Sin(a) * ra, 0);
+                Vector3 outerB = new Vector3(Mathf.Cos(b) * rb, Mathf.Sin(b) * rb, 0);
+                Vector3 innerA = new Vector3(Mathf.Cos(a) * .075f, Mathf.Sin(a) * .075f, 0);
+                Vector3 innerB = new Vector3(Mathf.Cos(b) * .075f, Mathf.Sin(b) * .075f, 0);
+                Vector3 front = Vector3.forward * .03f;
+                GaugeQuad(vertices, triangles, innerA + front, outerA + front, outerB + front, innerB + front);
+                GaugeQuad(vertices, triangles, innerB - front, outerB - front, outerA - front, innerA - front);
+                GaugeQuad(vertices, triangles, outerA + front, outerA - front, outerB - front, outerB + front);
+                GaugeQuad(vertices, triangles, innerB + front, innerB - front, innerA - front, innerA + front);
+            }
+            var mesh = new Mesh { name = "Rust gear with axle hole" };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        static void GaugeQuad(List<Vector3> vertices, List<int> triangles, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            int start = vertices.Count;
+            vertices.AddRange(new[] { a, b, c, d });
+            triangles.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
+        }
+
         [MenuItem("Tools/Crazy Elevator/Rebuild Illustrated Passenger Prefabs")]
         public static void Rebuild()
         {

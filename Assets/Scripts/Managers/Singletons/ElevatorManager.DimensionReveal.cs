@@ -160,7 +160,7 @@ namespace CrazyElevator.Managers
             : world == WorldBand.Candy
                 ? new[] { "Crying drains patience. Grandma calms the baby.", "On-time delivery pays a bonus.",
                     "Three spaces. Speeds the elevator up." }
-                : new[] { "Clears rust while aboard.", "Slows the elevator over time.", "Hold repair to patch it back up." };
+                : new[] { "Fixes damaged gears while aboard.", "Cracked gears slow the elevator over time.", "Hold repair to patch the gears." };
 
         void PrepareDimensionLineup(WorldBand world)
         {
@@ -188,24 +188,17 @@ namespace CrazyElevator.Managers
             dimensionLineupCamera.enabled = any;
         }
 
-        // Rust and repair have no passenger, so they show the authored starfish gauge and shovel.
+        // Rust and repair show the same authored gears as the live impairment meter.
         GameObject InstantiateLineupModel(string kind, Transform slot)
         {
-            if (kind == "RUST")
+            if (kind == "RUST" || kind == "REPAIR")
             {
                 if (impairmentGaugePrefab == null) return null;
                 StarfishImpairmentView gauge = Instantiate(impairmentGaugePrefab, slot, false);
-                gauge.SetSeverity(3);
-                // The starfish faces +Z (toward the cabin camera); the lineup camera looks from -Z.
+                gauge.SetSeverity(kind == "RUST" ? 3 : 0);
+                // Gears face +Z toward the cabin camera; the lineup camera looks from -Z.
                 gauge.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                 return gauge.gameObject;
-            }
-            if (kind == "REPAIR")
-            {
-                if (handymanShovelPrefab == null) return null;
-                Transform shovel = Instantiate(handymanShovelPrefab, slot, false);
-                shovel.localRotation = Quaternion.Euler(0f, 0f, -25f);
-                return shovel.gameObject;
             }
             GameObject source = FindPassengerTemplate(kind);
             return source != null ? Instantiate(source, slot, false) : null;

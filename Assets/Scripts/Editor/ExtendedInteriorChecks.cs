@@ -38,6 +38,217 @@ public static class ExtendedInteriorChecks
     static void Call(Game game, string name, params object[] args) => typeof(Game).GetMethod(name, Flags).Invoke(game, args);
     static void Require(bool value, string message) { if (!value) throw new Exception(message); }
 
+    // Run explicitly with -executeMethod ExtendedInteriorChecks.CheckGearGaugeBatch.
+    // Opens Main for reference checks, but never saves it or enters Play Mode.
+    [MenuItem("Tools/Crazy Elevator/Check Gear Gauge")]
+    public static void CheckGearGaugeBatch()
+    {
+        const string output = "Temp/GearChecks";
+        Directory.CreateDirectory(output);
+        string sceneBefore = File.ReadAllText(Scene);
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path != Scene)
+        {
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+                Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty,
+                    "Open Main first; gear checks will not discard unsaved scene changes.");
+            EditorSceneManager.OpenScene(Scene, OpenSceneMode.Single);
+        }
+        var game = UnityEngine.Object.FindAnyObjectByType<Game>();
+        Require(game && game.sceneView && game.impairmentGaugePrefab,
+            "Main must retain its elevator, scene view, and assigned impairment gauge.");
+        Require(game.GetComponent<CrazyElevator.Managers.PassengerManager>(),
+            "The player elevator must retain its PassengerManager.");
+        string[] managers = { "GameManager", "InputManager", "SfxManager", "MusicManager", "MenuManager" };
+        foreach (string manager in managers)
+        {
+            GameObject named = GameObject.Find(manager);
+            Require(named && named.GetComponent(manager), "Main lost its named " + manager + " object/component.");
+        }
+        Require(AssetDatabase.GetAssetPath(game.impairmentGaugePrefab)
+            == "Assets/Static/ElevatorPersonas/Prefabs/StarfishImpairmentGauge.prefab",
+            "Main no longer points at the shared authored gear prefab.");
+
+        GameObject rig = new GameObject("Gear verification preview");
+        rig.transform.position = new Vector3(4000, 4000, 4000);
+        Camera camera = new GameObject("Gear verification camera").AddComponent<Camera>();
+        camera.transform.SetParent(rig.transform, false);
+        camera.transform.localPosition = new Vector3(0, 0, 4);
+        camera.transform.localRotation = Quaternion.Euler(0, 180, 0);
+        camera.orthographic = true;
+        camera.orthographicSize = .38f;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = new Color(.035f, .07f, .09f, 1);
+        camera.cullingMask = 1 << 28;
+        camera.enabled = false;
+        Light light = new GameObject("Gear verification key").AddComponent<Light>();
+        light.transform.SetParent(rig.transform, false);
+        light.transform.localRotation = Quaternion.Euler(20, 155, 0);
+        light.type = LightType.Directional;
+        light.intensity = 1.6f;
+        light.cullingMask = 1 << 28;
+        var texture = new RenderTexture(1440, 540, 24);
+        texture.Create();
+        camera.targetTexture = texture;
+        var gauge = UnityEngine.Object.Instantiate(game.impairmentGaugePrefab, rig.transform, false);
+        var second = UnityEngine.Object.Instantiate(game.impairmentGaugePrefab, rig.transform, false);
+        second.gameObject.SetActive(false);
+        try
+        {
+            SetGearPreviewLayer(gauge.gameObject);
+            Require(gauge.starfish != null && gauge.starfish.Length == 3,
+                "The impairment meter must have three authored gears.");
+            Require(gauge.GetComponentInChildren<TextMesh>(true) == null,
+                "The gear meter must remain visual without a text label.");
+            foreach (MeshFilter filter in gauge.GetComponentsInChildren<MeshFilter>(true))
+                Require(filter.sharedMesh, "The gear prefab has a missing mesh: " + filter.name);
+            for (int level = 0; level <= 3; level++)
+            {
+                gauge.SetSeverity(level);
+                second.SetSeverity(level);
+                Require(gauge.DisplayedSeverity == level && second.DisplayedSeverity == level,
+                    "Inside and outside gear meters must agree on severity.");
+                for (int i = 0; i < gauge.starfish.Length; i++)
+                {
+                    Transform gear = gauge.starfish[i];
+                    Require(gear && gear.localScale.x > .5f, "A gear disappeared from the indicator.");
+                    bool metal = false, crack = false, wrench = false;
+                    foreach (MeshRenderer surface in gear.GetComponentsInChildren<MeshRenderer>(true))
+                    {
+                        if (surface.name.StartsWith("Gear metal"))
+                        {
+                            metal = true;
+                            Require(surface.sharedMaterial == (i < level ? gauge.severityMaterials[level - 1] : gauge.inactiveMaterial),
+                                "Gear severity must select its authored damage color.");
+                        }
+                        else if (surface.name.StartsWith("Damage crack"))
+                        {
+                            crack = true;
+                            Require(surface.gameObject.activeSelf == (i < level), "Cracks must only appear on damaged gears.");
+                        }
+                    }
+                    foreach (Transform part in gear.GetComponentsInChildren<Transform>(true))
+                        if (part.name.StartsWith("Repair wrench"))
+                        {
+                            wrench = true;
+                            Require(part.gameObject.activeSelf == (level == 3 && i == 2),
+                                "The repair wrench must appear only at severe damage.");
+                        }
+                    Require(metal && crack, "Each gear needs its authored ring and visible damage detail.");
+                    Require(wrench == (i == 2), "The third gear must retain its authored repair wrench overlay.");
+                }
+                WriteGearPreview(camera, texture, output + "/gear-level-" + level + ".png");
+            }
+            // Returning directly to repaired must restore visible healthy gears immediately.
+            gauge.SetSeverity(0);
+            Require(gauge.DisplayedSeverity == 0 && gauge.starfish[0].localScale.x > .5f,
+                "Immediate repair must leave a visible healthy gear indicator.");
+            gauge.gameObject.SetActive(false);
+            foreach (string kind in new[] { "RUST", "REPAIR" })
+            {
+                GameObject model = (GameObject)typeof(Game).GetMethod("InstantiateLineupModel", Flags)
+                    .Invoke(game, new object[] { kind, rig.transform });
+                Require(model, "The underwater tutorial lost its " + kind + " visual.");
+                var tutorialGauge = model.GetComponent<StarfishImpairmentView>();
+                Require(tutorialGauge && tutorialGauge.DisplayedSeverity == (kind == "RUST" ? 3 : 0),
+                    "The tutorial must use damaged gears for rust and healthy gears for repair.");
+                // Both sides of the authored mesh must render; tutorials face the opposite camera.
+                SetGearPreviewLayer(model);
+                WriteGearPreview(camera, texture, output + "/tutorial-" + kind.ToLowerInvariant() + ".png");
+                UnityEngine.Object.DestroyImmediate(model);
+            }
+            CheckGearHandymanPreview(game, output);
+            Require(sceneBefore == File.ReadAllText(Scene), "Gear checks must not modify Main.");
+            File.WriteAllText(output + "/result.txt", "PASS: Main references and named managers; three authored gears with valid meshes; no text label; matching inside/outside severity; damage colors and cracks; severe repair wrench; immediate visible repaired state; tutorial damaged/healthy gear models; handyman popup shows healthy gears without cleaning or shrinking.\n");
+            Debug.Log("PASS: Gear gauge wiring, severity, repaired state, and tutorial preview checks. Renders: " + output);
+        }
+        finally
+        {
+            camera.targetTexture = null;
+            texture.Release();
+            UnityEngine.Object.DestroyImmediate(texture);
+            UnityEngine.Object.DestroyImmediate(rig);
+        }
+    }
+
+    static void CheckGearHandymanPreview(Game game, string output)
+    {
+        Transform existingStage = (Transform)Get(game, "encounterPreviewStage");
+        Require(existingStage == null, "Finish the existing encounter preview before checking the handyman popup.");
+        try
+        {
+            Require(game.PrepareAbilityIntro("HANDYMAN"), "The handyman popup could not create its authored models.");
+            Transform handyman = (Transform)Get(game, "abilityIntroPassenger");
+            Transform opponent = (Transform)Get(game, "abilityIntroOpponent");
+            var gears = opponent.GetComponentInChildren<StarfishImpairmentView>(true);
+            Require(gears && gears.DisplayedSeverity == 0,
+                "The handyman popup must immediately show healthy gears.");
+            Vector3 handymanPosition = handyman.localPosition, handymanScale = handyman.localScale;
+            Vector3 gearPosition = opponent.localPosition, gearScale = opponent.localScale;
+            Quaternion handymanRotation = handyman.localRotation, gearRotation = opponent.localRotation;
+            Vector3[] iconScales = Array.ConvertAll(gears.starfish, icon => icon.localScale);
+            game.AnimateAbilityIntro(1.5f);
+            Require(handyman.localPosition == handymanPosition && handyman.localScale == handymanScale
+                && handyman.localRotation == handymanRotation && opponent.localPosition == gearPosition
+                && opponent.localScale == gearScale && opponent.localRotation == gearRotation,
+                "The handyman popup must show the result without a cleaning animation.");
+            for (int i = 0; i < gears.starfish.Length; i++)
+                Require(gears.starfish[i].localScale == iconScales[i] && iconScales[i].x > .5f,
+                    "The repaired gear icons must remain visible without shrinking away.");
+            Require(!(bool)Property(game, "HandymanRepairActive"),
+                "Showing the handyman popup must not start an in-cabin cleaning sequence.");
+            Camera camera = (Camera)Get(game, "encounterPreviewCamera");
+            WriteGearPreview(camera, camera.targetTexture, output + "/handyman-popup.png");
+        }
+        finally
+        {
+            // Runtime cleanup uses deferred Destroy; editor checks release their own temporary stage immediately.
+            Camera camera = (Camera)Get(game, "encounterPreviewCamera");
+            RenderTexture texture = (RenderTexture)Get(game, "encounterPreviewTexture");
+            if (camera) camera.targetTexture = null;
+            if (texture)
+            {
+                texture.Release();
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+            Transform stage = (Transform)Get(game, "encounterPreviewStage");
+            if (stage) UnityEngine.Object.DestroyImmediate(stage.gameObject);
+            foreach (string field in new[] { "encounterPreviewStage", "encounterPreviewPivot", "encounterPreviewCamera",
+                "encounterPreviewTexture", "encounterPreviewModel", "abilityIntroPassenger", "abilityIntroOpponent",
+                "abilityIntroOwnCar", "abilityIntroKind", "abilityIntroVip" }) Set(game, field, null);
+        }
+    }
+
+    static void SetGearPreviewLayer(GameObject model)
+    {
+        foreach (Transform part in model.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = 28;
+    }
+
+    static void WriteGearPreview(Camera camera, RenderTexture texture, string path)
+    {
+        camera.Render();
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = texture;
+        var pixels = new Texture2D(texture.width, texture.height, TextureFormat.RGB24, false);
+        try
+        {
+            pixels.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            pixels.Apply();
+            Color32[] samples = pixels.GetPixels32();
+            Color32 background = samples[0];
+            int visible = 0;
+            foreach (Color32 sample in samples)
+                if (Mathf.Abs(sample.r - background.r) + Mathf.Abs(sample.g - background.g)
+                    + Mathf.Abs(sample.b - background.b) > 24) visible++;
+            Require(visible > 500, "The gear preview rendered empty: " + path);
+            File.WriteAllBytes(path, pixels.EncodeToPNG());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(pixels);
+            RenderTexture.active = previous;
+        }
+    }
+
     static void Poll()
     {
         if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
@@ -47,6 +258,27 @@ public static class ExtendedInteriorChecks
         try { action = File.ReadAllText(request).Trim(); }
         catch (IOException) { return; }
         if (action.Length == 0) return;
+        if (action == "gear-checks")
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorApplication.isPlaying = false;
+                return;
+            }
+            File.Delete(request);
+            try
+            {
+                CrazyElevator.EditorTools.PassengerPrefabBuilder.RebuildGearGauge();
+                CheckGearGaugeBatch();
+            }
+            catch (Exception error)
+            {
+                Directory.CreateDirectory("Temp/GearChecks");
+                File.WriteAllText("Temp/GearChecks/result.txt", "FAIL: " + error);
+                Debug.LogException(error);
+            }
+            return;
+        }
         if (!EditorApplication.isPlaying)
         {
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path != Scene) return;

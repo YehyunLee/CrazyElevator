@@ -1298,7 +1298,7 @@ namespace CrazyElevator.Managers
                 if (repairProgress >= 2f)
                 {
                     repairedFor = 20f; repairProgress = 0; rustExposure = 0; Play(ding);
-                    notice = "Rust reduced to one starfish. A handyman onboard restores full performance.";
+                    notice = "Gears patched. A handyman onboard restores full performance.";
                 }
             }
             else repairProgress = 0;
@@ -1663,13 +1663,13 @@ namespace CrazyElevator.Managers
 
         void InitializeImpairmentIndicators()
         {
-            if (!impairmentGaugePrefab) { Debug.LogError("Assign the starfish impairment gauge.", this); return; }
+            if (!impairmentGaugePrefab) { Debug.LogError("Assign the gear impairment gauge.", this); return; }
             interiorImpairment = Instantiate(impairmentGaugePrefab, stage, false);
-            interiorImpairment.name = "Interior starfish rust meter";
+            interiorImpairment.name = "Interior gear rust meter";
             interiorImpairment.transform.localPosition = new Vector3(0, 3.31f, .48f);
             interiorImpairment.transform.localScale = Vector3.one * .85f;
             exteriorImpairment = Instantiate(impairmentGaugePrefab, exteriorCar, false);
-            exteriorImpairment.name = "Exterior starfish rust meter";
+            exteriorImpairment.name = "Exterior gear rust meter";
             exteriorImpairment.transform.localPosition = new Vector3(0, 1.65f, -1.05f);
             exteriorImpairment.transform.localRotation = Quaternion.Euler(0, 180, 0);
             exteriorImpairment.transform.localScale = Vector3.one * 1.8f;
@@ -1683,18 +1683,18 @@ namespace CrazyElevator.Managers
         }
         void UpdateImpairmentIndicators()
         {
-            // Keep the captured damage visible until Casey sweeps it away.
-            int severity = HandymanRepairPending ? repairStarfishLevel : ImpairmentLevel;
-            bool showStarfish = InWater;
+            // Keep both views synchronized with the current gear damage.
+            int severity = HandymanRepairPending ? repairGearLevel : ImpairmentLevel;
+            bool showGears = InWater;
             if (interiorImpairment)
             {
                 interiorImpairment.SetSeverity(severity);
-                interiorImpairment.gameObject.SetActive(showStarfish);
+                interiorImpairment.gameObject.SetActive(showGears);
             }
             if (exteriorImpairment)
             {
                 exteriorImpairment.SetSeverity(severity);
-                exteriorImpairment.gameObject.SetActive(showStarfish);
+                exteriorImpairment.gameObject.SetActive(showGears);
             }
         }
         string ImpairmentDescription

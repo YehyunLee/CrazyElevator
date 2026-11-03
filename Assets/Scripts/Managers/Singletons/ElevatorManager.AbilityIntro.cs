@@ -74,10 +74,11 @@ namespace CrazyElevator.Managers
             var model = Instantiate(source, slot.transform, false);
             model.name = label + " ability preview";
             model.SetActive(true);
-            var stars = model.GetComponent<StarfishImpairmentView>();
-            if (stars != null)
+            var gears = model.GetComponent<StarfishImpairmentView>();
+            if (gears != null)
             {
-                stars.SetSeverity(3);
+                // Handyman repair is immediate; the popup shows the restored gears.
+                gears.SetSeverity(0);
                 model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             }
             MakeStillPreviewModel(model, accent ?? Teal);
@@ -108,6 +109,18 @@ namespace CrazyElevator.Managers
                 return;
             }
             if (abilityIntroOpponent == null) return;
+            if (abilityIntroKind == "HANDYMAN")
+            {
+                // Show the result without replaying a cleaning sequence.
+                abilityIntroPassenger.localPosition = new Vector3(-1.25f, 0f, 0f);
+                abilityIntroPassenger.localRotation = Quaternion.Euler(0f, 10f, 0f);
+                abilityIntroOpponent.localPosition = new Vector3(1.25f, 0f, 0f);
+                abilityIntroOpponent.localRotation = Quaternion.identity;
+                encounterPreviewCamera.orthographicSize = 2.1f;
+                encounterPreviewCamera.transform.localPosition = new Vector3(0f, 0f, -12f);
+                encounterPreviewCamera.transform.localRotation = Quaternion.identity;
+                return;
+            }
             float approach = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.75f, 1.5f, time));
             float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(1.5f, 2.15f, time)) * Mathf.PI);
             float recoil = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.55f, 2.2f, time));
@@ -126,8 +139,7 @@ namespace CrazyElevator.Managers
             abilityIntroOpponent.localRotation = abilityIntroKind == "DIVER"
                 ? Quaternion.Euler(0f, time * 260f, impact * 18f)
                 : Quaternion.Euler(0f, -12f, speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
-            if (abilityIntroKind == "HANDYMAN")
-                abilityIntroOpponent.localScale = Vector3.one * (1f - recoil * .85f);
+
             // Start on the passenger, then pivot/zoom out to reveal the threat.
             float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.25f, 1.2f, time));
             encounterPreviewCamera.orthographicSize = Mathf.Lerp(1.2f, 2.1f, reveal);
