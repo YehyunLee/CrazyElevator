@@ -239,32 +239,46 @@ namespace CrazyElevator.Managers
             return false;
         }
 
-        // Discretize the stick so small analog fluctuations do not repeatedly
-        // reopen a door or keep resetting the automatic boarding delay.
-        static int BoardingDirection(Vector2 direction)
-        {
-            if (direction.magnitude < .55f) return -1;
-            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-                return direction.x < 0f ? 0 : 2;
-            return direction.y > 0f ? 1 : 3;
-        }
-
         void ReadBoardingDoorSelection(InputManager.SeatInput input)
         {
             if (phase != Phase.Boarding) return;
             Vector2 direction = input.Select;
-            int slot = BoardingDirection(direction);
-            if (slot >= 0 && slot != BoardingDirection(lastSelectionDirection))
+            if (input.BoardingLeftPressed || input.BoardingFrontPressed || input.BoardingRightPressed)
             {
-                if (slot == 3) SelectInDirection(Vector2.down);
-                else
-                {
-                    BoardingDoor door = BoardingDoorAtScreenSlot(slot);
-                    if (!boardingDoorOpen[(int)door]) OpenBoardingDoor(door);
-                    else if (selectedRider != null) SelectRider(null);
-                }
+                if (input.BoardingLeftPressed)
+                    HandleBoardingDoorPress(BoardingDoorAtScreenSlot(0));
+                if (input.BoardingFrontPressed)
+                    HandleBoardingDoorPress(BoardingDoor.Front);
+                if (input.BoardingRightPressed)
+                    HandleBoardingDoorPress(BoardingDoorAtScreenSlot(2));
+                lastSelectionDirection = direction;
+                return;
             }
+
+            // Treat each axis independently so a diagonal stick press can
+            // open both matching entrances in the same frame.
+            int horizontal = BoardingAxis(direction.x);
+            int previousHorizontal = BoardingAxis(lastSelectionDirection.x);
+            if (horizontal != 0 && horizontal != previousHorizontal)
+                HandleBoardingDoorPress(BoardingDoorAtScreenSlot(horizontal < 0 ? 0 : 2));
+
+            int vertical = BoardingAxis(direction.y);
+            int previousVertical = BoardingAxis(lastSelectionDirection.y);
+            if (vertical > 0 && vertical != previousVertical)
+                HandleBoardingDoorPress(BoardingDoor.Front);
+            else if (vertical < 0 && vertical != previousVertical)
+                SelectInDirection(Vector2.down);
+
             lastSelectionDirection = direction;
+        }
+
+        static int BoardingAxis(float value)
+            => Mathf.Abs(value) < .55f ? 0 : value < 0f ? -1 : 1;
+
+        void HandleBoardingDoorPress(BoardingDoor door)
+        {
+            if (!boardingDoorOpen[(int)door]) OpenBoardingDoor(door);
+            else if (selectedRider != null) SelectRider(null);
         }
 
         // Tint the authored doorway frames, leaving the transparent panels alone.

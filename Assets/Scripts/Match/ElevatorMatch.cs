@@ -985,6 +985,7 @@ namespace CrazyElevator.Match
         static readonly Color Coral = new Color32(255, 124, 104, 255);
         static readonly Color Gold = new Color32(255, 205, 82, 255);
         static readonly Color Ink = new Color32(25, 31, 46, 255);
+        static readonly string[] VipNavigationArrows = { "←", "↖", "↑", "↗", "→", "↘", "↓", "↙" };
         [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue, collisionWord,
             resultTitle, resultName, resultPoints, resultWinner, roundStatus, sharedClock,
             resultSmall, resultWorld, resultAction, resultKey, resultWinBadge;
@@ -1279,15 +1280,6 @@ namespace CrazyElevator.Match
                 GUI.Label(marker, arrow + (rival.IsNpc ? " CPU " : " RIVAL ")
                     + "F" + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor), rival.ActiveMinFloor, rival.ActiveMaxFloor)), label);
             }
-            if (matchVip != null && !matchVip.Boarded && !matchVip.Resolved)
-            {
-                Rect vip = new Rect(view.x + 8f, view.y + 78f, Mathf.Min(270f, view.width * .55f), 28f);
-                Fill(vip, new Color(Ink.r, Ink.g, Ink.b, .9f));
-                label.normal.textColor = Gold;
-                string side = matchVip.OriginStop < ElevatorRound.CenterStop ? " L" : matchVip.OriginStop > ElevatorRound.CenterStop ? " R" : " MID";
-                GUI.Label(vip, "VIP F" + ElevatorRound.FloorNumber(matchVip.Origin) + side
-                    + " → F" + ElevatorRound.FloorNumber(matchVip.Destination) + " +250", label);
-            }
             if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
             {
                 Rect message = new Rect(view.x + view.width * .15f, view.y + view.height * .18f, view.width * .7f, 38f);
@@ -1295,7 +1287,10 @@ namespace CrazyElevator.Match
                 label.normal.textColor = contestMessageTimes[seat] > 0f ? Gold : Coral;
                 GUI.Label(message, contestMessageTimes[seat] > 0f ? contestMessages[seat] : eventMessage, label);
             }
-            Camera camera = actor.sceneView != null ? actor.sceneView.exteriorCamera : null;
+            Camera camera = actor.Traveling
+                ? (actor.sceneView != null ? actor.sceneView.exteriorCamera : null)
+                : actor.CabinCamera;
+            DrawVipNavigator(actor, view, camera);
             if (camera == null || !camera.enabled) return;
             foreach (CandyTrail trail in candyTrails)
             {
@@ -1311,6 +1306,88 @@ namespace CrazyElevator.Match
                 label.fontSize = 13;
                 GUI.Label(tag, "STICKY", label);
             }
+        }
+
+        void DrawVipNavigator(Game actor, Rect view, Camera camera)
+        {
+            if (matchVip == null || matchVip.Boarded || matchVip.Resolved || camera == null
+                || player == null || !player.TryGetWaitingPassengerWorldPosition(matchVip, out Vector3 worldPosition)) return;
+
+            Vector3 projected = camera.WorldToScreenPoint(worldPosition + Vector3.up * 2.65f);
+            Vector2 target = new Vector2(projected.x, Screen.height - projected.y);
+            Vector2 direction = target - view.center;
+            if (projected.z < 0f) direction = -direction;
+
+            float sideInset = Mathf.Clamp(view.width * .06f, 24f, 42f);
+            Rect safeView = Rect.MinMaxRect(view.xMin + sideInset, view.yMin + 82f,
+                view.xMax - sideInset, view.yMax - 72f);
+            if (safeView.width <= 0f || safeView.height <= 0f) return;
+
+            bool targetVisible = projected.z > 0f && safeView.Contains(target);
+            Vector2 marker = target;
+            if (!targetVisible)
+            {
+                if (direction.sqrMagnitude < .01f)
+                    direction = new Vector2(0f, matchVip.Origin >= actor.CurrentFloor ? -1f : 1f);
+                direction.Normalize();
+                Vector2 center = safeView.center;
+                float xDistance = Mathf.Abs(direction.x) > .001f
+                    ? (safeView.width * .5f) / Mathf.Abs(direction.x) : float.MaxValue;
+                float yDistance = Mathf.Abs(direction.y) > .001f
+                    ? (safeView.height * .5f) / Mathf.Abs(direction.y) : float.MaxValue;
+                marker = center + direction * Mathf.Min(xDistance, yDistance);
+            }
+
+            float size = Mathf.Clamp(view.width * .055f, 36f, 52f);
+            var arrow = new GUIStyle(centred)
+            {
+                fontSize = Mathf.RoundToInt(size),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false
+            };
+            arrow.normal.textColor = Gold;
+            if (targetVisible)
+            {
+                float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f;
+                GUI.Label(new Rect(marker.x - size * .5f, marker.y - size + bob,
+                    size, size), "▼", arrow);
+                DrawVipTag(new Vector2(marker.x, marker.y - size * 1.25f + bob), view.width);
+                return;
+            }
+
+            GUI.Label(new Rect(marker.x - size * .5f, marker.y - size * .5f,
+                size, size), "●", arrow);
+            arrow.fontSize = Mathf.RoundToInt(size * .48f);
+            arrow.normal.textColor = Ink;
+            GUI.Label(new Rect(marker.x - size * .5f, marker.y - size * .5f,
+                size, size), NavigationArrow(direction), arrow);
+            DrawVipTag(marker - direction * size * .95f, view.width);
+        }
+
+        static string NavigationArrow(Vector2 direction)
+        {
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            int index = Mathf.RoundToInt((angle + 180f) / 45f) % VipNavigationArrows.Length;
+            return VipNavigationArrows[index];
+        }
+
+        void DrawVipTag(Vector2 center, float viewWidth)
+        {
+            float width = Mathf.Clamp(viewWidth * .12f, 58f, 78f);
+            const float height = 24f;
+            Rect tag = new Rect(center.x - width * .5f, center.y - height * .5f, width, height);
+            Fill(tag, Gold);
+            Fill(new Rect(tag.x + 2f, tag.y + 2f, tag.width - 4f, tag.height - 4f), Ink);
+            var style = new GUIStyle(centred)
+            {
+                fontSize = 14,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false
+            };
+            style.normal.textColor = Gold;
+            GUI.Label(tag, "VIP", style);
         }
 
         // Both seats read GameManager's round clock; draw it once across the split.

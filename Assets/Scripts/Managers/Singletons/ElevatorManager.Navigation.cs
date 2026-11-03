@@ -507,7 +507,8 @@ namespace CrazyElevator.Managers
             foreach (Rider rider in round.Riders)
             {
                 crowd.TryGetValue(rider, out CrowdFigure figure);
-                bool waiting = rider.Origin >= MinTravelFloor && rider.Origin <= MaxTravelFloor
+                bool featuredVip = abilityIntroKind == "VIP" && abilityIntroVip == rider;
+                bool waiting = featuredVip || rider.Origin >= MinTravelFloor && rider.Origin <= MaxTravelFloor
                     && rider.Origin >= low - CrowdFloorRange
                     && rider.Origin <= high + CrowdFloorRange && round.IsQueuedAtStop(rider);
                 if (waiting)
