@@ -10,11 +10,13 @@ namespace CrazyElevator.Managers
         const int DuelTutorialStepCount = 8;
         const float TutorialCardTravelSeconds = .42f;
         const float TutorialPracticeSeconds = 1.7f;
-        const float TutorialStoryLineSeconds = 3.8f;
+        const float TutorialStoryLineSeconds = 2.8f;
         const float TutorialStoryFadeSeconds = .6f;
         const float TutorialHandoffFadeSeconds = .8f;
         const float TutorialCountdownSeconds = 4f;
         const float TutorialCharacterSeconds = 6f;
+        int tutorialCollisionSeat = -1;
+        bool tutorialCollisionHitConfirmed;
         int tutorialCharacterIndex;
         static readonly string[] TutorialCharacterKinds =
             { "COURIER", "INTERVIEW", "HUNTER", "PREGNANT", "BOSS", "GROUP", "BOUNCER", "ELDERLY", "HANDYMAN", "DIVER" };
@@ -22,25 +24,22 @@ namespace CrazyElevator.Managers
             { "COURIER", "INTERVIEW CANDIDATE", "HUNTER", "MOM + BABY", "BOSS", "THE TRIO", "BOUNCER", "GRANDMA", "HANDYMAN", "DIVER" };
         static readonly string[] TutorialCharacterDescriptions =
         {
-            "Takes two spaces. A short trip earns a delivery bonus.",
-            "Very little patience. Get them to their interview quickly!",
-            "Stuns monsters so your elevator can pass safely.",
-            "Takes two spaces. The crying baby makes patience drain faster.",
-            "Deliver on time for a premium bonus.",
-            "Three passengers, three spaces. Speeds you up and leaves a sticky trail for your rival.",
-            "Takes two spaces. Makes your collisions hit harder.",
-            "Slows the elevator, but earns a big bonus. Also calms the baby.",
-            "Keeps the elevator rust-free and at full power while aboard.",
-            "Protects your elevator from tornadoes."
+            "2 SPACES • SHORT TRIPS",
+            "LOW PATIENCE • DELIVER FAST",
+            "STUNS MONSTERS",
+            "2 SPACES • BABY DRAINS PATIENCE",
+            "ON TIME = BIG BONUS",
+            "3 SPACES • SPEED UP + STICKY TRAIL",
+            "STRONGER COLLISIONS",
+            "SLOWS YOU • CALMS THE BABY",
+            "CLEARS RUST • FULL POWER",
+            "BLOCKS TORNADOES"
         };
         static readonly string[] TutorialStoryLines =
         {
-            "YOU ARE THE ELEVATOR DRIVER.",
-            "YOU ARE FIGHTING FOR A PROMOTION.",
-            "BEAT YOUR COLLEAGUE.",
-            "ONE MINUTE PER ROUND. SCORE THE MOST TO WIN.",
-            "COLLIDE WITH THEIR ELEVATOR TO ATTACK.",
-            "FIRST TO 3 ROUND WINS. THE WORLD CHANGES EACH ROUND."
+            "BEAT YOUR COLLEAGUE TO THE PROMOTION.",
+            "60 SECONDS. MOST POINTS WINS.",
+            "FIRST TO 3 ROUND WINS."
         };
         enum TutorialCardMotion
         {
@@ -52,6 +51,7 @@ namespace CrazyElevator.Managers
         enum TutorialFinalePhase
         {
             None,
+            Collision,
             Characters,
             Story,
             FadeToControls,
@@ -79,7 +79,7 @@ namespace CrazyElevator.Managers
         readonly float[] tutorialStepSettledTimes = new float[2];
         const float TutorialInfoCardSeconds = 1.8f;
         readonly bool[] tutorialResumeActorOnCardSettled = new bool[2];
-        readonly int[] tutorialExitBaseline = new int[2];
+        readonly int[] tutorialKickBaseline = new int[2];
         readonly int[] tutorialTravelStartBaseline = new int[2];
         readonly int[] tutorialFloorStopBaseline = new int[2];
         readonly float[] tutorialMoveSeconds = new float[2];
@@ -188,7 +188,7 @@ namespace CrazyElevator.Managers
                 tutorialResumeActorOnCardSettled[i] = false;
                 actor?.SuppressEncounterCards();
                 actor?.SetTutorialStops(true);
-                tutorialExitBaseline[i] = actor != null ? actor.PassengerExitCount : 0;
+                tutorialKickBaseline[i] = actor != null ? actor.KickoutCount : 0;
                 tutorialTravelStartBaseline[i] = actor != null ? actor.TravelStartCount : 0;
                 tutorialFloorStopBaseline[i] = actor != null ? actor.FloorStopCount : 0;
                 tutorialLastFloor[i] = actor != null ? actor.CurrentFloor : 0f;
@@ -366,11 +366,10 @@ namespace CrazyElevator.Managers
                 case 6:
                     return tutorialStepSettledTimes[index] >= TutorialInfoCardSeconds
                         && !TutorialHasPassengerAtCurrentFloor(actor);
-                // If everyone aboard got off at that floor there is nobody to kick; move on.
                 case 7:
-                    return actor.PassengerExitCount > tutorialExitBaseline[index]
-                        || actor.CurrentPassengers.Count == 0
-                            && tutorialStepSettledTimes[index] >= TutorialInfoCardSeconds;
+                    if (actor.KickoutCount > tutorialKickBaseline[index]) return true;
+                    actor.PrepareTutorialKickPassenger();
+                    return false;
                 default:
                     return false;
             }
@@ -393,7 +392,10 @@ namespace CrazyElevator.Managers
                     || !TutorialHasPassengerFor(actor, tutorialTargetFloor[index])))
                 tutorialTargetFloor[index] = FindTutorialPassengerFloor(actor);
             if (nextStep == 7)
-                tutorialExitBaseline[index] = actor.PassengerExitCount;
+            {
+                tutorialKickBaseline[index] = actor.KickoutCount;
+                actor.PrepareTutorialKickPassenger();
+            }
             if (nextStep == 3)
                 tutorialLastFloor[index] = actor.CurrentFloor;
             BeginTutorialCardTransition(index, nextStep, nextStep < ActiveTutorialStepCount);
@@ -523,12 +525,46 @@ namespace CrazyElevator.Managers
 
         void BeginTutorialHandoff()
         {
-            tutorialFinalePhase = TutorialFinalePhase.Characters;
+            tutorialFinalePhase = TutorialFinalePhase.Collision;
             tutorialFinaleTimer = 0f;
             tutorialStoryIndex = 0;
             tutorialCharacterIndex = -1;
+            tutorialCollisionSeat = -1;
             PauseTutorialGame();
+            AdvanceTutorialCollision();
+        }
+
+        void AdvanceTutorialCollision()
+        {
+            PauseTutorialGame();
+            tutorialFinaleTimer = 0f;
+            tutorialCollisionHitConfirmed = false;
+            tutorialGame.Match?.EndTutorialCollisionPractice();
+            while (++tutorialCollisionSeat < tutorialActors.Length)
+            {
+                ElevatorManager actor = tutorialActors[tutorialCollisionSeat];
+                if (actor == null || tutorialGame.Match == null) continue;
+                for (int seat = 0; seat < tutorialActors.Length; seat++)
+                    InputManager.Instance?.LockTutorialInput(seat);
+                if (!tutorialGame.Match.BeginTutorialCollisionPractice(actor.Seat)) continue;
+                InputManager.Instance?.UnlockTutorialInput(actor.Seat);
+                InputManager.Instance?.SetTutorialInputMode(actor.Seat, InputManager.TutorialInputMode.Collision);
+                ResumeTutorialGame();
+                return;
+            }
+            tutorialFinalePhase = TutorialFinalePhase.Characters;
             AdvanceTutorialCharacter();
+        }
+
+        bool TutorialPresentationNextPressed(float minimumSeconds)
+        {
+            InputManager inputManager = InputManager.Instance;
+            if (inputManager == null || tutorialFinaleTimer < minimumSeconds) return false;
+            for (int seat = 0; seat < tutorialActors.Length; seat++)
+                if (tutorialActors[seat] != null
+                    && inputManager.ReadForTutorialControls(tutorialActors[seat].Seat, true).ConfirmPressed)
+                    return true;
+            return false;
         }
 
         void AdvanceTutorialCharacter()
@@ -546,14 +582,20 @@ namespace CrazyElevator.Managers
             tutorialFinaleTimer += Time.unscaledDeltaTime;
             switch (tutorialFinalePhase)
             {
+                case TutorialFinalePhase.Collision:
+                    if (!tutorialCollisionHitConfirmed
+                        && tutorialGame.Match != null
+                        && tutorialGame.Match.TutorialCollisionPracticeCompleted(tutorialCollisionSeat))
+                    {
+                        tutorialCollisionHitConfirmed = true;
+                        tutorialFinaleTimer = 0f;
+                        InputManager.Instance?.LockTutorialInput(tutorialCollisionSeat);
+                    }
+                    if (tutorialCollisionHitConfirmed && tutorialFinaleTimer >= 1.2f) AdvanceTutorialCollision();
+                    break;
                 case TutorialFinalePhase.Characters:
                     tutorialGame.AnimateTutorialCharacter(tutorialFinaleTimer);
-                    InputManager inputManager = InputManager.Instance;
-                    bool next = inputManager != null && tutorialFinaleTimer >= .7f
-                        && (inputManager.ReadForTutorialControls(0, true).ConfirmPressed
-                            || tutorialActors[1] != null
-                                && inputManager.ReadForTutorialControls(1, true).ConfirmPressed);
-                    if (next || tutorialFinaleTimer >= TutorialCharacterSeconds)
+                    if (TutorialPresentationNextPressed(.7f) || tutorialFinaleTimer >= TutorialCharacterSeconds)
                         AdvanceTutorialCharacter();
                     break;
                 case TutorialFinalePhase.Story:
@@ -583,6 +625,7 @@ namespace CrazyElevator.Managers
 
         void FinishTutorial()
         {
+            tutorialGame?.Match?.EndTutorialCollisionPractice();
             tutorialGame?.FinishTutorialCharacter();
             tutorialActive = false;
             TutorialActive = false;
@@ -623,7 +666,7 @@ namespace CrazyElevator.Managers
                     case 4: return "LB";
                     case 5: return "A";
                     case 7: return "B";
-                    case 8: return "A/D";
+                    case 8: return "LB";
                     default: return "A";
                 }
             }
@@ -637,7 +680,7 @@ namespace CrazyElevator.Managers
                     case 4: return "RSHIFT";
                     case 5: return ".";
                     case 7: return ",";
-                    case 8: return "A/D";
+                    case 8: return "↑";
                     default: return ".";
                 }
             }
@@ -649,7 +692,7 @@ namespace CrazyElevator.Managers
                 case 4: return "SHIFT";
                 case 5: return "C";
                 case 7: return "I";
-                case 8: return "A/D";
+                case 8: return "W";
                 default: return "C";
             }
         }
@@ -660,13 +703,14 @@ namespace CrazyElevator.Managers
             {
                 case -1: return "PRACTICE SHIFT";
                 case 0: return "OPEN A DOOR";
-                case 1: return "BOARD 2 PASSENGERS";
+                case 1: return "BOARD TWO";
                 case 2: return "CLOSE DOORS";
                 case 3: return "MOVE";
-                case 4: return "SPEED BOOST";
+                case 4: return "BOOST";
                 case 5: return "STOP";
                 case 6: return "DROP-OFF";
-                case 7: return "KICK OUT";
+                case 7: return "KICK";
+                case 8: return tutorialCollisionHitConfirmed ? "NICE HIT!" : "BUMP YOUR RIVAL";
                 default: return "CORE CONTROLS LEARNED";
             }
         }
@@ -676,22 +720,25 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "TUTORIAL";
-                case 0: return "PRESS LEFT, UP OR RIGHT.";
-                case 1: return "AUTO BOARD. TRY ANOTHER DOOR.";
-                case 2: return "CLOSE THE DOORS.";
-                case 3: return "HOLD UP OR DOWN.";
+                case 0: return "CHOOSE A DOOR.";
+                case 1: return "OPEN ANOTHER DOOR.";
+                case 2: return "PRESS TO LEAVE.";
+                case 3: return KeyboardHintsEnabled ? seat == 1 ? "HOLD ↑ / ↓." : "HOLD W / S."
+                    : "HOLD UP / DOWN.";
                 case 4: return KeyboardHintsEnabled
-                    ? "HOLD " + TutorialKey(step, seat) + " + UP OR DOWN."
-                    : "HOLD STICK UP/DOWN\n+ HOLD LB.";
+                    ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
+                    : "HOLD UP + LB.";
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0
                         ? "STOP AT FLOOR " + ElevatorRound.FloorNumber(targetFloor) + "."
                         : "STOP AT PASSENGER FLOOR.";
-                case 6: return "RIDERS GET OFF BY THEMSELVES.";
-                case 7:
-                    return KeyboardHintsEnabled ? "KICK A PASSENGER OUT."
-                        : "STICK DOWN TO SELECT.\nPRESS B TO KICK.";
+                case 6: return "AUTOMATIC!";
+                case 7: return "KICK HIGHLIGHTED RIDER.";
+                case 8:
+                    if (tutorialCollisionHitConfirmed) return "YOU MADE AN OPENING!";
+                    return KeyboardHintsEnabled ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
+                        : "HOLD UP + LB.";
                 default: return "START YOUR SHIFT.";
             }
         }
@@ -726,7 +773,9 @@ namespace CrazyElevator.Managers
                 || tutorialActors[index] == null
                 || tutorialCardMotions[index] == TutorialCardMotion.Hidden)
                 return;
-            int step = tutorialSteps[index];
+            bool collisionPractice = tutorialFinalePhase == TutorialFinalePhase.Collision
+                && index == tutorialCollisionSeat;
+            int step = collisionPractice ? 8 : tutorialSteps[index];
             int inputSeat = tutorialActors[index].Seat;
             Matrix4x4 previousMatrix = GUI.matrix;
             Color previousGuiColor = GUI.color;
@@ -744,7 +793,7 @@ namespace CrazyElevator.Managers
                 return;
             }
 
-            if (step >= ActiveTutorialStepCount)
+            if (step >= ActiveTutorialStepCount && !collisionPractice)
             {
                 DrawTutorialWaitingPanel(view, tutorialActors[0] != null && tutorialActors[1] != null);
                 GUI.matrix = previousMatrix;
@@ -754,7 +803,7 @@ namespace CrazyElevator.Managers
             }
 
             float width = Mathf.Min(view.width - 36f, view.width < 1200f ? 700f : 860f);
-            float height = Mathf.Clamp(view.height * .28f, 300f, 325f);
+            float height = Mathf.Clamp(view.height * .25f, 280f, 300f);
             float margin = Mathf.Clamp(view.width * .035f, 18f, 32f);
             float settledX = margin;
             float settledY = Mathf.Max(margin, view.height - height - margin);
@@ -792,7 +841,7 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(card.x + 30f, card.y + 44f, card.width - 60f, 58f),
                 TutorialTitle(step), cardTitle);
 
-            float rowY = card.y + 120f;
+            float rowY = card.y + 106f;
             if (step >= 0)
             {
                 float hintWidth = KeyboardHintsEnabled || step == 6 ? 68f : Mathf.Min(220f, card.width * .35f);
@@ -811,7 +860,7 @@ namespace CrazyElevator.Managers
                     TutorialBody(step, index), body);
             }
 
-            string footer = "ESC TO EXIT";
+            string footer = collisionPractice ? "BUMP THEM AWAY. BOARD FIRST." : "";
             if (!string.IsNullOrEmpty(footer))
             {
                 int previousFooterSize = caption.fontSize;
@@ -887,9 +936,7 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(x + 24f, y + 18f, width - 48f, 26f),
                 waitingForOtherPlayer ? "WAITING" : "TUTORIAL COMPLETE", caption);
             GUI.Label(new Rect(x + 24f, y + 50f, width - 48f, 48f),
-                waitingForOtherPlayer ? "WAITING FOR OTHER DRIVER." : "GET READY.", cardTitle);
-            GUI.Label(new Rect(x + 24f, y + 126f, width - 48f, 36f),
-                waitingForOtherPlayer ? "YOUR TUTORIAL IS COMPLETE." : "SHIFT STARTING SOON.", body);
+                waitingForOtherPlayer ? "OTHER DRIVER'S TURN." : "GET READY.", cardTitle);
             cardTitle.fontSize = previousTitleSize;
             body.fontSize = previousBodySize;
             cardTitle.alignment = previousTitleAlignment;
@@ -902,6 +949,11 @@ namespace CrazyElevator.Managers
 
         void DrawTutorialFinale()
         {
+            if (tutorialFinalePhase == TutorialFinalePhase.Collision)
+            {
+                DrawTutorialOverlay();
+                return;
+            }
             if (tutorialFinalePhase == TutorialFinalePhase.Characters)
             {
                 DrawTutorialCharacterIntro();
@@ -945,6 +997,15 @@ namespace CrazyElevator.Managers
         {
             if (tutorialGame == null || tutorialCharacterIndex < 0
                 || tutorialCharacterIndex >= TutorialCharacterKinds.Length) return;
+            DrawTutorialPresentation("MEET THE PASSENGERS  "
+                + (tutorialCharacterIndex + 1) + " / " + TutorialCharacterKinds.Length,
+                TutorialCharacterNames[tutorialCharacterIndex], TutorialCharacterDescriptions[tutorialCharacterIndex],
+                TutorialCharacterSeconds);
+        }
+
+        void DrawTutorialPresentation(string kicker, string headingText, string descriptionText,
+            float duration)
+        {
             Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
             float scale = Mathf.Min(Screen.width / 1280f, Screen.height / 720f);
             Matrix4x4 previousMatrix = GUI.matrix;
@@ -959,17 +1020,16 @@ namespace CrazyElevator.Managers
             heading.normal.textColor = Cream;
             description.normal.textColor = Cream;
             small.normal.textColor = Teal;
-            GUI.Label(new Rect(80, 24, 1120, 32), "MEET THE PASSENGERS  "
-                + (tutorialCharacterIndex + 1) + " / " + TutorialCharacterKinds.Length, small);
-            GUI.Label(new Rect(80, 64, 1120, 62), TutorialCharacterNames[tutorialCharacterIndex], heading);
+            GUI.Label(new Rect(80, 24, 1120, 32), kicker, small);
+            GUI.Label(new Rect(80, 64, 1120, 62), headingText, heading);
             Texture preview = tutorialGame.DimensionRevealTexture;
             if (preview != null)
                 GUI.DrawTexture(new Rect(240, 136, 800, 390), preview, ScaleMode.ScaleToFit);
-            GUI.Label(new Rect(160, 536, 960, 92), TutorialCharacterDescriptions[tutorialCharacterIndex], description);
+            GUI.Label(new Rect(160, 536, 960, 104), descriptionText, description);
             GUI.Label(new Rect(80, 650, 1120, 30),
                 KeyboardHintsEnabled ? "C / P2 PERIOD: NEXT   •   AUTO ADVANCES" : "A: NEXT   •   AUTO ADVANCES", small);
             Panel(new Rect(400, 694, 480, 4), new Color(.2f, .25f, .3f));
-            Panel(new Rect(400, 694, 480 * Mathf.Clamp01(tutorialFinaleTimer / TutorialCharacterSeconds), 4), Teal);
+            Panel(new Rect(400, 694, 480 * Mathf.Clamp01(tutorialFinaleTimer / duration), 4), Teal);
             GUI.matrix = previousMatrix;
         }
 
@@ -1021,13 +1081,13 @@ namespace CrazyElevator.Managers
             TutorialControllerOval(new Rect(120, 23, 68, 81), shell);
             TutorialControllerOval(new Rect(22, 19, 156, 65), shell);
             Panel(new Rect(45, 28, 110, 49), shell);
-            bool boost = step == 4 && pressed;
+            bool boost = (step == 4 || step == 8) && pressed;
             DrawTutorialShoulder(new Rect(18, 0, 56, 23), "LB", boost, active);
             DrawTutorialShoulder(new Rect(126, 0, 56, 23), "RB", false, active);
             GUI.Label(new Rect(77, 28, 46, 20), boost ? "HOLD" : "", new GUIStyle(caption)
                 { fontSize = 11, alignment = TextAnchor.MiddleCenter });
 
-            bool useStick = step == 0 || step == 1 || step == 3 || step == 4 || step == 7;
+            bool useStick = step == 0 || step == 1 || step == 3 || step == 4 || step == 8;
             Vector2 offset = Vector2.zero;
             if (useStick && pressed)
             {
@@ -1036,7 +1096,7 @@ namespace CrazyElevator.Managers
                     int direction = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 3;
                     offset = direction == 0 ? Vector2.left : direction == 1 ? Vector2.up : Vector2.right;
                 }
-                else if (step == 7) offset = Vector2.down;
+                else if (step == 8) offset = Vector2.up;
                 else offset = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 2 == 0 ? Vector2.up : Vector2.down;
             }
             TutorialControllerOval(new Rect(33, 36, 38, 38), useStick ? accent : idle);
@@ -1047,7 +1107,7 @@ namespace CrazyElevator.Managers
             Panel(new Rect(64, 78, 25, 9), idle);
             TutorialControllerOval(new Rect(110, 70, 25, 25), idle);
             TutorialControllerButton(new Rect(145, 61, 21, 21), "A", (step == 2 || step == 5) && pressed, active);
-            TutorialControllerButton(new Rect(166, 42, 21, 21), "B", step == 7 && cycle >= 1.65f, active);
+            TutorialControllerButton(new Rect(166, 42, 21, 21), "B", step == 7 && pressed, active);
             TutorialControllerButton(new Rect(124, 42, 21, 21), "X", false, active);
             TutorialControllerButton(new Rect(145, 23, 21, 21), "Y", false, active);
             GUI.matrix = previous;

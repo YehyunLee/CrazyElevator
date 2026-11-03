@@ -156,7 +156,8 @@ namespace CrazyElevator.Managers
             }
             // The CPU's intro may finish behind the tutorial, but its shift
             // must not consume time or passengers until the tutorial ends.
-            if (IsNpc && MenuManager.TutorialActive) return;
+            if (IsNpc && MenuManager.TutorialActive
+                && (Match == null || !Match.IsTutorialCollisionParticipant(this))) return;
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
             if (Match == null && IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
@@ -596,6 +597,11 @@ namespace CrazyElevator.Managers
 
         void AdvanceTravelStep(float dt)
         {
+            if (Match != null && !Match.TutorialCollisionTravelAllowed(this))
+            {
+                travelVelocity = 0f;
+                return;
+            }
             AccumulateRust(dt);
             if (railRiding) { AdvanceRailStep(dt); return; }
             float before = travelFloor;

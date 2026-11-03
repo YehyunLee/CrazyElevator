@@ -81,6 +81,50 @@ namespace CrazyElevator.Managers
             round.RefillPracticeQueue();
         }
 
+        // Automatic drop-offs can empty the practice cabin before the kick step.
+        // Give that step one real selectable rider without changing live queues.
+        public bool PrepareTutorialKickPassenger()
+        {
+            if (!MenuManager.TutorialActive || round == null || phase != Phase.Boarding || stage == null) return false;
+            Rider target = null;
+            foreach (Rider rider in round.Riders)
+            {
+                if (!round.Owns(rider) || round.AtDestination(rider) || exiting.ContainsKey(rider)) continue;
+                if (target == null) target = rider;
+                if (CanSelect(rider)) { target = rider; break; }
+            }
+            // An existing passenger may still be walking into the cabin. Wait
+            // for the normal transfer instead of creating another rider each frame.
+            if (target != null && !CanSelect(target)) return false;
+            if (target == null)
+            {
+                target = new Rider
+                {
+                    Name = "Practice passenger", Kind = "INTERVIEW", Badge = "!", Color = 2,
+                    Data = passengerCatalog != null ? passengerCatalog.FindKind("INTERVIEW") : null,
+                    Origin = round.Floor, OriginStop = round.Stop,
+                    Destination = round.Floor == round.MinFloor ? round.MinFloor + 1 : round.MinFloor,
+                    DestinationStop = ElevatorRound.CenterStop,
+                    Space = 1, Patience = 60f, Remaining = 60f,
+                    Boarded = true, BoardedBySeat = round.Seat
+                };
+                if (!round.HasCapacityFor(target)
+                    || !TryCabinTilePlacement(target, new Vector3(0f, .12f, CabinTileZ[0]), false, out Vector3 spot))
+                    return false;
+                round.Riders.Add(target);
+                cabinPositions[target] = spot;
+                RememberCabinTileRun(target, spot);
+                SyncFigures(0f);
+            }
+            if (!CanSelect(target)) return false;
+            if (CanSelect(selectedRider) && round.Owns(selectedRider) && !round.AtDestination(selectedRider)) return true;
+            pendingSelectionAfterBoarding = null;
+            selectFirstWaitingWhenAvailable = false;
+            controllerSelection = true;
+            SelectRider(target);
+            return true;
+        }
+
         void TickAutoBoarding(float dt)
         {
             if (phase != Phase.Boarding || PersonaBusy) return;

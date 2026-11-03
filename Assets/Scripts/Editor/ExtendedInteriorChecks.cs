@@ -19,6 +19,8 @@ public static class ExtendedInteriorChecks
     const string Work = "Temp/ExtendedInterior";
     const string Scene = "Assets/Scenes/Main.unity";
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
+    static IEnumerator tutorialChecks;
+    static int tutorialCheckFrame = -1;
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
     static object Get(Game game, string name)
     {
@@ -252,6 +254,25 @@ public static class ExtendedInteriorChecks
     static void Poll()
     {
         if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+        if (tutorialChecks != null)
+        {
+            if (!EditorApplication.isPlaying || tutorialCheckFrame == Time.frameCount) return;
+            tutorialCheckFrame = Time.frameCount;
+            int tutorialExitCode = 0;
+            try { if (tutorialChecks.MoveNext()) return; }
+            catch (Exception error)
+            {
+                tutorialExitCode = 1;
+                Directory.CreateDirectory("Temp/TutorialChecks");
+                File.WriteAllText("Temp/TutorialChecks/result.txt", "FAIL: " + error);
+                Debug.LogException(error);
+            }
+            (tutorialChecks as IDisposable)?.Dispose();
+            tutorialChecks = null;
+            if (Application.isBatchMode) EditorApplication.Exit(tutorialExitCode);
+            else EditorApplication.isPlaying = false;
+            return;
+        }
         string request = Work + "/request.txt";
         if (!File.Exists(request)) return;
         string action;
@@ -287,10 +308,11 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare")
         {
             bool singleDimension = action != "match-prepare";
-            File.WriteAllText(request, action == "interaction-prepare" ? "interaction-run"
+            File.WriteAllText(request, action == "tutorial-prepare" ? "tutorial-run"
+                : action == "interaction-prepare" ? "interaction-run"
                 : action == "bouncer-prepare" ? "bouncer-run"
                 : singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
@@ -318,6 +340,7 @@ public static class ExtendedInteriorChecks
         try
         {
             if (action == "checks") { Run(game); RunBoost(game); }
+            else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
@@ -1686,6 +1709,164 @@ public static class ExtendedInteriorChecks
                 "The rival did not consume the trail and slow down.");
         }
         Debug.Log("PASS: Shared VIP, exclusive claim, bonus, hazard event, and candy trail for both seats.");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Tutorial Practice")]
+    public static void RequestTutorialPracticeChecks()
+    {
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "tutorial-prepare");
+    }
+
+    static IEnumerator RunTutorialPracticeChecks()
+    {
+        const string output = "Temp/TutorialChecks";
+        Directory.CreateDirectory(output);
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        var menu = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Managers.MenuManager>();
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        Require(match && match.player && match.Rival && menu && input, "Tutorial checks need two real elevators and their managers.");
+        var menuType = menu.GetType();
+        var tutorialFlag = menuType.GetField("<TutorialActive>k__BackingField", BindingFlags.Static | BindingFlags.NonPublic);
+        Game[] actors = { match.player, match.Rival };
+        bool[] enabledBefore = { actors[0].enabled, actors[1].enabled };
+        bool matchEnabled = match.enabled;
+        bool menuEnabled = menu.enabled;
+        bool tutorialBefore = (bool)tutorialFlag.GetValue(null);
+        bool activeBefore = (bool)menuType.GetField("tutorialActive", Flags).GetValue(menu);
+        try
+        {
+            CrazyElevator.Managers.MenuManager.Close();
+            tutorialFlag.SetValue(null, true);
+            menuType.GetField("tutorialActive", Flags).SetValue(menu, true);
+            match.StartMatch();
+            match.enabled = false;
+            foreach (Game actor in actors) actor.enabled = false;
+            menu.enabled = true;
+            menuType.GetField("tutorialGame", Flags).SetValue(menu, actors[0]);
+            menuType.GetField("tutorialIntroReady", Flags).SetValue(menu, true);
+            menuType.GetField("showingControllerInstructions", Flags).SetValue(menu, false);
+            var tutorialActors = (Game[])menuType.GetField("tutorialActors", Flags).GetValue(menu);
+            var steps = (int[])menuType.GetField("tutorialSteps", Flags).GetValue(menu);
+            var kickBaseline = (int[])menuType.GetField("tutorialKickBaseline", Flags).GetValue(menu);
+            var motionTimes = (float[])menuType.GetField("tutorialCardMotionTimes", Flags).GetValue(menu);
+            Array motions = (Array)menuType.GetField("tutorialCardMotions", Flags).GetValue(menu);
+            object settled = Enum.Parse(motions.GetType().GetElementType(), "Settled");
+            menuType.GetField("tutorialFinalePhase", Flags).SetValue(menu,
+                Enum.Parse(menuType.GetField("tutorialFinalePhase", Flags).FieldType, "None"));
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                tutorialActors[seat] = actor;
+                steps[seat] = 7;
+                motions.SetValue(settled, seat);
+                motionTimes[seat] = 1f;
+                kickBaseline[seat] = actor.KickoutCount;
+                input.UnlockTutorialInput(seat);
+                input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Kickout);
+                Require(actor.CurrentPassengers.Count == 0, "Fresh tutorial must start with an empty cabin for this regression.");
+                Require(actor.PrepareTutorialKickPassenger(), "Empty-cabin kick practice could not prepare its rider.");
+                Require(actor.CurrentPassengers.Count == 1 && actor.HasSelectedBoardedPassenger,
+                    "Kick practice needs one highlighted real passenger.");
+                SharedRider rider = actor.CurrentPassengers[0];
+                Require(!((Round)Get(actor, "round")).AtDestination(rider), "Kick target would immediately auto-exit.");
+                Require(actor.PrepareTutorialKickPassenger() && actor.CurrentPassengers.Count == 1,
+                    "Repeated tutorial preparation duplicated the practice passenger.");
+                Require(!(bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "Kick tutorial completed before any kick.");
+                Call(actor, "LateUpdate");
+            }
+            ScreenCapture.CaptureScreenshot(output + "/kick-practice.png");
+            yield return null;
+            yield return null;
+            yield return null;
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                // A normal correct-floor drop-off must not satisfy the kick lesson.
+                Round round = (Round)Get(actor, "round");
+                SharedRider rider = actor.CurrentPassengers[0];
+                round.Arrive(rider.Destination, rider.DestinationStop);
+                Call(actor, "ConfirmPassenger");
+                Call(actor, "SyncFigures", 2f);
+                Require(actor.KickoutCount == kickBaseline[seat], "A normal drop-off counted as a kick.");
+                Require(!(bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "A normal drop-off skipped the kick lesson.");
+                Require(actor.PrepareTutorialKickPassenger(), "Kick practice could not recover after an automatic drop-off.");
+                actor.KickoutSelectedPublic();
+                Require(actor.KickoutCount == kickBaseline[seat] + 1
+                    && (bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "A real selected-passenger kick did not finish the lesson.");
+            }
+            // Start the real menu handoff, not an isolated preview or a fabricated success flag.
+            for (int seat = 0; seat < steps.Length; seat++) steps[seat] = 8;
+            menuType.GetMethod("BeginTutorialHandoff", Flags).Invoke(menu, null);
+            Require(!input.IsTutorialInputLocked(0) && input.IsTutorialInputLocked(1),
+                "Collision lesson did not unlock the attacker and hold the target.");
+            match.enabled = true;
+            float cameraSettledAt = Time.realtimeSinceStartup + .9f;
+            while (Time.realtimeSinceStartup < cameraSettledAt)
+            {
+                foreach (Game actor in actors)
+                {
+                    Call(actor, "SyncFigures", Time.deltaTime);
+                    Call(actor, "LateUpdate");
+                }
+                yield return null;
+            }
+            foreach (Game actor in actors)
+                Require((float)Get(actor, "cameraViewBlend") >= .99f, "Collision practice did not switch into the real shaft view.");
+            ScreenCapture.CaptureScreenshot(output + "/collision-practice.png");
+            yield return null;
+            yield return null;
+            yield return null;
+            match.enabled = false;
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game attacker = actors[seat], target = actors[1 - seat];
+                Require(match.BeginTutorialCollisionPractice(seat), "Could not stage collision for seat " + seat);
+                input.UnlockTutorialInput(seat);
+                input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Collision);
+                input.LockTutorialInput(1 - seat);
+                float targetStart = target.CurrentFloor;
+                float timeLeft = attacker.SecondsLeft;
+                Require(!match.TutorialCollisionPracticeCompleted(seat), "Collision lesson auto-completed before input.");
+                for (int frame = 0; frame < 300 && !match.TutorialCollisionPracticeCompleted(seat); frame++)
+                {
+                    attacker.SetTravelInput(1f, true);
+                    Call(attacker, "AdvanceBuildingTravel", 1f / 60f);
+                }
+                Require(match.TutorialCollisionPracticeCompleted(seat), "Actual travel did not register a tutorial collision for seat " + seat);
+                Require(target.TravelVelocity > 0f, "Input-locked target did not receive the real hit.");
+                Call(target, "AdvanceBuildingTravel", .2f);
+                Require(target.CurrentFloor > targetStart, "The target did not visibly rebound in gameplay.");
+                Require(attacker.SecondsLeft == timeLeft, "Collision tutorial consumed the real round timer.");
+                match.EndTutorialCollisionPractice();
+                Require(!match.IsTutorialCollisionParticipant(attacker)
+                    && !match.TutorialCollisionPracticeCompleted(seat), "Ending collision practice left its exception active.");
+            }
+            input.ClearTutorialInputLocks();
+            Require(actors[0].StageTutorialCollision(2f) && actors[1].StageTutorialCollision(3f),
+                "Could not stage the ordinary tutorial protection check.");
+            Set(actors[0], "travelVelocity", 1.8f);
+            typeof(CrazyElevator.Match.ElevatorMatch).GetField("collisionCooldown", Flags).SetValue(match, 0f);
+            float incoming = 1.8f;
+            match.ConstrainTravel(actors[0], 2f, 3.2f, ref incoming);
+            Require(actors[1].TravelVelocity == 0f && actors[1].CurrentFloor == 3f,
+                "Ordinary tutorial collisions stopped protecting the non-participating target.");
+            File.WriteAllText(output + "/result.txt", "PASS: both seats retain one highlighted kick target; repeated preparation does not duplicate; normal drop-off cannot complete kicking; actual kicks complete; live collision unlocks only learner; both seats cause real contact and displace locked target; no timeout completion; practice clock unchanged; staged exception clears; ordinary tutorial target protection remains.\n");
+            Debug.Log(File.ReadAllText(output + "/result.txt"));
+        }
+        finally
+        {
+            match.EndTutorialCollisionPractice();
+            input.ClearTutorialInputLocks();
+            tutorialFlag.SetValue(null, tutorialBefore);
+            menuType.GetField("tutorialActive", Flags).SetValue(menu, activeBefore);
+            for (int seat = 0; seat < actors.Length; seat++) actors[seat].enabled = enabledBefore[seat];
+            match.enabled = matchEnabled;
+            menu.enabled = menuEnabled;
+        }
     }
 
     static void RunBouncerChecks()
