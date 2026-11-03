@@ -1073,16 +1073,32 @@ namespace CrazyElevator.Managers
                 // large overhead badge above the selection arrow.
                 if (!rider.Boarded && !rider.Resolved && round.IsOffered(rider))
                 {
-                    Rect badge = new Rect(headX - 26f, Mathf.Max(8f, headY - 74f), 52f, 42f);
-                    Color badgeBorder = rider.IsVip ? Gold : selected
-                        ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
-                        : Teal;
+                    string abilityIcon = PassengerAbilityIconKind(rider);
+                    bool showAbility = !string.IsNullOrEmpty(abilityIcon);
+                    float badgeWidth = showAbility ? 88f : 52f;
+                    Rect badge = new Rect(headX - badgeWidth * .5f, Mathf.Max(8f, headY - 74f), badgeWidth, 42f);
+                    Color abilityAccent = PassengerAbilityAccent(rider);
+                    Color badgeBorder = rider.IsVip ? Gold : showAbility ? abilityAccent : selected
+                        ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid : Teal;
                     FramedPanel(badge, badgeBorder, 3f);
-                    int previousNumberSize = calloutNumber.fontSize;
-                    calloutNumber.fontSize = 32;
-                    OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
-                        DestinationTag(rider), calloutNumber);
-                    calloutNumber.fontSize = previousNumberSize;
+                    if (showAbility)
+                    {
+                        DrawPassengerBadgeIcon(new Rect(badge.x + 3f, badge.y + 3f, 36f, 36f),
+                            abilityIcon, abilityAccent);
+                        int previousNumberSize = calloutNumber.fontSize;
+                        calloutNumber.fontSize = 29;
+                        OutlinedLabel(new Rect(badge.x + 39f, badge.y - 1f, badge.width - 40f, badge.height),
+                            DestinationTag(rider), calloutNumber);
+                        calloutNumber.fontSize = previousNumberSize;
+                    }
+                    else
+                    {
+                        int previousNumberSize = calloutNumber.fontSize;
+                        calloutNumber.fontSize = 32;
+                        OutlinedLabel(new Rect(badge.x, badge.y - 1f, badge.width, badge.height),
+                            DestinationTag(rider), calloutNumber);
+                        calloutNumber.fontSize = previousNumberSize;
+                    }
                     if (rider.IsVip)
                         OutlinedLabel(new Rect(badge.x - 12f, badge.y - 25f, badge.width + 24f, 24f), "VIP", small, Gold);
                 }
@@ -1115,15 +1131,12 @@ namespace CrazyElevator.Managers
                 string cue = PassengerVisualCue(rider, selected);
                 if (!string.IsNullOrEmpty(cue))
                 {
-                    if (rider.Kind == "HUNTER" || rider.Kind == "DIVER" || rider.Kind == "BOUNCER")
-                        DrawPassengerBadgeIcon(new Rect(Mathf.Clamp(headX - 20f, 8f, viewWidth - 48f),
-                            Mathf.Max(72f, headY - 46f), 40f, 40f), rider.Kind, Teal);
                     float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
                     float cueX = headX + 22f + cueWidth <= viewWidth - 8f
                         ? headX + 22f : headX - cueWidth - 22f;
                     Rect cueRect = new Rect(Mathf.Clamp(cueX, 8f, viewWidth - cueWidth - 8f),
                         headY + 8f, cueWidth, 22f);
-                    FramedPanel(cueRect, rider.HasFeature(PassengerFeature.SpeedSlow) ? Coral : Teal, 2f);
+                    FramedPanel(cueRect, PassengerAbilityAccent(rider), 2f);
                     Label(new Rect(cueRect.x + 8f, cueRect.y + 2f, cueRect.width - 12f, 18f), cue, small);
                 }
 
@@ -1156,16 +1169,73 @@ namespace CrazyElevator.Managers
         {
             if (rider.Kind == "HUNTER") return "MONSTER STUN";
             if (rider.Kind == "DIVER") return "TORNADO SHIELD";
-            if (rider.Kind == "BOUNCER") return "BUMP ↑";
+            if (rider.Kind == "BOUNCER") return "STRONG BUMP";
             if (!rider.Boarded)
-                return selected && rider.Space > 1 ? rider.Space + " TILES" : null;
+            {
+                if (rider.HasFeature(PassengerFeature.SpeedSlow)) return "SPEED DOWN";
+                if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED UP";
+                if (rider.HasFeature(PassengerFeature.CryingBaby)) return "PATIENCE DRAIN";
+                if (rider.HasFeature(PassengerFeature.ClearsRust)) return "CLEARS RUST";
+                if (rider.HasFeature(PassengerFeature.UrgencySpeech)) return "SHORT PATIENCE";
+                if (rider.Kind == "BOSS") return "DELIVERY BONUS";
+                return selected && rider.Space > 1 ? rider.Space + " SPACES" : null;
+            }
             if (!round.Owns(rider)) return null;
             if (rider.HasFeature(PassengerFeature.SpeedSlow))
-                return round.BabyCalmedByGrandma ? "SPEED ↓ + CALM" : "SPEED ↓";
-            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED ↑";
+                return round.BabyCalmedByGrandma ? "SPEED DOWN + CALM" : "SPEED DOWN";
+            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED UP";
             if (rider.HasFeature(PassengerFeature.CryingBaby))
-                return round.BabyCalmedByGrandma ? "BABY CALM" : "PATIENCE ↓";
+                return round.BabyCalmedByGrandma ? "BABY CALM" : "PATIENCE DRAIN";
+            if (rider.HasFeature(PassengerFeature.ClearsRust)) return "CLEARS RUST";
+            if (rider.HasFeature(PassengerFeature.UrgencySpeech)) return "SHORT PATIENCE";
+            if (rider.Kind == "BOSS") return "DELIVERY BONUS";
             return null;
+        }
+
+        static string PassengerAbilityIconKind(Rider rider)
+        {
+            if (rider == null) return null;
+            switch (rider.Kind)
+            {
+                case "ELDERLY": return "ELDERLY";
+                case "PREGNANT": return "PREGNANT";
+                case "GROUP": return "GROUP";
+                case "HANDYMAN": return "HANDYMAN";
+                case "HUNTER": return "HUNTER";
+                case "DIVER": return "DIVER";
+                case "BOUNCER": return "BOUNCER";
+                case "BOSS": return "BOSS";
+                case "INTERVIEW": return "INTERVIEW";
+                case "COURIER": return "COURIER";
+            }
+            if (rider.HasFeature(PassengerFeature.SpeedSlow)) return "ELDERLY";
+            if (rider.HasFeature(PassengerFeature.CryingBaby)) return "PREGNANT";
+            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEEDBOOST";
+            if (rider.HasFeature(PassengerFeature.ClearsRust)) return "HANDYMAN";
+            if (rider.HasFeature(PassengerFeature.MultiSpace)) return "COURIER";
+            return null;
+        }
+
+        static Color PassengerAbilityAccent(Rider rider)
+        {
+            if (rider == null) return Teal;
+            switch (rider.Kind)
+            {
+                case "ELDERLY": return new Color32(255, 66, 65, 255);
+                case "PREGNANT": return new Color32(255, 128, 34, 255);
+                case "GROUP": return new Color32(255, 211, 55, 255);
+                case "HANDYMAN": return new Color32(42, 225, 210, 255);
+                case "HUNTER": return new Color32(130, 255, 74, 255);
+                case "DIVER": return new Color32(51, 171, 255, 255);
+                case "BOUNCER": return new Color32(255, 89, 179, 255);
+                case "BOSS": return new Color32(255, 205, 62, 255);
+                case "INTERVIEW": return new Color32(255, 238, 86, 255);
+                case "COURIER": return new Color32(255, 164, 55, 255);
+            }
+            if (rider.HasFeature(PassengerFeature.SpeedSlow)) return new Color32(255, 66, 65, 255);
+            if (rider.HasFeature(PassengerFeature.CryingBaby)) return new Color32(255, 128, 34, 255);
+            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return new Color32(255, 211, 55, 255);
+            return Teal;
         }
 
         // The cabin camera is much smaller during shaft travel, so the authored
@@ -1189,9 +1259,13 @@ namespace CrazyElevator.Managers
 
                 Vector3 point = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
                 if (point.z <= 0) continue;
-                float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + 18f, preview.xMax - 18f));
+                string abilityIcon = PassengerAbilityIconKind(rider);
+                bool showAbility = !string.IsNullOrEmpty(abilityIcon);
+                float badgeWidth = showAbility ? 58f : 34f;
+                float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + badgeWidth * .5f,
+                    preview.xMax - badgeWidth * .5f));
                 float y = Mathf.Round(Mathf.Clamp(Screen.height - point.y, preview.yMin + 30f, preview.yMax - 22f));
-                Rect badge = new Rect(x - 17f, y - 2f, 34f, 28f);
+                Rect badge = new Rect(x - badgeWidth * .5f, y - 2f, badgeWidth, 28f);
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     bool overlaps = false;
@@ -1201,8 +1275,19 @@ namespace CrazyElevator.Managers
                     badge.y = Mathf.Max(preview.yMin + 28f, badge.y - 30f);
                 }
                 occupiedBadges.Add(badge);
-                FramedPanel(badge, new Color32(145, 153, 166, 255), 2f);
-                OutlinedLabel(badge, DestinationTag(rider), calloutNumber);
+                Color abilityAccent = PassengerAbilityAccent(rider);
+                FramedPanel(badge, showAbility ? abilityAccent : new Color32(145, 153, 166, 255), 2f);
+                if (showAbility)
+                {
+                    DrawPassengerBadgeIcon(new Rect(badge.x + 1f, badge.y + 2f, 24f, 24f),
+                        abilityIcon, abilityAccent);
+                    int previousBadgeNumberSize = calloutNumber.fontSize;
+                    calloutNumber.fontSize = 19;
+                    OutlinedLabel(new Rect(badge.x + 26f, badge.y, badge.width - 27f, badge.height),
+                        DestinationTag(rider), calloutNumber);
+                    calloutNumber.fontSize = previousBadgeNumberSize;
+                }
+                else OutlinedLabel(badge, DestinationTag(rider), calloutNumber);
             }
 
             calloutNumber.fontSize = previousSize;
