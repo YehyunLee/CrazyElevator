@@ -14,6 +14,25 @@ namespace CrazyElevator.Managers
         const float TutorialStoryFadeSeconds = .6f;
         const float TutorialHandoffFadeSeconds = .8f;
         const float TutorialCountdownSeconds = 4f;
+        const float TutorialCharacterSeconds = 6f;
+        int tutorialCharacterIndex;
+        static readonly string[] TutorialCharacterKinds =
+            { "COURIER", "INTERVIEW", "HUNTER", "PREGNANT", "BOSS", "GROUP", "BOUNCER", "ELDERLY", "HANDYMAN", "DIVER" };
+        static readonly string[] TutorialCharacterNames =
+            { "COURIER", "INTERVIEW CANDIDATE", "HUNTER", "MOM + BABY", "BOSS", "THE TRIO", "BOUNCER", "GRANDMA", "HANDYMAN", "DIVER" };
+        static readonly string[] TutorialCharacterDescriptions =
+        {
+            "Takes two spaces. A short trip earns a delivery bonus.",
+            "Very little patience. Get them to their interview quickly!",
+            "Stuns monsters so your elevator can pass safely.",
+            "Takes two spaces. The crying baby makes patience drain faster.",
+            "Deliver on time for a premium bonus.",
+            "Three passengers, three spaces. Speeds you up and leaves a sticky trail for your rival.",
+            "Takes two spaces. Makes your collisions hit harder.",
+            "Slows the elevator, but earns a big bonus. Also calms the baby.",
+            "Keeps the elevator rust-free and at full power while aboard.",
+            "Protects your elevator from tornadoes."
+        };
         static readonly string[] TutorialStoryLines =
         {
             "YOU ARE THE ELEVATOR DRIVER.",
@@ -33,6 +52,7 @@ namespace CrazyElevator.Managers
         enum TutorialFinalePhase
         {
             None,
+            Characters,
             Story,
             FadeToControls,
             Controls,
@@ -270,6 +290,9 @@ namespace CrazyElevator.Managers
                 }
 
                 int step = tutorialSteps[i];
+                // Both seats practice with the same landing. Keep its doorways
+                // supplied until each driver has boarded their two passengers.
+                if (step <= 1) tutorialActors[i].RefillTutorialPassengers();
                 if (step >= ActiveTutorialStepCount)
                 {
                     tutorialCompletionTimes[i] += Time.unscaledDeltaTime;
@@ -500,10 +523,22 @@ namespace CrazyElevator.Managers
 
         void BeginTutorialHandoff()
         {
-            tutorialFinalePhase = TutorialFinalePhase.Story;
+            tutorialFinalePhase = TutorialFinalePhase.Characters;
             tutorialFinaleTimer = 0f;
             tutorialStoryIndex = 0;
+            tutorialCharacterIndex = -1;
             PauseTutorialGame();
+            AdvanceTutorialCharacter();
+        }
+
+        void AdvanceTutorialCharacter()
+        {
+            tutorialFinaleTimer = 0f;
+            // Missing optional art must not leave an empty or stale character on screen.
+            while (++tutorialCharacterIndex < TutorialCharacterKinds.Length)
+                if (tutorialGame.PrepareTutorialCharacter(TutorialCharacterKinds[tutorialCharacterIndex])) return;
+            tutorialGame.FinishTutorialCharacter();
+            tutorialFinalePhase = TutorialFinalePhase.Story;
         }
 
         void UpdateTutorialFinale()
@@ -511,6 +546,16 @@ namespace CrazyElevator.Managers
             tutorialFinaleTimer += Time.unscaledDeltaTime;
             switch (tutorialFinalePhase)
             {
+                case TutorialFinalePhase.Characters:
+                    tutorialGame.AnimateTutorialCharacter(tutorialFinaleTimer);
+                    InputManager inputManager = InputManager.Instance;
+                    bool next = inputManager != null && tutorialFinaleTimer >= .7f
+                        && (inputManager.ReadForTutorialControls(0, true).ConfirmPressed
+                            || tutorialActors[1] != null
+                                && inputManager.ReadForTutorialControls(1, true).ConfirmPressed);
+                    if (next || tutorialFinaleTimer >= TutorialCharacterSeconds)
+                        AdvanceTutorialCharacter();
+                    break;
                 case TutorialFinalePhase.Story:
                     if (tutorialFinaleTimer >= TutorialStoryLineSeconds)
                     {
@@ -538,6 +583,7 @@ namespace CrazyElevator.Managers
 
         void FinishTutorial()
         {
+            tutorialGame?.FinishTutorialCharacter();
             tutorialActive = false;
             TutorialActive = false;
             tutorialFinalePhase = TutorialFinalePhase.None;
@@ -574,7 +620,7 @@ namespace CrazyElevator.Managers
                     case 0: case 1: return "STICK";
                     case 2: return "A";
                     case 3: return "STICK";
-                    case 4: return "LB / LT / RT";
+                    case 4: return "LB";
                     case 5: return "A";
                     case 7: return "B";
                     case 8: return "A/D";
@@ -636,7 +682,7 @@ namespace CrazyElevator.Managers
                 case 3: return "HOLD UP OR DOWN.";
                 case 4: return KeyboardHintsEnabled
                     ? "HOLD " + TutorialKey(step, seat) + " + UP OR DOWN."
-                    : "HOLD STICK UP/DOWN\n+ LB OR EITHER TRIGGER.";
+                    : "HOLD STICK UP/DOWN\n+ HOLD LB.";
                 case 5:
                     int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
                     return targetFloor >= 0
@@ -708,7 +754,7 @@ namespace CrazyElevator.Managers
             }
 
             float width = Mathf.Min(view.width - 36f, view.width < 1200f ? 700f : 860f);
-            float height = Mathf.Clamp(view.height * .25f, 230f, 260f);
+            float height = Mathf.Clamp(view.height * .28f, 300f, 325f);
             float margin = Mathf.Clamp(view.width * .035f, 18f, 32f);
             float settledX = margin;
             float settledY = Mathf.Max(margin, view.height - height - margin);
@@ -749,9 +795,9 @@ namespace CrazyElevator.Managers
             float rowY = card.y + 120f;
             if (step >= 0)
             {
-                float hintWidth = KeyboardHintsEnabled || step == 6 ? 68f : Mathf.Min(190f, card.width * .32f);
+                float hintWidth = KeyboardHintsEnabled || step == 6 ? 68f : Mathf.Min(220f, card.width * .35f);
                 if (!KeyboardHintsEnabled && step != 6)
-                    DrawTutorialController(new Rect(card.x + 24f, rowY - 15f, hintWidth, 100f), step, accent);
+                    DrawTutorialController(new Rect(card.x + 24f, rowY - 15f, hintWidth, 145f), step, accent);
                 else
                     DrawTutorialKeyHint(new Rect(card.x + 30f, rowY, hintWidth, 68f),
                         TutorialKey(step, inputSeat));
@@ -856,6 +902,11 @@ namespace CrazyElevator.Managers
 
         void DrawTutorialFinale()
         {
+            if (tutorialFinalePhase == TutorialFinalePhase.Characters)
+            {
+                DrawTutorialCharacterIntro();
+                return;
+            }
             if (tutorialFinalePhase == TutorialFinalePhase.Story)
             {
                 DrawTutorialStoryForView(new Rect(0f, 0f, Screen.width, Screen.height));
@@ -888,6 +939,38 @@ namespace CrazyElevator.Managers
             title.fontSize = previousCountdownFontSize;
             title.alignment = previousCountdownAlignment;
             title.normal.textColor = previousCountdownTextColor;
+        }
+
+        void DrawTutorialCharacterIntro()
+        {
+            if (tutorialGame == null || tutorialCharacterIndex < 0
+                || tutorialCharacterIndex >= TutorialCharacterKinds.Length) return;
+            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
+            float scale = Mathf.Min(Screen.width / 1280f, Screen.height / 720f);
+            Matrix4x4 previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1280f * scale) * .5f,
+                (Screen.height - 720f * scale) * .5f, 0), Quaternion.identity, new Vector3(scale, scale, 1));
+            GUIStyle heading = new GUIStyle(cardTitle)
+                { fontSize = 40, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUIStyle description = new GUIStyle(body)
+                { fontSize = 25, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUIStyle small = new GUIStyle(caption)
+                { fontSize = 18, alignment = TextAnchor.MiddleCenter };
+            heading.normal.textColor = Cream;
+            description.normal.textColor = Cream;
+            small.normal.textColor = Teal;
+            GUI.Label(new Rect(80, 24, 1120, 32), "MEET THE PASSENGERS  "
+                + (tutorialCharacterIndex + 1) + " / " + TutorialCharacterKinds.Length, small);
+            GUI.Label(new Rect(80, 64, 1120, 62), TutorialCharacterNames[tutorialCharacterIndex], heading);
+            Texture preview = tutorialGame.DimensionRevealTexture;
+            if (preview != null)
+                GUI.DrawTexture(new Rect(240, 136, 800, 390), preview, ScaleMode.ScaleToFit);
+            GUI.Label(new Rect(160, 536, 960, 92), TutorialCharacterDescriptions[tutorialCharacterIndex], description);
+            GUI.Label(new Rect(80, 650, 1120, 30),
+                KeyboardHintsEnabled ? "C / P2 PERIOD: NEXT   •   AUTO ADVANCES" : "A: NEXT   •   AUTO ADVANCES", small);
+            Panel(new Rect(400, 694, 480, 4), new Color(.2f, .25f, .3f));
+            Panel(new Rect(400, 694, 480 * Mathf.Clamp01(tutorialFinaleTimer / TutorialCharacterSeconds), 4), Teal);
+            GUI.matrix = previousMatrix;
         }
 
         void DrawTutorialStoryForView(Rect view)
@@ -925,8 +1008,8 @@ namespace CrazyElevator.Managers
         void DrawTutorialController(Rect rect, int step, Color accent)
         {
             Matrix4x4 previous = GUI.matrix;
-            GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y, 0f),
-                Quaternion.identity, new Vector3(rect.width / 200f, rect.height / 110f, 1f));
+            GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y + rect.height * 24f / 135f, 0f),
+                Quaternion.identity, new Vector3(rect.width / 200f, rect.height / 135f, 1f));
             float cycle = Mathf.Repeat(Time.unscaledTime, 2.4f);
             bool pressed = cycle < 1.65f;
             Color shell = new Color32(104, 119, 136, 255);
@@ -939,11 +1022,8 @@ namespace CrazyElevator.Managers
             TutorialControllerOval(new Rect(22, 19, 156, 65), shell);
             Panel(new Rect(45, 28, 110, 49), shell);
             bool boost = step == 4 && pressed;
-            DrawKeyboardKeycap(new Rect(29, 0, 41, 19), "LT");
-            DrawKeyboardKeycap(new Rect(130, 0, 41, 19), "RT");
-            Panel(new Rect(29, 19, 41, 5), boost ? active : idle);
-            Panel(new Rect(130, 19, 41, 5), boost ? active : idle);
-            Panel(new Rect(24, 26, 45, 7), boost ? active : idle);
+            DrawTutorialShoulder(new Rect(18, 0, 56, 23), "LB", boost, active);
+            DrawTutorialShoulder(new Rect(126, 0, 56, 23), "RB", false, active);
             GUI.Label(new Rect(77, 28, 46, 20), boost ? "HOLD" : "", new GUIStyle(caption)
                 { fontSize = 11, alignment = TextAnchor.MiddleCenter });
 
@@ -977,6 +1057,16 @@ namespace CrazyElevator.Managers
         {
             TutorialControllerOval(rect, pressed ? accent : Ink);
             GUIStyle style = new GUIStyle(caption) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
+            style.normal.textColor = pressed ? Ink : Cream;
+            GUI.Label(rect, label, style);
+        }
+
+        void DrawTutorialShoulder(Rect rect, string label, bool pressed, Color accent)
+        {
+            Panel(new Rect(rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4), Cream);
+            Panel(new Rect(rect.x, rect.y + (pressed ? 2f : 0f), rect.width, rect.height),
+                pressed ? accent : Ink);
+            GUIStyle style = new GUIStyle(caption) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
             style.normal.textColor = pressed ? Ink : Cream;
             GUI.Label(rect, label, style);
         }

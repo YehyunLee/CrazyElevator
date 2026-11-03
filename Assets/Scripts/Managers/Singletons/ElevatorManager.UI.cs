@@ -361,6 +361,27 @@ namespace CrazyElevator.Managers
 
         public Texture DimensionRevealTexture => encounterPreviewTexture;
 
+        public bool PrepareTutorialCharacter(string kind)
+        {
+            PassengerData data = passengerCatalog != null ? passengerCatalog.FindKind(kind) : null;
+            GameObject source = data != null && data.prefab != null ? data.prefab.gameObject
+                : sceneView != null && sceneView.passengers != null ? FindPassengerTemplate(kind) : null;
+            PrepareEncounterPreview(new EncounterCard
+            {
+                Title = kind, PreviewSource = source, Accent = Teal, PreviewYaw = 0f
+            });
+            return encounterPreviewModel != null;
+        }
+
+        public void AnimateTutorialCharacter(float seconds)
+        {
+            if (encounterPreviewPivot != null && encounterPreviewModel != null)
+                encounterPreviewPivot.localRotation = Quaternion.Euler(0f,
+                    Mathf.Sin(seconds * .85f) * 28f, 0f);
+        }
+
+        public void FinishTutorialCharacter() => ClearEncounterPreviewModel();
+
         void EnsureEncounterPreview()
         {
             if (encounterPreviewStage != null && encounterPreviewCamera != null

@@ -75,6 +75,12 @@ namespace CrazyElevator.Managers
                 && round.IsOffered(rider) && rider.Arrival <= 0f
                 && figures.TryGetValue(rider, out var figure) && figure != null;
 
+        public void RefillTutorialPassengers()
+        {
+            if (!MenuManager.TutorialActive || round == null || phase != Phase.Boarding) return;
+            round.RefillPracticeQueue();
+        }
+
         void TickAutoBoarding(float dt)
         {
             if (phase != Phase.Boarding || PersonaBusy) return;

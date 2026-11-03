@@ -291,6 +291,41 @@ namespace CrazyElevator.Shared
             Seat = seat;
         }
 
+        // Explicitly requested by tutorial boarding steps only. Live rounds never
+        // call this: their captured queues remain finite and shared as before.
+        public int RefillPracticeQueue()
+        {
+            RevealQueue(Floor, Stop);
+            if (!revealedQueues.TryGetValue(Floor * Stops + Stop, out var queue)) return 0;
+            List<Rider> departed = null;
+            foreach (Rider rider in queue)
+            {
+                if (!rider.Boarded && !rider.Resolved) continue;
+                if (departed == null) departed = new List<Rider>();
+                departed.Add(rider);
+            }
+            if (departed == null) return 0;
+            foreach (Rider original in departed)
+            {
+                // New identities preserve the first player's cabin, destinations,
+                // and eventual drop-offs while restoring the same doorway slot.
+                var replacement = new Rider
+                {
+                    Data = original.Data, Name = original.Name, Request = original.Request,
+                    Kind = original.Kind, Badge = original.Badge, Color = original.Color,
+                    Origin = original.Origin, Destination = original.Destination,
+                    OriginStop = original.OriginStop, DestinationStop = original.DestinationStop,
+                    PickupDoor = original.PickupDoor, PickupQueueSlot = original.PickupQueueSlot,
+                    Space = original.Space, Bonus = original.Bonus,
+                    Patience = original.Patience, Remaining = original.Patience
+                };
+                Riders.Add(replacement);
+                queue.Remove(original);
+                queue.Add(replacement);
+            }
+            return departed.Count;
+        }
+
         public bool Owns(Rider rider) => rider != null && rider.Boarded
             && !rider.Resolved && rider.BoardedBySeat == Seat;
 
