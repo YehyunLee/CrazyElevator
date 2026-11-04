@@ -9,9 +9,13 @@ namespace CrazyElevator.Managers
         public static MusicManager Instance { get; private set; }
 
         public AudioClip[] themes = System.Array.Empty<AudioClip>();
+        public AudioClip tutorialTheme;
         [SerializeField, Range(0f, 1f)] float musicVolume = .32f;
         AudioSource music;
         bool muted;
+        bool tutorialMode, themeWasPlayingBeforeTutorial;
+        AudioClip themeBeforeTutorial;
+        float themeTimeBeforeTutorial;
 
         void Awake()
         {
@@ -34,6 +38,18 @@ namespace CrazyElevator.Managers
 
         public void PlayMusic(AudioClip clip = null)
         {
+            if (tutorialMode)
+            {
+                if (clip != null && clip != tutorialTheme)
+                {
+                    themeBeforeTutorial = clip;
+                    themeTimeBeforeTutorial = 0f;
+                    themeWasPlayingBeforeTutorial = true;
+                }
+                if (music.clip == tutorialTheme && !music.isPlaying) music.Play();
+                music.mute = muted;
+                return;
+            }
             if (clip != null) music.clip = clip;
             if (music.clip == null) return;
             if (!music.isPlaying) music.Play();
@@ -45,6 +61,15 @@ namespace CrazyElevator.Managers
         public void SetTheme(AudioClip clip)
         {
             if (clip == null || music == null) return;
+            if (tutorialMode)
+            {
+                if (clip == themeBeforeTutorial) return;
+                float savedPosition = themeBeforeTutorial != null && themeBeforeTutorial.length > 0f
+                    ? themeTimeBeforeTutorial / themeBeforeTutorial.length : 0f;
+                themeBeforeTutorial = clip;
+                themeTimeBeforeTutorial = Mathf.Clamp01(savedPosition) * clip.length;
+                return;
+            }
             if (music.clip == clip) { PlayMusic(); return; }
 
             bool wasPlaying = music.isPlaying;
@@ -57,6 +82,40 @@ namespace CrazyElevator.Managers
                 music.Play();
             }
             music.mute = muted;
+        }
+
+        public void SetTutorialMode(bool enabled)
+        {
+            if (music == null || tutorialMode == enabled) return;
+            tutorialMode = enabled;
+            if (enabled)
+            {
+                themeBeforeTutorial = music.clip;
+                themeTimeBeforeTutorial = music.clip != null ? music.time : 0f;
+                themeWasPlayingBeforeTutorial = music.isPlaying;
+                if (tutorialTheme != null)
+                {
+                    music.Stop();
+                    music.clip = tutorialTheme;
+                    music.time = 0f;
+                    music.Play();
+                }
+                music.mute = muted;
+                return;
+            }
+
+            if (themeBeforeTutorial != null)
+            {
+                music.Stop();
+                music.clip = themeBeforeTutorial;
+                music.time = Mathf.Clamp(themeTimeBeforeTutorial, 0f, Mathf.Max(0f, themeBeforeTutorial.length - .01f));
+                if (themeWasPlayingBeforeTutorial) music.Play();
+            }
+            else music.Stop();
+            music.mute = muted;
+            themeBeforeTutorial = null;
+            themeTimeBeforeTutorial = 0f;
+            themeWasPlayingBeforeTutorial = false;
         }
 
         public AudioClip ThemeAt(int index)

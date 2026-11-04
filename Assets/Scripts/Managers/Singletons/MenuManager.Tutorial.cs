@@ -157,6 +157,7 @@ namespace CrazyElevator.Managers
             InputManager.Instance?.ClearTutorialInputLocks();
             tutorialActive = true;
             TutorialActive = true;
+            MusicManager.Instance?.SetTutorialMode(true);
             IsOpen = false;
             pauseOpen = false;
             tutorialIntroReady = false;
@@ -629,6 +630,7 @@ namespace CrazyElevator.Managers
             tutorialGame?.FinishTutorialCharacter();
             tutorialActive = false;
             TutorialActive = false;
+            MusicManager.Instance?.SetTutorialMode(false);
             tutorialFinalePhase = TutorialFinalePhase.None;
             showingControllerInstructions = false;
             InputManager.Instance?.ClearTutorialInputLocks();

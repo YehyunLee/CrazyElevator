@@ -810,6 +810,7 @@ namespace CrazyElevator.Managers
 
         public static void ReturnToLobby()
         {
+            MusicManager.Instance?.SetTutorialMode(false);
             openLobbyOnLoad = true;
             fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
@@ -820,6 +821,7 @@ namespace CrazyElevator.Managers
 
         public static void ReturnToMainMenu()
         {
+            MusicManager.Instance?.SetTutorialMode(false);
             openLobbyOnLoad = false;
             fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
