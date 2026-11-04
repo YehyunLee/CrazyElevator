@@ -9,6 +9,8 @@ Every world displays floors **1–8**, including the HUD, cabin indicator, world
 
 Before every round, including Office and rematches, a world preview introduces its characters and mechanics using the existing 3D models. Solo waits for confirmation; in a match every human player must be ready, while CPU seats never block. The briefing holds the timer, passenger patience, boarding, and countdown. Once everyone is ready, the shared countdown runs before the round starts. Tutorial practice hands off to this same briefing for the first real round.
 
+After the basic steps, each human practices a real collision in the shaft: hold up and boost into the staged rival. Contact and knockback complete the step; a timer or confirmation button cannot skip it. Only the practicing driver controls their car during that turn. Short prompts and the animated controller show the action; the Bouncer's character introduction explains its stronger hit. Both cars recoil, and passenger count adds no collision weight or stability. Kick practice highlights a real onboard rider, supplies one if automatic drop-off emptied the cabin, and requires an actual kick before advancing. All staging and passenger replenishment are tutorial-only; the real round starts with fresh cars and passengers.
+
 ## Scene ownership (required)
 
 Put each global manager on its **own named GameObject** in `Main.unity` and attach the script in the Inspector. Do **not** recreate them with runtime `new GameObject` / `AddComponent`.

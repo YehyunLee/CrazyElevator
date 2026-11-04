@@ -52,7 +52,7 @@ namespace CrazyElevator.Managers
                 : kind == "DIVER" ? sceneView.tornado
                 : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
                 : kind == "CALM" ? FindPassengerTemplate("PREGNANT")
-                : kind == "PREGNANT" ? FindPassengerTemplate("BOSS")
+                : kind == "PREGNANT" ? FindPassengerTemplate("ELDERLY")
                 : (kind == "BOUNCER" || kind == "GROUP" || kind == "ELDERLY")
                     && sceneView.exteriorCar != null ? sceneView.exteriorCar.gameObject : null;
             if (passenger == null || (kind != "VIP" && opponent == null)) return false;
@@ -95,10 +95,11 @@ namespace CrazyElevator.Managers
             var model = Instantiate(source, slot.transform, false);
             model.name = label + " ability preview";
             model.SetActive(true);
-            var stars = model.GetComponent<StarfishImpairmentView>();
-            if (stars != null)
+            var gears = model.GetComponent<StarfishImpairmentView>();
+            if (gears != null)
             {
-                stars.SetSeverity(3);
+                // Handyman repair is immediate; the popup shows the restored gears.
+                gears.SetSeverity(0);
                 model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             }
             MakeStillPreviewModel(model, accent ?? Teal);
@@ -370,8 +371,7 @@ namespace CrazyElevator.Managers
             abilityIntroOpponent.localRotation = abilityIntroKind == "DIVER"
                 ? Quaternion.Euler(0f, time * 260f, impact * 18f)
                 : Quaternion.Euler(0f, -12f, speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
-            if (abilityIntroKind == "HANDYMAN")
-                abilityIntroOpponent.localScale = Vector3.one * (1f - recoil * .85f);
+
             // Start on the passenger, then pivot/zoom out to reveal the threat.
             float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.25f, 1.2f, time));
             encounterPreviewCamera.orthographicSize = Mathf.Lerp(1.2f, 2.1f, reveal);

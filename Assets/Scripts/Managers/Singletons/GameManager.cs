@@ -299,7 +299,7 @@ namespace CrazyElevator.Managers
                 }
                 abilityIntroTime += Time.unscaledDeltaTime;
                 abilityIntroActor.AnimateAbilityIntro(abilityIntroTime);
-                if (abilityIntroTime >= (abilityIntroKind == "VIP" ? ElevatorManager.VipIntroDuration : AbilityIntroSeconds))
+                if (abilityIntroTime >= (abilityIntroKind == "VIP" ? ElevatorManager.VipIntroDuration : abilityIntroKind == "HANDYMAN" ? 1.6f : AbilityIntroSeconds))
                 {
                     StopAbilityIntro();
                     StartNextAbilityIntro();

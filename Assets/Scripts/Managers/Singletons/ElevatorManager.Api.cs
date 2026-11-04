@@ -161,6 +161,44 @@ namespace CrazyElevator.Managers
         }
         public void SetPausedPublic(bool value) => paused = value;
 
+        // Place the real car on the main shaft for the hands-on collision lesson.
+        // The match holds it still until the learner actually pushes the stick.
+        public bool StageTutorialCollision(float floor)
+        {
+            if (!MenuManager.TutorialActive || round == null || Match == null) return false;
+            CancelPassengerDrag();
+            SelectRider(null);
+            ClearHandymanRepair();
+            ClearInteriorTransfers();
+            CloseRequestedBoardingDoors();
+            round.Arrive(Mathf.Clamp(Mathf.RoundToInt(floor), MinTravelFloor, MaxTravelFloor),
+                ElevatorRound.CenterStop);
+            travelFloor = Mathf.Clamp(floor, MinTravelFloor, MaxTravelFloor);
+            travelDirection = 1;
+            destination = selectedFloor = -1;
+            phase = Phase.Moving;
+            phaseTime = 0f;
+            tutorialPassengerView = false;
+            ResetRouteLateral();
+            StopTutorialCollisionMotion();
+            passedFloors.Clear();
+            passedFloors.Add(round.Floor);
+            doors = 0f;
+            SetDoors(0f);
+            notice = "BUMP YOUR RIVAL";
+            return true;
+        }
+
+        public void StopTutorialCollisionMotion()
+        {
+            travelVelocity = railVelocity = 0f;
+            boostAxis = 0f;
+            boostHeld = false;
+            collisionSlowTimer = collisionRecoilTimer = collisionImpact = bouncerImpact = 0f;
+            strongCollisionRecoil = false;
+            ClearRouteTurns();
+        }
+
         public void SetTravelInput(float axis, bool boost)
         {
             if (phase != Phase.Moving) return;

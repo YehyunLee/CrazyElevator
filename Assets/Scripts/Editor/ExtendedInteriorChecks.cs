@@ -19,6 +19,8 @@ public static class ExtendedInteriorChecks
     const string Work = "Temp/ExtendedInterior";
     const string Scene = "Assets/Scenes/Main.unity";
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
+    static IEnumerator tutorialChecks;
+    static int tutorialCheckFrame = -1;
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
     static object Get(Game game, string name)
     {
@@ -38,15 +40,266 @@ public static class ExtendedInteriorChecks
     static void Call(Game game, string name, params object[] args) => typeof(Game).GetMethod(name, Flags).Invoke(game, args);
     static void Require(bool value, string message) { if (!value) throw new Exception(message); }
 
+    // Run explicitly with -executeMethod ExtendedInteriorChecks.CheckGearGaugeBatch.
+    // Opens Main for reference checks, but never saves it or enters Play Mode.
+    [MenuItem("Tools/Crazy Elevator/Check Gear Gauge")]
+    public static void CheckGearGaugeBatch()
+    {
+        const string output = "Temp/GearChecks";
+        Directory.CreateDirectory(output);
+        string sceneBefore = File.ReadAllText(Scene);
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path != Scene)
+        {
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+                Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty,
+                    "Open Main first; gear checks will not discard unsaved scene changes.");
+            EditorSceneManager.OpenScene(Scene, OpenSceneMode.Single);
+        }
+        var game = UnityEngine.Object.FindAnyObjectByType<Game>();
+        Require(game && game.sceneView && game.impairmentGaugePrefab,
+            "Main must retain its elevator, scene view, and assigned impairment gauge.");
+        Require(game.GetComponent<CrazyElevator.Managers.PassengerManager>(),
+            "The player elevator must retain its PassengerManager.");
+        string[] managers = { "GameManager", "InputManager", "SfxManager", "MusicManager", "MenuManager" };
+        foreach (string manager in managers)
+        {
+            GameObject named = GameObject.Find(manager);
+            Require(named && named.GetComponent(manager), "Main lost its named " + manager + " object/component.");
+        }
+        Require(AssetDatabase.GetAssetPath(game.impairmentGaugePrefab)
+            == "Assets/Static/ElevatorPersonas/Prefabs/StarfishImpairmentGauge.prefab",
+            "Main no longer points at the shared authored gear prefab.");
+
+        GameObject rig = new GameObject("Gear verification preview");
+        rig.transform.position = new Vector3(4000, 4000, 4000);
+        Camera camera = new GameObject("Gear verification camera").AddComponent<Camera>();
+        camera.transform.SetParent(rig.transform, false);
+        camera.transform.localPosition = new Vector3(0, 0, 4);
+        camera.transform.localRotation = Quaternion.Euler(0, 180, 0);
+        camera.orthographic = true;
+        camera.orthographicSize = .38f;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = new Color(.035f, .07f, .09f, 1);
+        camera.cullingMask = 1 << 28;
+        camera.enabled = false;
+        Light light = new GameObject("Gear verification key").AddComponent<Light>();
+        light.transform.SetParent(rig.transform, false);
+        light.transform.localRotation = Quaternion.Euler(20, 155, 0);
+        light.type = LightType.Directional;
+        light.intensity = 1.6f;
+        light.cullingMask = 1 << 28;
+        var texture = new RenderTexture(1440, 540, 24);
+        texture.Create();
+        camera.targetTexture = texture;
+        var gauge = UnityEngine.Object.Instantiate(game.impairmentGaugePrefab, rig.transform, false);
+        var second = UnityEngine.Object.Instantiate(game.impairmentGaugePrefab, rig.transform, false);
+        second.gameObject.SetActive(false);
+        try
+        {
+            SetGearPreviewLayer(gauge.gameObject);
+            Require(gauge.starfish != null && gauge.starfish.Length == 3,
+                "The impairment meter must have three authored gears.");
+            Require(gauge.GetComponentInChildren<TextMesh>(true) == null,
+                "The gear meter must remain visual without a text label.");
+            foreach (MeshFilter filter in gauge.GetComponentsInChildren<MeshFilter>(true))
+                Require(filter.sharedMesh, "The gear prefab has a missing mesh: " + filter.name);
+            for (int level = 0; level <= 3; level++)
+            {
+                gauge.SetSeverity(level);
+                second.SetSeverity(level);
+                Require(gauge.DisplayedSeverity == level && second.DisplayedSeverity == level,
+                    "Inside and outside gear meters must agree on severity.");
+                for (int i = 0; i < gauge.starfish.Length; i++)
+                {
+                    Transform gear = gauge.starfish[i];
+                    Require(gear && gear.localScale.x > .5f, "A gear disappeared from the indicator.");
+                    bool metal = false, crack = false, wrench = false;
+                    foreach (MeshRenderer surface in gear.GetComponentsInChildren<MeshRenderer>(true))
+                    {
+                        if (surface.name.StartsWith("Gear metal"))
+                        {
+                            metal = true;
+                            Require(surface.sharedMaterial == (i < level ? gauge.severityMaterials[level - 1] : gauge.inactiveMaterial),
+                                "Gear severity must select its authored damage color.");
+                        }
+                        else if (surface.name.StartsWith("Damage crack"))
+                        {
+                            crack = true;
+                            Require(surface.gameObject.activeSelf == (i < level), "Cracks must only appear on damaged gears.");
+                        }
+                    }
+                    foreach (Transform part in gear.GetComponentsInChildren<Transform>(true))
+                        if (part.name.StartsWith("Repair wrench"))
+                        {
+                            wrench = true;
+                            Require(part.gameObject.activeSelf == (level == 3 && i == 2),
+                                "The repair wrench must appear only at severe damage.");
+                        }
+                    Require(metal && crack, "Each gear needs its authored ring and visible damage detail.");
+                    Require(wrench == (i == 2), "The third gear must retain its authored repair wrench overlay.");
+                }
+                WriteGearPreview(camera, texture, output + "/gear-level-" + level + ".png");
+            }
+            // Returning directly to repaired must restore visible healthy gears immediately.
+            gauge.SetSeverity(0);
+            Require(gauge.DisplayedSeverity == 0 && gauge.starfish[0].localScale.x > .5f,
+                "Immediate repair must leave a visible healthy gear indicator.");
+            gauge.gameObject.SetActive(false);
+            foreach (string kind in new[] { "RUST", "REPAIR" })
+            {
+                GameObject model = (GameObject)typeof(Game).GetMethod("InstantiateLineupModel", Flags)
+                    .Invoke(game, new object[] { kind, rig.transform });
+                Require(model, "The underwater tutorial lost its " + kind + " visual.");
+                var tutorialGauge = model.GetComponent<StarfishImpairmentView>();
+                Require(tutorialGauge && tutorialGauge.DisplayedSeverity == (kind == "RUST" ? 3 : 0),
+                    "The tutorial must use damaged gears for rust and healthy gears for repair.");
+                // Both sides of the authored mesh must render; tutorials face the opposite camera.
+                SetGearPreviewLayer(model);
+                WriteGearPreview(camera, texture, output + "/tutorial-" + kind.ToLowerInvariant() + ".png");
+                UnityEngine.Object.DestroyImmediate(model);
+            }
+            CheckGearHandymanPreview(game, output);
+            Require(sceneBefore == File.ReadAllText(Scene), "Gear checks must not modify Main.");
+            File.WriteAllText(output + "/result.txt", "PASS: Main references and named managers; three authored gears with valid meshes; no text label; matching inside/outside severity; damage colors and cracks; severe repair wrench; immediate visible repaired state; tutorial damaged/healthy gear models; handyman popup shows healthy gears without cleaning or shrinking.\n");
+            Debug.Log("PASS: Gear gauge wiring, severity, repaired state, and tutorial preview checks. Renders: " + output);
+        }
+        finally
+        {
+            camera.targetTexture = null;
+            texture.Release();
+            UnityEngine.Object.DestroyImmediate(texture);
+            UnityEngine.Object.DestroyImmediate(rig);
+        }
+    }
+
+    static void CheckGearHandymanPreview(Game game, string output)
+    {
+        Transform existingStage = (Transform)Get(game, "encounterPreviewStage");
+        Require(existingStage == null, "Finish the existing encounter preview before checking the handyman popup.");
+        try
+        {
+            Require(game.PrepareAbilityIntro("HANDYMAN"), "The handyman popup could not create its authored models.");
+            Transform handyman = (Transform)Get(game, "abilityIntroPassenger");
+            Transform opponent = (Transform)Get(game, "abilityIntroOpponent");
+            var gears = opponent.GetComponentInChildren<StarfishImpairmentView>(true);
+            Require(gears && gears.DisplayedSeverity == 0,
+                "The handyman popup must immediately show healthy gears.");
+            Vector3 handymanPosition = handyman.localPosition, handymanScale = handyman.localScale;
+            Vector3 gearPosition = opponent.localPosition, gearScale = opponent.localScale;
+            Quaternion handymanRotation = handyman.localRotation, gearRotation = opponent.localRotation;
+            Vector3[] iconScales = Array.ConvertAll(gears.starfish, icon => icon.localScale);
+            game.AnimateAbilityIntro(1.5f);
+            Require(handyman.localPosition == handymanPosition && handyman.localScale == handymanScale
+                && handyman.localRotation == handymanRotation && opponent.localPosition == gearPosition
+                && opponent.localScale == gearScale && opponent.localRotation == gearRotation,
+                "The handyman popup must show the result without a cleaning animation.");
+            for (int i = 0; i < gears.starfish.Length; i++)
+                Require(gears.starfish[i].localScale == iconScales[i] && iconScales[i].x > .5f,
+                    "The repaired gear icons must remain visible without shrinking away.");
+            Require(!(bool)Property(game, "HandymanRepairActive"),
+                "Showing the handyman popup must not start an in-cabin cleaning sequence.");
+            Camera camera = (Camera)Get(game, "encounterPreviewCamera");
+            WriteGearPreview(camera, camera.targetTexture, output + "/handyman-popup.png");
+        }
+        finally
+        {
+            // Runtime cleanup uses deferred Destroy; editor checks release their own temporary stage immediately.
+            Camera camera = (Camera)Get(game, "encounterPreviewCamera");
+            RenderTexture texture = (RenderTexture)Get(game, "encounterPreviewTexture");
+            if (camera) camera.targetTexture = null;
+            if (texture)
+            {
+                texture.Release();
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+            Transform stage = (Transform)Get(game, "encounterPreviewStage");
+            if (stage) UnityEngine.Object.DestroyImmediate(stage.gameObject);
+            foreach (string field in new[] { "encounterPreviewStage", "encounterPreviewPivot", "encounterPreviewCamera",
+                "encounterPreviewTexture", "encounterPreviewModel", "abilityIntroPassenger", "abilityIntroOpponent",
+                "abilityIntroOwnCar", "abilityIntroKind", "abilityIntroVip" }) Set(game, field, null);
+        }
+    }
+
+    static void SetGearPreviewLayer(GameObject model)
+    {
+        foreach (Transform part in model.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = 28;
+    }
+
+    static void WriteGearPreview(Camera camera, RenderTexture texture, string path)
+    {
+        camera.Render();
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = texture;
+        var pixels = new Texture2D(texture.width, texture.height, TextureFormat.RGB24, false);
+        try
+        {
+            pixels.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            pixels.Apply();
+            Color32[] samples = pixels.GetPixels32();
+            Color32 background = samples[0];
+            int visible = 0;
+            foreach (Color32 sample in samples)
+                if (Mathf.Abs(sample.r - background.r) + Mathf.Abs(sample.g - background.g)
+                    + Mathf.Abs(sample.b - background.b) > 24) visible++;
+            Require(visible > 500, "The gear preview rendered empty: " + path);
+            File.WriteAllBytes(path, pixels.EncodeToPNG());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(pixels);
+            RenderTexture.active = previous;
+        }
+    }
+
     static void Poll()
     {
         if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+        if (tutorialChecks != null)
+        {
+            if (!EditorApplication.isPlaying || tutorialCheckFrame == Time.frameCount) return;
+            tutorialCheckFrame = Time.frameCount;
+            int tutorialExitCode = 0;
+            try { if (tutorialChecks.MoveNext()) return; }
+            catch (Exception error)
+            {
+                tutorialExitCode = 1;
+                Directory.CreateDirectory("Temp/TutorialChecks");
+                File.WriteAllText("Temp/TutorialChecks/result.txt", "FAIL: " + error);
+                Debug.LogException(error);
+            }
+            (tutorialChecks as IDisposable)?.Dispose();
+            tutorialChecks = null;
+            if (Application.isBatchMode) EditorApplication.Exit(tutorialExitCode);
+            else EditorApplication.isPlaying = false;
+            return;
+        }
         string request = Work + "/request.txt";
         if (!File.Exists(request)) return;
         string action;
         try { action = File.ReadAllText(request).Trim(); }
         catch (IOException) { return; }
         if (action.Length == 0) return;
+        if (action == "gear-checks")
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorApplication.isPlaying = false;
+                return;
+            }
+            File.Delete(request);
+            try
+            {
+                CrazyElevator.EditorTools.PassengerPrefabBuilder.RebuildGearGauge();
+                CheckGearGaugeBatch();
+            }
+            catch (Exception error)
+            {
+                Directory.CreateDirectory("Temp/GearChecks");
+                File.WriteAllText("Temp/GearChecks/result.txt", "FAIL: " + error);
+                Debug.LogException(error);
+            }
+            return;
+        }
         if (!EditorApplication.isPlaying)
         {
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path != Scene) return;
@@ -55,10 +308,11 @@ public static class ExtendedInteriorChecks
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
         if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare")
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare")
         {
             bool singleDimension = action != "match-prepare";
-            File.WriteAllText(request, action == "interaction-prepare" ? "interaction-run"
+            File.WriteAllText(request, action == "tutorial-prepare" ? "tutorial-run"
+                : action == "interaction-prepare" ? "interaction-run"
                 : action == "bouncer-prepare" ? "bouncer-run"
                 : singleDimension ? "single-dimension-run" : "match-run");
             typeof(CrazyElevator.Managers.MenuManager)
@@ -86,6 +340,7 @@ public static class ExtendedInteriorChecks
         try
         {
             if (action == "checks") { Run(game); RunBoost(game); }
+            else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
@@ -1454,6 +1709,164 @@ public static class ExtendedInteriorChecks
                 "The rival did not consume the trail and slow down.");
         }
         Debug.Log("PASS: Shared VIP, exclusive claim, bonus, hazard event, and candy trail for both seats.");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Tutorial Practice")]
+    public static void RequestTutorialPracticeChecks()
+    {
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "tutorial-prepare");
+    }
+
+    static IEnumerator RunTutorialPracticeChecks()
+    {
+        const string output = "Temp/TutorialChecks";
+        Directory.CreateDirectory(output);
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        var menu = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Managers.MenuManager>();
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        Require(match && match.player && match.Rival && menu && input, "Tutorial checks need two real elevators and their managers.");
+        var menuType = menu.GetType();
+        var tutorialFlag = menuType.GetField("<TutorialActive>k__BackingField", BindingFlags.Static | BindingFlags.NonPublic);
+        Game[] actors = { match.player, match.Rival };
+        bool[] enabledBefore = { actors[0].enabled, actors[1].enabled };
+        bool matchEnabled = match.enabled;
+        bool menuEnabled = menu.enabled;
+        bool tutorialBefore = (bool)tutorialFlag.GetValue(null);
+        bool activeBefore = (bool)menuType.GetField("tutorialActive", Flags).GetValue(menu);
+        try
+        {
+            CrazyElevator.Managers.MenuManager.Close();
+            tutorialFlag.SetValue(null, true);
+            menuType.GetField("tutorialActive", Flags).SetValue(menu, true);
+            match.StartMatch();
+            match.enabled = false;
+            foreach (Game actor in actors) actor.enabled = false;
+            menu.enabled = true;
+            menuType.GetField("tutorialGame", Flags).SetValue(menu, actors[0]);
+            menuType.GetField("tutorialIntroReady", Flags).SetValue(menu, true);
+            menuType.GetField("showingControllerInstructions", Flags).SetValue(menu, false);
+            var tutorialActors = (Game[])menuType.GetField("tutorialActors", Flags).GetValue(menu);
+            var steps = (int[])menuType.GetField("tutorialSteps", Flags).GetValue(menu);
+            var kickBaseline = (int[])menuType.GetField("tutorialKickBaseline", Flags).GetValue(menu);
+            var motionTimes = (float[])menuType.GetField("tutorialCardMotionTimes", Flags).GetValue(menu);
+            Array motions = (Array)menuType.GetField("tutorialCardMotions", Flags).GetValue(menu);
+            object settled = Enum.Parse(motions.GetType().GetElementType(), "Settled");
+            menuType.GetField("tutorialFinalePhase", Flags).SetValue(menu,
+                Enum.Parse(menuType.GetField("tutorialFinalePhase", Flags).FieldType, "None"));
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                tutorialActors[seat] = actor;
+                steps[seat] = 7;
+                motions.SetValue(settled, seat);
+                motionTimes[seat] = 1f;
+                kickBaseline[seat] = actor.KickoutCount;
+                input.UnlockTutorialInput(seat);
+                input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Kickout);
+                Require(actor.CurrentPassengers.Count == 0, "Fresh tutorial must start with an empty cabin for this regression.");
+                Require(actor.PrepareTutorialKickPassenger(), "Empty-cabin kick practice could not prepare its rider.");
+                Require(actor.CurrentPassengers.Count == 1 && actor.HasSelectedBoardedPassenger,
+                    "Kick practice needs one highlighted real passenger.");
+                SharedRider rider = actor.CurrentPassengers[0];
+                Require(!((Round)Get(actor, "round")).AtDestination(rider), "Kick target would immediately auto-exit.");
+                Require(actor.PrepareTutorialKickPassenger() && actor.CurrentPassengers.Count == 1,
+                    "Repeated tutorial preparation duplicated the practice passenger.");
+                Require(!(bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "Kick tutorial completed before any kick.");
+                Call(actor, "LateUpdate");
+            }
+            ScreenCapture.CaptureScreenshot(output + "/kick-practice.png");
+            yield return null;
+            yield return null;
+            yield return null;
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                // A normal correct-floor drop-off must not satisfy the kick lesson.
+                Round round = (Round)Get(actor, "round");
+                SharedRider rider = actor.CurrentPassengers[0];
+                round.Arrive(rider.Destination, rider.DestinationStop);
+                Call(actor, "ConfirmPassenger");
+                Call(actor, "SyncFigures", 2f);
+                Require(actor.KickoutCount == kickBaseline[seat], "A normal drop-off counted as a kick.");
+                Require(!(bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "A normal drop-off skipped the kick lesson.");
+                Require(actor.PrepareTutorialKickPassenger(), "Kick practice could not recover after an automatic drop-off.");
+                actor.KickoutSelectedPublic();
+                Require(actor.KickoutCount == kickBaseline[seat] + 1
+                    && (bool)menuType.GetMethod("TutorialStepCompletedForActor", Flags).Invoke(menu, new object[] { seat, 7 }),
+                    "A real selected-passenger kick did not finish the lesson.");
+            }
+            // Start the real menu handoff, not an isolated preview or a fabricated success flag.
+            for (int seat = 0; seat < steps.Length; seat++) steps[seat] = 8;
+            menuType.GetMethod("BeginTutorialHandoff", Flags).Invoke(menu, null);
+            Require(!input.IsTutorialInputLocked(0) && input.IsTutorialInputLocked(1),
+                "Collision lesson did not unlock the attacker and hold the target.");
+            match.enabled = true;
+            float cameraSettledAt = Time.realtimeSinceStartup + .9f;
+            while (Time.realtimeSinceStartup < cameraSettledAt)
+            {
+                foreach (Game actor in actors)
+                {
+                    Call(actor, "SyncFigures", Time.deltaTime);
+                    Call(actor, "LateUpdate");
+                }
+                yield return null;
+            }
+            foreach (Game actor in actors)
+                Require((float)Get(actor, "cameraViewBlend") >= .99f, "Collision practice did not switch into the real shaft view.");
+            ScreenCapture.CaptureScreenshot(output + "/collision-practice.png");
+            yield return null;
+            yield return null;
+            yield return null;
+            match.enabled = false;
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game attacker = actors[seat], target = actors[1 - seat];
+                Require(match.BeginTutorialCollisionPractice(seat), "Could not stage collision for seat " + seat);
+                input.UnlockTutorialInput(seat);
+                input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Collision);
+                input.LockTutorialInput(1 - seat);
+                float targetStart = target.CurrentFloor;
+                float timeLeft = attacker.SecondsLeft;
+                Require(!match.TutorialCollisionPracticeCompleted(seat), "Collision lesson auto-completed before input.");
+                for (int frame = 0; frame < 300 && !match.TutorialCollisionPracticeCompleted(seat); frame++)
+                {
+                    attacker.SetTravelInput(1f, true);
+                    Call(attacker, "AdvanceBuildingTravel", 1f / 60f);
+                }
+                Require(match.TutorialCollisionPracticeCompleted(seat), "Actual travel did not register a tutorial collision for seat " + seat);
+                Require(target.TravelVelocity > 0f, "Input-locked target did not receive the real hit.");
+                Call(target, "AdvanceBuildingTravel", .2f);
+                Require(target.CurrentFloor > targetStart, "The target did not visibly rebound in gameplay.");
+                Require(attacker.SecondsLeft == timeLeft, "Collision tutorial consumed the real round timer.");
+                match.EndTutorialCollisionPractice();
+                Require(!match.IsTutorialCollisionParticipant(attacker)
+                    && !match.TutorialCollisionPracticeCompleted(seat), "Ending collision practice left its exception active.");
+            }
+            input.ClearTutorialInputLocks();
+            Require(actors[0].StageTutorialCollision(2f) && actors[1].StageTutorialCollision(3f),
+                "Could not stage the ordinary tutorial protection check.");
+            Set(actors[0], "travelVelocity", 1.8f);
+            typeof(CrazyElevator.Match.ElevatorMatch).GetField("collisionCooldown", Flags).SetValue(match, 0f);
+            float incoming = 1.8f;
+            match.ConstrainTravel(actors[0], 2f, 3.2f, ref incoming);
+            Require(actors[1].TravelVelocity == 0f && actors[1].CurrentFloor == 3f,
+                "Ordinary tutorial collisions stopped protecting the non-participating target.");
+            File.WriteAllText(output + "/result.txt", "PASS: both seats retain one highlighted kick target; repeated preparation does not duplicate; normal drop-off cannot complete kicking; actual kicks complete; live collision unlocks only learner; both seats cause real contact and displace locked target; no timeout completion; practice clock unchanged; staged exception clears; ordinary tutorial target protection remains.\n");
+            Debug.Log(File.ReadAllText(output + "/result.txt"));
+        }
+        finally
+        {
+            match.EndTutorialCollisionPractice();
+            input.ClearTutorialInputLocks();
+            tutorialFlag.SetValue(null, tutorialBefore);
+            menuType.GetField("tutorialActive", Flags).SetValue(menu, activeBefore);
+            for (int seat = 0; seat < actors.Length; seat++) actors[seat].enabled = enabledBefore[seat];
+            match.enabled = matchEnabled;
+            menu.enabled = menuEnabled;
+        }
     }
 
     static void RunBouncerChecks()

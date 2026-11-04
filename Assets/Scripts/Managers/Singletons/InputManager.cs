@@ -32,7 +32,8 @@ namespace CrazyElevator.Managers
             Boost,
             Stop,
             HelpPassenger,
-            Kickout
+            Kickout,
+            Collision
         }
 
         public GameView ActiveView { get; private set; } = GameView.Menu;
@@ -131,6 +132,11 @@ namespace CrazyElevator.Managers
         {
             if (seat < 0 || seat >= tutorialInputModes.Length) return;
             tutorialInputModes[seat] = mode;
+        }
+
+        public void UnlockTutorialInput(int seat)
+        {
+            if (seat >= 0 && seat < tutorialInputLocks.Length) tutorialInputLocks[seat] = false;
         }
 
         public TutorialInputMode GetTutorialInputMode(int seat)
@@ -574,6 +580,7 @@ namespace CrazyElevator.Managers
             // turn the car onto a floor rail or switch duel lanes.
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
+            bool collisionBoost = input.BoostHeld;
             bool confirm = input.ConfirmPressed;
             bool boardingLeft = input.BoardingLeftPressed;
             bool boardingFront = input.BoardingFrontPressed;
@@ -612,6 +619,11 @@ namespace CrazyElevator.Managers
                 case TutorialInputMode.Move:
                     input.Move = move;
                     input.MovePressed = move.magnitude >= .55f;
+                    break;
+                case TutorialInputMode.Collision:
+                    input.Move = new Vector2(0f, Mathf.Max(0f, move.y));
+                    input.MovePressed = input.Move.y >= .55f;
+                    input.BoostHeld = collisionBoost;
                     break;
                 case TutorialInputMode.Boost:
                 case TutorialInputMode.Stop:

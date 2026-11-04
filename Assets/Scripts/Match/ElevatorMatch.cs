@@ -63,6 +63,9 @@ namespace CrazyElevator.Match
         readonly string[] contestMessages = new string[2];
         readonly float[] contestMessageTimes = new float[2];
         int collisionCount;
+        Game tutorialCollisionAttacker, tutorialCollisionTarget;
+        bool tutorialCollisionCompleted;
+        float tutorialCollisionStartFloor;
         static readonly float[] JunctionFloorPositions = { 5.5f, 12.5f, 19.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
@@ -229,6 +232,7 @@ namespace CrazyElevator.Match
             // The CPU reads the same visible junction sign as a player and
             // moves toward the express track shortly before reaching it.
             if (Running && !Paused && Rival != null && Rival.IsNpc
+                && !IsTutorialCollisionParticipant(Rival)
                 && TryGetUpcomingJunction(Rival, out int npcJunction, out float npcDistance)
                 && npcDistance < 1.15f)
             {
@@ -311,6 +315,7 @@ namespace CrazyElevator.Match
         // Both cars receive a fresh clock, passenger pool and starting position.
         void BeginRound()
         {
+            EndTutorialCollisionPractice();
             bool practice = MenuManager.TutorialActive;
             Paused = false;
             dimensionRevealActive = false;
@@ -610,12 +615,65 @@ namespace CrazyElevator.Match
             targetTrack[seat] = requested;
         }
 
+        public bool BeginTutorialCollisionPractice(int attackerSeat)
+        {
+            EndTutorialCollisionPractice();
+            if (!MenuManager.TutorialActive || !Running || player == null || Rival == null
+                || attackerSeat < 0 || attackerSeat > 1) return false;
+            Game attacker = attackerSeat == 0 ? player : Rival;
+            Game target = attackerSeat == 0 ? Rival : player;
+            if (attacker.IsNpc) return false;
+            tutorialCollisionAttacker = attacker;
+            tutorialCollisionTarget = target;
+            tutorialCollisionCompleted = false;
+            tutorialCollisionStartFloor = attacker.ActiveMinFloor + 2f;
+            targetTrack[0] = targetTrack[1] = 0;
+            trackPosition[0] = trackPosition[1] = 0f;
+            collisionCooldown = collisionFlash = 0f;
+            if (!attacker.StageTutorialCollision(tutorialCollisionStartFloor)
+                || !target.StageTutorialCollision(attacker.ActiveMinFloor + 3f))
+            {
+                EndTutorialCollisionPractice();
+                return false;
+            }
+            return true;
+        }
+
+        public bool IsTutorialCollisionParticipant(Game actor)
+            => MenuManager.TutorialActive && tutorialCollisionAttacker != null
+                && (actor == tutorialCollisionAttacker || actor == tutorialCollisionTarget);
+
+        public bool TutorialCollisionTravelAllowed(Game actor)
+        {
+            if (!IsTutorialCollisionParticipant(actor) || tutorialCollisionCompleted) return true;
+            return actor == tutorialCollisionAttacker && actor.TravelInputActive;
+        }
+
+        public bool TutorialCollisionPracticeCompleted(int seat)
+            => IsTutorialCollisionParticipant(tutorialCollisionAttacker)
+                && tutorialCollisionAttacker.Seat == seat && tutorialCollisionCompleted;
+
+        public void EndTutorialCollisionPractice()
+        {
+            tutorialCollisionAttacker?.StopTutorialCollisionMotion();
+            tutorialCollisionTarget?.StopTutorialCollisionMotion();
+            tutorialCollisionAttacker = tutorialCollisionTarget = null;
+            tutorialCollisionCompleted = false;
+            tutorialCollisionStartFloor = 0f;
+        }
+
         // Prevent cars in the same track from passing through each other. A
         // player can escape the block with A/D; the NPC automatically tries the
         // free track after it reaches a blocker.
         public float ConstrainTravel(Game actor, float before, float candidate, ref float velocity)
         {
             if (!Running || actor == null) return candidate;
+            if (IsTutorialCollisionParticipant(actor) && actor == tutorialCollisionAttacker
+                && !tutorialCollisionCompleted && candidate < tutorialCollisionStartFloor)
+            {
+                velocity = Mathf.Max(0f, velocity);
+                candidate = tutorialCollisionStartFloor;
+            }
             Game other = Other(actor);
             if (other == null || !HorizontallyOverlaps(actor, other)) return candidate;
 
@@ -711,11 +769,23 @@ namespace CrazyElevator.Match
             float closingSpeed, Game tutorialTarget = null)
         {
             if (collisionCooldown > 0f) return;
+            bool practicePair = IsTutorialCollisionParticipant(first)
+                && IsTutorialCollisionParticipant(second);
+            bool practiceHit = practicePair && !tutorialCollisionCompleted
+                && verticalDirection != 0f && closingSpeed > .05f
+                && tutorialCollisionAttacker.TravelInputActive;
+            if (practicePair)
+            {
+                // This is the one tutorial step where the learner must move the
+                // target. The other practice steps keep their collision protection.
+                tutorialTarget = null;
+                if (practiceHit) tutorialCollisionCompleted = true;
+            }
             collisionCooldown = .48f;
             collisionFlash = .72f;
             collisionCount++;
-            bool firstBoost = !MenuManager.TutorialActive && first != null && first.HasBouncer;
-            bool secondBoost = !MenuManager.TutorialActive && second != null && second.HasBouncer;
+            bool firstBoost = (practicePair || !MenuManager.TutorialActive) && first != null && first.HasBouncer;
+            bool secondBoost = (practicePair || !MenuManager.TutorialActive) && second != null && second.HasBouncer;
             bouncerCollision = firstBoost || secondBoost;
             // A tutorial collision can still show feedback and stop the
             // incoming elevator, but it must not move the elevator that was
@@ -724,9 +794,9 @@ namespace CrazyElevator.Match
             if (verticalDirection != 0f)
             {
                 float rebound = Mathf.Clamp(closingSpeed * collisionBounceStrength, 1.05f, 2.4f);
-                if (first != tutorialTarget && !TutorialInputLocked(first))
+                if (first != tutorialTarget && (practicePair || !TutorialInputLocked(first)))
                     ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f), secondBoost);
-                if (second != tutorialTarget && !TutorialInputLocked(second))
+                if (second != tutorialTarget && (practicePair || !TutorialInputLocked(second)))
                     ApplyCollisionResponse(second, verticalDirection * rebound * (firstBoost ? 1.5f : 1f), firstBoost);
                 if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
                 if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
@@ -738,12 +808,12 @@ namespace CrazyElevator.Match
                 int direction = separation > .01f ? 1 : separation < -.01f ? -1
                     : first != null && Mathf.Abs(first.LateralTravelVelocity) > .05f
                         ? (first.LateralTravelVelocity > 0f ? 1 : -1) : 1;
-                if (first != tutorialTarget && !TutorialInputLocked(first))
+                if (first != tutorialTarget && (practicePair || !TutorialInputLocked(first)))
                 {
                     if (secondBoost) first?.ApplyMatchLateralBounce(collisionSlowSeconds, -direction);
                     else first?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
                 }
-                if (second != tutorialTarget && !TutorialInputLocked(second))
+                if (second != tutorialTarget && (practicePair || !TutorialInputLocked(second)))
                 {
                     if (firstBoost) second?.ApplyMatchLateralBounce(collisionSlowSeconds, direction);
                     else second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
@@ -1196,6 +1266,25 @@ namespace CrazyElevator.Match
 
         void DrawRivalInteractions(Game actor, int seat, Rect view)
         {
+            if (IsTutorialCollisionParticipant(actor) && actor == tutorialCollisionAttacker)
+            {
+                Camera tutorialCamera = actor.sceneView != null ? actor.sceneView.exteriorCamera : null;
+                if (tutorialCamera != null && tutorialCamera.enabled)
+                {
+                    Vector3 target = tutorialCamera.WorldToScreenPoint(tutorialCollisionTarget.ShaftWorldPosition
+                        + Vector3.up * (tutorialCollisionTarget.ExteriorCollisionHalfSize.y + .6f));
+                    if (target.z > 0f)
+                    {
+                        float x = Mathf.Clamp(target.x, view.x + 60f, view.xMax - 60f);
+                        float y = Mathf.Clamp(Screen.height - target.y, view.y + 80f, view.yMax - 80f);
+                        Rect marker = new Rect(x - 54f, y - 28f, 108f, 28f);
+                        Fill(marker, Ink);
+                        var targetLabel = new GUIStyle(centred) { fontSize = 18 };
+                        targetLabel.normal.textColor = Gold;
+                        GUI.Label(marker, "↓ RIVAL", targetLabel);
+                    }
+                }
+            }
             if (MenuManager.TutorialActive || Finished || actor.IntroPlaying || actor.CountdownPlaying) return;
             Game rival = seat == 0 ? Rival : player;
             var label = new GUIStyle(centred) { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };

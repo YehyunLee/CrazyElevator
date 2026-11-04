@@ -158,7 +158,8 @@ namespace CrazyElevator.Managers
             }
             // The CPU's intro may finish behind the tutorial, but its shift
             // must not consume time or passengers until the tutorial ends.
-            if (IsNpc && MenuManager.TutorialActive) return;
+            if (IsNpc && MenuManager.TutorialActive
+                && (Match == null || !Match.IsTutorialCollisionParticipant(this))) return;
             // Pause / mute are owned by GameManager + MusicManager for the player seat.
             if (Match == null && IsNpc && inputManager != null && input.PausePressed && phase != Phase.Results)
                 paused = !paused;
@@ -598,6 +599,11 @@ namespace CrazyElevator.Managers
 
         void AdvanceTravelStep(float dt)
         {
+            if (Match != null && !Match.TutorialCollisionTravelAllowed(this))
+            {
+                travelVelocity = 0f;
+                return;
+            }
             AccumulateRust(dt);
             if (railRiding) { AdvanceRailStep(dt); return; }
             float before = travelFloor;
@@ -1300,7 +1306,7 @@ namespace CrazyElevator.Managers
                 if (repairProgress >= 2f)
                 {
                     repairedFor = 20f; repairProgress = 0; rustExposure = 0; Play(ding);
-                    notice = "Rust reduced to one starfish. A handyman onboard restores full performance.";
+                    notice = "Gears patched. A handyman onboard restores full performance.";
                 }
             }
             else repairProgress = 0;
@@ -1510,7 +1516,7 @@ namespace CrazyElevator.Managers
     {
         [Header("Rust and handyman")]
         public StarfishImpairmentView impairmentGaugePrefab;
-        [Min(1)] public float secondsPerRustLevel = 10f;
+        [Min(1)] public float secondsPerRustLevel = 25f;
         [Range(.1f, .9f)] public float underwaterSpeedMultiplier = .58f;
         [Range(.1f, .9f)] public float underwaterAccelerationMultiplier = .45f;
         [Header("Passenger speed effects")]
@@ -1630,7 +1636,7 @@ namespace CrazyElevator.Managers
                 var floorRiders = targetRound.Riders.FindAll(rider => rider.Origin == floor);
                 if (floorRiders.Count == 0) continue;
                 string repeatKind = floor < candyStartsAtFloor ? "INTERVIEW"
-                    : floor < underwaterStartsAtFloor ? "PREGNANT" : "ELDERLY";
+                    : floor < underwaterStartsAtFloor ? "PREGNANT" : (floor % 2 == 0 ? "HANDYMAN" : "DIVER");
                 Rider template = floorRiders.Find(rider => rider.Kind == repeatKind)
                     ?? floorRiders.Find(rider => rider.Kind != "BOSS"
                         && rider.Kind != "HANDYMAN" && rider.Kind != "GROUP")
@@ -1665,13 +1671,13 @@ namespace CrazyElevator.Managers
 
         void InitializeImpairmentIndicators()
         {
-            if (!impairmentGaugePrefab) { Debug.LogError("Assign the starfish impairment gauge.", this); return; }
+            if (!impairmentGaugePrefab) { Debug.LogError("Assign the gear impairment gauge.", this); return; }
             interiorImpairment = Instantiate(impairmentGaugePrefab, stage, false);
-            interiorImpairment.name = "Interior starfish rust meter";
+            interiorImpairment.name = "Interior gear rust meter";
             interiorImpairment.transform.localPosition = new Vector3(0, 3.31f, .48f);
             interiorImpairment.transform.localScale = Vector3.one * .85f;
             exteriorImpairment = Instantiate(impairmentGaugePrefab, exteriorCar, false);
-            exteriorImpairment.name = "Exterior starfish rust meter";
+            exteriorImpairment.name = "Exterior gear rust meter";
             exteriorImpairment.transform.localPosition = new Vector3(0, 1.65f, -1.05f);
             exteriorImpairment.transform.localRotation = Quaternion.Euler(0, 180, 0);
             exteriorImpairment.transform.localScale = Vector3.one * 1.8f;
@@ -1685,18 +1691,18 @@ namespace CrazyElevator.Managers
         }
         void UpdateImpairmentIndicators()
         {
-            // Keep the captured damage visible until Casey sweeps it away.
-            int severity = HandymanRepairPending ? repairStarfishLevel : ImpairmentLevel;
-            bool showStarfish = InWater;
+            // Keep both views synchronized with the current gear damage.
+            int severity = HandymanRepairPending ? repairGearLevel : ImpairmentLevel;
+            bool showGears = InWater;
             if (interiorImpairment)
             {
                 interiorImpairment.SetSeverity(severity);
-                interiorImpairment.gameObject.SetActive(showStarfish);
+                interiorImpairment.gameObject.SetActive(showGears);
             }
             if (exteriorImpairment)
             {
                 exteriorImpairment.SetSeverity(severity);
-                exteriorImpairment.gameObject.SetActive(showStarfish);
+                exteriorImpairment.gameObject.SetActive(showGears);
             }
         }
         string ImpairmentDescription

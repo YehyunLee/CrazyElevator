@@ -234,9 +234,10 @@ namespace CrazyElevator.Shared
                     Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
                 if (world == PassengerTheme.Candy && f % 3 == 0)
                     Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
-                if (world == PassengerTheme.Underwater && f % 3 == 1)
+                if (world == PassengerTheme.Underwater)
                     Add("Diver", "DIVER", "Blocks tornadoes", "SHIELD", f, 1, 60, 0, 4, 100);
-                Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
+                if (world != PassengerTheme.Underwater || (f - FloorsPerDimension * 2) % 4 == 0)
+                    Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
             }
@@ -288,6 +289,41 @@ namespace CrazyElevator.Shared
                 OwnsPassengerPoolClock = false;
             }
             Seat = seat;
+        }
+
+        // Explicitly requested by tutorial boarding steps only. Live rounds never
+        // call this: their captured queues remain finite and shared as before.
+        public int RefillPracticeQueue()
+        {
+            RevealQueue(Floor, Stop);
+            if (!revealedQueues.TryGetValue(Floor * Stops + Stop, out var queue)) return 0;
+            List<Rider> departed = null;
+            foreach (Rider rider in queue)
+            {
+                if (!rider.Boarded && !rider.Resolved) continue;
+                if (departed == null) departed = new List<Rider>();
+                departed.Add(rider);
+            }
+            if (departed == null) return 0;
+            foreach (Rider original in departed)
+            {
+                // New identities preserve the first player's cabin, destinations,
+                // and eventual drop-offs while restoring the same doorway slot.
+                var replacement = new Rider
+                {
+                    Data = original.Data, Name = original.Name, Request = original.Request,
+                    Kind = original.Kind, Badge = original.Badge, Color = original.Color,
+                    Origin = original.Origin, Destination = original.Destination,
+                    OriginStop = original.OriginStop, DestinationStop = original.DestinationStop,
+                    PickupDoor = original.PickupDoor, PickupQueueSlot = original.PickupQueueSlot,
+                    Space = original.Space, Bonus = original.Bonus,
+                    Patience = original.Patience, Remaining = original.Patience
+                };
+                Riders.Add(replacement);
+                queue.Remove(original);
+                queue.Add(replacement);
+            }
+            return departed.Count;
         }
 
         public bool Owns(Rider rider) => rider != null && rider.Boarded

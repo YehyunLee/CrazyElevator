@@ -8,16 +8,16 @@ namespace CrazyElevator.Managers
 
     public sealed partial class ElevatorManager
     {
-        const float RepairSweepStart = 1.6f;
-        const float RepairSweepEnd = 3.2f;
-        const float HandymanRepairDuration = 4.2f;
+        const float RepairSweepStart = .6f;
+        const float RepairSweepEnd = 1.2f;
+        const float HandymanRepairDuration = 1.6f;
 
         [Header("Handyman cleaning animation")]
         public Transform handymanShovelPrefab;
 
         Rider repairingHandyman;
         float handymanRepairTime;
-        int repairStarfishLevel;
+        int repairGearLevel;
         bool handymanRepairFinished;
         Vector3 repairHome, repairScale;
         Transform repairToolPivot, repairShovel;
@@ -36,7 +36,7 @@ namespace CrazyElevator.Managers
         bool HandymanRepairActive => repairingHandyman != null;
         bool HandymanRepairPending => HandymanRepairActive && !handymanRepairFinished;
         // Boarding changes HasHandyman immediately, so use the last visible level.
-        int VisibleStarfishLevel => interiorImpairment && interiorImpairment.gameObject.activeInHierarchy
+        int VisibleGearLevel => interiorImpairment && interiorImpairment.gameObject.activeInHierarchy
             ? Mathf.Max(0, interiorImpairment.DisplayedSeverity) : 0;
 
         // Called only after a passenger has actually boarded, by either input path.
@@ -44,19 +44,15 @@ namespace CrazyElevator.Managers
         {
             if (!extendedInterior || rider == null || !rider.HasFeature(PassengerFeature.ClearsRust)
                 || !round.Owns(rider) || HandymanRepairActive || !figures.ContainsKey(rider)
-                || VisibleStarfishLevel == 0) return;
+                || VisibleGearLevel == 0) return;
 
-            repairingHandyman = rider;
-            handymanRepairTime = 0;
-            handymanRepairFinished = false;
-            repairStarfishLevel = VisibleStarfishLevel;
-            repairHome = RiderPosition(rider);
-            repairScale = boardingTransfers.TryGetValue(rider, out var transfer)
-                ? transfer.targetScale : figures[rider].localScale;
+            rustExposure = 0;
             repairProgress = 0;
-            ElevatorSays("Those starfish damaged my gears. Please fix me!", 5f);
+            UpdateImpairmentIndicators();
+            ElevatorSays("Gears fixed. Thanks, Casey!", 1.6f);
+            SetControlStatus("REPAIRED");
+            Play(ding);
         }
-
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)
         {
             if (rider != repairingHandyman) return false;
@@ -89,7 +85,7 @@ namespace CrazyElevator.Managers
                 if (repairShovel)
                 {
                     Vector3 grip = figure.TransformPoint(new Vector3(-.3f, .9f, -.08f));
-                    // The blade follows the three stars from left to right, then flicks them clear.
+                    // The legacy repair sweep follows the gauge from left to right.
                     Vector3 tip = stage.TransformPoint(new Vector3(Mathf.Lerp(-.62f, 1.15f, sweep),
                         2.2f + Mathf.Sin(sweep * Mathf.PI) * .12f, .6f));
                     repairShovel.position = grip;
@@ -101,7 +97,7 @@ namespace CrazyElevator.Managers
             }
 
             notice = t < RepairSweepStart ? "Casey is tightening the gears..."
-                : t < RepairSweepEnd ? "Casey is shovelling the starfish off!"
+                : t < RepairSweepEnd ? "Casey is fixing the gears!"
                 : "All fixed! Full power while Casey is aboard.";
             if (t >= RepairSweepEnd && !handymanRepairFinished)
             {
@@ -110,7 +106,7 @@ namespace CrazyElevator.Managers
                 if (exteriorImpairment) exteriorImpairment.AnimateRemoval(1);
                 handymanRepairFinished = true;
                 UpdateImpairmentIndicators();
-                ElevatorSays("Ahh, much better. Starfish gone, gears fixed. Thanks, Casey!", 5f);
+                ElevatorSays("Ahh, much better. Gears fixed. Thanks, Casey!", 1.6f);
                 Play(ding);
             }
             if (t >= HandymanRepairDuration)
@@ -163,7 +159,7 @@ namespace CrazyElevator.Managers
                 return;
             }
             repairShovel = Instantiate(handymanShovelPrefab, stage, false);
-            repairShovel.name = "Handyman starfish shovel";
+            repairShovel.name = "Handyman repair tool";
             repairShovel.gameObject.SetActive(false);
         }
 
