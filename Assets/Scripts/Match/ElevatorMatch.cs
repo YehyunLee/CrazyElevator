@@ -72,6 +72,9 @@ namespace CrazyElevator.Match
         readonly float[] expressFlash = { 0f, 0f };
         const float ResultRevealInputAt = 5.7f;
         float resultRevealStartedAt = -1f;
+        int resultActionSelection;
+        bool resultActionMoveHeld;
+        float resultActionMoveRepeatTimer;
         AudioClip collisionClip;
         ParticleSystem collisionParticles;
         Material collisionParticleMaterial;
@@ -242,6 +245,9 @@ namespace CrazyElevator.Match
             {
                 GameManager.Instance?.RecordRoundResult(player.Points, Rival.Points);
                 resultRevealStartedAt = Time.unscaledTime;
+                resultActionSelection = 0;
+                resultActionMoveHeld = false;
+                resultActionMoveRepeatTimer = 0f;
                 player.PlayEndingDrum();
             }
 
@@ -265,9 +271,21 @@ namespace CrazyElevator.Match
             {
                 InputManager.SeatInput playerOne = input.ReadForSeat(0, true);
                 InputManager.SeatInput playerTwo = input.ReadForSeat(1, true);
-                if (playerOne.StartPressed || playerOne.ConfirmPressed
+                GameManager session = GameManager.Instance;
+                if (session != null && session.MatchFinished)
+                {
+                    float horizontal = Mathf.Abs(playerTwo.Move.x) > Mathf.Abs(playerOne.Move.x)
+                        ? playerTwo.Move.x : playerOne.Move.x;
+                    UpdateResultActionNavigation(horizontal);
+                    if (playerOne.StartPressed || playerOne.ConfirmPressed
+                        || playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                        ActivateResultAction(resultActionSelection);
+                }
+                else if (playerOne.StartPressed || playerOne.ConfirmPressed
                     || playerTwo.StartPressed || playerTwo.ConfirmPressed)
+                {
                     ContinueMatch();
+                }
             }
             // Pause is owned by GameManager so InputManager only fires once.
         }
@@ -305,6 +323,9 @@ namespace CrazyElevator.Match
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
             resultRevealStartedAt = -1f;
+            resultActionSelection = 0;
+            resultActionMoveHeld = false;
+            resultActionMoveRepeatTimer = 0f;
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
@@ -1016,7 +1037,6 @@ namespace CrazyElevator.Match
             if (dimensionRevealActive)
             {
                 DrawDimensionReveal();
-                if (Paused) DrawPauseOverlay();
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -1028,7 +1048,6 @@ namespace CrazyElevator.Match
             DrawSharedRoundHUD();
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
-            else if (Paused && !MenuManager.TutorialActive) DrawPauseOverlay();
             DrawSessionFade(player.SessionFadeAlpha);
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
@@ -1510,11 +1529,12 @@ namespace CrazyElevator.Match
                 string playerName = player.IsNpc ? "CPU 1" : "PLAYER 1";
                 string rivalName = Rival.IsNpc ? "CPU 2" : "PLAYER 2";
                 string winnerName = playerWon ? playerName : rivalName;
-                string headline = draw ? "IT'S A DRAW" : winnerName + " WINS";
+                string headline = matchFinished ? winnerName + " WINS THE MATCH"
+                    : draw ? "IT'S A DRAW" : winnerName + " WINS";
                 float winnerIn = Reveal01((time - 4.55f) / .6f);
                 DrawRevealLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
                 DrawRevealLabel(new Rect(180, 232, 1080, 30),
-                    matchFinished ? "MATCH CHAMPION" : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
+                    matchFinished ? "BEST OF FIVE CHAMPION" : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
                     resultTitle, winnerIn, new Color(.73f, .79f, .86f));
 
                 DrawRevealScoreCard(new Rect(220, 300, 488, 256), playerName, player.Points,
@@ -1525,33 +1545,98 @@ namespace CrazyElevator.Match
                     Reveal01((time - 3.55f) / .75f));
 
                 if (time < ResultRevealInputAt) return;
-                int nextDimension = matchFinished ? 0 : (dimension + 1) % ElevatorRound.Dimensions;
+                int nextDimension = matchFinished && session != null ? session.FirstEnabledDimension
+                    : (dimension + 1) % ElevatorRound.Dimensions;
                 Color nextColour = ResultWorldColour(nextDimension);
                 Fill(new Rect(220, 596, 1000, 112), new Color32(18, 24, 36, 255));
                 Fill(new Rect(220, 596, 4, 112), nextColour);
                 DrawRevealLabel(new Rect(248, 614, 500, 24),
-                    matchFinished ? "NEW MATCH" : "NEXT WORLD", resultSmall, 1f, Color.white);
+                    matchFinished ? "REMATCH STARTS IN" : "NEXT WORLD", resultSmall, 1f, Color.white);
                 DrawRevealLabel(new Rect(248, 642, 500, 44),
-                    matchFinished ? "OFFICE" : session != null ? session.NextDimensionName : "CANDY",
+                    matchFinished ? GameManager.DimensionDisplayName(nextDimension)
+                        : session != null ? session.NextDimensionName : "CANDY",
                     resultWorld, 1f, nextColour);
 
-                Rect button = new Rect(832, 620, 364, 64);
-                bool hovered = button.Contains(Event.current.mousePosition);
-                Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
-                Fill(button, hovered ? Color.Lerp(Teal, Color.white, .2f) : Teal);
-                GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height),
-                    matchFinished ? "PLAY AGAIN" : "NEXT ROUND", resultAction);
-                var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
-                Fill(key, new Color(0, 0, 0, .2f));
-                Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
-                GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
-                if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
+                if (matchFinished)
+                {
+                    DrawFinalResultActionButton(new Rect(220, 746, 306, 64),
+                        "PLAY AGAIN", Teal, 0);
+                    DrawFinalResultActionButton(new Rect(557, 746, 306, 64),
+                        "RETURN TO LOBBY", Coral, 1);
+                    DrawFinalResultActionButton(new Rect(894, 746, 306, 64),
+                        "RETURN TO MAIN MENU", Gold, 2);
+                }
+                else
+                {
+                    Rect button = new Rect(832, 620, 364, 64);
+                    bool hovered = button.Contains(Event.current.mousePosition);
+                    Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+                    Fill(button, hovered ? Color.Lerp(Teal, Color.white, .2f) : Teal);
+                    GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height),
+                        "NEXT ROUND", resultAction);
+                    var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
+                    Fill(key, new Color(0, 0, 0, .2f));
+                    Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
+                    GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
+                    if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
+                }
             }
             finally
             {
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
             }
+        }
+
+        void UpdateResultActionNavigation(float horizontal)
+        {
+            bool moving = Mathf.Abs(horizontal) >= .55f;
+            if (!moving)
+            {
+                resultActionMoveHeld = false;
+                resultActionMoveRepeatTimer = 0f;
+                return;
+            }
+
+            if (!resultActionMoveHeld || resultActionMoveRepeatTimer <= 0f)
+            {
+                int direction = horizontal > 0f ? 1 : -1;
+                resultActionSelection = (resultActionSelection + direction + 3) % 3;
+                resultActionMoveRepeatTimer = resultActionMoveHeld ? .16f : .32f;
+            }
+            else
+            {
+                resultActionMoveRepeatTimer -= Time.unscaledDeltaTime;
+            }
+            resultActionMoveHeld = true;
+        }
+
+        void DrawFinalResultActionButton(Rect button, string label, Color accent, int action)
+        {
+            bool hovered = button.Contains(Event.current.mousePosition);
+            if (hovered) resultActionSelection = action;
+            bool selected = resultActionSelection == action || hovered;
+            Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+            if (selected)
+                Fill(new Rect(button.x - 3, button.y - 3, button.width + 6, button.height + 6), Color.white);
+            Fill(button, selected ? Color.Lerp(accent, Color.white, .18f) : accent);
+            GUI.Label(new Rect(button.x + 8, button.y, button.width - 76, button.height), label, resultAction);
+            if (selected)
+            {
+                Rect key = new Rect(button.xMax - 64, button.y + 15, 54, 34);
+                Fill(key, new Color(0, 0, 0, .13f));
+                Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2),
+                    new Color(1, 1, 1, .24f));
+                GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
+            }
+            if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ActivateResultAction(action);
+        }
+
+        void ActivateResultAction(int action)
+        {
+            if (action == 0) ContinueMatch();
+            else if (action == 1) MenuManager.ReturnToLobby();
+            else MenuManager.ReturnToMainMenu();
         }
 
         static Color ResultWorldColour(int dimension) => dimension == 1 ? new Color32(236, 118, 188, 255)

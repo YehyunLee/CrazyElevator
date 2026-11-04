@@ -8,7 +8,7 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         const float AbilityIntroDuration = 3.5f;
-        public const float VipIntroDuration = 4.5f;
+        public const float VipIntroDuration = 2.25f;
         Transform abilityIntroPassenger, abilityIntroOpponent, abilityIntroOwnCar;
         string abilityIntroKind;
         SharedRider abilityIntroVip;
@@ -468,12 +468,10 @@ namespace CrazyElevator.Managers
         void IntroduceBoardedPassenger(CrazyElevator.Shared.Rider rider)
         {
             if (rider == null || round == null || !round.Owns(rider)) return;
-            string kind = round.BabyCalmedByGrandma
-                && (rider.HasFeature(PassengerFeature.CryingBaby) || rider.HasFeature(PassengerFeature.CalmsBaby))
-                ? "CALM" : rider.HasFeature(PassengerFeature.CryingBaby) ? "PREGNANT"
-                : rider.HasFeature(PassengerFeature.SpeedSlow) ? "ELDERLY"
-                : rider.HasFeature(PassengerFeature.SpeedBoost) ? "GROUP" : null;
-            if (kind != null) GameManager.Instance?.RequestAbilityIntro(this, kind);
+            if (round.BabyCalmedByGrandma
+                && (rider.HasFeature(PassengerFeature.CryingBaby)
+                    || rider.HasFeature(PassengerFeature.CalmsBaby)))
+                GameManager.Instance?.RequestAbilityIntro(this, "CALM");
         }
 
         public void FinishAbilityIntro()

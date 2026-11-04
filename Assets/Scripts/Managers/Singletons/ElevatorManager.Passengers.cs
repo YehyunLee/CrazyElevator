@@ -30,7 +30,7 @@ namespace CrazyElevator.Managers
             hasChosenBoardingDoor = true;
             bool newlyOpened = !boardingDoorOpen[(int)door];
             boardingDoorOpen[(int)door] = true;
-            if (newlyOpened) autoBoardWait = .25f;
+            if (newlyOpened) autoBoardWait = DoorAnimationSeconds;
             SelectRider(null);
             notice = ((BoardingDoor)BoardingDoorScreenSlot(door)).ToString().ToUpperInvariant()
                 + " DOOR OPEN. Passengers board automatically.";
@@ -66,7 +66,7 @@ namespace CrazyElevator.Managers
                     foreach (InteriorTransfer transfer in boardingTransfers.Values)
                         if ((int)transfer.entryDoor == door) { needed = true; break; }
                 boardingDoorOpenness[door] = Mathf.MoveTowards(boardingDoorOpenness[door],
-                    needed ? 1f : 0f, dt / .65f);
+                    needed ? 1f : 0f, dt / DoorAnimationSeconds);
             }
         }
 
@@ -153,7 +153,7 @@ namespace CrazyElevator.Managers
             }
             if (next == null) return;
 
-            autoBoardWait = .45f;
+            autoBoardWait = PassengerBoardingSeconds;
             nextAutoBoardDoor = (entryDoor + 1) % boardingDoorOpen.Length;
             // Each open door serves its own finite queue in turn.
             if (!HasBoardingSpace(next))

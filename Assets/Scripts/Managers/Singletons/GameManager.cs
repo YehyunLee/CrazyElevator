@@ -13,6 +13,8 @@ namespace CrazyElevator.Managers
         public static GameManager Instance { get; private set; }
 
         public const int MaxNumberOfFloors = ElevatorRound.Floors;
+        const string DimensionPoolPreference = "CrazyElevator.DimensionPool.Mask";
+        const int DefaultDimensionPoolMask = (1 << ElevatorRound.Dimensions) - 1;
 
         public DimensionRange[] dimensions =
         {
@@ -45,17 +47,73 @@ namespace CrazyElevator.Managers
         public bool AbilityIntroActive => abilityIntroActive;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
         public int RoundNumber => matchProgress.RoundNumber;
-        public int ActiveDimension => matchProgress.ActiveDimension;
+        public int ActiveDimension => DimensionForRound(matchProgress.RoundNumber - 1);
         public int PlayerOneWins => matchProgress.PlayerOneWins;
         public int PlayerTwoWins => matchProgress.PlayerTwoWins;
         public bool MatchFinished => matchProgress.Finished;
         public bool RoundRecorded => matchProgress.RoundRecorded;
         public int LastRoundWinner => matchProgress.LastRoundWinner;
-        public string ActiveDimensionName => DimensionName(ActiveDimension);
-        public string NextDimensionName => DimensionName((ActiveDimension + 1) % ElevatorRound.Dimensions);
+        public string ActiveDimensionName => DimensionDisplayName(ActiveDimension);
+        public int FirstEnabledDimension => DimensionForRound(0);
+        public int NextDimensionIndex => DimensionForRound(matchProgress.RoundNumber);
+        public string NextDimensionName => DimensionDisplayName(NextDimensionIndex);
 
-        static string DimensionName(int dimension) => dimension == 0 ? "OFFICE"
+        public static string DimensionDisplayName(int dimension) => dimension == 0 ? "OFFICE"
             : dimension == 1 ? "CANDY" : "UNDERWATER";
+
+        public bool IsDimensionEnabled(int dimension)
+        {
+            if (dimension < 0 || dimension >= ElevatorRound.Dimensions) return false;
+            return (CurrentDimensionPoolMask & (1 << dimension)) != 0;
+        }
+
+        public int EnabledDimensionCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < ElevatorRound.Dimensions; i++)
+                    if (IsDimensionEnabled(i)) count++;
+                return count;
+            }
+        }
+
+        int CurrentDimensionPoolMask
+        {
+            get
+            {
+                int mask = PlayerPrefs.GetInt(DimensionPoolPreference, DefaultDimensionPoolMask)
+                    & DefaultDimensionPoolMask;
+                return mask == 0 ? 1 : mask;
+            }
+        }
+
+        public bool SetDimensionEnabled(int dimension, bool enabled)
+        {
+            if (dimension < 0 || dimension >= ElevatorRound.Dimensions) return false;
+            int mask = CurrentDimensionPoolMask;
+            int next = enabled ? mask | (1 << dimension) : mask & ~(1 << dimension);
+            if (next == 0) return false;
+            PlayerPrefs.SetInt(DimensionPoolPreference, next);
+            PlayerPrefs.Save();
+            return true;
+        }
+
+        int DimensionForRound(int roundOffset)
+        {
+            int mask = CurrentDimensionPoolMask;
+            int enabledCount = 0;
+            for (int i = 0; i < ElevatorRound.Dimensions; i++)
+                if ((mask & (1 << i)) != 0) enabledCount++;
+
+            int target = Mathf.Abs(roundOffset) % Mathf.Max(1, enabledCount);
+            for (int i = 0; i < ElevatorRound.Dimensions; i++)
+            {
+                if ((mask & (1 << i)) == 0) continue;
+                if (target-- == 0) return i;
+            }
+            return 0;
+        }
 
         public void ResetMatchProgress()
         {

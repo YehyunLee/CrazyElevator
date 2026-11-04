@@ -50,7 +50,6 @@ namespace CrazyElevator.Managers
             repairProgress = 0;
             UpdateImpairmentIndicators();
             ElevatorSays("Gears fixed. Thanks, Casey!", 1.6f);
-            GameManager.Instance?.RequestAbilityIntro(this, "HANDYMAN");
             SetControlStatus("REPAIRED");
             Play(ding);
         }
