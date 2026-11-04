@@ -398,6 +398,7 @@ namespace CrazyElevator.Match
                     contestMessages[1 - trail.Seat] = "STICKY CANDY!";
                     contestMessages[trail.Seat] = "RIVAL SLOWED!";
                     contestMessageTimes[0] = contestMessageTimes[1] = 2f;
+                    GameManager.Instance?.RequestAbilityIntro(trail.Seat == 0 ? player : Rival, "GROUP");
                     candyTrails.RemoveAt(i);
                 }
                 else if (trail.Life <= 0f) candyTrails.RemoveAt(i);

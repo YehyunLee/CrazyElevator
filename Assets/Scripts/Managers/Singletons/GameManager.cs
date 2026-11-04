@@ -129,12 +129,15 @@ namespace CrazyElevator.Managers
             // A CPU-only pane is invisible in solo-versus-CPU. Its personal
             // effects should not interrupt the human player's view.
             if (kind != "BOUNCER" && actor.Match != null && !actor.Match.IsVisibleSeat(actor.Seat)) return;
-            string seenKey = kind != "BOUNCER" && actor.Match != null && actor.Match.SplitScreen
-                ? kind + ":" + actor.Seat : kind;
+            string seenKey = AbilityIntroKey(actor, kind);
             if (!introducedAbilities.Add(seenKey)) return;
             pendingAbilityIntros.Enqueue((actor, kind, null));
             if (!AbilityIntroActive) StartNextAbilityIntro();
         }
+
+        static string AbilityIntroKey(ElevatorManager actor, string kind)
+            => kind != "BOUNCER" && actor != null && actor.Match != null && actor.Match.SplitScreen
+                ? kind + ":" + actor.Seat : kind;
 
         // The VIP is shared by both players and changes every round, so it is
         // intentionally not part of the per-match ability-introduction set.
@@ -153,10 +156,17 @@ namespace CrazyElevator.Managers
                 if (next.actor == null) continue;
                 try
                 {
-                    if (!next.actor.PrepareAbilityIntro(next.kind, next.rider)) continue;
+                    if (!next.actor.PrepareAbilityIntro(next.kind, next.rider))
+                    {
+                        introducedAbilities.Remove(AbilityIntroKey(next.actor, next.kind));
+                        Debug.LogWarning("Could not prepare " + next.kind
+                            + " ability introduction; it can retry on its next activation.", next.actor);
+                        continue;
+                    }
                 }
                 catch (System.Exception error)
                 {
+                    introducedAbilities.Remove(AbilityIntroKey(next.actor, next.kind));
                     Debug.LogWarning("Could not show " + next.kind + " ability introduction: " + error.Message);
                     next.actor.FinishAbilityIntro();
                     continue;

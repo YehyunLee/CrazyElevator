@@ -365,12 +365,16 @@ namespace CrazyElevator.Managers
                 abilityIntroOwnCar.localRotation = Quaternion.Euler(0f, 0f, -impact * 5f);
             }
             bool speed = abilityIntroKind == "GROUP" || abilityIntroKind == "ELDERLY";
-            float opponentX = speed ? (abilityIntroKind == "GROUP" ? Mathf.Lerp(.7f, 2.1f, approach)
-                : Mathf.Lerp(1f, 1.3f, approach)) : 2.2f - approach * .75f + recoil * .5f;
+            float opponentX = abilityIntroKind == "GROUP" ? Mathf.Lerp(.7f, 2.1f, approach)
+                : abilityIntroKind == "ELDERLY"
+                    ? Mathf.Lerp(.9f, 2.05f, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.3f, 1.1f, time)))
+                        - .75f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.05f, 1.8f, time))
+                    : 2.2f - approach * .75f + recoil * .5f;
             abilityIntroOpponent.localPosition = new Vector3(opponentX, impact * .12f, 0f);
             abilityIntroOpponent.localRotation = abilityIntroKind == "DIVER"
                 ? Quaternion.Euler(0f, time * 260f, impact * 18f)
-                : Quaternion.Euler(0f, -12f, speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
+                : Quaternion.Euler(0f, -12f, abilityIntroKind == "ELDERLY" ? -recoil * 9f
+                    : speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
 
             // Start on the passenger, then pivot/zoom out to reveal the threat.
             float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.25f, 1.2f, time));
@@ -380,6 +384,7 @@ namespace CrazyElevator.Managers
             encounterPreviewCamera.transform.localPosition = new Vector3(
                 focusX - 12f * Mathf.Tan(yaw * Mathf.Deg2Rad), 0f, -12f);
             encounterPreviewCamera.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            encounterPreviewCamera.Render();
         }
 
         public void DrawAbilityIntro(float time, Rect view, bool showPlayer, bool playerPane)
@@ -468,10 +473,16 @@ namespace CrazyElevator.Managers
         void IntroduceBoardedPassenger(CrazyElevator.Shared.Rider rider)
         {
             if (rider == null || round == null || !round.Owns(rider)) return;
+            if (rider.HasFeature(PassengerFeature.CryingBaby) && !round.BabyCalmedByGrandma)
+                GameManager.Instance?.RequestAbilityIntro(this, "PREGNANT");
             if (round.BabyCalmedByGrandma
                 && (rider.HasFeature(PassengerFeature.CryingBaby)
                     || rider.HasFeature(PassengerFeature.CalmsBaby)))
                 GameManager.Instance?.RequestAbilityIntro(this, "CALM");
+            if (rider.HasFeature(PassengerFeature.SpeedBoost))
+                GameManager.Instance?.RequestAbilityIntro(this, "GROUP");
+            if (rider.HasFeature(PassengerFeature.SpeedSlow))
+                GameManager.Instance?.RequestAbilityIntro(this, "ELDERLY");
         }
 
         public void FinishAbilityIntro()

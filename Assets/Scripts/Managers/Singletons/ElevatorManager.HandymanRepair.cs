@@ -43,14 +43,25 @@ namespace CrazyElevator.Managers
         void BeginHandymanRepair(Rider rider)
         {
             if (!extendedInterior || rider == null || !rider.HasFeature(PassengerFeature.ClearsRust)
-                || !round.Owns(rider) || HandymanRepairActive || !figures.ContainsKey(rider)
-                || VisibleGearLevel == 0) return;
+                || !round.Owns(rider) || HandymanRepairActive
+                || !figures.TryGetValue(rider, out Transform figure) || figure == null) return;
+
+            int damagedGearLevel = VisibleGearLevel;
+            if (damagedGearLevel == 0) return;
+
+            repairingHandyman = rider;
+            handymanRepairTime = 0f;
+            repairGearLevel = damagedGearLevel;
+            handymanRepairFinished = false;
+            repairHome = RiderPosition(rider);
+            repairScale = figure.localScale;
 
             rustExposure = 0;
             repairProgress = 0;
             UpdateImpairmentIndicators();
-            ElevatorSays("Gears fixed. Thanks, Casey!", 1.6f);
-            SetControlStatus("REPAIRED");
+            ElevatorSays("Casey is cleaning the gears!", 1.6f);
+            GameManager.Instance?.RequestAbilityIntro(this, "HANDYMAN");
+            SetControlStatus("REPAIRING");
             Play(ding);
         }
         bool AnimateHandymanRepair(Rider rider, Transform figure, float dt)
