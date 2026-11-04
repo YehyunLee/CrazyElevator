@@ -44,9 +44,11 @@ namespace CrazyElevator.Managers
         ElevatorManager abilityIntroActor;
         string abilityIntroKind;
         bool abilityIntroActive;
-        float abilityIntroTime, abilityIntroPreviousTimeScale = 1f;
+        float abilityIntroTime;
         float gameplayStartCueTime;
         public bool AbilityIntroActive => abilityIntroActive;
+        public bool IsAbilityIntroActor(ElevatorManager actor)
+            => abilityIntroActive && actor != null && abilityIntroActor == actor;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
         public int RoundNumber => matchProgress.RoundNumber;
         public int ActiveDimension => DimensionForRound(matchProgress.RoundNumber - 1);
@@ -183,8 +185,6 @@ namespace CrazyElevator.Managers
                 abilityIntroKind = next.kind;
                 abilityIntroActive = true;
                 abilityIntroTime = 0f;
-                abilityIntroPreviousTimeScale = Time.timeScale;
-                Time.timeScale = 0f;
                 return;
             }
         }
@@ -196,7 +196,6 @@ namespace CrazyElevator.Managers
             abilityIntroActor = null;
             abilityIntroKind = null;
             abilityIntroActive = false;
-            Time.timeScale = abilityIntroPreviousTimeScale;
         }
         public void RecordRoundResult(int playerOneScore, int playerTwoScore)
             => matchProgress.RecordResult(playerOneScore, playerTwoScore);

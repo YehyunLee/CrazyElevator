@@ -1264,8 +1264,11 @@ namespace CrazyElevator.Managers
         const float KickDuration = .78f;
         const float DeliveryComboWindow = 3.5f;
         const float DeliveryPopupDuration = 1.35f;
+        const float ScoreFlightDuration = .62f;
+        const float ScoreFlightSpacing = .1f;
         readonly Dictionary<Rider, KickVisual> kicks = new Dictionary<Rider, KickVisual>();
         readonly List<DeliveryPopup> deliveryPopups = new List<DeliveryPopup>();
+        readonly List<ScoreFlight> scoreFlights = new List<ScoreFlight>();
         float lastRewardedDeliveryAt = -1000f;
         int deliveryCombo, deliveryPopupSerial;
 
@@ -1287,6 +1290,13 @@ namespace CrazyElevator.Managers
             public float StartedAt;
             public int Points, Combo, Serial;
             public bool Happy;
+        }
+
+        sealed class ScoreFlight
+        {
+            public Vector2 Viewport;
+            public float StartedAt;
+            public int Points, Serial;
         }
 
         // Capture the art's original pose so replacement models keep their scale.
@@ -1382,6 +1392,47 @@ namespace CrazyElevator.Managers
                 Serial = deliveryPopupSerial++,
                 Happy = result == OffboardResult.Happy
             });
+            QueueScoreFlights(viewport, points, now);
+        }
+
+        void QueueScoreFlights(Vector2 viewport, int points, float now)
+        {
+            int count = Mathf.Clamp(Mathf.CeilToInt(points / 65f), 2, 5);
+            int remaining = points;
+            for (int i = 0; i < count; i++)
+            {
+                int value = Mathf.CeilToInt(remaining / (float)(count - i));
+                remaining -= value;
+                if (scoreFlights.Count >= 40) scoreFlights.RemoveAt(0);
+                scoreFlights.Add(new ScoreFlight
+                {
+                    Viewport = viewport,
+                    StartedAt = now + i * ScoreFlightSpacing,
+                    Points = value,
+                    Serial = deliveryPopupSerial++
+                });
+            }
+        }
+
+        // Match collisions use the same animated score trail as passenger
+        // deliveries, so the reward visibly lands in the winning driver's HUD.
+        public bool AwardBumpPoints(int points, Vector3 worldPosition)
+        {
+            if (round == null || round.Finished || points <= 0) return false;
+            round.Score += points;
+
+            Vector2 viewport = new Vector2(.5f, .48f);
+            Camera sourceCamera = sceneView != null ? sceneView.exteriorCamera : null;
+            if (sourceCamera == null) sourceCamera = eye;
+            if (sourceCamera != null)
+            {
+                Vector3 point = sourceCamera.WorldToViewportPoint(worldPosition);
+                if (point.z > 0f)
+                    viewport = new Vector2(Mathf.Clamp(point.x, .16f, .84f),
+                        Mathf.Clamp(point.y, .2f, .8f));
+            }
+            QueueScoreFlights(viewport, points, Time.unscaledTime);
+            return true;
         }
 
         // Wind-up, airborne tumble, then a quick landing bounce.
@@ -1486,6 +1537,7 @@ namespace CrazyElevator.Managers
         {
             foreach (var rider in new List<Rider>(kicks.Keys)) EndKick(rider);
             deliveryPopups.Clear();
+            scoreFlights.Clear();
             deliveryCombo = 0;
             lastRewardedDeliveryAt = -1000f;
         }

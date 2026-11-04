@@ -97,7 +97,7 @@ namespace CrazyElevator.Managers
         // Advance gameplay each frame; menus and pause stop the clock.
         void Update()
         {
-            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
+            if (GameManager.Instance != null && GameManager.Instance.IsAbilityIntroActor(this)) return;
             if (MenuManager.IsOpen) return;
             RefreshCabinCameraHome();
             sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
@@ -1844,6 +1844,7 @@ namespace CrazyElevator.Managers
             if (!MenuManager.TutorialActive) tutorialPassengerView = false;
             showingTravelView = DisplayBuildingView;
             bool cameraPaused = paused || MenuManager.IsOpen || Time.timeScale <= 0f || dimensionRevealActive
+                || GameManager.Instance != null && GameManager.Instance.IsAbilityIntroActor(this)
                 || Match != null && (Match.Paused || Match.DimensionRevealActive);
             float dt = cameraPaused ? 0f : Time.deltaTime;
             bool initializeView = !cameraViewReady;
