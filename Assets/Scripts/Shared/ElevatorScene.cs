@@ -47,5 +47,9 @@ namespace CrazyElevator.Shared
         [Header("Shaft hazards (moved by ElevatorManager.Hazards)")]
         public GameObject tornado;
         public GameObject monster;
+        [Header("World events")]
+        public GameObject securitySweep;
+        public GameObject syrupSurge;
+        public GameObject oceanCurrent;
     }
 }

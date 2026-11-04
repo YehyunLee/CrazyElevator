@@ -180,6 +180,7 @@ namespace CrazyElevator.Managers
             bouncerImpact = Mathf.Max(0f, bouncerImpact - dt * 3.5f);
             TickHazardTimers(dt);
             UpdateShaftHazards(dt);
+            CheckWorldEventHit();
             UpdateShaftCrowd(dt);
             // Both cars may stop at one floor, but its shared waiting queue
             // should lose patience only once per frame.
@@ -654,6 +655,7 @@ namespace CrazyElevator.Managers
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = bouncerImpact = 0;
             strongCollisionRecoil = false;
             hazardCooldown = carSpin = abilityFeedbackTime = 0f;
+            ResetWorldEvent();
             if (WorldOwner == this)
                 foreach (var hazard in hazards) hazard.Stunned = 0f;
             ResetRouteLateral();
@@ -1581,9 +1583,9 @@ namespace CrazyElevator.Managers
             }
         }
         float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f))
-            * CollisionMultiplier * PassengerSpeedMultiplier;
+            * CollisionMultiplier * PassengerSpeedMultiplier * WorldHazardSpeedMultiplier;
         float AccelerationMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterAccelerationMultiplier * Mathf.Lerp(1, .5f, (ImpairmentLevel - 1) * .5f))
-            * CollisionMultiplier * PassengerSpeedMultiplier;
+            * CollisionMultiplier * PassengerSpeedMultiplier * WorldHazardSpeedMultiplier;
         float WorldCruiseSpeed => BandForFloor(MovementFloor) == WorldBand.Candy ? candyFloorsPerSecond
             : BandForFloor(MovementFloor) == WorldBand.Water ? underwaterFloorsPerSecond : floorsPerSecond;
         float CruiseSpeed => WorldCruiseSpeed * SpeedMultiplier;
@@ -1890,7 +1892,11 @@ namespace CrazyElevator.Managers
             if (!cameraPaused || initializeView) UpdateRideMotion(dt);
             eye.backgroundColor = WorldSky(travelFloor);
             EnsureCrazyRouteMap();
-            if (!cameraPaused || initializeView) UpdateCrazyTravelCamera(carLocal);
+            if (!cameraPaused || initializeView)
+            {
+                UpdateCrazyTravelCamera(carLocal);
+                ApplyWorldEventCameraAccent();
+            }
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
         }
 
@@ -1933,6 +1939,7 @@ namespace CrazyElevator.Managers
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
             DrawPassengerAbilityFeedback();
+            DrawWorldEventCue();
             // While moving, the marker shows the stop a stop press would glide into.
             bool moving = phase == Phase.Moving;
             int floor = moving ? GlideStopFloor() : NearbyFloor;

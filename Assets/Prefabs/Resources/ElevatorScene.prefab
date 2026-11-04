@@ -530,6 +530,9 @@ MonoBehaviour:
   - {fileID: 7360044963061388723, guid: e18e6497dfcde46cfa7a2a8d7b0e19c5, type: 3}
   tornado: {fileID: 100010, guid: 9d1d750bd76e48ae97d2f7eb13f1baf2, type: 3}
   monster: {fileID: 100010, guid: b877a14800bf4db8a1d762bafed063f5, type: 3}
+  securitySweep: {fileID: 100010, guid: 44952d4fc7e641ea833d37aaaa2ef2e0, type: 3}
+  syrupSurge: {fileID: 100010, guid: d9273127500943108c5309ba65d6860e, type: 3}
+  oceanCurrent: {fileID: 100010, guid: 23a55251b3a24776ab5c24dacad193d2, type: 3}
 --- !u!1001 &3672296175483465992
 PrefabInstance:
   m_ObjectHideFlags: 0
