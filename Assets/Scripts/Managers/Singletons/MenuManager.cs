@@ -950,6 +950,17 @@ namespace CrazyElevator.Managers
 
         void DrawGamepadInstructions()
         {
+            if (controllerInstructions != null)
+            {
+                // Fit the complete diagram above the shared ready button at any aspect ratio.
+                GUI.DrawTexture(new Rect(180, 124, 1340, 748), controllerInstructions,
+                    ScaleMode.ScaleToFit, true);
+                GUI.Label(new Rect(100, 884, 1500, 44),
+                    "AT A STOP: STICK / D-PAD OPENS DOORS  ·  A STOPS / CLOSES  ·  LB BOOSTS  ·  RB REPAIRS",
+                    caption);
+                return;
+            }
+
             DrawKeyboardHint(new Rect(210, 220, 380, 110), "STICK / D-PAD", "MOVE / OPEN DOOR");
             DrawKeyboardHint(new Rect(660, 220, 380, 110), "A", "STOP / CLOSE DOORS");
             DrawKeyboardHint(new Rect(1110, 220, 380, 110), "B", "KICK");
