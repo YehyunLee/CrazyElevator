@@ -147,12 +147,14 @@ namespace CrazyElevator.Managers
             {
                 if (paused) return;
                 countdownTime += Time.unscaledDeltaTime;
-                if (countdownTime >= 4f)
+                if (countdownTime >= 3f)
                 {
                     countdownTime = 0f;
                     phase = Phase.Boarding;
                     phaseTime = 0f;
                     SetDoors(1f);
+                    if (Seat == 0 || Match == null)
+                        GameManager.Instance?.ShowGameplayStartCue();
                 }
                 return;
             }
@@ -324,6 +326,7 @@ namespace CrazyElevator.Managers
         // wall is cut away only for the exterior camera, like a dollhouse.
         float PhysicalCabinScale => stage.localScale.x;
         const float PassengerVisualScale = 1.2f;
+        const float ShaftPassengerVisualScale = 2.5f;
         Quaternion PhysicalCabinRotation => stage.localRotation;
         // Frame the usable floor and entrances. The cutaway's near upper corners
         // can extend off-screen without shrinking the floor to fit an empty box.

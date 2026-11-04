@@ -13,7 +13,7 @@ namespace CrazyElevator.Managers
         const float TutorialStoryLineSeconds = 2.8f;
         const float TutorialStoryFadeSeconds = .6f;
         const float TutorialHandoffFadeSeconds = .8f;
-        const float TutorialCountdownSeconds = 4f;
+        const float TutorialCountdownSeconds = 3f;
         const float TutorialCharacterSeconds = 6f;
         int tutorialCollisionSeat = -1;
         bool tutorialCollisionHitConfirmed;
@@ -37,9 +37,9 @@ namespace CrazyElevator.Managers
         };
         static readonly string[] TutorialStoryLines =
         {
-            "BEAT YOUR COLLEAGUE TO THE PROMOTION.",
-            "60 SECONDS. MOST POINTS WINS.",
-            "FIRST TO 3 ROUND WINS."
+            "MULTIVERSE TRANSIT. TWO DRIVERS. ONE PROMOTION.",
+            "DELIVER PASSENGERS. OUTSCORE YOUR COLLEAGUE.",
+            "WIN THREE ROUNDS. BECOME CHIEF OPERATOR."
         };
         enum TutorialCardMotion
         {
@@ -975,15 +975,11 @@ namespace CrazyElevator.Managers
 
             if (tutorialFinalePhase != TutorialFinalePhase.Countdown) return;
             Panel(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
-            string countdown = tutorialFinaleTimer < 3f
-                ? (3 - Mathf.FloorToInt(tutorialFinaleTimer)).ToString()
-                : "START";
+            string countdown = (3 - Mathf.FloorToInt(tutorialFinaleTimer)).ToString();
             int previousCountdownFontSize = title.fontSize;
             TextAnchor previousCountdownAlignment = title.alignment;
             Color previousCountdownTextColor = title.normal.textColor;
-            title.fontSize = countdown == "START"
-                ? Mathf.Clamp(Mathf.RoundToInt(Screen.width * .07f), 64, 118)
-                : Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
+            title.fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
             title.alignment = TextAnchor.MiddleCenter;
             title.normal.textColor = Cream;
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),

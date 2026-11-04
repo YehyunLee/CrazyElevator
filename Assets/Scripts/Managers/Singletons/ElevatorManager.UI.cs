@@ -804,15 +804,11 @@ namespace CrazyElevator.Managers
             int previousDepth = GUI.depth;
             GUI.depth = -1000;
             Panel(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
-            string countdown = countdownTime < 3f
-                ? (3 - Mathf.FloorToInt(countdownTime)).ToString()
-                : "START";
+            string countdown = (3 - Mathf.FloorToInt(countdownTime)).ToString();
             int previousSize = title.fontSize;
             TextAnchor previousAlignment = title.alignment;
             Color previousTextColor = title.normal.textColor;
-            title.fontSize = countdown == "START"
-                ? Mathf.Clamp(Mathf.RoundToInt(Screen.width * .07f), 64, 118)
-                : Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
+            title.fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
             title.alignment = TextAnchor.MiddleCenter;
             title.normal.textColor = Cream;
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
