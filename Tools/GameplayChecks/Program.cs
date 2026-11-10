@@ -236,7 +236,7 @@ internal static class Program
         round.Arrive(passenger.Destination, passenger.DestinationStop);
         Require(round.Offboard(passenger) == OffboardResult.None && !round.Remove(passenger)
             && !round.Board(extra) && round.Score == 0, "Passenger action changed score after the deadline.");
-        Require(ElevatorRound.Duration == 60f, "Each round must last exactly one minute.");
+        Require(ElevatorRound.Duration == 90f, "Preserve the branch's existing 90-second round duration.");
         Require(PassengerData.ThemeAtFloor(7) == PassengerTheme.Office
             && PassengerData.ThemeAtFloor(8) == PassengerTheme.Candy
             && PassengerData.ThemeAtFloor(15) == PassengerTheme.Candy
@@ -265,8 +265,8 @@ internal static class Program
                 Require(round.ActiveDimension == dimension && round.MinFloor == firstFloor
                     && round.MaxFloor == lastFloor && round.Floor == firstFloor && round.PeakFloor == firstFloor,
                     "Round did not start at its dimension's first floor.");
-                Require(round.TimeLeft == 60f && round.Elapsed == 0f && !round.Finished,
-                    "A new dimension round did not get its full minute.");
+                Require(round.TimeLeft == ElevatorRound.Duration && round.Elapsed == 0f && !round.Finished,
+                    "A new dimension round did not get its full configured duration.");
                 Require(round.Riders.Count > 0 && round.Riders.All(r => r.Origin >= firstFloor
                     && r.Origin <= lastFloor && r.Destination >= firstFloor && r.Destination <= lastFloor
                     && r.Destination != r.Origin), "A rider requests or waits in an inactive dimension.");
@@ -281,12 +281,12 @@ internal static class Program
                 catch (ArgumentOutOfRangeException) { refused = true; }
                 Require(refused && round.Floor == firstFloor, "Arrive escaped the active dimension.");
                 round.Arrive(lastFloor);
-                round.Tick(59f, false);
+                round.Tick(ElevatorRound.Duration - 1f, false);
                 Require(round.MaxUnlockedFloor == lastFloor && round.MinFloor == firstFloor
                     && !round.Finished && round.TimeLeft == 1f, "World bounds or timer changed before the deadline.");
                 round.Tick(2f, false);
                 Require(round.TimeLeft == 0f && round.Finished && round.MaxUnlockedFloor == lastFloor,
-                    "The one-minute round escaped its deadline or dimension.");
+                    "The round escaped its deadline or dimension.");
             }
     }
 
@@ -355,8 +355,8 @@ internal static class Program
             Require(ReferenceEquals(primary.Riders, second.Riders)
                 && primary.Floor == second.Floor && primary.MaxFloor == second.MaxFloor,
                 "Both seats must start with the same world and passenger identities.");
-            Require(primary.Score == 0 && second.Score == 0 && primary.TimeLeft == 60f
-                && second.TimeLeft == 60f && primary.Riders.All(r => !r.Boarded && !r.Resolved
+            Require(primary.Score == 0 && second.Score == 0 && primary.TimeLeft == ElevatorRound.Duration
+                && second.TimeLeft == ElevatorRound.Duration && primary.Riders.All(r => !r.Boarded && !r.Resolved
                     && !previousRiders.Contains(r)), "A new round retained scores, clock, or passengers from the previous round.");
             Rider shared = primary.Riders.First();
             primary.Arrive(shared.Origin, shared.OriginStop);
@@ -366,8 +366,8 @@ internal static class Program
             Require(primary.Board(shared) && !second.Board(shared),
                 "A dimension reset allowed both elevators to claim the same passenger.");
             previousRiders.UnionWith(primary.Riders);
-            primary.Tick(60f, false);
-            second.Tick(60f, false);
+            primary.Tick(ElevatorRound.Duration, false);
+            second.Tick(ElevatorRound.Duration, false);
         }
     }
 
@@ -480,16 +480,39 @@ internal static class Program
             "A respawn broke the original passenger's delivery or the rival's cabin.");
     }
 
+    static void CheckBaseDeliveryPoints()
+    {
+        foreach (float remaining in new[] { 60f, 30f, 0f })
+        foreach (int mood in new[] { 2, 1, 0 })
+        {
+            var round = new ElevatorRound();
+            round.Riders.Clear();
+            Rider rider = NewRider(0, 0, BoardingDoor.Front);
+            rider.Remaining = remaining; rider.Mood = mood; rider.Bonus = 250;
+            rider.Boarded = true; rider.BoardedBySeat = round.Seat;
+            round.Riders.Add(rider);
+            int expected = remaining > 0 ? 100 + (int)(50 * remaining / 60f)
+                : round.LateDeliveriesScore ? 25 : 0;
+            if (mood == 1) expected /= 2;
+            Require(round.BaseDeliveryPoints(rider) == expected, "Manifest base points include bonuses or ignore patience/mood.");
+            round.Arrive(rider.Destination, rider.DestinationStop);
+            round.Offboard(rider);
+            Require(round.Score == expected + (remaining > 0 && mood > 0 ? 250 : 0),
+                "Displayed base points disagree with the delivery scoring calculation.");
+        }
+    }
+
     static int Main()
     {
         var checks = new Dictionary<string, Action>
         {
+            { "Manifest base points match delivery, excluding bonuses", CheckBaseDeliveryPoints },
             { "Matching inside/outside and both-seat door queues over all 24 floors and 5 stops", CheckQueueConsistency },
             { "Exact two-grandma and one-box-man preview limits in solo and two-player", CheckFiniteLandingRoster },
             { "Visible groups use front and alternating sides without moving or refilling captured queues", CheckVisibleDoorDistribution },
             { "Rejecting, timing out, revisiting, and progression preserve visible groups", CheckQueueDepartures },
             { "Two seats board exclusively, retain separate cabin clocks and score once", CheckTwoSeatBoarding },
-            { "Capacity, one-minute deadline, and office/candy/underwater order", CheckDeadlineAndCapacity },
+            { "Capacity, configured deadline, and office/candy/underwater order", CheckDeadlineAndCapacity },
             { "Default and catalog rounds stay inside one dimension with reachable destinations", CheckSingleDimensionRounds },
             { "Every world's displayed floors run from 1 to 8", CheckLocalFloorNumbers },
             { "Every passenger kind and random request stays within its origin world", CheckWorldDestinations },

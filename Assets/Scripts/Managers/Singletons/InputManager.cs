@@ -178,7 +178,7 @@ namespace CrazyElevator.Managers
         }
 
         public bool HasLobbyInput(int seat)
-            => HasInput(seat) || (seat == 1 && CanUseSplitKeyboard);
+            => HasInput(seat) || (seat >= 0 && seat < 2 && CanUseSplitKeyboard);
 
         int NextAvailableSeat => !HasInput(0) ? 0 : !HasInput(1) ? 1 : -1;
 
@@ -405,7 +405,8 @@ namespace CrazyElevator.Managers
             if (keyboardMouseSeat == seat) return null;
             var assigned = JoinedGamepad(seat);
             if (assigned != null) return assigned;
-            if (!controllerJoining && seat == 0 && menuInputSource == InputSource.Gamepad
+            if (!controllerJoining && ActiveView == GameView.Menu
+                && joinedGamepadIds[0] < 0 && seat == 0 && menuInputSource == InputSource.Gamepad
                 && Gamepad.all.Count > 0) return Gamepad.all[0];
             return null;
         }
@@ -444,11 +445,13 @@ namespace CrazyElevator.Managers
             bool splitKeyboardActive = splitKeyboard
                 && (keyboardModeSession || ActiveView == GameView.Menu);
             bool inputAssigned = controllerAssigned || keyboardAssigned;
-            bool virtualPlayerTwoKeyboard = seat == 1 && splitKeyboardActive && !inputAssigned;
+            // Either disconnected seat keeps its own keyboard controls. A
+            // remaining controller is never reassigned to the other player.
+            bool virtualKeyboard = seat >= 0 && seat < 2 && splitKeyboardActive && !inputAssigned;
             bool playerTwoKeyboard = seat == 1 && splitKeyboard
-                && (keyboardAssigned || virtualPlayerTwoKeyboard);
+                && (keyboardAssigned || virtualKeyboard);
             bool keyboardAvailable = keyboard != null && (keyboardAssigned
-                || virtualPlayerTwoKeyboard
+                || virtualKeyboard
                 || seat == 0 && !controllerJoining
                     && (ActiveView == GameView.Menu
                         || menuInputSource == InputSource.KeyboardMouse
