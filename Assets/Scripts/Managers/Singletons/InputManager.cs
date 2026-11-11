@@ -304,10 +304,29 @@ namespace CrazyElevator.Managers
 
         void RegisterNextGamepad()
         {
-            int seat = NextAvailableSeat;
-            if (seat < 0) return;
             var pad = GamepadActivityThisFrame(true);
             if (pad == null) return;
+
+            int seat = NextAvailableSeat;
+            if (seat < 0)
+            {
+                // A shared keyboard can fill one seat before the second
+                // controller joins. Give controllers both seats by replacing
+                // that keyboard PlayerInput when no seat is left.
+                seat = keyboardMouseSeat;
+                if (seat < 0) return;
+
+                var keyboardPlayer = ExistingPlayerInput(seat);
+                if (keyboardPlayer != null)
+                {
+                    keyboardPlayer.SwitchCurrentControlScheme("Gamepad", pad);
+                    RegisterPlayerInput(keyboardPlayer);
+                    return;
+                }
+
+                keyboardMouseSeat = -1;
+            }
+
             var playerInput = JoinGamepad(GetComponent<PlayerInputManager>(), seat, pad);
             if (playerInput != null) joinedGamepadIds[seat] = pad.deviceId;
         }
@@ -640,7 +659,7 @@ namespace CrazyElevator.Managers
         {
             if (!controllerJoining && ActiveView == GameView.Menu)
                 DetectMenuInputSource();
-            if (controllerJoining && NextAvailableSeat >= 0)
+            if (controllerJoining && (NextAvailableSeat >= 0 || keyboardMouseSeat >= 0))
             {
                 RegisterNextGamepad();
                 if (NextAvailableSeat >= 0 && KeyboardActivityThisFrame())
