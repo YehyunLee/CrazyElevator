@@ -1703,7 +1703,6 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.MenuManager
   menuArtwork: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
-  passengerPortraitAtlas: {fileID: 2800000, guid: 9136f372b64f498dad16414b1acb381e, type: 3}
   controllerInstructions: {fileID: 2800000, guid: 559a3286dac74179894e4e458f441042, type: 3}
   dimensionGuideImages:
   - {fileID: 2800000, guid: 291fe3bafed1494b84f59d6a45bb97ac, type: 3}
@@ -1712,16 +1711,6 @@ MonoBehaviour:
   menuArtwork: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
   controllerInstructions: {fileID: 2800000, guid: 559a3286dac74179894e4e458f441042, type: 3}
   titleButtons: {fileID: 910001005}
-  playerOneLabel:
-    topLeft: {x: 0.02, y: 0.02}
-    topRight: {x: 0.98, y: 0.18}
-    bottomRight: {x: 0.98, y: 0.94}
-    bottomLeft: {x: 0.02, y: 1}
-  rivalLabel:
-    topLeft: {x: 0.02, y: 0.18}
-    topRight: {x: 0.98, y: 0.02}
-    bottomRight: {x: 0.98, y: 1}
-    bottomLeft: {x: 0.02, y: 0.94}
   playerOneButton:
     serializedVersion: 2
     x: 260

@@ -24,7 +24,6 @@ namespace CrazyElevator.Managers
         static readonly Color CpuReadyColour = new Color32(145, 150, 160, 255);
         static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
-        [SerializeField] Texture2D passengerPortraitAtlas;
         [SerializeField] Texture2D controllerInstructions;
         const float ArtWidth = 1700f;
         const float ArtHeight = 1082f;
@@ -55,27 +54,6 @@ namespace CrazyElevator.Managers
         const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
         [Header("First menu buttons")]
         [SerializeField] CanvasGroup titleButtons;
-        [System.Serializable]
-        sealed class MenuLabelShape
-        {
-            // Coordinates run from 0 to 1 within the label: top-left, top-right,
-            // bottom-right, bottom-left. Edit these on Main > MenuManager.
-            public Vector2 topLeft = new Vector2(.04f, .04f);
-            public Vector2 topRight = new Vector2(.98f, 0);
-            public Vector2 bottomRight = new Vector2(1, .92f);
-            public Vector2 bottomLeft = new Vector2(0, 1);
-        }
-        [Header("Menu label corners (0 to 1)")]
-        [SerializeField] MenuLabelShape playerOneLabel = new MenuLabelShape
-        {
-            topLeft = new Vector2(.02f, .02f), topRight = new Vector2(.98f, .18f),
-            bottomRight = new Vector2(.98f, .94f), bottomLeft = new Vector2(.02f, 1)
-        };
-        [SerializeField] MenuLabelShape rivalLabel = new MenuLabelShape
-        {
-            topLeft = new Vector2(.02f, .18f), topRight = new Vector2(.98f, .02f),
-            bottomRight = new Vector2(.98f, 1), bottomLeft = new Vector2(.02f, .94f)
-        };
         [Header("Mode screen button rectangles (1700 x 1082)")]
         [SerializeField] Rect playerOneButton = new Rect(260, 300, 540, 480);
         [SerializeField] Rect rivalButton = new Rect(900, 300, 540, 480);
@@ -85,11 +63,9 @@ namespace CrazyElevator.Managers
         [SerializeField] Rect playerTwoReadyButton = new Rect(940, 665, 460, 80);
         [SerializeField] Rect startButton = new Rect(720, 930, 260, 72);
         [SerializeField] Rect backButton = new Rect(48, 46, 220, 58);
-        Texture2D playerOneLabelTexture, rivalLabelTexture;
         Texture2D triangleCursorTexture;
         Texture2D keyIconTexture;
         Texture2D leftChoiceArrowTexture, rightChoiceArrowTexture;
-        int playerOneShapeHash, rivalShapeHash;
         float transition;
         float launchTimer;
         bool choosingMode;
@@ -279,8 +255,6 @@ namespace CrazyElevator.Managers
                 roundPassengerIntroductionActive = false;
                 RoundPassengerIntroductionActive = false;
             }
-            if (playerOneLabelTexture != null) Destroy(playerOneLabelTexture);
-            if (rivalLabelTexture != null) Destroy(rivalLabelTexture);
             if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
             if (keyIconTexture != null) Destroy(keyIconTexture);
             if (leftChoiceArrowTexture != null) Destroy(leftChoiceArrowTexture);
@@ -1156,10 +1130,8 @@ namespace CrazyElevator.Managers
                 SyncTitleButtons();
             }
 
-            DrawPlayerCard(playerOneButton, "PLAYER 1", playerOneLabel,
-                ref playerOneLabelTexture, ref playerOneShapeHash, false, false);
-            DrawPlayerCard(rivalButton, "PLAYER 2", rivalLabel,
-                ref rivalLabelTexture, ref rivalShapeHash, false, false);
+            DrawPlayerCard(playerOneButton, "PLAYER 1", PlayerOneColour);
+            DrawPlayerCard(rivalButton, "PLAYER 2", Teal);
             GUI.Label(new Rect(810, 480, 80, 65), "VS", cardTitle);
 
             DrawStatusBar(playerOneReadyButton, playerOneReady ? "READY" : "NOT READY",
@@ -1273,39 +1245,14 @@ namespace CrazyElevator.Managers
             GUI.EndGroup();
         }
 
-        void DrawPlayerCard(Rect rect, string label, MenuLabelShape shape,
-            ref Texture2D texture, ref int shapeHash,
-            bool playerOneHovering, bool playerTwoHovering)
+        void DrawPlayerCard(Rect rect, string label, Color borderColour)
         {
-            EnsureLabelTexture(shape, ref texture, ref shapeHash);
-
-            if (playerOneHovering && playerTwoHovering)
-            {
-                DrawTintedTexture(Expand(rect, 10f), texture, PlayerOneColour);
-                DrawTintedTexture(Expand(rect, 5f), texture, PlayerTwoColour);
-            }
-            else if (playerOneHovering || playerTwoHovering)
-            {
-                DrawTintedTexture(Expand(rect, 5f), texture,
-                    playerOneHovering ? PlayerOneColour : PlayerTwoColour);
-            }
-            DrawTintedTexture(rect, texture, Teal);
-            DrawLabel(rect, label, menuLabelText, Ink);
-            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
-        }
-
-        void EnsureLabelTexture(MenuLabelShape shape, ref Texture2D texture, ref int shapeHash)
-        {
-            int currentHash = shape.topLeft.GetHashCode();
-            currentHash = currentHash * 31 + shape.topRight.GetHashCode();
-            currentHash = currentHash * 31 + shape.bottomRight.GetHashCode();
-            currentHash = currentHash * 31 + shape.bottomLeft.GetHashCode();
-            if (texture == null || shapeHash != currentHash)
-            {
-                if (texture != null) Destroy(texture);
-                texture = CreateLabelTexture(shape);
-                shapeHash = currentHash;
-            }
+            float side = Mathf.Min(rect.width, rect.height);
+            Rect square = new Rect(rect.center.x - side * .5f,
+                rect.center.y - side * .5f, side, side);
+            Panel(square, new Color32(15, 20, 31, 255));
+            DrawRectOutline(square, borderColour, 8f);
+            DrawLabel(square, label, menuLabelText, Cream);
         }
 
         void DrawStatusBar(Rect rect, string label, Color fill, Color textColour,
@@ -1365,14 +1312,6 @@ namespace CrazyElevator.Managers
             style.normal.textColor = previous;
         }
 
-        static void DrawTintedTexture(Rect rect, Texture2D texture, Color colour)
-        {
-            Color previous = GUI.color;
-            GUI.color = colour;
-            GUI.DrawTexture(rect, texture);
-            GUI.color = previous;
-        }
-
         static Rect Expand(Rect rect, float amount) => new Rect(
             rect.x - amount, rect.y - amount,
             rect.width + amount * 2f, rect.height + amount * 2f);
@@ -1384,39 +1323,6 @@ namespace CrazyElevator.Managers
             float sideHeight = Mathf.Max(0f, rect.height - thickness * 2f);
             Panel(new Rect(rect.x, rect.y + thickness, thickness, sideHeight), colour);
             Panel(new Rect(rect.xMax - thickness, rect.y + thickness, thickness, sideHeight), colour);
-        }
-
-        static Texture2D CreateLabelTexture(MenuLabelShape shape)
-        {
-            const int width = 256, height = 80;
-            var pixels = new Color32[width * height];
-            Vector2[] corners = { shape.topLeft, shape.topRight, shape.bottomRight, shape.bottomLeft };
-            for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                int covered = 0;
-                for (int sy = 0; sy < 2; sy++)
-                for (int sx = 0; sx < 2; sx++)
-                {
-                    var point = new Vector2((x + (sx + .5f) * .5f) / width,
-                        1f - (y + (sy + .5f) * .5f) / height);
-                    bool inside = true;
-                    for (int edge = 0; edge < 4; edge++)
-                    {
-                        Vector2 a = corners[edge], b = corners[(edge + 1) % 4];
-                        if ((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x) < 0)
-                        { inside = false; break; }
-                    }
-                    if (inside) covered++;
-                }
-                pixels[y * width + x] = new Color32(255, 255, 255,
-                    (byte)(covered * 255 / 4));
-            }
-            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
-            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            return texture;
         }
 
         static Texture2D CreateTriangleCursor()
