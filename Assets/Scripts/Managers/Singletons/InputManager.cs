@@ -33,7 +33,8 @@ namespace CrazyElevator.Managers
             Stop,
             HelpPassenger,
             Kickout,
-            Collision
+            Collision,
+            LateralTravel
         }
 
         public GameView ActiveView { get; private set; } = GameView.Menu;
@@ -581,6 +582,7 @@ namespace CrazyElevator.Managers
             Vector2 select = input.Select;
             // Travel steps teach up/down only; a slightly diagonal stick must not
             // turn the car onto a floor rail or switch duel lanes.
+            Vector2 lateralMove = input.Move;
             Vector2 move = new Vector2(0f, input.Move.y);
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool collisionBoost = input.BoostHeld;
@@ -622,6 +624,10 @@ namespace CrazyElevator.Managers
                 case TutorialInputMode.Move:
                     input.Move = move;
                     input.MovePressed = move.magnitude >= .55f;
+                    break;
+                case TutorialInputMode.LateralTravel:
+                    input.Move = lateralMove;
+                    input.MovePressed = lateralMove.magnitude >= .55f;
                     break;
                 case TutorialInputMode.Collision:
                     input.Move = new Vector2(0f, Mathf.Max(0f, move.y));

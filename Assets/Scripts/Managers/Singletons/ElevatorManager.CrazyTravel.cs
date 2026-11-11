@@ -120,6 +120,7 @@ namespace CrazyElevator.Managers
         float GroundRightX => ElevatorMatchType.ShaftCenterX + GroundTrackSpan;
 
         public bool OnFloorRail => phase == Phase.Moving && railRiding;
+        public bool OnMainVerticalTrack => MovingInShaft && !railRiding && OnMainShaft(RouteLateralX);
 
         // The two centre shafts plus the lane-change space between them.
         bool OnMainShaft(float x) => x >= LeftShaftX - ShaftAlignReach && x <= RightShaftX + ShaftAlignReach;
