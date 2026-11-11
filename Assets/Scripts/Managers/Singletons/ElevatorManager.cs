@@ -386,6 +386,9 @@ namespace CrazyElevator.Managers
                 pullback = Mathf.Max(pullback, Mathf.Max(Mathf.Abs(offset.x) / horizontal - offset.z,
                     Mathf.Abs(offset.y) / vertical - offset.z));
             }
+            // Give the passenger view a little more breathing room once the
+            // elevator is at a landing, especially in a narrow split-screen seat.
+            if (atLanding) pullback *= 1.1f;
             Vector3 target = home - cabinCameraHomeRotation * Vector3.forward * pullback;
             cabinCameraHome = cabinFramingReady ? SmoothCabinHome(cabinCameraHome, target, dt) : target;
             cabinFramingReady = true;
