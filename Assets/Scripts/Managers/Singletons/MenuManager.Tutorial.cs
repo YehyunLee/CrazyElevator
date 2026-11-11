@@ -10,6 +10,7 @@ namespace CrazyElevator.Managers
         const int LateralTravelStep = 9;
         const float TutorialCardTravelSeconds = .42f;
         const float TutorialPracticeSeconds = 1.7f;
+        const float BoardingCardSeconds = 3f;
         const float TutorialStoryLineSeconds = 2.8f;
         const float TutorialStoryFadeSeconds = .6f;
         const float TutorialHandoffFadeSeconds = .8f;
@@ -328,9 +329,11 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0:
-                    return actor.HasChosenBoardingDoor;
+                    return actor.HasChosenBoardingDoor
+                        && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
                 case 1:
-                    return actor.CurrentPassengers.Count >= 2;
+                    return actor.CurrentPassengers.Count >= 2
+                        && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
                 case 2:
                     return actor.TravelStartCount > tutorialTravelStartBaseline[index];
                 // Move and boost progress adds up across presses instead of resetting,
@@ -742,7 +745,10 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case -1: return "TUTORIAL";
-                case 0: return "CHOOSE A DOOR.";
+                case 0:
+                    if (!KeyboardHintsEnabled) return "MOVE THE LEFT STICK TOWARD A DOOR TO OPEN IT.";
+                    return seat == 1 ? "PRESS ← (LEFT), ↑ (FRONT), OR → (RIGHT)."
+                        : "PRESS A (LEFT), W (FRONT), OR D (RIGHT).";
                 case 1: return "OPEN ANOTHER DOOR.";
                 case 2: return "PRESS TO LEAVE.";
                 case 3: return KeyboardHintsEnabled ? seat == 1 ? "HOLD ↑ / ↓." : "HOLD W / S."
@@ -1097,8 +1103,10 @@ namespace CrazyElevator.Managers
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y + rect.height * 24f / 135f, 0f),
                 Quaternion.identity, new Vector3(rect.width / 200f, rect.height / 135f, 1f));
-            float cycle = Mathf.Repeat(Time.unscaledTime, 2.4f);
-            bool pressed = cycle < 1.65f;
+            bool boardingStep = step == 0 || step == 1;
+            float cycleSeconds = boardingStep ? 3.2f : 2.4f;
+            float cycle = Mathf.Repeat(Time.unscaledTime, cycleSeconds);
+            bool pressed = cycle < (boardingStep ? 2.2f : 1.65f);
             Color shell = new Color32(104, 119, 136, 255);
             Color idle = new Color32(38, 48, 63, 255);
             Color active = Color.Lerp(accent, Cream, .15f + .2f * Mathf.Sin(Time.unscaledTime * 6f));
@@ -1114,14 +1122,14 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(77, 28, 46, 20), boost ? "HOLD" : "", new GUIStyle(caption)
                 { fontSize = 11, alignment = TextAnchor.MiddleCenter });
 
-            bool useStick = step == 0 || step == 1 || step == 3 || step == 4 || step == 8
+            bool useStick = boardingStep || step == 3 || step == 4 || step == 8
                 || step == LateralTravelStep;
             Vector2 offset = Vector2.zero;
             if (useStick && pressed)
             {
-                if (step <= 1)
+                if (boardingStep)
                 {
-                    int direction = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 3;
+                    int direction = Mathf.FloorToInt(Time.unscaledTime / cycleSeconds) % 3;
                     offset = direction == 0 ? Vector2.left : direction == 1 ? Vector2.up : Vector2.right;
                 }
                 else if (step == 8) offset = Vector2.up;
