@@ -55,6 +55,7 @@ namespace CrazyElevator.Managers
         public bool IsAbilityIntroActor(ElevatorManager actor)
             => abilityIntroActive && actor != null && abilityIntroActor == actor;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
+        public const int RoundsPerMatch = MatchProgress.MaximumRounds;
         public int RoundNumber => matchProgress.RoundNumber;
         public int ActiveDimension => MenuManager.TutorialWillStart
             ? 0 : DimensionForRound(matchProgress.RoundNumber - 1);
@@ -63,6 +64,7 @@ namespace CrazyElevator.Managers
         public bool MatchFinished => matchProgress.Finished;
         public bool RoundRecorded => matchProgress.RoundRecorded;
         public int LastRoundWinner => matchProgress.LastRoundWinner;
+        public int MatchWinner => matchProgress.MatchWinner;
         public string ActiveDimensionName => DimensionDisplayName(ActiveDimension);
         public int FirstEnabledDimension => DimensionForRound(0);
         public int NextDimensionIndex => DimensionForRound(matchProgress.RoundNumber);

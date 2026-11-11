@@ -599,9 +599,9 @@ public static class ExtendedInteriorChecks
             && rival.Offboard(downward) == CrazyElevator.Shared.OffboardResult.Happy
             && player.Delivered == 1 && rival.Delivered == 1 && player.Load == 0 && rival.Load == 0,
             "Upward and downward deliveries did not score independently.");
-        Require(Round.Duration == 180f && Round.MaxUnlockedFloorAt(0f) == 7
+        Require(Round.Duration == 90f && Round.MaxUnlockedFloorAt(0f) == 7
             && Round.MaxUnlockedFloorAt(40f) == 15 && Round.MaxUnlockedFloorAt(110f) == 23,
-            "Random routes changed the three-minute shift or world progression.");
+            "Random routes changed the 90-second round or world progression.");
         Debug.Log("PASS: valid randomized destinations, balanced up/down requests, mostly short trips, catalog/default/shared generation, deliveries in both directions, and unchanged world progression.");
     }
 
@@ -1735,7 +1735,7 @@ public static class ExtendedInteriorChecks
         try
         {
             match.StartMatch();
-            for (int index = 0; index < 5; index++)
+            for (int index = 0; index < Game.RoundsPerMatch; index++)
             {
                 int dimension = index % Round.Dimensions;
                 int first = dimension * Round.FloorsPerDimension, last = first + Round.FloorsPerDimension - 1;
@@ -1809,9 +1809,9 @@ public static class ExtendedInteriorChecks
                 Call(player, "AdvanceBuildingTravel", 20f);
                 Require(player.CurrentFloor >= first && player.CurrentFloor <= last,
                     "Travel escaped above the active world.");
-                // P1, draw, P2, P1, P1 exercises rotation past round three and a 3-1 finish.
-                round.Score = index == 2 ? 50 : 100;
-                other.Score = index == 1 ? 100 : index == 2 ? 100 : 50;
+                // P1, draw, P1 exercises the third-round cap and a 2-0 finish.
+                round.Score = index == 1 ? 50 : 100;
+                other.Score = index == 1 ? 50 : 50;
                 round.TimeLeft = other.TimeLeft = 0f;
                 Call(player, "Update"); Call(rival, "Update");
                 // Update's enabled guard still applies to reflection; no frame is yielded here.
@@ -1821,16 +1821,17 @@ public static class ExtendedInteriorChecks
                 updateMatch.Invoke(match, null);
                 match.enabled = false;
                 Require(session.RoundRecorded && session.PlayerOneWins + session.PlayerTwoWins == wins
-                    && round.Score == (index == 2 ? 50 : 100),
+                    && round.Score == (index == 1 ? 50 : 100),
                     "Results must lock the score and record each round only once.");
                 if (index == 1) Require(session.PlayerOneWins == 1 && session.PlayerTwoWins == 0,
                     "A tied round awarded a win.");
-                if (index < 4) match.ContinueMatch();
+                if (index < Game.RoundsPerMatch - 1) match.ContinueMatch();
             }
-            Require(session.MatchFinished && session.PlayerOneWins == 3 && session.PlayerTwoWins == 1,
-                "The match must finish when one player wins three rounds.");
+            Require(session.MatchFinished && session.PlayerOneWins == 2 && session.PlayerTwoWins == 0
+                && session.MatchWinner == 0,
+                "A best-of-three match must finish at two round wins or after its third round.");
             session.AdvanceRound();
-            Require(session.RoundNumber == 5, "A completed match advanced to another round.");
+            Require(session.RoundNumber == Game.RoundsPerMatch, "A completed match advanced to another round.");
             match.ContinueMatch();
             Require(session.RoundNumber == 1 && !session.MatchFinished
                 && session.PlayerOneWins == 0 && session.PlayerTwoWins == 0
@@ -1838,7 +1839,7 @@ public static class ExtendedInteriorChecks
                 && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
                 "Play Again must reset the series and introduce the office again.");
             CheckMatchRoundIntroduction(match, 0);
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; full configured clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch office introduction.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; rematch office introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally
