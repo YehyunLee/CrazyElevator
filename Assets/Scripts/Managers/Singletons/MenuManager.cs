@@ -118,8 +118,7 @@ namespace CrazyElevator.Managers
         bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
         GUIStyle poolToggleLabel, poolCycleCaption;
-        GUIStyle poolHeaderText, poolInstructionText, poolDimensionNameText;
-        GUIStyle poolDimensionDetailText, poolNoticeText;
+        GUIStyle poolHeaderText, poolInstructionText, poolDimensionNameText, poolNoticeText;
         GUIStyle guideHeaderText, guideCaptionText, guideCardTitleText;
         GUIStyle guideNeighborItemText, guideCurrentItemText, guideArrowText;
         GUIStyle guideNextStopHeaderText, guideNextStopDescriptionText, guidePreviewText;
@@ -1576,7 +1575,7 @@ namespace CrazyElevator.Managers
             poolHeaderText = FixedTextColorStyle(title, Cream);
             poolInstructionText = FixedTextColorStyle(caption, Cream);
             poolDimensionNameText = FixedTextColorStyle(cardTitle, Ink);
-            poolDimensionDetailText = FixedTextColorStyle(cardCaption, Ink);
+            poolDimensionNameText.alignment = TextAnchor.MiddleLeft;
             poolNoticeText = FixedTextColorStyle(caption, Cream);
             body = new GUIStyle(caption) { alignment = TextAnchor.MiddleLeft, fontSize = Mathf.Clamp(Screen.height / 55, 12, 16) };
             GameTypography.Apply(body);

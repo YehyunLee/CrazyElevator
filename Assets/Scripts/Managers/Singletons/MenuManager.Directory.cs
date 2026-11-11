@@ -190,16 +190,13 @@ namespace CrazyElevator.Managers
 
             GameManager game = GameManager.Instance;
             string[] names = { "OFFICE", "CANDYLAND", "UNDERWATER", "MYSTICAL FOREST", "SPACE" };
-            string[] details = { "FLOORS 1–8  ·  OFFICE SHAFT", "FLOORS 1–8  ·  COTTON CANDY WORLD",
-                "FLOORS 1–8  ·  UNDERWATER SHAFT", "FLOORS 1–8  ·  FOREST", "FLOORS 1–8  ·  SPACE" };
             for (int i = 0; i < ElevatorRound.Dimensions; i++)
             {
                 Rect row = new Rect(440, 220 + i * 108, 820, 94);
                 bool enabled = game == null || game.IsDimensionEnabled(i);
                 Color accent = ElevatorManager.DimensionIntroAccent((WorldBand)i);
                 DrawDirectoryCard(row, accent, i == poolSelection);
-                GUI.Label(new Rect(row.x + 34, row.y + 8, 500, 42), names[i], poolDimensionNameText);
-                GUI.Label(new Rect(row.x + 36, row.y + 53, 500, 28), details[i], poolDimensionDetailText);
+                GUI.Label(new Rect(row.x + 34, row.y + 8, 500, row.height - 16), names[i], poolDimensionNameText);
                 Rect toggle = new Rect(row.xMax - 244, row.y + 14, 220, 66);
                 Panel(toggle, enabled ? accent : new Color32(81, 85, 96, 255));
                 GUI.Label(toggle, enabled ? "IN POOL  ✓" : "EXCLUDED", poolToggleLabel);
