@@ -5,15 +5,11 @@ namespace CrazyElevator.Managers
 {
     public sealed partial class ElevatorManager
     {
-        // The reveal waits for confirm; this is only the CPU-vs-CPU fallback.
-        public const float DimensionRevealSeconds = 6.8f;
-        // Ignore confirm briefly so a press meant for gameplay doesn't skip the card.
-        public const float DimensionRevealConfirmDelay = 1.2f;
-        public const float DimensionRevealFadeSeconds = .6f;
+        public const float DimensionRevealSeconds = 3f;
+        const float DimensionRevealFadeSeconds = .6f;
         const float DimensionDoorCloseSeconds = .85f;
         bool dimensionRevealActive;
         float dimensionRevealTime;
-        float dimensionRevealExitTime = -1f;
         int dimensionRevealIndex = -1;
         Phase dimensionResumePhase;
         float dimensionResumePhaseTime;
@@ -32,7 +28,6 @@ namespace CrazyElevator.Managers
             if (dimensionRevealActive) return;
             dimensionRevealIndex = index;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
             dimensionResumePhase = phase;
             dimensionResumePhaseTime = phaseTime;
             dimensionResumeDoors = doors;
@@ -67,9 +62,6 @@ namespace CrazyElevator.Managers
             ClearDimensionLineup();
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
-            // The confirm that closed the card must not also act in the cabin.
-            encounterConfirmationConsumedFrame = Time.frameCount;
             if (Match == null && !MenuManager.BeginRoundPassengerIntroduction(this, null))
                 BeginRoundCountdown();
         }
@@ -79,7 +71,6 @@ namespace CrazyElevator.Managers
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
             ClearEncounterPreviewModel();
             ClearDimensionLineup();
         }
@@ -90,33 +81,18 @@ namespace CrazyElevator.Managers
             dimensionRevealTime += Mathf.Max(0f, dt);
             float close = Mathf.Clamp01(dimensionRevealTime / DimensionDoorCloseSeconds);
             SetDoors(Mathf.Lerp(dimensionResumeDoors, 0f, close));
-            // In 1v1, ElevatorMatch waits for every human player instead.
-            if (Match != null) return;
-            if (dimensionRevealExitTime < 0f)
-            {
-                if (dimensionRevealTime >= DimensionRevealConfirmDelay && SeatControls.ConfirmPressed)
-                {
-                    dimensionRevealExitTime = 0f;
-                    Play(click);
-                }
-                return;
-            }
-            dimensionRevealExitTime += Mathf.Max(0f, dt);
-            if (dimensionRevealExitTime >= DimensionRevealFadeSeconds) FinishDimensionReveal();
+            // ElevatorMatch ends the shared preview for both cars together.
+            if (Match == null && dimensionRevealTime >= DimensionRevealSeconds) FinishDimensionReveal();
         }
 
         // Shared by the solo and 1v1 reveal screens.
-        public static float DimensionRevealAlpha(float time, float exitTime)
+        public static float DimensionRevealAlpha(float time)
         {
             float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(time / .85f));
-            float fadeOut = exitTime < 0f ? 1f
-                : Mathf.SmoothStep(0f, 1f, 1f - Mathf.Clamp01(exitTime / DimensionRevealFadeSeconds));
+            float fadeOut = Mathf.SmoothStep(0f, 1f,
+                Mathf.Clamp01((DimensionRevealSeconds - time) / DimensionRevealFadeSeconds));
             return Mathf.Min(fadeIn, fadeOut);
         }
-
-        // Blinks gently once confirm is accepted.
-        public static float DimensionPromptAlpha(float time) => time < DimensionRevealConfirmDelay ? 0f
-            : Mathf.Lerp(.55f, 1f, .5f + .5f * Mathf.Sin((time - DimensionRevealConfirmDelay) * 4f));
 
         // ---------- Passenger models for the reveal rows ----------
         // The authored passenger prefabs render side by side into one texture;
@@ -326,7 +302,7 @@ namespace CrazyElevator.Managers
         void DrawDimensionRevealOverlay(Rect view)
         {
             Styles();
-            float contentAlpha = DimensionRevealAlpha(dimensionRevealTime, dimensionRevealExitTime);
+            float contentAlpha = DimensionRevealAlpha(dimensionRevealTime);
             Panel(view, new Color(0f, 0f, 0f, .96f));
             if (contentAlpha <= .001f) return;
 
@@ -384,15 +360,6 @@ namespace CrazyElevator.Managers
                 title.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
                 GUI.Label(new Rect(row.x + 10f, row.y + 42f, row.width - 20f, 66f), lines[i], title);
                 DrawDimensionPassenger(new Rect(row.x, row.y + 104f, row.width, row.height - 108f), i, contentAlpha);
-            }
-
-            if (dimensionRevealExitTime < 0f)
-            {
-                title.fontSize = nameSize;
-                title.normal.textColor = new Color(Gold.r, Gold.g, Gold.b,
-                    contentAlpha * DimensionPromptAlpha(dimensionRevealTime));
-                GUI.Label(new Rect(card.x, rowTop + card.height * .36f + 4f, card.width,
-                    card.yMax - rowTop - card.height * .36f - 8f), "PRESS " + GameplayConfirmKey + " TO CONTINUE", title);
             }
 
             title.fontSize = oldSize;

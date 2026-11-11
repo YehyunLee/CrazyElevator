@@ -83,8 +83,6 @@ namespace CrazyElevator.Match
         bool dimensionRevealActive;
         int dimensionRevealIndex = -1;
         float dimensionRevealTime;
-        float dimensionRevealExitTime = -1f;
-        readonly bool[] dimensionRevealReady = new bool[2];
         public bool DimensionRevealActive => dimensionRevealActive;
 
         void Awake()
@@ -308,7 +306,6 @@ namespace CrazyElevator.Match
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
             resultRevealStartedAt = -1f;
             resultActionSelection = 0;
             resultActionMoveHeld = false;
@@ -413,60 +410,27 @@ namespace CrazyElevator.Match
         {
             dimensionRevealIndex = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
-            dimensionRevealReady[0] = dimensionRevealReady[1] = false;
             dimensionRevealActive = true;
             player.BeginDimensionReveal(dimensionRevealIndex);
             Rival?.BeginDimensionReveal(dimensionRevealIndex);
         }
 
-        // Both players confirm each world introduction before the countdown starts.
+        // The shared world preview hands off automatically to the passenger cards.
         void UpdateDimensionReveal(float dt)
         {
             if (Paused || MenuManager.IsOpen) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
-            if (dimensionRevealExitTime < 0f)
-            {
-                ReadDimensionRevealConfirms();
-                if (DimensionRevealEveryoneReady()) dimensionRevealExitTime = 0f;
-                return;
-            }
-            dimensionRevealExitTime += Mathf.Max(0f, dt);
-            if (dimensionRevealExitTime < Game.DimensionRevealFadeSeconds) return;
+            if (dimensionRevealTime < Game.DimensionRevealSeconds) return;
             player.FinishDimensionReveal();
             Rival?.FinishDimensionReveal();
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
-            dimensionRevealExitTime = -1f;
             if (!MenuManager.BeginRoundPassengerIntroduction(player, Rival))
             {
                 player.BeginRoundCountdown();
                 Rival?.BeginRoundCountdown();
             }
-        }
-
-        bool DimensionRevealSeatHuman(int seat) => seat == 0 ? humanPlayer : humanRival && Rival != null;
-
-        void ReadDimensionRevealConfirms()
-        {
-            var input = InputManager.Instance;
-            if (input == null || dimensionRevealTime < Game.DimensionRevealConfirmDelay) return;
-            for (int seat = 0; seat < 2; seat++)
-            {
-                if (!DimensionRevealSeatHuman(seat) || dimensionRevealReady[seat]) continue;
-                if (!input.ReadForSeat(seat, true).ConfirmPressed) continue;
-                dimensionRevealReady[seat] = true;
-                player.PlayClick();
-            }
-        }
-
-        bool DimensionRevealEveryoneReady()
-        {
-            if (!DimensionRevealSeatHuman(0) && !DimensionRevealSeatHuman(1))
-                return dimensionRevealTime >= Game.DimensionRevealSeconds;
-            return (!DimensionRevealSeatHuman(0) || dimensionRevealReady[0])
-                && (!DimensionRevealSeatHuman(1) || dimensionRevealReady[1]);
         }
 
         float ResultRevealTime => resultRevealStartedAt < 0f
@@ -1152,7 +1116,7 @@ namespace CrazyElevator.Match
 
         void DrawDimensionReveal()
         {
-            float contentAlpha = Game.DimensionRevealAlpha(dimensionRevealTime, dimensionRevealExitTime);
+            float contentAlpha = Game.DimensionRevealAlpha(dimensionRevealTime);
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
             if (contentAlpha <= .001f) return;
 
@@ -1220,10 +1184,6 @@ namespace CrazyElevator.Match
                 player?.DrawDimensionPassenger(new Rect(row.x, row.y + 120f, row.width, row.height - 124f),
                     i, contentAlpha);
             }
-            float rowBottom = rowTop + card.height * .36f;
-            DrawDimensionRevealPrompt(new Rect(card.x, rowBottom + 4f, card.width, card.yMax - rowBottom - 8f),
-                nameSize, contentAlpha);
-
             heading.fontSize = previousHeadingSize;
             heading.normal.textColor = previousText;
             heading.alignment = previousAlign;
@@ -1231,34 +1191,6 @@ namespace CrazyElevator.Match
             text.normal.textColor = previousBody;
             text.alignment = previousBodyAlign;
             text.wordWrap = previousWrap;
-        }
-
-        void DrawDimensionRevealPrompt(Rect line, int size, float contentAlpha)
-        {
-            if (dimensionRevealExitTime >= 0f) return;
-            float blink = Game.DimensionPromptAlpha(dimensionRevealTime);
-            if (blink <= 0f) return;
-            heading.fontSize = size;
-            if (SplitScreen)
-            {
-                Rect left = new Rect(line.x, line.y, line.width * .5f, line.height);
-                Rect right = new Rect(line.center.x, line.y, line.width * .5f, line.height);
-                DrawSeatReady(left, 0, MenuManager.KeyboardHintsEnabled ? "P1  PRESS C" : "P1  PRESS A", Coral, contentAlpha, blink);
-                DrawSeatReady(right, 1, MenuManager.KeyboardHintsEnabled ? "P2  PRESS ." : "P2  PRESS A", Teal, contentAlpha, blink);
-                return;
-            }
-            if (!DimensionRevealSeatHuman(0) && !DimensionRevealSeatHuman(1)) return;
-            string key = MenuManager.KeyboardHintsEnabled ? (DimensionRevealSeatHuman(0) ? "C" : ".") : "A";
-            string prompt = "PRESS " + key + " TO CONTINUE";
-            heading.normal.textColor = new Color(1f, .82f, .24f, contentAlpha * blink);
-            GUI.Label(line, prompt, heading);
-        }
-
-        void DrawSeatReady(Rect area, int seat, string prompt, Color colour, float contentAlpha, float blink)
-        {
-            bool ready = dimensionRevealReady[seat];
-            heading.normal.textColor = new Color(colour.r, colour.g, colour.b, contentAlpha * (ready ? 1f : blink));
-            GUI.Label(area, ready ? "P" + (seat + 1) + "  READY!" : prompt, heading);
         }
 
         void DrawSplitDivider()

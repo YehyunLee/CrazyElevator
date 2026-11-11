@@ -22,7 +22,7 @@ namespace CrazyElevator.Managers
         bool roundPassengerIntroductionActive;
         readonly ElevatorManager[] roundPassengerActors = new ElevatorManager[2];
         readonly List<string> roundPassengerKinds = new List<string>();
-        readonly bool[] passengerGalleryReady = new bool[2];
+        const float RoundPassengerSkipDelay = .7f;
         ElevatorManager roundPassengerPreviewActor;
         int roundPassengerIndex;
         float roundPassengerTimer;
@@ -30,19 +30,6 @@ namespace CrazyElevator.Managers
             { "COURIER", "INTERVIEW", "HUNTER", "PREGNANT", "BOSS", "GROUP", "BOUNCER", "ELDERLY", "HANDYMAN", "DIVER" };
         static readonly string[] TutorialCharacterNames =
             { "COURIER", "INTERVIEW CANDIDATE", "HUNTER", "MOM + BABY", "BOSS", "THE TRIO", "BOUNCER", "GRANDMA", "HANDYMAN", "DIVER" };
-        static readonly string[] TutorialCharacterDescriptions =
-        {
-            "2 SPACES • SHORT TRIPS",
-            "LOW PATIENCE • DELIVER FAST",
-            "STUNS MONSTERS",
-            "2 SPACES • BABY DRAINS PATIENCE",
-            "ON TIME = BIG BONUS",
-            "3 SPACES • SPEED UP + STICKY TRAIL",
-            "STRONGER COLLISIONS",
-            "SLOWS YOU • CALMS THE BABY",
-            "CLEARS RUST • FULL POWER",
-            "BLOCKS TORNADOES"
-        };
         static readonly string[] TutorialStoryLines =
         {
             "YOU'RE A BELLHOP FIGHTING FOR A PROMOTION.",
@@ -172,7 +159,6 @@ namespace CrazyElevator.Managers
             tutorialFinalePhase = TutorialFinalePhase.None;
             tutorialFinaleTimer = 0f;
             tutorialStoryIndex = 0;
-            ResetPassengerGalleryReady();
             tutorialGame = GameManager.Instance != null
                 ? GameManager.Instance.Player : FindAnyObjectByType<ElevatorManager>();
             if (tutorialGame != null && tutorialGame.IsNpc && tutorialGame.Match != null
@@ -577,32 +563,18 @@ namespace CrazyElevator.Managers
             tutorialFinalePhase = TutorialFinalePhase.Story;
         }
 
-        void ResetPassengerGalleryReady()
-        {
-            passengerGalleryReady[0] = passengerGalleryReady[1] = false;
-        }
-
-        bool PassengerGalleryNextPressed(ElevatorManager first, ElevatorManager second,
-            float elapsed, float minimumSeconds)
+        bool PassengerGalleryNextPressed()
         {
             InputManager inputManager = InputManager.Instance;
-            if (inputManager == null || elapsed < minimumSeconds) return false;
-            bool hasPlayer = false;
-            bool allReady = true;
-            for (int seat = 0; seat < passengerGalleryReady.Length; seat++)
-            {
-                ElevatorManager actor = first != null && first.Seat == seat ? first
-                    : second != null && second.Seat == seat ? second : null;
-                if (actor == null) continue;
-                hasPlayer = true;
-                InputManager.SeatInput input = inputManager.ReadForSeat(seat, true);
-                if (input.ConfirmPressed) passengerGalleryReady[seat] = true;
-                if (!passengerGalleryReady[seat]) allReady = false;
-            }
-            if (!hasPlayer || !allReady) return false;
-            ResetPassengerGalleryReady();
-            return true;
+            if (inputManager == null || roundPassengerTimer < RoundPassengerSkipDelay) return false;
+            for (int seat = 0; seat < roundPassengerActors.Length; seat++)
+                if (HasRoundPassengerViewer(seat) && inputManager.ReadForSeat(seat, true).ConfirmPressed)
+                    return true;
+            return false;
         }
+
+        bool HasRoundPassengerViewer(int seat) =>
+            roundPassengerActors[seat] != null && !roundPassengerActors[seat].IsNpc;
 
         void UpdateTutorialFinale()
         {
@@ -686,10 +658,9 @@ namespace CrazyElevator.Managers
                 : second != null && second.Seat == 1 ? second : null;
             roundPassengerPreviewActor = first != null ? first : second;
             roundPassengerKinds.Clear();
-            ResetPassengerGalleryReady();
             roundPassengerIndex = -1;
             roundPassengerTimer = 0f;
-            if (roundPassengerPreviewActor == null) return false;
+            if (!HasRoundPassengerViewer(0) && !HasRoundPassengerViewer(1)) return false;
 
             // Keep the familiar passenger order, but only include kinds that
             // can actually appear in this round's configured dimension.
@@ -717,14 +688,12 @@ namespace CrazyElevator.Managers
         {
             roundPassengerTimer += Time.unscaledDeltaTime;
             roundPassengerPreviewActor?.AnimateTutorialCharacter(roundPassengerTimer);
-            if (PassengerGalleryNextPressed(roundPassengerActors[0], roundPassengerActors[1],
-                roundPassengerTimer, .7f)) AdvanceRoundPassenger();
+            if (PassengerGalleryNextPressed()) AdvanceRoundPassenger();
         }
 
         void AdvanceRoundPassenger()
         {
             roundPassengerTimer = 0f;
-            ResetPassengerGalleryReady();
             while (++roundPassengerIndex < roundPassengerKinds.Count)
                 if (roundPassengerPreviewActor.PrepareTutorialCharacter(roundPassengerKinds[roundPassengerIndex]))
                     return;
@@ -742,11 +711,9 @@ namespace CrazyElevator.Managers
             string kind = roundPassengerKinds[roundPassengerIndex];
             int knownIndex = System.Array.IndexOf(TutorialCharacterKinds, kind);
             string name = knownIndex >= 0 ? TutorialCharacterNames[knownIndex] : RoundPassengerName(kind);
-            string description = knownIndex >= 0 ? TutorialCharacterDescriptions[knownIndex]
-                : RoundPassengerDescription(kind);
             DrawPassengerGalleryCard(roundPassengerPreviewActor,
                 "ROUND PASSENGERS  " + (roundPassengerIndex + 1) + " / " + roundPassengerKinds.Count,
-                name, description, passengerGalleryReady[0], passengerGalleryReady[1]);
+                name);
         }
 
         string RoundPassengerName(string kind)
@@ -755,14 +722,6 @@ namespace CrazyElevator.Managers
                 if (rider != null && rider.Kind == kind && rider.Data != null
                     && !string.IsNullOrEmpty(rider.Data.displayName)) return rider.Data.displayName;
             return kind.Replace('_', ' ');
-        }
-
-        string RoundPassengerDescription(string kind)
-        {
-            foreach (var rider in roundPassengerPreviewActor.AllRiders)
-                if (rider != null && rider.Kind == kind && rider.Data != null
-                    && !string.IsNullOrEmpty(rider.Data.request)) return rider.Data.request;
-            return "MEET THIS ROUND'S PASSENGER.";
         }
 
         void SkipTutorial()
@@ -1129,8 +1088,7 @@ namespace CrazyElevator.Managers
             title.normal.textColor = previousCountdownTextColor;
         }
 
-        void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText,
-            string descriptionText, bool playerOneReady, bool playerTwoReady)
+        void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText)
         {
             Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
             float scale = Mathf.Min(Screen.width / 1280f, Screen.height / 720f);
@@ -1139,28 +1097,17 @@ namespace CrazyElevator.Managers
                 (Screen.height - 720f * scale) * .5f, 0), Quaternion.identity, new Vector3(scale, scale, 1));
             GUIStyle heading = new GUIStyle(cardTitle)
                 { fontSize = 40, alignment = TextAnchor.MiddleCenter, wordWrap = true };
-            GUIStyle description = new GUIStyle(body)
-                { fontSize = 25, alignment = TextAnchor.MiddleCenter, wordWrap = true };
             GUIStyle small = new GUIStyle(caption)
                 { fontSize = 18, alignment = TextAnchor.MiddleCenter };
             heading.normal.textColor = Cream;
-            description.normal.textColor = Cream;
             small.normal.textColor = Teal;
             GUI.Label(new Rect(80, 24, 1120, 32), kicker, small);
             GUI.Label(new Rect(80, 64, 1120, 62), headingText, heading);
             Texture preview = actor != null ? actor.DimensionRevealTexture : null;
             if (preview != null)
                 GUI.DrawTexture(new Rect(240, 136, 800, 390), preview, ScaleMode.ScaleToFit);
-            GUI.Label(new Rect(160, 536, 960, 104), descriptionText, description);
-            int requiredPlayers = roundPassengerActors[1] != null ? 2 : 1;
-            string skipHint = "PRESS A TO SKIP";
-            if (KeyboardHintsEnabled)
-                skipHint += requiredPlayers > 1 ? "  (P1 C / P2 PERIOD)" : "  (C)";
-            GUI.Label(new Rect(80, 650, 1120, 30),
-                skipHint, small);
-            float readiness = (playerOneReady ? 1f : 0f) + (playerTwoReady ? 1f : 0f);
-            Panel(new Rect(400, 694, 480, 4), new Color(.2f, .25f, .3f));
-            Panel(new Rect(400, 694, 480 * Mathf.Clamp01(readiness / requiredPlayers), 4), Teal);
+            if (roundPassengerTimer >= RoundPassengerSkipDelay)
+                GUI.Label(new Rect(80, 568, 1120, 30), "CONFIRM TO SKIP", small);
             GUI.matrix = previousMatrix;
         }
 

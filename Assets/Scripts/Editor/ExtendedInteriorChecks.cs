@@ -1451,9 +1451,8 @@ public static class ExtendedInteriorChecks
             Require((float)Get(game, "dimensionRevealTime") == introTime,
                 "The solo introduction advanced while paused.");
             game.SetPausedPublic(false);
-            Set(game, "dimensionRevealExitTime", 0f);
-            Call(game, "TickDimensionReveal", Game.DimensionRevealFadeSeconds);
-            FinishRoundPassengerGallery(game, null, false);
+            Call(game, "TickDimensionReveal", Game.DimensionRevealSeconds);
+            FinishRoundPassengerGallery(game, null);
             FinishRoundCountdown(game);
             if (index < enabledDimensions - 1) Call(game, "StartOrContinue");
         }
@@ -1462,7 +1461,7 @@ public static class ExtendedInteriorChecks
             && game.DimensionRevealIndex == session.ActiveDimension,
             "Restarting solo play must introduce its shuffled first dimension.");
         game.FinishDimensionReveal();
-        FinishRoundPassengerGallery(game, null, false);
+        FinishRoundPassengerGallery(game, null);
         FinishRoundCountdown(game);
         Call(game, "LateUpdate");
         var round = (Round)Get(game, "round");
@@ -1548,15 +1547,15 @@ public static class ExtendedInteriorChecks
     static void FinishRoundCountdown(Game game)
     {
         Require(game.CountdownPlaying && !game.DimensionRevealActive,
-            "The ready handoff must show the countdown before starting gameplay.");
+            "The passenger gallery must hand off to the countdown.");
         float clock = game.SecondsLeft;
-        Set(game, "countdownTime", 4f);
+        Set(game, "countdownTime", 3f);
         Call(game, "Update");
         Require(!game.CountdownPlaying && game.SecondsLeft == clock,
             "The countdown handoff consumed round time.");
     }
 
-    static void FinishRoundPassengerGallery(Game first, Game second, bool checkTwoSeatGate)
+    static void FinishRoundPassengerGallery(Game first, Game second)
     {
         var menu = CrazyElevator.Managers.MenuManager.Current;
         Require(menu != null && CrazyElevator.Managers.MenuManager.RoundPassengerIntroductionActive,
@@ -1569,19 +1568,6 @@ public static class ExtendedInteriorChecks
                 && r.Origin >= round.MinFloor && r.Origin <= round.MaxFloor)),
             "The round gallery must list only passengers available in its active dimension.");
 
-        if (checkTwoSeatGate && second != null)
-        {
-            var ready = (bool[])menuType.GetField("passengerGalleryReady", Flags).GetValue(menu);
-            var next = menuType.GetMethod("PassengerGalleryNextPressed", Flags);
-            ready[first.Seat] = true;
-            Require(!(bool)next.Invoke(menu, new object[] { first, second, 1f, .7f, false })
-                && CrazyElevator.Managers.MenuManager.RoundPassengerIntroductionActive,
-                "One ready player must not advance the passenger gallery.");
-            ready[second.Seat] = true;
-            Require((bool)next.Invoke(menu, new object[] { first, second, 1f, .7f, false }),
-                "Both players confirming must advance the passenger gallery.");
-        }
-
         var advance = menuType.GetMethod("AdvanceRoundPassenger", Flags);
         int advancesRemaining = kinds.Count + 1;
         while (CrazyElevator.Managers.MenuManager.RoundPassengerIntroductionActive
@@ -1592,24 +1578,17 @@ public static class ExtendedInteriorChecks
             "The round countdown must start after the passenger gallery is complete.");
     }
 
-    // Gameplay-only checks explicitly pass through the new ready break first.
+    // Gameplay-only checks advance the round introductions first.
     static void FinishMatchRoundIntroduction(CrazyElevator.Match.ElevatorMatch match)
     {
         var type = typeof(CrazyElevator.Match.ElevatorMatch);
         Require(match.DimensionRevealActive && match.player.DimensionRevealActive && match.Rival.DimensionRevealActive
             && match.player.CountdownPlaying && match.Rival.CountdownPlaying,
             "A fresh match round must show the dimension before its passenger gallery and countdown.");
-        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
-        var human = type.GetMethod("DimensionRevealSeatHuman", Flags);
-        for (int seat = 0; seat < ready.Length; seat++)
-            ready[seat] = (bool)human.Invoke(match, new object[] { seat });
-        type.GetField("dimensionRevealTime", Flags).SetValue(match, Game.DimensionRevealSeconds);
-        var tick = type.GetMethod("UpdateDimensionReveal", Flags);
-        tick.Invoke(match, new object[] { 0f });
-        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        type.GetMethod("UpdateDimensionReveal", Flags).Invoke(match, new object[] { Game.DimensionRevealSeconds });
         Require(!match.DimensionRevealActive && !match.player.DimensionRevealActive && !match.Rival.DimensionRevealActive,
-            "Ready players did not finish the dimension introduction together.");
-        FinishRoundPassengerGallery(match.player, match.Rival, false);
+            "The dimension introduction did not finish automatically for both players.");
+        FinishRoundPassengerGallery(match.player, match.Rival);
         FinishRoundCountdown(match.player);
         FinishRoundCountdown(match.Rival);
     }
@@ -1654,24 +1633,13 @@ public static class ExtendedInteriorChecks
             "A paused introduction advanced its ready or fade clock.");
         match.TogglePause();
 
-        var ready = (bool[])type.GetField("dimensionRevealReady", Flags).GetValue(match);
-        Require(!ready[0] && !ready[1], "A new round retained another round's ready confirmations.");
-        var everyoneReady = type.GetMethod("DimensionRevealEveryoneReady", Flags);
-        time.SetValue(match, Game.DimensionRevealConfirmDelay + .01f);
-        ready[0] = true;
-        Require(!(bool)everyoneReady.Invoke(match, null),
-            "Player 1 skipped the introduction before Player 2 was ready.");
-        ready[1] = true;
-        Require((bool)everyoneReady.Invoke(match, null),
-            "Both human confirmations did not release the introduction.");
-        tick.Invoke(match, new object[] { 0f });
-        tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
+        tick.Invoke(match, new object[] { Game.DimensionRevealSeconds });
         Require(!match.DimensionRevealActive && !player.DimensionRevealActive && !rival.DimensionRevealActive
             && player.CountdownPlaying && rival.CountdownPlaying
             && CrazyElevator.Managers.MenuManager.RoundPassengerIntroductionActive
             && round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration,
             "The world reveal must hand both cars to the passenger gallery without consuming game time.");
-        FinishRoundPassengerGallery(player, rival, true);
+        FinishRoundPassengerGallery(player, rival);
         FinishRoundCountdown(player);
         FinishRoundCountdown(rival);
     }
@@ -1905,7 +1873,7 @@ public static class ExtendedInteriorChecks
                 && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
                 "Play Again must reset the series and introduce its new shuffled dimension.");
             CheckMatchRoundIntroduction(match, rematchDimension);
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; shuffled dimensions without repeats until the enabled pool is exhausted; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; randomized rematch introduction.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; shuffled dimensions without repeats until the enabled pool is exhausted; automatic dimension preview and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; randomized rematch introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally
