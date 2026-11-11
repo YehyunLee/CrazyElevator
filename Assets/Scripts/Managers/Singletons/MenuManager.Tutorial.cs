@@ -780,6 +780,18 @@ namespace CrazyElevator.Managers
             }
         }
 
+        // Draw in the gameplay HUD's own pass so its signs and arrows stay behind the cards.
+        internal static void DrawTutorialCardsAboveHud()
+        {
+            MenuManager menu = Current;
+            if (menu == null || !menu.tutorialActive || menu.tutorialFinalePhase != TutorialFinalePhase.None
+                || Event.current.type != EventType.Repaint)
+                return;
+
+            menu.Styles();
+            menu.DrawTutorialOverlay();
+        }
+
         void DrawTutorialOverlay()
         {
             // The Crazy Elevator reveal owns the screen until it has finished.

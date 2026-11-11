@@ -789,6 +789,7 @@ namespace CrazyElevator.Managers
                 DrawScoreFlights(Screen.width, Screen.height, SoloScoreHudAnchor());
             }
             DrawSessionFade(sessionFadeAlpha);
+            MenuManager.DrawTutorialCardsAboveHud();
         }
 
         void DrawSessionFade(float alpha)

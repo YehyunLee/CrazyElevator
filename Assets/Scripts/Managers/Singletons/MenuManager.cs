@@ -34,6 +34,8 @@ namespace CrazyElevator.Managers
         const float TransitionSeconds = 1.1f;
         const float LaunchSeconds = .95f;
         const float MenuFadeSeconds = .55f;
+        // Lower IMGUI depths draw in front of gameplay HUD and ability overlays.
+        const int TutorialOverlayDepth = -3000;
         // Keep the IMGUI cursor and action hint locked to the same reference-
         // resolution rectangles as the title Canvas buttons in Main.unity.
         static readonly Rect[] TitleButtonRects =
@@ -797,13 +799,13 @@ namespace CrazyElevator.Managers
                     DrawMenuFade();
                     return;
                 }
-                int previousDepth = GUI.depth;
-                GUI.depth = -1000;
                 if (tutorialFinalePhase != TutorialFinalePhase.None)
+                {
+                    int previousDepth = GUI.depth;
+                    GUI.depth = TutorialOverlayDepth;
                     DrawTutorialFinale();
-                else
-                    DrawTutorialOverlay();
-                GUI.depth = previousDepth;
+                    GUI.depth = previousDepth;
+                }
                 DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
@@ -823,7 +825,7 @@ namespace CrazyElevator.Managers
         {
             if (!tutorialActive || tutorialGame == null) return;
             int previousDepth = GUI.depth;
-            GUI.depth = -1001;
+            GUI.depth = TutorialOverlayDepth - 1;
             Rect button = new Rect(Screen.width - 220f, 18f, 200f, 48f);
             Panel(button, Cream);
             if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
@@ -838,7 +840,7 @@ namespace CrazyElevator.Managers
         void DrawControllerInstructions()
         {
             int previousDepth = GUI.depth;
-            GUI.depth = -1000;
+            GUI.depth = tutorialActive ? TutorialOverlayDepth : -1000;
             Matrix4x4 previousMatrix = GUI.matrix;
             Panel(new Rect(0, 0, Screen.width, Screen.height), Color.black);
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
