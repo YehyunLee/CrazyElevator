@@ -67,6 +67,7 @@ namespace CrazyElevator.Managers
             public bool MovePressed;
             public bool SelectPressed;
             public bool ConfirmPressed;
+            public bool SkipPressed;
             public bool BoardingLeftPressed;
             public bool BoardingFrontPressed;
             public bool BoardingRightPressed;
@@ -527,6 +528,8 @@ namespace CrazyElevator.Managers
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
+            bool skip = keyboardAvailable && !playerTwoKeyboard && keyboard.yKey.wasPressedThisFrame
+                || pad != null && pad.buttonNorth.wasPressedThisFrame;
             bool kickout = playerTwoKeyboard
                 ? keyboardAvailable && keyboard.commaKey.wasPressedThisFrame
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
@@ -564,6 +567,7 @@ namespace CrazyElevator.Managers
                 MovePressed = navigation.magnitude >= .55f,
                 SelectPressed = selection.magnitude >= .55f,
                 ConfirmPressed = confirm,
+                SkipPressed = skip,
                 BoardingLeftPressed = boardingLeft,
                 BoardingFrontPressed = boardingFront,
                 BoardingRightPressed = boardingRight,
@@ -761,7 +765,8 @@ namespace CrazyElevator.Managers
             }
 
             if (pause) OnPause?.Invoke();
-            if (overlay) OnOverlay?.Invoke();
+            if (overlay && (GameManager.Instance == null || !GameManager.Instance.AbilityIntroActive))
+                OnOverlay?.Invoke();
             if (confirm) OnConfirm?.Invoke();
             if (kickout) OnKickout?.Invoke();
             if (closeDoors) OnCloseDoors?.Invoke();

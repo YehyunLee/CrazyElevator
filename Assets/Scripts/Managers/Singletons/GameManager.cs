@@ -337,6 +337,17 @@ namespace CrazyElevator.Managers
                     StartNextAbilityIntro();
                     return;
                 }
+                InputManager abilityInput = InputManager.Instance;
+                bool skipPressed = abilityInput != null && abilityInput.ReadForSeat(abilityIntroActor.Seat,
+                    abilityIntroActor.Match != null).SkipPressed;
+                if (!skipPressed && abilityInput != null && abilityIntroActor.Match != null)
+                    skipPressed = abilityInput.ReadForSeat(1 - abilityIntroActor.Seat, true).SkipPressed;
+                if (skipPressed)
+                {
+                    StopAbilityIntro();
+                    StartNextAbilityIntro();
+                    return;
+                }
                 abilityIntroTime += Time.unscaledDeltaTime;
                 abilityIntroActor.AnimateAbilityIntro(abilityIntroTime);
                 if (abilityIntroTime >= (abilityIntroKind == "VIP" ? ElevatorManager.VipIntroDuration : abilityIntroKind == "HANDYMAN" ? 1.6f : AbilityIntroSeconds))

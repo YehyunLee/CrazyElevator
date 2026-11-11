@@ -504,7 +504,17 @@ namespace CrazyElevator.Managers
                 : abilityIntroKind == "MUSHROOM" ? "SPORES GUARD AGAINST VINES"
                 : abilityIntroKind == "ASTRONAUT" ? "TETHERS AGAINST GRAVITY"
                 : abilityIntroKind == "ALIEN" ? "RIDES THE UFO BEAM TO A SHORTCUT" : "CLEARS RUST";
-            GUI.Label(new Rect(view.x, frame.yMax, view.width, view.yMax - frame.yMax), message, textStyle);
+            float promptHeight = Mathf.Clamp(view.height * .04f, 22f, 36f);
+            Rect messageArea = new Rect(view.x, frame.yMax, view.width,
+                Mathf.Max(0f, view.yMax - frame.yMax - promptHeight));
+            GUI.Label(messageArea, message, textStyle);
+            var skipHint = new GUIStyle(textStyle)
+            {
+                fontSize = Mathf.Clamp(Mathf.RoundToInt(view.height * .022f), 14, 24),
+                fontStyle = FontStyle.Bold
+            };
+            GUI.Label(new Rect(view.x, view.yMax - promptHeight, view.width, promptHeight),
+                "PRESS Y TO SKIP", skipHint);
             textStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.height * .022f), 14, 24);
             string heading = showPlayer ? (IsNpc ? "CPU  ·  " : "PLAYER " + (Seat + 1) + "  ·  ") : "";
             string name = abilityIntroKind == "VIP" ? "VIP PASSENGER" : abilityIntroKind == "GROUP" ? "THE TRIO" : abilityIntroKind == "ELDERLY" ? "GRANDMA"
