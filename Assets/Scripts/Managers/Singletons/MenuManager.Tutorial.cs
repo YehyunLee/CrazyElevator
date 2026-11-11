@@ -18,7 +18,6 @@ namespace CrazyElevator.Managers
         const float TutorialCountdownSeconds = 3f;
         int tutorialCollisionSeat = -1;
         bool tutorialCollisionHitConfirmed;
-        int tutorialCharacterIndex;
         public static bool RoundPassengerIntroductionActive { get; private set; }
         bool roundPassengerIntroductionActive;
         readonly ElevatorManager[] roundPassengerActors = new ElevatorManager[2];
@@ -62,7 +61,6 @@ namespace CrazyElevator.Managers
         {
             None,
             Collision,
-            Characters,
             Story,
             FadeToControls,
             Controls,
@@ -553,7 +551,6 @@ namespace CrazyElevator.Managers
             tutorialFinalePhase = TutorialFinalePhase.Collision;
             tutorialFinaleTimer = 0f;
             tutorialStoryIndex = 0;
-            tutorialCharacterIndex = -1;
             tutorialCollisionSeat = -1;
             PauseTutorialGame();
             AdvanceTutorialCollision();
@@ -577,8 +574,7 @@ namespace CrazyElevator.Managers
                 ResumeTutorialGame();
                 return;
             }
-            tutorialFinalePhase = TutorialFinalePhase.Characters;
-            AdvanceTutorialCharacter();
+            tutorialFinalePhase = TutorialFinalePhase.Story;
         }
 
         void ResetPassengerGalleryReady()
@@ -587,7 +583,7 @@ namespace CrazyElevator.Managers
         }
 
         bool PassengerGalleryNextPressed(ElevatorManager first, ElevatorManager second,
-            float elapsed, float minimumSeconds, bool tutorialControls)
+            float elapsed, float minimumSeconds)
         {
             InputManager inputManager = InputManager.Instance;
             if (inputManager == null || elapsed < minimumSeconds) return false;
@@ -599,26 +595,13 @@ namespace CrazyElevator.Managers
                     : second != null && second.Seat == seat ? second : null;
                 if (actor == null) continue;
                 hasPlayer = true;
-                InputManager.SeatInput input = tutorialControls
-                    ? inputManager.ReadForTutorialControls(seat, true)
-                    : inputManager.ReadForSeat(seat, true);
+                InputManager.SeatInput input = inputManager.ReadForSeat(seat, true);
                 if (input.ConfirmPressed) passengerGalleryReady[seat] = true;
                 if (!passengerGalleryReady[seat]) allReady = false;
             }
             if (!hasPlayer || !allReady) return false;
             ResetPassengerGalleryReady();
             return true;
-        }
-
-        void AdvanceTutorialCharacter()
-        {
-            tutorialFinaleTimer = 0f;
-            ResetPassengerGalleryReady();
-            // Missing optional art must not leave an empty or stale character on screen.
-            while (++tutorialCharacterIndex < TutorialCharacterKinds.Length)
-                if (tutorialGame.PrepareTutorialCharacter(TutorialCharacterKinds[tutorialCharacterIndex])) return;
-            tutorialGame.FinishTutorialCharacter();
-            tutorialFinalePhase = TutorialFinalePhase.Story;
         }
 
         void UpdateTutorialFinale()
@@ -636,12 +619,6 @@ namespace CrazyElevator.Managers
                         InputManager.Instance?.LockTutorialInput(tutorialCollisionSeat);
                     }
                     if (tutorialCollisionHitConfirmed && tutorialFinaleTimer >= 1.2f) AdvanceTutorialCollision();
-                    break;
-                case TutorialFinalePhase.Characters:
-                    tutorialGame.AnimateTutorialCharacter(tutorialFinaleTimer);
-                    if (PassengerGalleryNextPressed(tutorialActors[0], tutorialActors[1],
-                        tutorialFinaleTimer, .7f, true))
-                        AdvanceTutorialCharacter();
                     break;
                 case TutorialFinalePhase.Story:
                     if (tutorialFinaleTimer >= TutorialStoryLineSeconds)
@@ -741,7 +718,7 @@ namespace CrazyElevator.Managers
             roundPassengerTimer += Time.unscaledDeltaTime;
             roundPassengerPreviewActor?.AnimateTutorialCharacter(roundPassengerTimer);
             if (PassengerGalleryNextPressed(roundPassengerActors[0], roundPassengerActors[1],
-                roundPassengerTimer, .7f, false)) AdvanceRoundPassenger();
+                roundPassengerTimer, .7f)) AdvanceRoundPassenger();
         }
 
         void AdvanceRoundPassenger()
@@ -1122,11 +1099,6 @@ namespace CrazyElevator.Managers
                 DrawTutorialOverlay();
                 return;
             }
-            if (tutorialFinalePhase == TutorialFinalePhase.Characters)
-            {
-                DrawTutorialCharacterIntro();
-                return;
-            }
             if (tutorialFinalePhase == TutorialFinalePhase.Story)
             {
                 DrawTutorialStoryForView(new Rect(0f, 0f, Screen.width, Screen.height));
@@ -1157,16 +1129,6 @@ namespace CrazyElevator.Managers
             title.normal.textColor = previousCountdownTextColor;
         }
 
-        void DrawTutorialCharacterIntro()
-        {
-            if (tutorialGame == null || tutorialCharacterIndex < 0
-                || tutorialCharacterIndex >= TutorialCharacterKinds.Length) return;
-            DrawPassengerGalleryCard(tutorialGame, "MEET THE PASSENGERS  "
-                + (tutorialCharacterIndex + 1) + " / " + TutorialCharacterKinds.Length,
-                TutorialCharacterNames[tutorialCharacterIndex], TutorialCharacterDescriptions[tutorialCharacterIndex],
-                passengerGalleryReady[0], passengerGalleryReady[1]);
-        }
-
         void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText,
             string descriptionText, bool playerOneReady, bool playerTwoReady)
         {
@@ -1190,9 +1152,7 @@ namespace CrazyElevator.Managers
             if (preview != null)
                 GUI.DrawTexture(new Rect(240, 136, 800, 390), preview, ScaleMode.ScaleToFit);
             GUI.Label(new Rect(160, 536, 960, 104), descriptionText, description);
-            int requiredPlayers = roundPassengerIntroductionActive
-                ? (roundPassengerActors[1] != null ? 2 : 1)
-                : (tutorialActors[1] != null ? 2 : 1);
+            int requiredPlayers = roundPassengerActors[1] != null ? 2 : 1;
             string skipHint = "PRESS A TO SKIP";
             if (KeyboardHintsEnabled)
                 skipHint += requiredPlayers > 1 ? "  (P1 C / P2 PERIOD)" : "  (C)";
