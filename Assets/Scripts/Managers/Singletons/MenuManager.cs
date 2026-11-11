@@ -48,9 +48,8 @@ namespace CrazyElevator.Managers
         };
         static readonly Rect[] OptionsButtonRects =
         {
-            new Rect(480f, 360f, 740f, 140f),
-            new Rect(480f, 535f, 740f, 120f),
-            new Rect(620f, 730f, 460f, 90f)
+            new Rect(440f, 290f, 820f, 110f),
+            new Rect(440f, 445f, 820f, 110f)
         };
         const string InputHintsPreference = "CrazyElevator.InputHints.Keyboard";
         const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
@@ -514,7 +513,7 @@ namespace CrazyElevator.Managers
             bool vertical = Mathf.Abs(playerOne.Move.y) >= .55f;
             bool horizontal = Mathf.Abs(playerOne.Move.x) >= .55f;
             if (vertical && !optionsVerticalHeld)
-                optionsSelection = (optionsSelection + (playerOne.Move.y < 0 ? 1 : 2)) % 3;
+                optionsSelection = (optionsSelection + (playerOne.Move.y < 0 ? 1 : -1) + 2) % 2;
             if (horizontal && !optionsHorizontalHeld && optionsSelection == 0)
                 SetKeyboardHints(playerOne.Move.x > 0);
 
@@ -522,15 +521,15 @@ namespace CrazyElevator.Managers
             optionsHorizontalHeld = horizontal;
 
             bool confirm = playerOne.ConfirmPressed || playerOne.StartPressed;
-            bool back = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+            bool back = keyboard != null
+                && (keyboard.escapeKey.wasPressedThisFrame || keyboard.bKey.wasPressedThisFrame);
+            foreach (Gamepad pad in Gamepad.all)
+                if (pad != null) back |= pad.buttonEast.wasPressedThisFrame;
             if (confirm)
             {
-                if (optionsSelection == 1)
-                    SetTutorialMode(!TutorialModeEnabled);
-                else if (optionsSelection == 2)
-                    CloseOptions();
+                if (optionsSelection == 1) SetTutorialMode(!TutorialModeEnabled);
             }
-            else if (back)
+            if (back)
             {
                 CloseOptions();
             }
@@ -1002,43 +1001,46 @@ namespace CrazyElevator.Managers
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
                 new Vector3(scale, scale, 1));
 
-            GUI.Label(new Rect(360, 120, 980, 90), "OPTIONS", title);
-            GUI.Label(new Rect(420, 250, 860, 46), "CHOOSE YOUR KEY HINTS", caption);
+            GUI.Label(new Rect(250, 70, 1200, 84), "OPTIONS", poolHeaderText);
+            GUI.Label(new Rect(290, 154, 1120, 46),
+                "Choose your controls and tutorial settings.", poolInstructionText);
 
-            Rect modeButton = new Rect(480, 360, 740, 140);
-            DrawSelectionFrame(modeButton, optionsSelection == 0, false);
-            Panel(modeButton, Teal);
-            GUI.Label(new Rect(510, 382, 680, 54),
-                KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER", cardTitle);
-            GUI.Label(new Rect(510, 438, 680, 34),
-                KeyboardHintsEnabled ? "C / WASD" : "A / D-PAD", caption);
-            // Keep the navigation instruction attached to the key-hint choice.
-            GUI.Label(new Rect(modeButton.xMax + 16f, modeButton.y + 45f, 360f, 50f),
-                "LEFT / RIGHT TO CHANGE", caption);
+            Rect modeButton = OptionsButtonRects[0];
+            DrawDirectoryCard(modeButton, Teal, optionsSelection == 0);
+            GUI.Label(new Rect(modeButton.x + 34, modeButton.y + 8, 470, modeButton.height - 16),
+                "CONTROL HINTS", poolDimensionNameText);
+            Rect modeValue = new Rect(modeButton.xMax - 244, modeButton.y + 22, 220, 66);
+            Panel(modeValue, Teal);
+            GUI.Label(modeValue, KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER", poolToggleLabel);
+            if (optionsSelection == 0)
+            {
+                DrawKeyHint(new Rect(modeButton.xMax + 18, modeButton.center.y - 27, 54, 54), "A", true);
+                GUI.Label(new Rect(modeButton.xMax + 82, modeButton.center.y - 24, 250, 48),
+                    "CHANGE", poolCycleCaption);
+            }
             if (GUI.Button(modeButton, GUIContent.none, GUIStyle.none))
                 SetKeyboardHints(!KeyboardHintsEnabled);
 
-            Rect tutorialButton = new Rect(480, 535, 740, 120);
-            DrawSelectionFrame(tutorialButton, optionsSelection == 1, false);
-            Panel(tutorialButton, TutorialModeEnabled ? Teal : Coral);
-            GUI.Label(new Rect(510, 550, 680, 48), "TUTORIAL MODE", cardTitle);
-            GUI.Label(new Rect(510, 600, 680, 30), TutorialModeEnabled ? "ON" : "OFF", caption);
+            Rect tutorialButton = OptionsButtonRects[1];
+            DrawDirectoryCard(tutorialButton, Coral, optionsSelection == 1);
+            GUI.Label(new Rect(tutorialButton.x + 34, tutorialButton.y + 8,
+                    470, tutorialButton.height - 16), "TUTORIAL MODE", poolDimensionNameText);
+            Rect tutorialValue = new Rect(tutorialButton.xMax - 244, tutorialButton.y + 22, 220, 66);
+            Panel(tutorialValue, TutorialModeEnabled ? Teal : Coral);
+            GUI.Label(tutorialValue, TutorialModeEnabled ? "ON" : "OFF", poolToggleLabel);
             if (optionsSelection == 1)
             {
-                DrawKeyHint(new Rect(tutorialButton.xMax + 16f, tutorialButton.y + 33f, 54f, 54f),
-                    KeyboardHintsEnabled ? "C" : "A");
-                GUI.Label(new Rect(tutorialButton.xMax + 84f, tutorialButton.y + 35f, 300f, 50f),
-                    "PRESS TO TOGGLE", caption);
+                DrawKeyHint(new Rect(tutorialButton.xMax + 18, tutorialButton.center.y - 27, 54, 54), "A", true);
+                GUI.Label(new Rect(tutorialButton.xMax + 82, tutorialButton.center.y - 24, 250, 48),
+                    "TOGGLE", poolCycleCaption);
             }
             if (GUI.Button(tutorialButton, GUIContent.none, GUIStyle.none))
                 SetTutorialMode(!TutorialModeEnabled);
 
-            Rect back = new Rect(620, 730, 460, 90);
-            DrawSelectionFrame(back, optionsSelection == 2, false);
-            Panel(back, Cream);
-            GUI.Label(back, "BACK", cardTitle);
-            DrawKeyHint(new Rect(back.x + back.width + 16f, back.y + 18f, 54f, 54f),
-                "B");
+            Rect back = new Rect(615, 910, 470, 76);
+            DrawDirectoryCard(back, Cream, false);
+            GUI.Label(back, "BACK", guideCardTitleText);
+            DrawKeyHint(new Rect(back.xMax + 18f, back.y + 10f, 54f, 54f), "B", true);
             if (GUI.Button(back, GUIContent.none, GUIStyle.none)) CloseOptions();
 
             GUI.matrix = Matrix4x4.identity;
