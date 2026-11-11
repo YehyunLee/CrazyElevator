@@ -37,6 +37,11 @@ namespace CrazyElevator.Shared
                 case PassengerFeature.StunsMonster: return Kind == "HUNTER";
                 case PassengerFeature.BlocksTornado: return Kind == "DIVER";
                 case PassengerFeature.StrongCollision: return Kind == "BOUNCER";
+                case PassengerFeature.ForestScout: return Kind == "FAIRY";
+                case PassengerFeature.ForestShortcut: return Kind == "GOBLIN";
+                case PassengerFeature.ForestSporeGuard: return Kind == "MUSHROOM";
+                case PassengerFeature.GravityAnchor: return Kind == "ASTRONAUT";
+                case PassengerFeature.UfoLink: return Kind == "ALIEN";
                 default: return false;
             }
         }
@@ -558,6 +563,61 @@ namespace CrazyElevator.Shared
             if (!IsPassengerTypeUnlocked(candidate)) return false;
             return QueueIncludesCandidate(candidate,
                 QueueCandidatesAt(candidate.Origin, candidate.OriginStop));
+        }
+
+        // UFO beams may move one waiting rider to a nearby landing. Keep both
+        // shared queue snapshots in sync so neither player sees a duplicate.
+        public bool TryRelocateWaitingPassenger(Rider rider, int newFloor)
+        {
+            if (rider == null || rider.Boarded || rider.Resolved || rider.SpawnDelay > 0
+                || !ContainsFloor(rider.Origin) || !ContainsFloor(newFloor) || rider.Origin == newFloor)
+                return false;
+
+            int oldKey = rider.Origin * Stops + rider.OriginStop;
+            int targetStop = -1;
+            int targetCount = int.MaxValue;
+            int preferredStop = rider.OriginStop;
+            if (StopIsOpen(newFloor, preferredStop))
+            {
+                int preferredKey = newFloor * Stops + preferredStop;
+                int preferredCount = revealedQueues.TryGetValue(preferredKey, out HashSet<Rider> preferredQueue)
+                    ? preferredQueue.Count : QueueCandidatesAt(newFloor, preferredStop).Count;
+                if (preferredCount < OfferLimitAt(newFloor))
+                {
+                    targetStop = preferredStop;
+                    targetCount = preferredCount;
+                }
+            }
+            for (int stop = 0; stop < Stops; stop++)
+            {
+                if (targetStop >= 0) break;
+                if (!StopIsOpen(newFloor, stop)) continue;
+                int key = newFloor * Stops + stop;
+                bool captured = revealedQueues.TryGetValue(key, out HashSet<Rider> queue);
+                int count = captured ? queue.Count : QueueCandidatesAt(newFloor, stop).Count;
+                if (count >= OfferLimitAt(newFloor) || count >= targetCount) continue;
+                targetStop = stop;
+                targetCount = count;
+            }
+            if (targetStop < 0) return false;
+
+            if (revealedQueues.TryGetValue(oldKey, out HashSet<Rider> oldQueue)) oldQueue.Remove(rider);
+            rider.Origin = newFloor;
+            rider.OriginStop = targetStop;
+            if (rider.Destination == newFloor)
+            {
+                rider.Destination = DestinationFor(rider.Kind, newFloor);
+                rider.DestinationStop = PickStop(rider.Destination);
+            }
+            int newKey = newFloor * Stops + targetStop;
+            if (revealedQueues.TryGetValue(newKey, out HashSet<Rider> newQueue))
+                newQueue.Add(rider);
+
+            List<Rider> candidates = QueueCandidatesAt(newFloor, targetStop);
+            int slot = candidates.IndexOf(rider);
+            rider.PickupQueueSlot = Math.Max(0, slot);
+            rider.PickupDoor = QueueDoor(newFloor, targetStop, rider.PickupQueueSlot);
+            return true;
         }
 
         // Resolve an onboard passenger with the eject penalty.

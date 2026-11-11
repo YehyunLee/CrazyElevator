@@ -152,14 +152,14 @@ namespace CrazyElevator.Managers
             ? "Plan your route. Keep your passengers happy."
             : world == WorldBand.Candy ? "Bigger groups. Louder passengers. Faster rides."
             : world == WorldBand.Water ? "Watch the rust. Keep your elevator moving."
-            : world == WorldBand.Forest ? "Meet the residents of the mystical forest."
-            : "Give your passengers a ride through space.";
+            : world == WorldBand.Forest ? "Vines sweep the tracks. Scout, cut through, or guard."
+            : "A UFO beam moves passengers. Gravity can pull your car sideways.";
 
         public static string[] DimensionIntroNames(WorldBand world) => world == WorldBand.Office
             ? new[] { "COURIER", "INTERVIEW", "GRANDMA" }
             : world == WorldBand.Candy ? new[] { "MOM + BABY", "THE BOSS", "THE TRIO" }
             : world == WorldBand.Forest ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
-            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "DESTINATIONS" }
+            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "UFO EVENT" }
             : new[] { "HANDYMAN", "RUST", "REPAIR" };
 
         public static string[] DimensionIntroLines(WorldBand world) => world == WorldBand.Office
@@ -169,9 +169,9 @@ namespace CrazyElevator.Managers
                 ? new[] { "Crying drains patience. Grandma calms the baby.", "On-time delivery pays a bonus.",
                     "Three spaces. Speeds the elevator up." }
                 : world == WorldBand.Forest
-                ? new[] { "A forest passenger.", "A forest passenger.", "A forest passenger." }
+                ? new[] { "Fireflies point out a clear route.", "Cuts a vine shortcut.", "Spores block a vine hit." }
                 : world == WorldBand.Space
-                ? new[] { "A space passenger.", "A space passenger.", "Deliver riders to their floor." }
+                ? new[] { "Tethers the car against the pull.", "Rides the UFO beam onto another track.", "The beam moves a waiting passenger." }
                 : new[] { "Fixes damaged gears while aboard.", "Cracked gears slow the elevator over time.", "Hold repair to patch the gears." };
 
         void PrepareDimensionLineup(WorldBand world)

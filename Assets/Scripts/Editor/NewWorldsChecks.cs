@@ -92,7 +92,7 @@ public static class NewWorldsChecks
             CheckWorld(match.player, 4);
             CheckWorld(match.Rival, 4);
             CheckSharedPool(match);
-            Finish(true, "Solo and two-player Main: both worlds, authored backgrounds and floors, all five passenger prefabs, same-world destinations, shared queues, boarding and scoring.");
+            Finish(true, "Solo and two-player Main: both worlds, event prefabs, five passenger abilities and models, same-world destinations, UFO passenger relocation, shared queues, boarding and scoring.");
         }
         catch (Exception error) { Finish(false, error.ToString()); }
     }
@@ -132,6 +132,8 @@ public static class NewWorldsChecks
             "Wrong floor range in world " + dimension);
         string[] kinds = dimension == 3 ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
             : new[] { "ASTRONAUT", "ALIEN" };
+        Require(game.sceneView.forestVineSweep != null && game.sceneView.spaceGravitySweep != null,
+            "Forest or Space event prefab is not assigned in ElevatorScene.");
         foreach (string kind in kinds)
         {
             for (int floor = min; floor <= min + 7; floor++)
@@ -141,8 +143,14 @@ public static class NewWorldsChecks
                     && waiting.Destination != floor, "Missing or invalid " + kind + " on floor " + floor);
             }
             SharedRider rider = round.Riders.Find(r => r.Kind == kind && r.Origin == min);
+            PassengerFeature expectedFeature = kind == "FAIRY" ? PassengerFeature.ForestScout
+                : kind == "GOBLIN" ? PassengerFeature.ForestShortcut
+                : kind == "MUSHROOM" ? PassengerFeature.ForestSporeGuard
+                : kind == "ASTRONAUT" ? PassengerFeature.GravityAnchor : PassengerFeature.UfoLink;
+            Require(rider.HasFeature(expectedFeature), kind + " is missing its world ability.");
             foreach (PassengerFeature feature in Enum.GetValues(typeof(PassengerFeature)))
-                if (feature != PassengerFeature.None) Require(!rider.HasFeature(feature), kind + " has an unexpected ability.");
+                if (feature != PassengerFeature.None && feature != expectedFeature)
+                    Require(!rider.HasFeature(feature), kind + " has an unexpected ability.");
             var spawn = typeof(ElevatorManager).GetMethod("SpawnPassengerArt", PrivateInstance);
             PassengerView view = (PassengerView)spawn.Invoke(game, new object[] { rider, game.sceneView.exteriorCar.parent });
             Require(view != null && view.ResolvedKind == kind && view.destination != null
@@ -164,6 +172,23 @@ public static class NewWorldsChecks
                 && world.Find("Sign • " + floor) != null && world.Find("Floor Rails/Floor rail " + floor) != null,
                 "Missing a playable landing, sign or rail on floor " + floor);
         }
+        if (dimension == 4) CheckUfoPassengerRelocation();
+    }
+
+    static void CheckUfoPassengerRelocation()
+    {
+        ElevatorRound round = new ElevatorRound();
+        round.ConfigureDimension(4);
+        SharedRider rider = round.Riders.Find(r => r.Kind == "ALIEN" && r.Origin == round.MinFloor);
+        Require(rider != null, "Space world has no Alien for the UFO relocation check.");
+        int oldFloor = rider.Origin;
+        int newFloor = oldFloor + 2;
+        round.RevealQueue(oldFloor, rider.OriginStop);
+        Require(round.IsQueuedAtStop(rider), "Alien is not in its original revealed passenger queue.");
+        Require(round.TryRelocateWaitingPassenger(rider, newFloor), "UFO could not move a waiting passenger.");
+        Require(rider.Origin == newFloor && rider.Destination >= round.MinFloor
+            && rider.Destination <= round.MaxFloor && rider.Destination != rider.Origin
+            && round.IsQueuedAtStop(rider), "UFO relocation left the passenger at an invalid or hidden stop.");
     }
 
     static void CheckSharedPool(ElevatorMatch match)

@@ -22,7 +22,12 @@ namespace CrazyElevator.Shared
         CalmsBaby = 1 << 9,
         StunsMonster = 1 << 10,
         BlocksTornado = 1 << 11,
-        StrongCollision = 1 << 12
+        StrongCollision = 1 << 12,
+        ForestScout = 1 << 13,
+        ForestShortcut = 1 << 14,
+        ForestSporeGuard = 1 << 15,
+        GravityAnchor = 1 << 16,
+        UfoLink = 1 << 17
     }
 }
 

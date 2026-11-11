@@ -73,12 +73,22 @@ namespace CrazyElevator.Managers
         GameObject worldEventView;
         int worldEventId, worldEventSeen, worldEventAnnounced, worldEventNearby, worldEventResult, worldEventDimension = -1;
         float worldEventStart = -1f, worldEventFloor, worldEventX, worldEventStartX;
+        float worldEventTravelDistance = WorldEventSweepDistance;
         int worldEventDirection;
+        Rider worldEventPassenger;
+        int worldEventPassengerOldFloor = -1;
+        int worldEventPassengerNewFloor = -1;
+        bool worldEventPassengerMoved;
+        float worldEventPassengerMoveStart = -1f;
+        Vector3 worldEventPassengerFrom, worldEventPassengerTo;
+        float forestScoutBoostTime;
         GameObject worldLeakEffect;
         float worldLeakTime;
         GameObject worldStatusEffect;
-        float worldScanTime, worldSyrupTime;
-        float WorldHazardSpeedMultiplier => worldScanTime > 0f ? .18f : worldSyrupTime > 0f ? .42f : 1f;
+        float worldScanTime, worldSyrupTime, worldVineTime;
+        float WorldHazardSpeedMultiplier => (worldScanTime > 0f ? .18f : worldSyrupTime > 0f ? .42f
+            : worldVineTime > 0f ? .72f : 1f)
+            * (forestScoutBoostTime > 0f ? 1.18f : 1f);
 
         public bool HasBouncer => round != null && round.HasOnboardFeature(PassengerFeature.StrongCollision);
 
@@ -89,7 +99,9 @@ namespace CrazyElevator.Managers
             abilityFeedbackOrigin = exteriorCar != null ? exteriorCar.position : worldPosition;
             abilityFeedbackTime = 1.4f;
             string kind = label == "STUN!" ? "HUNTER" : label == "BLOCK!" ? "DIVER"
-                : label == "BUMP!" ? "BOUNCER" : null;
+                : label == "BUMP!" ? "BOUNCER" : label == "CUT THROUGH!" ? "GOBLIN"
+                : label == "FIREFLIES!" ? "FAIRY" : label == "SPORES!" ? "MUSHROOM" : label == "TETHER!" ? "ASTRONAUT"
+                : label == "UFO LINK!" ? "ALIEN" : null;
             if (kind != null) GameManager.Instance?.RequestAbilityIntro(this, kind);
         }
 
@@ -103,6 +115,8 @@ namespace CrazyElevator.Managers
             worldLeakTime = Mathf.Max(0f, worldLeakTime - dt);
             worldScanTime = Mathf.Max(0f, worldScanTime - dt);
             worldSyrupTime = Mathf.Max(0f, worldSyrupTime - dt);
+            worldVineTime = Mathf.Max(0f, worldVineTime - dt);
+            forestScoutBoostTime = Mathf.Max(0f, forestScoutBoostTime - dt);
             if (worldStatusEffect != null)
                 worldStatusEffect.SetActive(worldScanTime > 0f || worldSyrupTime > 0f);
             if (worldLeakEffect != null)
@@ -246,7 +260,7 @@ namespace CrazyElevator.Managers
         {
             worldEventSeen = worldEventAnnounced = worldEventNearby = worldEventResult = 0;
             worldLeakTime = 0f;
-            worldScanTime = worldSyrupTime = 0f;
+            worldScanTime = worldSyrupTime = worldVineTime = 0f;
             if (worldStatusEffect != null) Destroy(worldStatusEffect);
             worldStatusEffect = null;
             if (worldLeakEffect != null) worldLeakEffect.SetActive(false);
@@ -254,13 +268,19 @@ namespace CrazyElevator.Managers
             worldEventId = 0;
             worldEventStart = -1f;
             worldEventDimension = -1;
+            worldEventPassenger = null;
+            worldEventPassengerOldFloor = -1;
+            worldEventPassengerNewFloor = -1;
+            worldEventPassengerMoved = false;
+            worldEventPassengerMoveStart = -1f;
             if (worldEventView != null) Destroy(worldEventView);
             worldEventView = null;
         }
 
         void UpdateWorldEvent()
         {
-            if (round == null || round.ActiveDimension < 0 || round.ActiveDimension > 2 || MenuManager.TutorialActive)
+            if (round == null || round.ActiveDimension < 0 || round.ActiveDimension >= ElevatorRound.Dimensions
+                || MenuManager.TutorialActive)
             {
                 if (worldEventView != null) worldEventView.SetActive(false);
                 return;
@@ -273,6 +293,10 @@ namespace CrazyElevator.Managers
                 worldEventDimension = dimension;
                 worldEventStart = -1f;
                 worldEventId = 0;
+                worldEventPassenger = null;
+                worldEventPassengerOldFloor = -1;
+                worldEventPassengerNewFloor = -1;
+                worldEventPassengerMoved = false;
             }
             float elapsed = round.Elapsed;
             ElevatorManager other = Match != null ? Match.Rival : null;
@@ -293,8 +317,9 @@ namespace CrazyElevator.Managers
                         travellingCar.MinTravelFloor, travellingCar.MaxTravelFloor);
                 worldEventDirection = travellingCar.RouteLateralX <= ElevatorMatchType.ShaftCenterX ? 1 : -1;
                 worldEventStartX = travellingCar.RouteLateralX - worldEventDirection * WorldEventApproachDistance;
-                GameObject prefab = dimension == 0 ? sceneView.securitySweep
-                    : dimension == 1 ? sceneView.syrupSurge : sceneView.oceanCurrent;
+                worldEventTravelDistance = WorldEventSweepDistance;
+                if (dimension == 4) PrepareSpacePassengerTarget(travellingCar);
+                GameObject prefab = WorldEventPrefab(dimension);
                 if (worldEventView != null) Destroy(worldEventView);
                 worldEventView = prefab != null ? Instantiate(prefab, hazardRoot, false) : null;
             }
@@ -304,8 +329,10 @@ namespace CrazyElevator.Managers
             if (worldEventView.activeSelf != active) worldEventView.SetActive(active);
             if (!active) return;
             float warning = worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
-            float progress = Mathf.Clamp01((age - warning) / (WorldEventDuration - warning));
-            worldEventX = worldEventStartX + worldEventDirection * WorldEventSweepDistance * progress;
+            float sweepStart = dimension == 4 && worldEventPassenger != null
+                ? warning + .55f + 1.15f : warning;
+            float progress = Mathf.Clamp01((age - sweepStart) / (WorldEventDuration - sweepStart));
+            worldEventX = worldEventStartX + worldEventDirection * worldEventTravelDistance * progress;
             worldEventView.transform.localPosition = new Vector3(worldEventX, worldEventFloor * ShaftFloorHeight + 2f, HazardDepth);
             float pulse = age < warning ? .7f + .3f * Mathf.Abs(Mathf.Sin(age * 9f))
                 : 1f + .06f * Mathf.Sin(age * 5f);
@@ -316,6 +343,126 @@ namespace CrazyElevator.Managers
                 AnimateCurrentBubble("Bubble two", .45f, age + 1f);
                 AnimateCurrentBubble("Bubble three", -.2f, age + 2f);
             }
+            else if (dimension == 3) AnimateForestVines(age, warning);
+            else if (dimension == 4)
+            {
+                AnimateGravityWake(age, warning);
+                UpdateSpacePassengerBeam(age, warning);
+            }
+        }
+
+        GameObject WorldEventPrefab(int dimension)
+        {
+            if (dimension == 0) return sceneView.securitySweep;
+            if (dimension == 1) return sceneView.syrupSurge;
+            if (dimension == 2) return sceneView.oceanCurrent;
+            if (dimension == 3) return sceneView.forestVineSweep;
+            return sceneView.spaceGravitySweep;
+        }
+
+        void PrepareSpacePassengerTarget(ElevatorManager travellingCar)
+        {
+            worldEventPassenger = null;
+            worldEventPassengerOldFloor = -1;
+            worldEventPassengerNewFloor = -1;
+            worldEventPassengerMoved = false;
+            worldEventPassengerMoveStart = -1f;
+            Rider best = null;
+            int bestDistance = int.MaxValue;
+            foreach (Rider rider in round.Riders)
+            {
+                if (rider == null || rider.Boarded || rider.Resolved || !round.IsQueuedAtStop(rider)) continue;
+                int distance = Mathf.Abs(rider.Origin - Mathf.RoundToInt(worldEventFloor));
+                if (distance > 1 || distance >= bestDistance) continue;
+                best = rider;
+                bestDistance = distance;
+            }
+            if (best == null) return;
+
+            worldEventPassenger = best;
+            worldEventFloor = best.Origin;
+            worldEventPassengerOldFloor = best.Origin;
+            worldEventPassengerNewFloor = best.Origin <= round.MaxFloor - 2
+                ? best.Origin + 2 : best.Origin - 2;
+            PassengerView view = WaitingPassengerView(best);
+            if (view != null)
+            {
+                worldEventPassengerFrom = view.transform.localPosition;
+                float targetX = worldEventPassengerFrom.x;
+                float towardCar = travellingCar.RouteLateralX - targetX;
+                worldEventDirection = Mathf.Abs(towardCar) > .5f ? (towardCar > 0f ? 1 : -1)
+                    : worldEventDirection;
+                worldEventStartX = targetX;
+                worldEventTravelDistance = Mathf.Clamp(Mathf.Abs(towardCar) + 3f,
+                    WorldEventSweepDistance, 55f);
+            }
+        }
+
+        void AnimateForestVines(float age, float warning)
+        {
+            Transform vines = worldEventView.transform.Find("Vines");
+            if (vines == null) return;
+            Transform safeRoute = worldEventView.transform.Find("Fairy safe route");
+            ElevatorManager rival = Match != null ? Match.Rival : null;
+            bool hasScout = round.HasOnboardFeature(PassengerFeature.ForestScout)
+                || rival != null && rival.round != null && rival.round.HasOnboardFeature(PassengerFeature.ForestScout);
+            if (safeRoute != null)
+            {
+                safeRoute.gameObject.SetActive(hasScout);
+                safeRoute.localScale = Vector3.one * (1f + .08f * Mathf.Sin(age * 7f));
+            }
+            float warningPulse = age < warning ? .06f * Mathf.Sin(age * 12f) : 0f;
+            vines.localRotation = Quaternion.Euler(0f, 0f, warningPulse);
+            float sway = Mathf.Sin(age * 3.6f) * .055f;
+            for (int i = 0; i < vines.childCount; i++)
+            {
+                Transform strand = vines.GetChild(i);
+                if (strand.name.Contains("vine")) strand.localRotation = Quaternion.Euler(0f, 0f, sway * (i % 2 == 0 ? 1f : -1f));
+            }
+        }
+
+        void AnimateGravityWake(float age, float warning)
+        {
+            Transform orbit = worldEventView.transform.Find("Orbit");
+            if (orbit != null) orbit.localRotation = Quaternion.Euler(0f, 0f, age * 84f);
+            Transform saucer = worldEventView.transform.Find("UFO");
+            if (saucer != null)
+            {
+                saucer.localPosition = new Vector3(.18f * Mathf.Sin(age * 2.7f),
+                    .4f + .2f * Mathf.Sin(age * 3.3f), -.2f);
+                saucer.localRotation = Quaternion.Euler(0f, 0f, 7f * Mathf.Sin(age * 2.2f));
+                Transform beam = saucer.Find("Beam");
+                if (beam != null)
+                {
+                    float strength = age < warning ? .35f + .15f * Mathf.Sin(age * 8f)
+                        : .8f + .2f * Mathf.Sin(age * 7f);
+                    beam.localScale = new Vector3(.68f * strength, 1.52f, .58f * strength);
+                }
+            }
+            Transform singularity = worldEventView.transform.Find("Singularity");
+            if (singularity != null)
+            {
+                float pulse = 1f + .07f * Mathf.Sin(age * 4.4f);
+                singularity.localScale = new Vector3(1.48f * pulse, 1.48f * pulse, .25f);
+            }
+        }
+
+        void UpdateSpacePassengerBeam(float age, float warning)
+        {
+            if (worldEventPassenger == null || worldEventPassengerMoved
+                || age < warning + .55f) return;
+            PassengerView view = WaitingPassengerView(worldEventPassenger);
+            if (view == null || !round.TryRelocateWaitingPassenger(worldEventPassenger,
+                worldEventPassengerNewFloor))
+            {
+                worldEventPassenger = null;
+                return;
+            }
+            worldEventPassengerTo = WaitingWorldPosition(worldEventPassenger);
+            worldEventPassengerMoveStart = round.Elapsed;
+            worldEventPassengerMoved = true;
+            ShowActionFeedback("UFO BEAM · F" + ElevatorRound.FloorNumber(worldEventPassengerNewFloor), true);
+            Play(chime);
         }
 
         void AnimateCurrentBubble(string name, float height, float time)
@@ -347,11 +494,63 @@ namespace CrazyElevator.Managers
                 Play(chime);
                 return;
             }
+            int floor = Mathf.Clamp(Mathf.RoundToInt(travelFloor), MinTravelFloor, MaxTravelFloor);
+            Vector3 eventPoint = exteriorCar.parent.TransformPoint(new Vector3(owner.worldEventX,
+                owner.worldEventFloor * ShaftFloorHeight + 2f, HazardDepth));
+            if (owner.worldEventDimension == 3)
+            {
+                if (round.HasOnboardFeature(PassengerFeature.ForestSporeGuard))
+                {
+                    collisionImpact = .35f;
+                    ShowPassengerAbility("SPORES!", eventPoint);
+                    ShowActionFeedback("SPORES BLOCK VINES!", true);
+                    Play(chime);
+                    return;
+                }
+                collisionImpact = .85f;
+                if (round.HasOnboardFeature(PassengerFeature.ForestShortcut))
+                {
+                    StartRailRide(floor, owner.worldEventDirection,
+                        Mathf.Max(CruiseSpeed * 1.5f, Mathf.Abs(travelVelocity)));
+                    ShowPassengerAbility("CUT THROUGH!", eventPoint);
+                    ShowActionFeedback("GOBLIN SHORTCUT!", true);
+                    Play(kickWhoosh);
+                    return;
+                }
+                StartRailRide(floor, owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
+                worldVineTime = 1.5f;
+                ShowActionFeedback("VINES SHOVE THE CAR!", false);
+                Play(buzz);
+                return;
+            }
+
+            if (owner.worldEventDimension == 4)
+            {
+                if (round.HasOnboardFeature(PassengerFeature.GravityAnchor))
+                {
+                    ShowPassengerAbility("TETHER!", eventPoint);
+                    ShowActionFeedback("ASTRONAUT ANCHORS THE CAR!", true);
+                    Play(chime);
+                    return;
+                }
+                bool alien = round.HasOnboardFeature(PassengerFeature.UfoLink);
+                float speed = alien ? Mathf.Max(CruiseSpeed * 1.5f, Mathf.Abs(travelVelocity))
+                    : Mathf.Max(CruiseSpeed, Mathf.Abs(travelVelocity) * .7f);
+                StartRailRide(floor, owner.worldEventDirection, speed);
+                if (alien)
+                {
+                    ShowPassengerAbility("UFO LINK!", eventPoint);
+                    ShowActionFeedback("ALIEN RIDES THE BEAM!", true);
+                }
+                else ShowActionFeedback("GRAVITY PULL · TRACK SHIFT", false);
+                Play(alien ? kickWhoosh : buzz);
+                return;
+            }
+
             collisionImpact = 1f;
             if (owner.worldEventDimension == 2)
             {
-                StartRailRide(Mathf.Clamp(Mathf.RoundToInt(travelFloor), MinTravelFloor, MaxTravelFloor),
-                    owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
+                StartRailRide(floor, owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
                 if (!HasHandyman && repairedFor <= 0f)
                 {
                     rustExposure = Mathf.Min(secondsPerRustLevel * 2f, rustExposure + secondsPerRustLevel * .45f);
@@ -359,18 +558,17 @@ namespace CrazyElevator.Managers
                 }
                 ShowActionFeedback("PUSHED BY CURRENT", false);
                 Play(kickWhoosh);
+                return;
             }
-            else
-            {
-                bool scanner = owner.worldEventDimension == 0;
-                if (scanner) worldScanTime = 2.5f;
-                else worldSyrupTime = 4.5f;
-                travelVelocity *= scanner ? .2f : .42f;
-                railVelocity *= scanner ? .2f : .42f;
-                ShowWorldStatus(scanner ? sceneView.securitySweep : sceneView.syrupSurge, scanner);
-                ShowActionFeedback(scanner ? "SCANNER HIT · SLOWED" : "SYRUP HIT · SLOWED", false);
-                Play(buzz);
-            }
+
+            bool scanner = owner.worldEventDimension == 0;
+            if (scanner) worldScanTime = 2.5f;
+            else worldSyrupTime = 4.5f;
+            travelVelocity *= scanner ? .2f : .42f;
+            railVelocity *= scanner ? .2f : .42f;
+            ShowWorldStatus(scanner ? sceneView.securitySweep : sceneView.syrupSurge, scanner);
+            ShowActionFeedback(scanner ? "SCANNER HIT · SLOWED" : "SYRUP HIT · SLOWED", false);
+            Play(buzz);
         }
 
         void ShowWorldStatus(GameObject prefab, bool scanner)
@@ -409,17 +607,37 @@ namespace CrazyElevator.Managers
                 && DisplayBuildingView && Mathf.Abs(CurrentFloor - owner.worldEventFloor) < 3f)
             {
                 worldEventAnnounced = owner.worldEventId;
-                string label = owner.worldEventDimension == 0 ? "SCAN" : owner.worldEventDimension == 1 ? "SYRUP" : "CURRENT";
-                ShowActionFeedback(label + (owner.worldEventDirection > 0 ? "  →" : "  ←"), true);
+                string label = WorldEventLabel(owner);
+                if (owner.worldEventDimension == 3 && round.HasOnboardFeature(PassengerFeature.ForestScout))
+                    label = "FIREFLY ROUTE · " + (owner.worldEventDirection > 0 ? "←" : "→");
+                ShowActionFeedback(label, true);
                 Play(chime);
             }
             if (age >= WorldEventDuration && worldEventNearby == owner.worldEventId
                 && worldEventSeen != owner.worldEventId && worldEventResult != owner.worldEventId)
             {
                 worldEventResult = owner.worldEventId;
-                ShowActionFeedback("DODGED!", true);
+                if (owner.worldEventDimension == 3 && round.HasOnboardFeature(PassengerFeature.ForestScout))
+                {
+                    forestScoutBoostTime = 2.5f;
+                    ShowPassengerAbility("FIREFLIES!", exteriorCar.position + Vector3.up * 3f);
+                    ShowActionFeedback("FIREFLIES · SPEED UP!", true);
+                }
+                else ShowActionFeedback("DODGED!", true);
                 Play(chime);
             }
+        }
+
+        static string WorldEventLabel(ElevatorManager owner)
+        {
+            if (owner.worldEventDimension == 0) return "SCAN";
+            if (owner.worldEventDimension == 1) return "SYRUP";
+            if (owner.worldEventDimension == 2) return "CURRENT";
+            if (owner.worldEventDimension == 3) return "VINES";
+            if (owner.worldEventPassenger != null && owner.worldEventPassengerNewFloor >= 0)
+                return "UFO F" + ElevatorRound.FloorNumber(owner.worldEventPassengerOldFloor)
+                    + " → F" + ElevatorRound.FloorNumber(owner.worldEventPassengerNewFloor);
+            return "GRAVITY WAKE";
         }
 
         void DrawWorldEventCue()
@@ -430,10 +648,12 @@ namespace CrazyElevator.Managers
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
             float y = Screen.height - screen.y;
             if (screen.z <= 0f || screen.x < view.x || screen.x > view.xMax || y < view.y || y > view.yMax) return;
-            string label = owner.worldEventDimension == 0 ? "SCAN" : owner.worldEventDimension == 1 ? "SYRUP" : "CURRENT";
-            label += owner.worldEventDirection > 0 ? "  →" : "  ←";
+            string label = WorldEventLabel(owner);
+            if (owner.worldEventDimension == 3 && round.HasOnboardFeature(PassengerFeature.ForestScout))
+                label = "FIREFLY ROUTE · " + (owner.worldEventDirection > 0 ? "←" : "→");
+            if (owner.worldEventDimension < 3) label += owner.worldEventDirection > 0 ? "  →" : "  ←";
             GUIStyle style = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Mathf.Clamp(view.height / 35f, 16f, 26f)), fontStyle = FontStyle.Bold };
-            float width = Mathf.Min(180f, Mathf.Max(1f, view.width - 8f));
+            float width = Mathf.Min(230f, Mathf.Max(1f, view.width - 8f));
             float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
             float safeTop = Mathf.Min(view.yMax - 40f, view.y + Mathf.Max(90f, view.height * .11f));
             float top = Mathf.Clamp(y - 65f, safeTop, view.yMax - 40f);

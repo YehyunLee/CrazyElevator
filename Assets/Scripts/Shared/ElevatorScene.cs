@@ -51,5 +51,7 @@ namespace CrazyElevator.Shared
         public GameObject securitySweep;
         public GameObject syrupSurge;
         public GameObject oceanCurrent;
+        public GameObject forestVineSweep;
+        public GameObject spaceGravitySweep;
     }
 }

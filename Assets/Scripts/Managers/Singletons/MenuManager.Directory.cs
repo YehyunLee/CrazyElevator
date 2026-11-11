@@ -248,12 +248,14 @@ namespace CrazyElevator.Managers
             AddPassengerEntry(2, "ELDERLY", "GRANDMA", "Slows the elevator and takes a little longer to reach the door.");
 
             AddDimensionEntry(3, "MYSTICAL FOREST", "Meet the forest passengers.");
-            AddPassengerEntry(3, "FAIRY", "FAIRY", "A passenger from the forest.");
-            AddPassengerEntry(3, "GOBLIN", "GOBLIN", "A passenger from the forest.");
-            AddPassengerEntry(3, "MUSHROOM", "MUSHROOM", "A passenger from the forest.");
-            AddDimensionEntry(4, "SPACE", "Meet the passengers in space.");
-            AddPassengerEntry(4, "ASTRONAUT", "ASTRONAUT", "A passenger from space.");
-            AddPassengerEntry(4, "ALIEN", "ALIEN", "A passenger from space.");
+            AddQuirkEntry(3, "WILD GROWTH", "Glowing vines sweep across a track. Switch tracks or use a forest passenger's ability.");
+            AddPassengerEntry(3, "FAIRY", "THE FAIRY", "Fireflies reveal a safe route. A clean dodge gives the elevator a short speed boost.");
+            AddPassengerEntry(3, "GOBLIN", "THE GOBLIN", "Cuts through the vines and rides the side track as a shortcut.");
+            AddPassengerEntry(3, "MUSHROOM", "THE MUSHROOM", "A spore burst blocks a vine hit.");
+            AddDimensionEntry(4, "SPACE", "A UFO beam moves a waiting passenger. Watch the new floor.");
+            AddQuirkEntry(4, "GRAVITY WAKE", "A black hole distorts the shaft. The UFO beam pulls the elevator sideways.");
+            AddPassengerEntry(4, "ASTRONAUT", "THE ASTRONAUT", "Tethers the elevator to the track to resist the gravity pull.");
+            AddPassengerEntry(4, "ALIEN", "THE ALIEN", "Uses the UFO beam to slingshot the elevator onto a side track.");
         }
 
         void AddDimensionEntry(int dimension, string titleText, string description)
