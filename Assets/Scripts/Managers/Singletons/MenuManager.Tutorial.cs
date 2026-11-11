@@ -38,9 +38,10 @@ namespace CrazyElevator.Managers
         };
         static readonly string[] TutorialStoryLines =
         {
-            "MULTIVERSE TRANSIT. TWO DRIVERS. ONE PROMOTION.",
-            "DELIVER PASSENGERS. OUTSCORE YOUR COLLEAGUE.",
-            "WIN THREE ROUNDS. BECOME CHIEF OPERATOR."
+            "YOU'RE A BELLHOP FIGHTING FOR A PROMOTION.",
+            "DROP OFF PASSENGERS FOR POINTS. AVOID HAZARDS.",
+            "BEST OF 3 ROUNDS. 1:30 PER ROUND.",
+            "WINNER GETS THE PROMOTION."
         };
         enum TutorialCardMotion
         {
