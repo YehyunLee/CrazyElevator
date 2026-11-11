@@ -295,6 +295,7 @@ namespace CrazyElevator.Managers
             selectedRider = null; pendingSelectionAfterBoarding = null; selectFirstWaitingWhenAvailable = false;
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
+            else if (MenuManager.TutorialActive && Match != null) round.RevealPracticeQueue(2);
             ResetBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             sessionFadeAlpha = 1f;
@@ -543,9 +544,11 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Moving) return;
             if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             int target = GlideStopFloor();
-            if (!MenuManager.TutorialAllowsStopAt(this, target))
+            int stop = NearestStop(RouteLateralX);
+            if (!MenuManager.TutorialAllowsStopAt(this, target, stop))
             {
-                notice = "Not this floor. Keep going.";
+                notice = stop == CenterStop ? "Not this floor. Keep going." : "Steer toward the center stop.";
+                if (stop != CenterStop) ShowActionFeedback("STEER TOWARD CENTER", false);
                 Play(buzz);
                 return;
             }
@@ -554,7 +557,7 @@ namespace CrazyElevator.Managers
             // and slides sideways onto the nearest stop.
             float distance = Mathf.Abs(target - travelFloor);
             dockingSeconds = Mathf.Clamp(2f * distance / Mathf.Max(.6f, RouteSpeed), .35f, 1f);
-            BeginStopLineUp();
+            BeginStopLineUp(stop);
             destination = target; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
             phase = Phase.Docking; phaseTime = 0;

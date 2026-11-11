@@ -1075,6 +1075,7 @@ namespace CrazyElevator.Match
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
             DrawSessionFade(player.SessionFadeAlpha);
+            MenuManager.DrawTutorialCardsAboveHud();
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;

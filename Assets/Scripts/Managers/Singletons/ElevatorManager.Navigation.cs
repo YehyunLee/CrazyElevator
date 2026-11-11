@@ -138,9 +138,9 @@ namespace CrazyElevator.Managers
         }
 
         // Stopping also slides the car sideways onto the nearest stop ("lining up").
-        void BeginStopLineUp()
+        void BeginStopLineUp(int stop)
         {
-            dockingStop = NearestStop(RouteLateralX);
+            dockingStop = stop;
             dockingStartX = RouteLateralX;
             dockingTargetX = StopX(dockingStop);
             dockingSeconds = Mathf.Clamp(Mathf.Max(dockingSeconds, Mathf.Abs(dockingTargetX - dockingStartX) / 12f), .35f, 1f);
