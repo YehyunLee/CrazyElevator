@@ -7,8 +7,9 @@ namespace CrazyElevator.Shared
     {
         public const int MaximumRounds = 3;
         public const int RoundsToWin = MaximumRounds / 2 + 1;
+        int[] dimensionOrder = { 0, 1, 2, 3, 4 };
         public int RoundNumber { get; private set; } = 1;
-        public int ActiveDimension => (RoundNumber - 1) % ElevatorRound.Dimensions;
+        public int ActiveDimension => DimensionForRound(RoundNumber - 1);
         public int PlayerOneWins { get; private set; }
         public int PlayerTwoWins { get; private set; }
         public int PlayerOneTotalPoints { get; private set; }
@@ -21,6 +22,16 @@ namespace CrazyElevator.Shared
             ? PlayerOneWins > PlayerTwoWins ? 0 : 1
             : PlayerOneTotalPoints == PlayerTwoTotalPoints ? -1
             : PlayerOneTotalPoints > PlayerTwoTotalPoints ? 0 : 1;
+
+        public int DimensionForRound(int roundOffset)
+            => dimensionOrder[Math.Abs(roundOffset) % dimensionOrder.Length];
+
+        public void SetDimensionOrder(int[] order)
+        {
+            if (order == null || order.Length == 0)
+                throw new ArgumentException("At least one match dimension is required.", nameof(order));
+            dimensionOrder = (int[])order.Clone();
+        }
 
         public void Reset()
         {

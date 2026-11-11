@@ -1732,12 +1732,16 @@ public static class ExtendedInteriorChecks
         CrazyElevator.Managers.MenuManager.Close();
         var updateMatch = typeof(CrazyElevator.Match.ElevatorMatch).GetMethod("Update", Flags);
         List<SharedRider> previousPool = null;
+        var playedDimensions = new HashSet<int>();
         try
         {
             match.StartMatch();
-            for (int index = 0; index < Game.RoundsPerMatch; index++)
+            for (int index = 0; index < CrazyElevator.Managers.GameManager.RoundsPerMatch; index++)
             {
-                int dimension = index % Round.Dimensions;
+                int dimension = session.ActiveDimension;
+                if (index < session.EnabledDimensionCount)
+                    Require(playedDimensions.Add(dimension),
+                        "A dimension repeated before every enabled pool entry had been played.");
                 int first = dimension * Round.FloorsPerDimension, last = first + Round.FloorsPerDimension - 1;
                 var round = (Round)Get(player, "round");
                 var other = (Round)Get(rival, "round");
@@ -1825,21 +1829,24 @@ public static class ExtendedInteriorChecks
                     "Results must lock the score and record each round only once.");
                 if (index == 1) Require(session.PlayerOneWins == 1 && session.PlayerTwoWins == 0,
                     "A tied round awarded a win.");
-                if (index < Game.RoundsPerMatch - 1) match.ContinueMatch();
+                if (index < CrazyElevator.Managers.GameManager.RoundsPerMatch - 1) match.ContinueMatch();
             }
             Require(session.MatchFinished && session.PlayerOneWins == 2 && session.PlayerTwoWins == 0
                 && session.MatchWinner == 0,
                 "A best-of-three match must finish at two round wins or after its third round.");
             session.AdvanceRound();
-            Require(session.RoundNumber == Game.RoundsPerMatch, "A completed match advanced to another round.");
+            Require(session.RoundNumber == CrazyElevator.Managers.GameManager.RoundsPerMatch,
+                "A completed match advanced to another round.");
             match.ContinueMatch();
+            int rematchDimension = session.ActiveDimension;
+            int rematchFirstFloor = rematchDimension * Round.FloorsPerDimension;
             Require(session.RoundNumber == 1 && !session.MatchFinished
                 && session.PlayerOneWins == 0 && session.PlayerTwoWins == 0
-                && player.DiscreteFloor == 0 && rival.DiscreteFloor == 0
+                && player.DiscreteFloor == rematchFirstFloor && rival.DiscreteFloor == rematchFirstFloor
                 && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
-                "Play Again must reset the series and introduce the office again.");
-            CheckMatchRoundIntroduction(match, 0);
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; rematch office introduction.");
+                "Play Again must reset the series and introduce its new shuffled dimension.");
+            CheckMatchRoundIntroduction(match, rematchDimension);
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; shuffled dimensions without repeats until the enabled pool is exhausted; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; randomized rematch introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally

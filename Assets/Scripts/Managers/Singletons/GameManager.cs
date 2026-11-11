@@ -124,18 +124,24 @@ namespace CrazyElevator.Managers
 
         int DimensionForRound(int roundOffset)
         {
-            int mask = CurrentDimensionPoolMask;
-            int enabledCount = 0;
-            for (int i = 0; i < ElevatorRound.Dimensions; i++)
-                if ((mask & (1 << i)) != 0) enabledCount++;
+            return matchProgress.DimensionForRound(roundOffset);
+        }
 
-            int target = Mathf.Abs(roundOffset) % Mathf.Max(1, enabledCount);
+        int[] RandomDimensionOrder()
+        {
+            var enabled = new List<int>();
+            int mask = CurrentDimensionPoolMask;
             for (int i = 0; i < ElevatorRound.Dimensions; i++)
+                if ((mask & (1 << i)) != 0) enabled.Add(i);
+
+            for (int i = enabled.Count - 1; i > 0; i--)
             {
-                if ((mask & (1 << i)) == 0) continue;
-                if (target-- == 0) return i;
+                int swap = Random.Range(0, i + 1);
+                int dimension = enabled[i];
+                enabled[i] = enabled[swap];
+                enabled[swap] = dimension;
             }
-            return 0;
+            return enabled.ToArray();
         }
 
         public void ResetMatchProgress()
@@ -145,6 +151,7 @@ namespace CrazyElevator.Managers
             introducedAbilities.Clear();
             gameplayStartCueTime = 0f;
             matchProgress.Reset();
+            matchProgress.SetDimensionOrder(RandomDimensionOrder());
         }
 
         public void ShowGameplayStartCue()
