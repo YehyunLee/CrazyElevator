@@ -279,6 +279,34 @@ public static class ExtendedInteriorChecks
         try { action = File.ReadAllText(request).Trim(); }
         catch (IOException) { return; }
         if (action.Length == 0) return;
+        if (action == "authored-reference")
+        {
+            File.Delete(request);
+            var scene = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Shared.ElevatorScene>();
+            Directory.CreateDirectory("Temp/ZoeUI");
+            Camera cam = scene.cabinCamera;
+            var previous = cam.targetTexture;
+            var active = RenderTexture.active;
+            var rt = new RenderTexture(1200, 900, 24);
+            cam.targetTexture = rt;
+            cam.Render(); RenderTexture.active = rt;
+            var image = new Texture2D(1200, 900, TextureFormat.RGB24, false);
+            image.ReadPixels(new Rect(0, 0, 1200, 900), 0, 0); image.Apply();
+            File.WriteAllBytes("Temp/ZoeUI/authored-cabin.png", image.EncodeToPNG());
+            cam.targetTexture = previous; RenderTexture.active = active;
+            UnityEngine.Object.DestroyImmediate(image); UnityEngine.Object.DestroyImmediate(rt);
+            return;
+        }
+        if (action == "zoe-ui-prepare")
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            { EditorApplication.isPlaying = false; return; }
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().isDirty)
+            { File.Delete(request); Debug.LogError("Save scene edits before UI checks."); return; }
+            EditorSceneManager.OpenScene(Scene);
+            File.WriteAllText(request, "zoe-ui");
+            return;
+        }
         if (action == "gear-checks")
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -339,7 +367,8 @@ public static class ExtendedInteriorChecks
         int exitCode = 0;
         try
         {
-            if (action == "checks") { Run(game); RunBoost(game); }
+            if (action == "zoe-ui") tutorialChecks = RunZoeUiChecks();
+            else if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
@@ -727,6 +756,81 @@ public static class ExtendedInteriorChecks
         EditorSceneManager.OpenScene(Scene);
         Directory.CreateDirectory(Work);
         File.WriteAllText(Work + "/request.txt", "interaction-prepare");
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Zoe UI")]
+    public static void RequestZoeUiChecks()
+    {
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        File.WriteAllText(Work + "/request.txt", "zoe-ui-prepare");
+    }
+
+    static IEnumerator RunZoeUiChecks()
+    {
+        const string output = "Temp/ZoeUI";
+        Directory.CreateDirectory(output);
+        var menu = CrazyElevator.Managers.MenuManager.Current;
+        Type type = menu.GetType();
+        object Field(string key) => type.GetField(key, Flags).GetValue(menu);
+        Require(Field("menuArtwork") != null && Field("passengerPortraitAtlas") != null,
+            "Menu artwork and portraits must be assigned in Main.");
+        foreach (string name in new[] { "GameManager", "InputManager", "MenuManager", "MusicManager", "SfxManager" })
+            Require(GameObject.Find(name)?.GetComponent(name) != null, "Missing authored manager " + name);
+        for (int i = 0; i < 20; i++) yield return null;
+        ScreenCapture.CaptureScreenshot(output + "/01-title.png");
+        for (int i = 0; i < 5; i++) yield return null;
+        type.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+        type.GetField("transition", Flags).SetValue(menu, 10f);
+        for (int i = 0; i < 5; i++) yield return null;
+        ScreenCapture.CaptureScreenshot(output + "/02-lobby.png");
+        for (int i = 0; i < 5; i++) yield return null;
+        type.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+        Require(!(bool)type.GetMethod("TryStartReadyLobby", Flags).Invoke(menu, null), "One ready seat started the match.");
+        type.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+        Require(!(bool)Field("playerOneReady"), "Player 1 cannot undo ready.");
+        // Exercise actual launch path with tutorial disabled only for this test.
+        type.GetField("tutorialMode", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, false);
+        type.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
+        type.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 1 });
+        Require((bool)type.GetMethod("TryStartReadyLobby", Flags).Invoke(menu, null), "Both seats did not start.");
+        for (int i = 0; i < 180; i++) yield return null;
+        var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
+        Require(match && match.Rival && match.SplitScreen && !match.Rival.IsNpc && !match.player.IsNpc,
+            "Menu launch must create two human seats.");
+        match.StartMatch();
+        CheckMatchRoundIntroduction(match, 0);
+        foreach (Game game in new[] { match.player, match.Rival })
+        {
+            Require(game.passengerPortraitAtlas != null, "Each elevator needs the serialized portrait atlas.");
+            var round = (Round)Get(game, "round");
+            for (int i = 0; i < 6; i++)
+            {
+                var rider = new SharedRider { Name = new[] { "Courier", "Grandma", "Boss", "Interview", "Hunter", "Worker" }[i],
+                    Kind = new[] { "COURIER", "ELDERLY", "BOSS", "INTERVIEW", "HUNTER", "COURIER" }[i],
+                    Origin = 0, Destination = i + 1, Space = 1, Patience = 60, Remaining = 10 + i * 8,
+                    Boarded = true, BoardedBySeat = round.Seat };
+                round.Riders.Add(rider);
+            }
+            Call(game, "SyncFigures", 0f);
+            Call(game, "CloseAndTravel"); Call(game, "SetDoors", 0f); Call(game, "BeginBuildingTravel");
+            Set(game, "cameraViewBlend", 1f);
+            Set(game, "travelFloor", 2.2f);
+            Call(game, "LateUpdate");
+            game.enabled = false;
+        }
+        for (int i = 0; i < 10; i++) yield return null;
+        ScreenCapture.CaptureScreenshot(output + "/03-passenger-list.png");
+        for (int i = 0; i < 10; i++) yield return null;
+        foreach (Game game in new[] { match.player, match.Rival })
+        {
+            var riders = (List<SharedRider>)typeof(Game).GetField("manifestRiders", Flags).GetValue(game);
+            Require(riders.Count == 6, "Manifest must contain only this seat's six riders.");
+            for (int i = 1; i < riders.Count; i++)
+                Require(riders[i-1].Remaining <= riders[i].Remaining, "Manifest urgency order is wrong.");
+            Require(!((Camera)Get(game, "eye")).enabled, "Cabin inset camera remains enabled in travel view.");
+        }
+        File.WriteAllText(output + "/result.txt", "PASS: saved managers and art references, menu to two-human match, independent ready/undo, full round introduction, per-seat manifests sorted by patience, travel camera; screenshots captured.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
@@ -1129,7 +1233,7 @@ public static class ExtendedInteriorChecks
             car.localRotation = Quaternion.identity;
             foreach (int floor in new[] { 0, 1 })
             {
-                var round = new Round { Floor = floor, TimeLeft = 60f, CenterStopsOnly = true };
+                var round = new Round { Floor = floor, TimeLeft = Round.Duration, CenterStopsOnly = true };
                 round.Riders.Clear();
                 for (int slot = 0; slot < 5; slot++)
                     round.Riders.Add(new SharedRider { Name = "Queue placement check", Kind = "COURIER",
@@ -1328,11 +1432,11 @@ public static class ExtendedInteriorChecks
         {
             var previewRound = (Round)Get(game, "round");
             Require(game.DimensionRevealActive && game.DimensionRevealIndex == dimension && game.CountdownPlaying
-                && previewRound.TimeLeft == 60f && previewRound.Load == 0,
+                && previewRound.TimeLeft == Round.Duration && previewRound.Load == 0,
                 "Each solo round must introduce its world before the countdown.");
             float patience = previewRound.Riders[0].Remaining;
             Call(game, "Update");
-            Require(previewRound.TimeLeft == 60f && previewRound.Riders[0].Remaining == patience
+            Require(previewRound.TimeLeft == Round.Duration && previewRound.Riders[0].Remaining == patience
                 && game.DimensionRevealActive && !game.NpcBoard(),
                 "The solo introduction consumed time or allowed boarding.");
             float introTime = (float)Get(game, "dimensionRevealTime");
@@ -1488,7 +1592,7 @@ public static class ExtendedInteriorChecks
             Require(saved.Key.Remaining == saved.Value[0] && saved.Key.Arrival == saved.Value[1]
                 && saved.Key.SpawnDelay == saved.Value[2] && !saved.Key.Boarded && !saved.Key.Resolved,
                 "An introduction consumed passenger patience, arrival time, or the waiting roster.");
-        Require(round.TimeLeft == 60f && other.TimeLeft == 60f && round.Score == 0 && other.Score == 0,
+        Require(round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration && round.Score == 0 && other.Score == 0,
             "An introduction consumed round time or changed the delivery score.");
 
         var type = typeof(CrazyElevator.Match.ElevatorMatch);
@@ -1514,10 +1618,92 @@ public static class ExtendedInteriorChecks
         tick.Invoke(match, new object[] { 0f });
         tick.Invoke(match, new object[] { Game.DimensionRevealFadeSeconds });
         Require(!match.DimensionRevealActive && !player.DimensionRevealActive && !rival.DimensionRevealActive
-            && player.CountdownPlaying && rival.CountdownPlaying && round.TimeLeft == 60f && other.TimeLeft == 60f,
+            && player.CountdownPlaying && rival.CountdownPlaying && round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration,
             "The introduction must hand both cars to the countdown without consuming game time.");
         FinishRoundCountdown(player);
         FinishRoundCountdown(rival);
+    }
+
+    // Exercise actual InputSystem devices without changing saved input preferences.
+    static void CheckLocalDuelInput()
+    {
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        Require(input != null, "Local matches require the authored InputManager.");
+        Type type = input.GetType();
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        var ids = (int[])type.GetField("joinedGamepadIds", statics).GetValue(null);
+        int firstId = ids[0], secondId = ids[1];
+        var keyboardSeat = type.GetField("keyboardMouseSeat", statics);
+        var keyboardMode = type.GetField("keyboardModeSession", statics);
+        object oldSeat = keyboardSeat.GetValue(null), oldMode = keyboardMode.GetValue(null);
+        var oldView = input.ActiveView;
+        Keyboard oldKeyboard = Keyboard.current;
+        Gamepad oldGamepad = Gamepad.current;
+        var keyboard = InputSystem.AddDevice<Keyboard>();
+        var first = InputSystem.AddDevice<Gamepad>();
+        var second = InputSystem.AddDevice<Gamepad>();
+        try
+        {
+            keyboardSeat.SetValue(null, -1);
+            keyboardMode.SetValue(null, true);
+            input.SetView(CrazyElevator.Shared.GameView.ControlElevator);
+            ids[0] = ids[1] = -1;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.C, Key.I, Key.LeftShift));
+            InputSystem.Update();
+            var one = input.ReadForSeat(0, true);
+            var two = input.ReadForSeat(1, true);
+            Require(one.Move.y == 1f && one.ConfirmPressed && one.KickoutPressed && one.BoostHeld
+                && two.Move == Vector2.zero && !two.ConfirmPressed && !two.KickoutPressed && !two.BoostHeld,
+                "Player 1 keyboard controls: " + one.Move + ", confirm=" + one.ConfirmPressed + ", kick=" + one.KickoutPressed + ", boost=" + one.BoostHeld + "; P2=" + two.Move + ", confirm=" + two.ConfirmPressed + ", kick=" + two.KickoutPressed + ", boost=" + two.BoostHeld);
+            InputSystem.QueueStateEvent(keyboard,
+                new KeyboardState(Key.DownArrow, Key.Period, Key.Comma, Key.RightShift));
+            InputSystem.Update();
+            one = input.ReadForSeat(0, true);
+            two = input.ReadForSeat(1, true);
+            Require(two.Move.y == -1f && two.ConfirmPressed && two.KickoutPressed && two.BoostHeld
+                && one.Move == Vector2.zero && !one.ConfirmPressed && !one.KickoutPressed && !one.BoostHeld,
+                "Player 2 keyboard controls leaked into Player 1 or stopped responding.");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            ids[0] = first.deviceId;
+            ids[1] = second.deviceId;
+            InputSystem.QueueStateEvent(first,
+                new GamepadState { leftStick = Vector2.up }.WithButton(GamepadButton.South));
+            InputSystem.QueueStateEvent(second,
+                new GamepadState { leftStick = Vector2.down }.WithButton(GamepadButton.East));
+            InputSystem.Update();
+            one = input.ReadForSeat(0, true);
+            two = input.ReadForSeat(1, true);
+            Require(one.Move.y > .9f && one.ConfirmPressed && !one.KickoutPressed
+                && two.Move.y < -.9f && !two.ConfirmPressed && two.KickoutPressed,
+                "The two gamepads did not retain independent input seats.");
+            InputSystem.RemoveDevice(first);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.C));
+            InputSystem.Update();
+            one = input.ReadForSeat(0, true);
+            two = input.ReadForSeat(1, true);
+            Require(one.Move.y > .9f && one.ConfirmPressed && two.Move.y < -.9f,
+                "A disconnected seat stole the other controller or lost its keyboard fallback.");
+            InputSystem.AddDevice(first);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.QueueStateEvent(first, new GamepadState { leftStick = Vector2.right });
+            InputSystem.Update();
+            one = input.ReadForSeat(0, true);
+            two = input.ReadForSeat(1, true);
+            Require(one.Move.x > .9f && Mathf.Abs(one.Move.y) < .1f && two.Move.y < -.9f,
+                "Reconnecting a gamepad must restore its original seat.");
+        }
+        finally
+        {
+            ids[0] = firstId; ids[1] = secondId;
+            keyboardSeat.SetValue(null, oldSeat);
+            keyboardMode.SetValue(null, oldMode);
+            input.SetView(oldView);
+            if (keyboard.added) InputSystem.RemoveDevice(keyboard);
+            if (first.added) InputSystem.RemoveDevice(first);
+            if (second.added) InputSystem.RemoveDevice(second);
+            if (oldKeyboard != null && oldKeyboard.added) oldKeyboard.MakeCurrent();
+            if (oldGamepad != null && oldGamepad.added) oldGamepad.MakeCurrent();
+        }
     }
 
     static void RunSingleDimensionMatch()
@@ -1526,6 +1712,10 @@ public static class ExtendedInteriorChecks
         var session = CrazyElevator.Managers.GameManager.Instance;
         Require(match != null && match.player != null && match.Rival != null && session != null
             && match.SplitScreen, "Main must create two human elevators for the round checks.");
+        Require(!match.player.IsNpc && !match.Rival.IsNpc
+            && match.player.GetComponent<CrazyElevator.Match.NpcElevator>() == null
+            && match.Rival.GetComponent<CrazyElevator.Match.NpcElevator>() == null,
+            "A local duel must not create or enable a CPU driver for either seat.");
         foreach (Type type in new[] { typeof(CrazyElevator.Managers.GameManager),
             typeof(CrazyElevator.Managers.InputManager), typeof(CrazyElevator.Managers.SfxManager),
             typeof(CrazyElevator.Managers.MusicManager), typeof(CrazyElevator.Managers.MenuManager) })
@@ -1534,6 +1724,7 @@ public static class ExtendedInteriorChecks
             Require(root != null && root.GetComponent(type) != null && root.transform.parent == null,
                 "Main is missing the authored manager root " + type.Name + ".");
         }
+        CheckLocalDuelInput();
         var player = match.player;
         var rival = match.Rival;
         bool playerEnabled = player.enabled, rivalEnabled = rival.enabled, matchEnabled = match.enabled;
@@ -1553,9 +1744,9 @@ public static class ExtendedInteriorChecks
                 Require(session.RoundNumber == index + 1 && session.ActiveDimension == dimension
                     && round.Floor == first && other.Floor == first
                     && player.ActiveMinFloor == first && player.ActiveMaxFloor == last
-                    && round.TimeLeft == 60f && other.TimeLeft == 60f
+                    && round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration
                     && round.Score == 0 && other.Score == 0,
-                    "Round " + (index + 1) + " did not reset both cars to the active world's first floor and 60 seconds.");
+                    "Round " + (index + 1) + " did not reset both cars to the active world's first floor and full configured duration.");
                 RequireLocalFloorDisplay(player, "1", 2);
                 RequireLocalFloorDisplay(rival, "1", 2);
                 Require(Game.DestinationTag(new SharedRider
@@ -1587,7 +1778,7 @@ public static class ExtendedInteriorChecks
                 CheckMatchRoundIntroduction(match, dimension);
                 match.TogglePause();
                 Call(player, "Update"); Call(rival, "Update");
-                Require(round.TimeLeft == 60f && other.TimeLeft == 60f && player.IsPaused && rival.IsPaused,
+                Require(round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration && player.IsPaused && rival.IsPaused,
                     "Pausing must freeze both clocks.");
                 match.TogglePause();
                 foreach (var gate in Game.TeleportGates)
@@ -1647,7 +1838,7 @@ public static class ExtendedInteriorChecks
                 && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
                 "Play Again must reset the series and introduce the office again.");
             CheckMatchRoundIntroduction(match, 0);
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators; 60-second clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch office introduction.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; full configured clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; Office/Candy/Underwater/Office rotation; each round's dimension introduction, two-human ready barrier and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; first-to-three champion; rematch office introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally

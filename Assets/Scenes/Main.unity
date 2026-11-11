@@ -1104,8 +1104,9 @@ MonoBehaviour:
   extraGrandmaSpeedMultiplier: 0.85
   minimumGrandmaSpeedMultiplier: 0.3
   passengerCatalog: {fileID: 0}
-  showCabinPreview: 1
-  cabinPreviewWidth: 0.3
+  showPassengerList: 1
+  passengerListWidth: 0.3
+  passengerPortraitAtlas: {fileID: 2800000, guid: 9136f372b64f498dad16414b1acb381e, type: 3}
   cabinTravelShake: 0.022
   shaftTravelShake: 0.1
   backgroundMusic: {fileID: 8300000, guid: 84670dc8af8e6a94eb9a40d95de0c1f1, type: 3}
@@ -1664,6 +1665,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.MenuManager
   menuArtwork: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
+  passengerPortraitAtlas: {fileID: 2800000, guid: 9136f372b64f498dad16414b1acb381e, type: 3}
   controllerInstructions: {fileID: 2800000, guid: 559a3286dac74179894e4e458f441042, type: 3}
   dimensionGuideImages:
   - {fileID: 2800000, guid: 291fe3bafed1494b84f59d6a45bb97ac, type: 3}
@@ -1682,28 +1684,28 @@ MonoBehaviour:
     bottomLeft: {x: 0.02, y: 0.94}
   playerOneButton:
     serializedVersion: 2
-    x: 535
-    y: 795
-    width: 260
-    height: 72
+    x: 260
+    y: 300
+    width: 540
+    height: 480
   rivalButton:
     serializedVersion: 2
-    x: 905
-    y: 795
-    width: 260
-    height: 72
+    x: 900
+    y: 300
+    width: 540
+    height: 480
   playerOneReadyButton:
     serializedVersion: 2
-    x: 535
-    y: 873
-    width: 260
-    height: 46
+    x: 300
+    y: 665
+    width: 460
+    height: 80
   playerTwoReadyButton:
     serializedVersion: 2
-    x: 905
-    y: 873
-    width: 260
-    height: 46
+    x: 940
+    y: 665
+    width: 460
+    height: 80
   startButton:
     serializedVersion: 2
     x: 720

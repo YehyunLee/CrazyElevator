@@ -24,6 +24,7 @@ namespace CrazyElevator.Managers
         static readonly Color CpuReadyColour = new Color32(145, 150, 160, 255);
         static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
+        [SerializeField] Texture2D passengerPortraitAtlas;
         [SerializeField] Texture2D controllerInstructions;
         const float ArtWidth = 1700f;
         const float ArtHeight = 1082f;
@@ -75,12 +76,12 @@ namespace CrazyElevator.Managers
             bottomRight = new Vector2(.98f, 1), bottomLeft = new Vector2(.02f, .94f)
         };
         [Header("Mode screen button rectangles (1700 x 1082)")]
-        [SerializeField] Rect playerOneButton = new Rect(535, 795, 260, 72);
-        [SerializeField] Rect rivalButton = new Rect(905, 795, 260, 72);
+        [SerializeField] Rect playerOneButton = new Rect(260, 300, 540, 480);
+        [SerializeField] Rect rivalButton = new Rect(900, 300, 540, 480);
         // The status bars use the same outer frame as the cards and meet their
         // lower edge without a separate seam.
-        [SerializeField] Rect playerOneReadyButton = new Rect(535, 873, 260, 46);
-        [SerializeField] Rect playerTwoReadyButton = new Rect(905, 873, 260, 46);
+        [SerializeField] Rect playerOneReadyButton = new Rect(300, 665, 460, 80);
+        [SerializeField] Rect playerTwoReadyButton = new Rect(940, 665, 460, 80);
         [SerializeField] Rect startButton = new Rect(720, 930, 260, 72);
         [SerializeField] Rect backButton = new Rect(48, 46, 220, 58);
         Texture2D playerOneLabelTexture, rivalLabelTexture;
@@ -384,14 +385,6 @@ namespace CrazyElevator.Managers
                     playerTwoSelected = true;
                     playerTwoReady = false;
                 }
-                // A split keyboard makes Player 2 available, but it does not
-                // mean Player 2 has been selected. While the rival is still
-                // CPU, keep that side ready so the first keyboard ready toggle
-                // can immediately unlock Start.
-                if (!playerTwoRegistered && !playerTwoSelected)
-                {
-                    playerTwoReady = true;
-                }
                 lastPlayerTwoRegistered = playerTwoRegistered;
             }
 
@@ -543,10 +536,10 @@ namespace CrazyElevator.Managers
             choosingMode = true;
             playerOneReady = false;
             playerTwoReady = false;
-            // Local 1v1 is the default; the rival card can still be switched to CPU.
+            // Each seat belongs to a human; a shared keyboard is always supported.
             playerTwoSelected = true;
             playerOneHuman = true;
-            // Confirm starts on READY for each player; choosing CPU is explicit.
+            // Each confirm controls only that player's ready state.
             playerOneCursor = 2;
             playerTwoCursor = 3;
             playerOneCursorHeld = false;
@@ -556,8 +549,7 @@ namespace CrazyElevator.Managers
             SyncTitleButtons();
         }
 
-        bool BothCpu => !playerOneHuman && !playerTwoSelected;
-        bool AllPlayersReady => !BothCpu && playerOneReady && playerTwoReady;
+        bool AllPlayersReady => playerOneReady && playerTwoReady;
 
         bool TryStartReadyLobby()
         {
@@ -569,84 +561,24 @@ namespace CrazyElevator.Managers
 
         void HandleLobbyConfirm(int seat)
         {
-            int cursor = seat == 0 ? playerOneCursor : playerTwoCursor;
-            // Player 2 should not need a precise cursor position just to ready
-            // after selecting the seat. Its second confirm keypress is an
-            // unambiguous READY action even if the lobby cursor did not move.
-            if (seat == 1 && playerTwoSelected && !playerTwoReady && (cursor == 3 || cursor == 4))
+            if (launching) return;
+            if (seat == 0)
             {
-                playerTwoReady = true;
-                playerTwoCursor = 4;
-                return;
+                playerOneReady = !playerOneReady;
+                playerOneCursor = playerOneReady ? 4 : 2;
             }
-            if (cursor == 0)
+            else
             {
-                playerOneHuman = !playerOneHuman;
-                playerOneReady = !playerOneHuman;
-                return;
-            }
-            if (cursor == 1)
-            {
-                playerTwoSelected = !playerTwoSelected;
-                playerTwoReady = !playerTwoSelected;
-                if (playerTwoSelected)
-                    playerTwoCursor = 3;
-                return;
-            }
-            if (cursor == 2)
-            {
-                if (seat == 0 && playerOneHuman)
-                {
-                    playerOneReady = !playerOneReady;
-                    if (playerOneReady) playerOneCursor = 4;
-                }
-                return;
-            }
-            if (cursor == 3)
-            {
-                if (seat == 1 && playerTwoSelected)
-                {
-                    playerTwoReady = !playerTwoReady;
-                    if (playerTwoReady) playerTwoCursor = 4;
-                }
-                return;
-            }
-            if (cursor == 4 && AllPlayersReady)
-            {
-                StartSelectedMode();
+                playerTwoReady = !playerTwoReady;
+                playerTwoCursor = playerTwoReady ? 4 : 3;
             }
         }
 
         void MoveLobbyCursor(ref int cursor, Vector2 move, ref bool held, int seat)
         {
-            // The READY controls belong to their respective seats. Correct a
-            // stale cursor position before processing the next movement frame.
-            if (seat == 0 && cursor == 3) cursor = 2;
-            if (seat == 1 && cursor == 2) cursor = 3;
-            bool pressed = move.magnitude >= .55f;
-            if (!pressed) { held = false; return; }
-            if (held) return;
-            held = true;
-            bool horizontal = Mathf.Abs(move.x) >= Mathf.Abs(move.y);
-            if (horizontal)
-            {
-                if (cursor == 0 || cursor == 1) cursor = move.x > 0 ? 1 : 0;
-                else if (cursor == 2 || cursor == 3)
-                    cursor = seat == 0 ? 2 : 3;
-                return;
-            }
-            if (move.y < 0)
-            {
-                if (cursor == 0) cursor = seat == 0 ? 2 : 4;
-                else if (cursor == 1) cursor = seat == 1 ? 3 : 4;
-                else if (cursor == 2 || cursor == 3) cursor = 4;
-            }
-            else
-            {
-                if (cursor == 2) cursor = 0;
-                else if (cursor == 3) cursor = 1;
-                else if (cursor == 4) cursor = seat == 0 ? 2 : 3;
-            }
+            // There is one action per seat, so confirming never changes a mode.
+            cursor = seat == 0 ? 2 : 3;
+            held = move.magnitude >= .55f;
         }
 
         Vector2 KeyboardMenuMove(bool splitKeyboard)
@@ -673,11 +605,8 @@ namespace CrazyElevator.Managers
         {
             if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
 
-            if (playerOneButton.Contains(pointer)) playerOneCursor = 0;
-            else if (playerTwoAvailable && rivalButton.Contains(pointer)) playerOneCursor = 1;
-            else if (playerOneReadyButton.Contains(pointer)) playerOneCursor = 2;
-            else if (playerTwoSelected && playerTwoReadyButton.Contains(pointer)) playerOneCursor = 3;
-            else if (startButton.Contains(pointer)) playerOneCursor = 4;
+            if (playerOneReadyButton.Contains(pointer)) playerOneCursor = 2;
+            if (playerTwoReadyButton.Contains(pointer)) playerTwoCursor = 3;
         }
 
         static int MenuRectIndex(Vector2 point, Rect[] rects)
@@ -1113,53 +1042,20 @@ namespace CrazyElevator.Managers
             InputManager.Instance?.SetView(GameView.ControlElevator);
         }
 
-        void DrawModeSelect()
-        {
-            if (menuArtwork != null)
-            {
-                DrawArtworkMenu();
-                return;
-            }
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-
-            float scale = Mathf.Min(Screen.width / 1200f, Screen.height / 720f);
-            float cardWidth = Mathf.Min(430f, Screen.width * .39f);
-            float cardHeight = Mathf.Min(250f, Screen.height * .38f);
-            float gap = Mathf.Min(34f, Screen.width * .04f);
-            float totalWidth = cardWidth * 2 + gap;
-            float left = (Screen.width - totalWidth) * .5f;
-            float top = (Screen.height - cardHeight) * .5f + 30f * scale;
-
-            GUI.Label(new Rect(20, top - 128f * scale, Screen.width - 40, 55f * scale),
-                "CRAZY ELEVATORS", title);
-            GUI.Label(new Rect(20, top - 70f * scale, Screen.width - 40, 32f * scale),
-                "CHOOSE YOUR MODE", caption);
-
-            DrawMode(new Rect(left, top, cardWidth, cardHeight), Teal,
-                "SINGLE PLAYER", "Solo practice", false, !playerTwoSelected);
-            DrawMode(new Rect(left + cardWidth + gap, top, cardWidth, cardHeight), Coral,
-                "1V1", "CPU or Player 2", true, playerTwoSelected);
-            GUI.Label(new Rect(12, Screen.height - 38f * scale, Screen.width - 24, 24f * scale),
-                "PICK A MODE", caption);
-        }
+        void DrawModeSelect() => DrawArtworkMenu();
 
         void DrawArtworkMenu()
         {
-            bool hasCanvasTitle = titleButtons != null;
             float fade = Mathf.Clamp01(transition / TransitionSeconds);
-            // Scene UI renders behind OnGUI. Only draw a veil during the transition;
-            // an opaque panel here would hide the editable title Buttons in Game view.
-            if (!hasCanvasTitle)
-                Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-            else if (choosingMode)
-                Panel(new Rect(0, 0, Screen.width, Screen.height),
-                    new Color(Ink.r, Ink.g, Ink.b, fade));
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             var oldMatrix = GUI.matrix;
+            if (choosingMode || titleButtons == null)
+                Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
                 new Vector3(scale, scale, 1));
 
+            bool hasCanvasTitle = titleButtons != null;
             if (!hasCanvasTitle && fade < 1f)
             {
                 DrawArt(new Rect(0, 0, ArtWidth, ArtHeight), new Rect(0, 0, 1, 1), 1f - fade);
@@ -1168,7 +1064,7 @@ namespace CrazyElevator.Managers
                 Panel(new Rect(380, 690, 315, 370), cleanBackground);
                 Panel(new Rect(278, 733, 112, 66), cleanBackground);
             }
-            if (!choosingMode || fade < 1f)
+            if (!choosingMode)
             {
                 if (triangleCursorTexture == null) triangleCursorTexture = CreateTriangleCursor();
                 const float cursorWidth = 48f;
@@ -1200,96 +1096,75 @@ namespace CrazyElevator.Managers
                 }
             }
 
-            if (choosingMode)
+            else
             {
-                // The first car slides left as its companion appears beside it.
-                float eased = fade * fade * (3f - 2f * fade);
-                float descent = launching ? Mathf.Pow(Mathf.Clamp01(launchTimer / LaunchSeconds), 2) * (ArtHeight + 200) : 0;
-                DrawShaft(new Rect(Mathf.Lerp(1060, 500, eased), 0, Mathf.Lerp(495, 330, eased), ArtHeight), 1, descent);
-                DrawShaft(new Rect(870, 0, 330, ArtHeight), eased, descent);
-                if (fade >= 1f && !launching)
+                Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(.035f, .045f, .10f, .90f));
+                DrawLocalLobby();
+                if (fade < 1f)
+                    Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(Ink.r, Ink.g, Ink.b, 1f - fade));
+                if (launching)
                 {
-                    Panel(backButton, Cream);
-                    GUI.Label(backButton, "BACK", cardTitle);
-                    DrawKeyHint(new Rect(backButton.x + backButton.width + 16f,
-                        backButton.y + 2f, 54f, 54f), "B");
-                    bool playerTwoAvailable = InputManager.Instance != null
-                        && InputManager.Instance.HasLobbyInput(1);
-                    bool startEnabled = !BothCpu;
-                    bool p1OnFirstCard = playerOneCursor == 0;
-                    bool p2OnFirstCard = playerTwoAvailable && playerTwoCursor == 0;
-                    bool p1OnSecondCard = playerOneCursor == 1;
-                    bool p2OnSecondCard = playerTwoAvailable && playerTwoCursor == 1;
-
-                    DrawPlayerCard(playerOneButton, playerOneHuman ? "PLAYER 1" : "CPU",
-                        playerOneLabel, ref playerOneLabelTexture, ref playerOneShapeHash,
-                        p1OnFirstCard, p2OnFirstCard);
-                    DrawPlayerCard(rivalButton, playerTwoSelected ? "PLAYER 2" : "CPU",
-                        rivalLabel, ref rivalLabelTexture, ref rivalShapeHash,
-                        p1OnSecondCard, p2OnSecondCard);
-
-                    string playerOneStatus = playerOneHuman
-                        ? (playerOneReady ? "READY" : "UNREADY") : "CPU READY";
-                    string playerTwoStatus = playerTwoSelected
-                        ? (playerTwoReady ? "READY" : "UNREADY") : "CPU READY";
-                    Color playerOneStatusFill = !playerOneHuman ? CpuReadyColour
-                        : playerOneReady ? PlayerOneColour : LobbySurface;
-                    Color playerTwoStatusFill = !playerTwoSelected ? CpuReadyColour
-                        : playerTwoReady ? PlayerTwoColour : LobbySurface;
-                    DrawStatusBar(playerOneReadyButton, playerOneStatus, playerOneStatusFill,
-                        playerOneHuman && !playerOneReady ? Cream : Ink,
-                        playerOneCursor == 2, playerTwoAvailable && playerTwoCursor == 2);
-                    DrawStatusBar(playerTwoReadyButton, playerTwoStatus, playerTwoStatusFill,
-                        playerTwoSelected && !playerTwoReady ? Cream : Ink,
-                        playerOneCursor == 3, playerTwoAvailable && playerTwoCursor == 3);
-
-                    Color startFill = AllPlayersReady ? Teal
-                        : startEnabled ? LobbySurface : DisabledColour;
-                    DrawActionButton(startButton, AllPlayersReady ? "START" : "WAITING", startFill,
-                        AllPlayersReady ? Ink : Cream,
-                        playerOneCursor == 4, playerTwoAvailable && playerTwoCursor == 4);
-                    DrawLobbyKeyHint(playerOneButton, 0, playerOneCursor == 0);
-                    DrawLobbyKeyHint(rivalButton, 1, playerTwoAvailable && playerTwoCursor == 1);
-                    DrawLobbyKeyHint(playerOneReadyButton, 0, playerOneCursor == 2);
-                    DrawLobbyKeyHint(playerTwoReadyButton, 1, playerTwoAvailable && playerTwoCursor == 3);
-                    DrawLobbyKeyHint(startButton, 0, AllPlayersReady && playerOneCursor == 4);
-                    DrawLobbyKeyHint(startButton, 1, AllPlayersReady && playerTwoAvailable && playerTwoCursor == 4);
-                    // The lobby is drawn with IMGUI labels, so provide
-                    // transparent hitboxes for mouse users as well as the
-                    // keyboard/controller cursor.
-                    if (GUI.Button(playerOneButton, GUIContent.none, GUIStyle.none))
-                    {
-                        playerOneCursor = 0;
-                        HandleLobbyConfirm(0);
-                    }
-                    if (GUI.Button(rivalButton, GUIContent.none, GUIStyle.none)
-                        && playerTwoAvailable)
-                    {
-                        playerOneCursor = 1;
-                        HandleLobbyConfirm(0);
-                    }
-                    if (GUI.Button(playerOneReadyButton, GUIContent.none, GUIStyle.none)
-                        && playerOneHuman)
-                    {
-                        playerOneCursor = 2;
-                        HandleLobbyConfirm(0);
-                    }
-                    if (GUI.Button(playerTwoReadyButton, GUIContent.none, GUIStyle.none)
-                        && playerTwoSelected)
-                    {
-                        playerTwoCursor = 3;
-                        HandleLobbyConfirm(1);
-                    }
-                    if (GUI.Button(startButton, GUIContent.none, GUIStyle.none) && AllPlayersReady)
-                    {
-                        playerOneCursor = 4;
-                        HandleLobbyConfirm(0);
-                    }
+                    Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(.035f, .045f, .1f, .94f));
+                    MenuText(new Rect(250, 420, 1200, 110), "ALL ABOARD!", 68, Teal);
                 }
-                if (launching) Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(0, 0, 0,
-                    Mathf.Clamp01((launchTimer / LaunchSeconds - .55f) * 2.2f)));
             }
             GUI.matrix = oldMatrix;
+        }
+
+        void DrawLocalLobby()
+        {
+            MenuText(new Rect(400, 65, 900, 48), "LOCAL MULTIPLAYER  /  2 PLAYERS", 24, Teal);
+            MenuText(new Rect(320, 135, 1060, 92), "PLAYER SELECT", 46, Cream);
+            Panel(backButton, LobbySurface);
+            MenuText(backButton, "< BACK", 24, Cream);
+            if (GUI.Button(backButton, GUIContent.none, GUIStyle.none))
+            {
+                choosingMode = false;
+                transition = 0;
+                playerOneReady = playerTwoReady = false;
+                SyncTitleButtons();
+            }
+            DrawLocalPlayerCard(playerOneButton, playerOneReadyButton, 0, playerOneReady, Coral);
+            DrawLocalPlayerCard(rivalButton, playerTwoReadyButton, 1, playerTwoReady, Teal);
+            MenuText(new Rect(810, 480, 80, 65), "VS", 32, Cream);
+            string status = AllPlayersReady ? "LET'S GO!"
+                : playerOneReady ? "WAITING FOR PLAYER 2..."
+                : playerTwoReady ? "WAITING FOR PLAYER 1..." : "BOTH PLAYERS: PRESS YOUR READY KEY";
+            MenuText(new Rect(300, 805, 1100, 50), status, 27, Cream);
+            Rect tutorialToggle = new Rect(480, 890, 740, 62);
+            Panel(tutorialToggle, LobbySurface);
+            MenuText(tutorialToggle, TutorialModeEnabled ? "[ON]  GUIDED PRACTICE" : "[OFF]  GUIDED PRACTICE", 24, Teal);
+            if (GUI.Button(tutorialToggle, GUIContent.none, GUIStyle.none)) SetTutorialMode(!TutorialModeEnabled);
+        }
+
+        void DrawLocalPlayerCard(Rect card, Rect readyButton, int seat, bool ready, Color accent)
+        {
+            Panel(new Rect(card.x + 8, card.y + 8, card.width, card.height), Color.black);
+            Panel(card, accent);
+            Panel(new Rect(card.x + 4, card.y + 4, card.width - 8, card.height - 8),
+                new Color32(31, 38, 59, 255));
+            MenuText(new Rect(card.x, card.y + 20, card.width, 55), "PLAYER " + (seat + 1), 34, accent);
+            if (passengerPortraitAtlas != null)
+            {
+                int cell = seat == 0 ? 0 : 8;
+                GUI.DrawTextureWithTexCoords(new Rect(card.center.x - 80, card.y + 92, 160, 160),
+                    passengerPortraitAtlas, new Rect((cell % 4) * .25f, 1f - (cell / 4 + 1) * .25f, .25f, .25f));
+            }
+            bool controller = InputManager.Instance != null && InputManager.Instance.HasController(seat);
+            string move = controller ? "STICK / D-PAD" : seat == 0 ? "W A S D" : "ARROW KEYS";
+            string key = controller ? "A" : seat == 0 ? "C" : ".";
+            MenuText(new Rect(card.x, card.y + 265, card.width, 40), move + "  TO MOVE", 24, Cream);
+            MenuText(new Rect(card.x, card.y + 310, card.width, 30), controller ? "CONTROLLER CONNECTED" : "SHARED KEYBOARD", 18, accent);
+            Panel(readyButton, ready ? accent : LobbySurface);
+            MenuText(readyButton, ready ? "READY" : "[" + key + "]  I'M READY", 27, ready ? Ink : Cream);
+            if (GUI.Button(readyButton, GUIContent.none, GUIStyle.none)) HandleLobbyConfirm(seat);
+        }
+
+        void MenuText(Rect rect, string text, int size, Color colour)
+        {
+            GUIStyle style = new GUIStyle(caption) { fontSize = size, wordWrap = false };
+            SetFixedTextColor(style, colour);
+            GUI.Label(rect, text, style);
         }
 
         void DrawTitleActionHint()
@@ -1793,12 +1668,11 @@ namespace CrazyElevator.Managers
             // Tutorial mode presents the controls after both players finish
             // the guided shift. No-tutorial mode goes straight into the intro.
             showControllerInstructionsOnLoad = false;
-            startDuelOnLoad = duel;
-            playerTwoHumanOnLoad = duel && playerTwoSelected;
-            playerOneCpuOnLoad = !playerOneHuman;
-            if (duel && playerTwoSelected)
-                InputManager.Instance?.EnableSplitKeyboard();
-            SceneManager.LoadScene(duel ? DuelScene : SinglePlayerScene);
+            startDuelOnLoad = true;
+            playerTwoHumanOnLoad = true;
+            playerOneCpuOnLoad = false;
+            InputManager.Instance?.EnableSplitKeyboard();
+            SceneManager.LoadScene(DuelScene);
         }
 
         static void Panel(Rect rect, Color colour)

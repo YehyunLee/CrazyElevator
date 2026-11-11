@@ -1733,8 +1733,12 @@ namespace CrazyElevator.Managers
         // Keep in sync with the authored landings in ExteriorWorld.prefab.
         public const float ShaftFloorHeight = 13.2f;
         [Header("Shaft view")]
-        public bool showCabinPreview = true;
-        [Range(.2f, .45f)] public float cabinPreviewWidth = .3f;
+        [UnityEngine.Serialization.FormerlySerializedAs("showCabinPreview")]
+        public bool showPassengerList = true;
+        [UnityEngine.Serialization.FormerlySerializedAs("cabinPreviewWidth")]
+        [Range(.2f, .45f)] public float passengerListWidth = .3f;
+        [Tooltip("Reusable 4 x 4 passenger portrait sheet, in reading order.")]
+        public Texture2D passengerPortraitAtlas;
         [Range(0, .04f)] public float cabinTravelShake = .022f;
         [Range(0, .25f)] public float shaftTravelShake = .1f;
         Camera exteriorCamera;
@@ -1852,12 +1856,12 @@ namespace CrazyElevator.Managers
             bool visible = Match == null || Match.IsVisibleSeat(Seat);
             // Keep the shaft behind the growing cabin view until it fills the seat.
             exteriorCamera.enabled = visible && (showingTravelView || cameraViewBlend > 0f);
-            eye.enabled = visible && (!showingTravelView || showCabinPreview || cameraViewBlend < 1f);
+            eye.enabled = visible && (!showingTravelView || cameraViewBlend < 1f);
             Rect cameraRect = Match != null ? Match.CameraRect(Seat) : new Rect(0, 0, 1, 1);
             eye.targetTexture = null;
             exteriorCamera.targetTexture = null;
             exteriorCamera.rect = cameraRect;
-            eye.rect = BlendCameraRect(cameraRect, CabinPreviewRect(cameraRect), viewBlend);
+            eye.rect = BlendCameraRect(cameraRect, CabinTransitionRect(cameraRect), viewBlend);
             eye.depth = exteriorCamera.enabled ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
             float collisionKick = collisionImpact > 0f
@@ -1914,11 +1918,11 @@ namespace CrazyElevator.Managers
             => new Rect(Mathf.Lerp(full.x, preview.x, blend), Mathf.Lerp(full.y, preview.y, blend),
                 Mathf.Lerp(full.width, preview.width, blend), Mathf.Lerp(full.height, preview.height, blend));
 
-        // Keep the cabin in the upper-right, below the status HUD and away from the travel controls.
-        Rect CabinPreviewRect(Rect view)
+        // The cabin shrinks toward the manifest before the travel view takes over.
+        Rect CabinTransitionRect(Rect view)
         {
             float width = view.width * (Match != null && Match.SplitScreen
-                ? Mathf.Max(.4f, cabinPreviewWidth) : cabinPreviewWidth);
+                ? Mathf.Max(.4f, passengerListWidth) : passengerListWidth);
             float height = width * Screen.width / Mathf.Max(1f, Screen.height) / (16f / 9f);
             height = Mathf.Min(height, view.height * .32f);
             float marginX = view.width * .035f;
@@ -1936,8 +1940,7 @@ namespace CrazyElevator.Managers
             if (!DisplayBuildingView || !exteriorCamera) return;
             DrawSpeedLines();
             DrawDestinationBeacons();
-            DrawCabinPreviewFrame();
-            DrawCabinPreviewCallouts();
+            DrawPassengerList();
             DrawCrazyJunctionGuide();
             DrawPassengerAbilityFeedback();
             DrawWorldEventCue();
@@ -1956,20 +1959,6 @@ namespace CrazyElevator.Managers
             Panel(new Rect(x - 98 * size, y + 49 * size, 196 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
             Label(new Rect(x - 96 * size, y + 50 * size, 192 * size, 26 * size),
                 moving ? "F" + ElevatorRound.FloorNumber(floor) + side + "  ·  STOP" : "F" + ElevatorRound.FloorNumber(floor) + "  ·  " + WorldName(floor), markerStyle);
-        }
-
-        void DrawCabinPreviewFrame()
-        {
-            if (!showCabinPreview || !eye.enabled) return;
-            Rect pixels = eye.pixelRect;
-            Rect frame = new Rect(pixels.x - 4, Screen.height - pixels.yMax - 4, pixels.width + 8, pixels.height + 8);
-            Panel(new Rect(frame.x, frame.y, frame.width, 4), Ink);
-            Panel(new Rect(frame.x, frame.yMax - 4, frame.width, 4), Ink);
-            Panel(new Rect(frame.x, frame.y, 4, frame.height), Ink);
-            Panel(new Rect(frame.xMax - 4, frame.y, 4, frame.height), Ink);
-            Panel(new Rect(frame.x + 4, frame.y + 4, 72, 22), new Color(Ink.r, Ink.g, Ink.b, .9f));
-            var previewStyle = new GUIStyle(small) { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            Label(new Rect(frame.x + 4, frame.y + 4, 72, 22), "CABIN", previewStyle);
         }
 
         void ReleaseCabinPreview() { if (eye) eye.targetTexture = null; }
@@ -2421,8 +2410,9 @@ namespace CrazyElevator.Managers
             target.boostAcceleration = boostAcceleration;
             target.maximumTravelSpeed = maximumTravelSpeed;
             target.stopWindow = stopWindow;
-            target.showCabinPreview = showCabinPreview;
-            target.cabinPreviewWidth = cabinPreviewWidth;
+            target.showPassengerList = showPassengerList;
+            target.passengerListWidth = passengerListWidth;
+            target.passengerPortraitAtlas = passengerPortraitAtlas;
             target.cabinTravelShake = cabinTravelShake;
             target.shaftTravelShake = shaftTravelShake;
             target.backgroundMusic = null;

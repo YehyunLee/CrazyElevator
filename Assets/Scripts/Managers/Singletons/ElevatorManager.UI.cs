@@ -1333,59 +1333,122 @@ namespace CrazyElevator.Managers
             return Teal;
         }
 
-        // The cabin camera is much smaller during shaft travel, so the authored
-        // world-space numbers become illegible. Redraw only the onboard riders'
-        // destinations in screen space, sized for the preview itself.
-        void DrawCabinPreviewCallouts()
+        readonly List<Rider> manifestRiders = new List<Rider>();
+        Vector2 manifestScroll;
+
+        Rect PassengerListRect()
         {
-            if (!BuildingView || !showCabinPreview || !eye.enabled) return;
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            float width = Mathf.Min(view.width * .44f, Mathf.Max(190f, view.width * passengerListWidth));
+            float rowHeight = Mathf.Clamp(view.height * .066f, 44f, 62f);
+            int count = 0;
+            foreach (Rider rider in round.Riders) if (round.Owns(rider)) count++;
+            float height = Mathf.Min(view.height * .64f, 55f + Mathf.Max(1, count) * rowHeight);
+            return new Rect(view.xMax - width - 12f, view.y + Mathf.Max(84f, view.height * .14f), width, height);
+        }
 
-            Rect pixels = eye.pixelRect;
-            Rect preview = new Rect(pixels.x, Screen.height - pixels.yMax, pixels.width, pixels.height);
-            int previousSize = calloutNumber.fontSize;
-            calloutNumber.fontSize = Mathf.Clamp(Mathf.RoundToInt(preview.height * .13f), 22, 30);
-
-            var occupiedBadges = new List<Rect>();
+        void DrawPassengerList()
+        {
+            if (!showPassengerList || !BuildingView || cameraViewBlend < .99f) return;
+            manifestRiders.Clear();
             foreach (Rider rider in round.Riders)
+                if (round.Owns(rider)) manifestRiders.Add(rider);
+            // Stable insertion sort preserves boarding order when urgency ties.
+            for (int i = 1; i < manifestRiders.Count; i++)
             {
-                if (!round.Owns(rider) || exiting.ContainsKey(rider)
-                    || boardingTransfers.ContainsKey(rider)) continue;
-                if (!figures.TryGetValue(rider, out Transform figure) || !figure.gameObject.activeInHierarchy) continue;
-
-                Vector3 point = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
-                if (point.z <= 0) continue;
-                string abilityIcon = PassengerAbilityIconKind(rider);
-                bool showAbility = !string.IsNullOrEmpty(abilityIcon);
-                float badgeWidth = showAbility ? 58f : 34f;
-                float x = Mathf.Round(Mathf.Clamp(point.x, preview.xMin + badgeWidth * .5f,
-                    preview.xMax - badgeWidth * .5f));
-                float y = Mathf.Round(Mathf.Clamp(Screen.height - point.y, preview.yMin + 30f, preview.yMax - 22f));
-                Rect badge = new Rect(x - badgeWidth * .5f, y - 2f, badgeWidth, 28f);
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    bool overlaps = false;
-                    foreach (Rect occupied in occupiedBadges)
-                        if (badge.Overlaps(occupied)) { overlaps = true; break; }
-                    if (!overlaps) break;
-                    badge.y = Mathf.Max(preview.yMin + 28f, badge.y - 30f);
-                }
-                occupiedBadges.Add(badge);
-                Color abilityAccent = PassengerAbilityAccent(rider);
-                FramedPanel(badge, showAbility ? abilityAccent : new Color32(145, 153, 166, 255), 2f);
-                if (showAbility)
-                {
-                    DrawPassengerBadgeIcon(new Rect(badge.x + 1f, badge.y + 2f, 24f, 24f),
-                        abilityIcon, abilityAccent);
-                    int previousBadgeNumberSize = calloutNumber.fontSize;
-                    calloutNumber.fontSize = 19;
-                    OutlinedLabel(new Rect(badge.x + 26f, badge.y, badge.width - 27f, badge.height),
-                        DestinationTag(rider), calloutNumber);
-                    calloutNumber.fontSize = previousBadgeNumberSize;
-                }
-                else OutlinedLabel(badge, DestinationTag(rider), calloutNumber);
+                Rider rider = manifestRiders[i];
+                int j = i - 1;
+                while (j >= 0 && manifestRiders[j].Remaining > rider.Remaining)
+                { manifestRiders[j + 1] = manifestRiders[j]; j--; }
+                manifestRiders[j + 1] = rider;
             }
+            Rect card = PassengerListRect();
+            Panel(card, new Color32(20, 28, 45, 247));
+            Panel(new Rect(card.x, card.y, card.width, 3), Teal);
+            ManifestText(new Rect(card.x + 10, card.y + 9, card.width - 20, 24),
+                "ON BOARD  " + manifestRiders.Count, 17, Cream);
+            if (manifestRiders.Count == 0)
+            {
+                ManifestText(new Rect(card.x + 10, card.y + 44, card.width - 20, 40), "NO PASSENGERS YET", 12, Cream);
+                return;
+            }
+            float viewHeight = Match != null ? Match.ViewRect(Seat).height : Screen.height;
+            float rowHeight = Mathf.Clamp(viewHeight * .066f, 44f, 62f);
+            Rect scroll = new Rect(card.x + 6, card.y + 40, card.width - 12, card.height - 46);
+            bool overflow = manifestRiders.Count * rowHeight > scroll.height;
+            float rowWidth = scroll.width - (overflow ? 17 : 0);
+            manifestScroll = GUI.BeginScrollView(scroll, manifestScroll,
+                new Rect(0, 0, rowWidth, manifestRiders.Count * rowHeight), false, overflow);
+            for (int i = 0; i < manifestRiders.Count; i++)
+            {
+                Rider rider = manifestRiders[i];
+                Rect row = new Rect(0, i * rowHeight, rowWidth, rowHeight - 3);
+                Color accent = rider.Remaining <= rider.Patience * .25f ? Coral : Teal;
+                Panel(row, new Color32(35, 46, 66, 255));
+                float icon = Mathf.Min(row.height - 6, 46);
+                DrawManifestPortrait(new Rect(4, row.y + 3, icon, icon), rider.Kind);
+                float x = icon + 10;
+                string label = PassengerRoleName(rider.Kind);
+                int nameSize = Mathf.Clamp(Mathf.RoundToInt(rowWidth / 20), 10, 13);
+                ManifestText(new Rect(x, row.y + 2, rowWidth - x - 55, 20), label, nameSize, Cream);
+                ManifestText(new Rect(rowWidth - 51, row.y + 1, 48, 23), "F" + DestinationTag(rider), 18, Teal);
+                ManifestText(new Rect(x, row.y + 23, rowWidth - x, 19),
+                    Mathf.CeilToInt(Mathf.Max(0, rider.Remaining)) + "s  /  +" + round.BaseDeliveryPoints(rider), 12, accent);
+                float patience = Mathf.Clamp01(rider.Remaining / Mathf.Max(.001f, rider.Patience));
+                Panel(new Rect(x, row.yMax - 4, (rowWidth - x - 5) * patience, 2), accent);
+            }
+            GUI.EndScrollView();
+        }
 
-            calloutNumber.fontSize = previousSize;
+        void ManifestText(Rect rect, string text, int fontSize, Color colour)
+        {
+            GUIStyle style = new GUIStyle(small) { fontSize = fontSize, alignment = TextAnchor.MiddleLeft,
+                wordWrap = false, clipping = TextClipping.Clip };
+            style.normal.textColor = colour;
+            GUI.Label(rect, text, style);
+        }
+
+        static string PassengerRoleName(string kind)
+        {
+            switch (kind)
+            {
+                case "COURIER": return "COURIER";
+                case "INTERVIEW": return "INTERVIEWEE";
+                case "ELDERLY": return "GRANDMA";
+                case "PREGNANT": return "MOM + BABY";
+                case "GROUP": return "TRIO";
+                case "SPEEDBOOST": return "CLOWN";
+                case "HANDYMAN": return "HANDYMAN";
+                case "HUNTER": return "HUNTER";
+                case "DIVER": return "DIVER";
+                case "BOUNCER": return "BOUNCER";
+                case "BOSS": return "BOSS";
+                default: return "WORKER";
+            }
+        }
+
+        void DrawManifestPortrait(Rect rect, string kind)
+        {
+            if (passengerPortraitAtlas == null) { DrawPassengerBadgeIcon(rect, kind, Teal); return; }
+            int cell;
+            switch (kind)
+            {
+                case "MAD": cell = 1; break;
+                case "GROUP": cell = 2; break;
+                case "SPEEDBOOST": cell = 3; break;
+                case "BOSS": cell = 4; break;
+                case "ELDERLY": cell = 5; break;
+                case "PREGNANT": cell = 6; break;
+                case "HANDYMAN": cell = 7; break;
+                case "COURIER": cell = 8; break;
+                case "INTERVIEW": cell = 9; break;
+                case "HUNTER": cell = 10; break;
+                case "DIVER": cell = 11; break;
+                case "BOUNCER": cell = 12; break;
+                default: cell = 0; break;
+            }
+            GUI.DrawTextureWithTexCoords(rect, passengerPortraitAtlas,
+                new Rect(cell % 4 * .25f, 1f - (cell / 4 + 1) * .25f, .25f, .25f));
         }
 
         string PassengerCalloutText(Rider rider)

@@ -136,8 +136,7 @@ namespace CrazyElevator.Managers
         public void RequestAbilityIntro(ElevatorManager actor, string kind)
         {
             if (actor == null || MenuManager.TutorialActive || string.IsNullOrEmpty(kind)) return;
-            // A CPU-only pane is invisible in solo-versus-CPU. Its personal
-            // effects should not interrupt the human player's view.
+            // Only show personal effects for a visible player pane.
             if (kind != "BOUNCER" && actor.Match != null && !actor.Match.IsVisibleSeat(actor.Seat)) return;
             string seenKey = AbilityIntroKey(actor, kind);
             if (!introducedAbilities.Add(seenKey)) return;
@@ -269,9 +268,7 @@ namespace CrazyElevator.Managers
         {
             if (Player == null) { GoToView(GameView.Menu); return; }
             if (Player.IsPaused) { GoToView(GameView.Pause); return; }
-            var viewedPlayer = Player.IsNpc && Player.Match != null
-                && Player.Match.Rival != null && !Player.Match.Rival.IsNpc
-                ? Player.Match.Rival : Player;
+            var viewedPlayer = Player;
             if (viewedPlayer.TutorialPassengerViewActive)
             {
                 GoToView(GameView.Passenger);

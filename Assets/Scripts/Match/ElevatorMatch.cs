@@ -89,15 +89,18 @@ namespace CrazyElevator.Match
 
         void Awake()
         {
-            // The same scene and gameplay controller serve both menu choices.
-            // This manager only activates for the 1v1 selection.
+            // Main also hosts the title screen; the match activates after both
+            // local players confirm the lobby.
             if (!MenuManager.ConsumeDuelRequest())
             {
                 enabled = false;
                 return;
             }
-            humanPlayer = !MenuManager.ConsumePlayerOneCpuRequest();
-            humanRival = MenuManager.ConsumePlayerTwoRequest();
+            // Every playable match has two human seats. Old menu flags must
+            // never silently turn a disconnected player into a CPU.
+            MenuManager.ConsumePlayerOneCpuRequest();
+            MenuManager.ConsumePlayerTwoRequest();
+            humanPlayer = humanRival = true;
 
             if (player == null || player.sceneView == null)
             {
@@ -105,13 +108,7 @@ namespace CrazyElevator.Match
                 enabled = false;
                 return;
             }
-            player.ConfigureMatch(this, 0, !humanPlayer);
-            if (!humanPlayer)
-            {
-                var npc = player.GetComponent<NpcElevator>();
-                if (npc == null) npc = player.gameObject.AddComponent<NpcElevator>();
-                npc.game = player;
-            }
+            player.ConfigureMatch(this, 0, false);
             CreateRival();
             collisionClip = CreateCollisionClip();
             collisionParticles = CreateCollisionParticles(player.sceneView.exteriorCar.parent);
@@ -122,10 +119,10 @@ namespace CrazyElevator.Match
         {
             var source = player.sceneView;
             rivalView = Instantiate(source);
-            rivalView.name = humanRival ? "Player 2 elevator scene" : "NPC elevator scene";
+            rivalView.name = "Player 2 elevator scene";
             Transform duplicateWorld = rivalView.exteriorCar.parent;
             rivalView.exteriorCar.SetParent(source.exteriorCar.parent, false);
-            rivalView.exteriorCar.name = humanRival ? "Player 2 exterior car" : "NPC exterior car";
+            rivalView.exteriorCar.name = "Player 2 exterior car";
             Destroy(duplicateWorld.gameObject);
 
             // The saved prefab already mounts the cabin and camera on this car.
@@ -155,14 +152,13 @@ namespace CrazyElevator.Match
             }
 
             // Assign references before Awake runs on the rival controller.
-            var actor = new GameObject(humanRival ? "Player 2 elevator controller" : "NPC elevator controller");
+            var actor = new GameObject("Player 2 elevator controller");
             actor.SetActive(false);
             Rival = actor.AddComponent<Game>();
             actor.AddComponent<PassengerManager>().Bind(Rival);
             Rival.sceneView = rivalView;
             player.CopyMatchSettingsTo(Rival);
-            Rival.ConfigureMatch(this, 1, !humanRival);
-            if (!humanRival) actor.AddComponent<NpcElevator>().game = Rival;
+            Rival.ConfigureMatch(this, 1, false);
             actor.SetActive(true);
             ApplyCarTrim(source, playerOneCarTrim);
             ApplyCarTrim(rivalView, playerTwoCarTrim);
@@ -230,18 +226,6 @@ namespace CrazyElevator.Match
                 if (playerWasSwitching) targetTrack[0] = targetTrack[0] == 0 ? 1 : 0;
                 if (rivalWasSwitching) targetTrack[1] = targetTrack[1] == 0 ? 1 : 0;
                 TriggerCollision(player, Rival);
-            }
-
-            // The CPU reads the same visible junction sign as a player and
-            // moves toward the express track shortly before reaching it.
-            if (Running && !Paused && Rival != null && Rival.IsNpc
-                && !IsTutorialCollisionParticipant(Rival)
-                && TryGetUpcomingJunction(Rival, out int npcJunction, out float npcDistance)
-                && npcDistance < 1.15f)
-            {
-                int desired = expressTrack[npcJunction];
-                int current = targetTrack[SeatOf(Rival)];
-                if (desired != current) RequestTrack(Rival, desired > current ? 1 : -1);
             }
 
             if (Finished && resultRevealStartedAt < 0f)
@@ -435,7 +419,7 @@ namespace CrazyElevator.Match
             Rival?.BeginDimensionReveal(dimensionRevealIndex);
         }
 
-        // The card stays up until every human player confirms; the CPU never blocks it.
+        // Both players confirm each world introduction before the countdown starts.
         void UpdateDimensionReveal(float dt)
         {
             if (Paused || MenuManager.IsOpen) return;
@@ -1319,7 +1303,7 @@ namespace CrazyElevator.Match
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width * .5f;
             DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                (actor.IsNpc ? "CPU " : "PLAYER ") + (seat + 1) + " SCORE", actor.Points.ToString());
+                "PLAYER " + (seat + 1) + " SCORE", actor.Points.ToString());
             DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
                 colour, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(actor.CurrentFloor),
                     actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString());
@@ -1357,7 +1341,7 @@ namespace CrazyElevator.Match
                 Rect marker = new Rect(view.xMax - 154f, view.y + 78f, 146f, 28f);
                 Fill(marker, new Color(Ink.r, Ink.g, Ink.b, .88f));
                 label.normal.textColor = rivalColor;
-                GUI.Label(marker, arrow + (rival.IsNpc ? " CPU " : " RIVAL ")
+                GUI.Label(marker, arrow + " RIVAL "
                     + "F" + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor), rival.ActiveMinFloor, rival.ActiveMaxFloor)), label);
             }
             if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
@@ -1587,8 +1571,8 @@ namespace CrazyElevator.Match
                 DrawRevealLabel(new Rect(694, 78, 260, 36),
                     session != null ? session.ActiveDimensionName : "OFFICE", resultName, titleIn, Color.white);
 
-                string playerName = player.IsNpc ? "CPU 1" : "PLAYER 1";
-                string rivalName = Rival.IsNpc ? "CPU 2" : "PLAYER 2";
+                string playerName = "PLAYER 1";
+                string rivalName = "PLAYER 2";
                 string winnerName = playerWon ? playerName : rivalName;
                 string headline = matchFinished ? winnerName + " WINS THE MATCH"
                     : draw ? "IT'S A DRAW" : winnerName + " WINS";

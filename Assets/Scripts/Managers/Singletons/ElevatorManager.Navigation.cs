@@ -272,7 +272,7 @@ namespace CrazyElevator.Managers
             Rect arrowBox = new Rect(tip - pointing * arrow * .5f - Vector2.one * arrow * .5f, Vector2.one * arrow);
 
             // Move arrow and tag together: out of the cabin preview, then off earlier tags along the edge.
-            Vector2 shift = CabinPreviewClearance(Union(tag, arrowBox), 12f * size);
+            Vector2 shift = PassengerListClearance(Union(tag, arrowBox), 12f * size);
             tag.position += shift;
             Vector2 step = Mathf.Abs(pointing.x) > Mathf.Abs(pointing.y)
                 ? new Vector2(0f, (tag.center.y > view.center.y ? -1f : 1f) * (tagSize.y + 6f * size))
@@ -332,13 +332,12 @@ namespace CrazyElevator.Managers
             return shift;
         }
 
-        // The smallest move (left or up) that takes `area` off the cabin preview.
-        Vector2 CabinPreviewClearance(Rect area, float pad)
+        // Keep destination cues clear of the passenger list.
+        Vector2 PassengerListClearance(Rect area, float pad)
         {
-            if (!showCabinPreview || eye == null || !eye.enabled) return Vector2.zero;
-            Rect pixels = eye.pixelRect;
-            Rect cabin = new Rect(pixels.x - pad, Screen.height - pixels.yMax - pad,
-                pixels.width + pad * 2f, pixels.height + pad * 2f);
+            if (!showPassengerList) return Vector2.zero;
+            Rect cabin = PassengerListRect();
+            cabin = new Rect(cabin.x - pad, cabin.y - pad, cabin.width + pad * 2, cabin.height + pad * 2);
             if (!cabin.Overlaps(area)) return Vector2.zero;
             float left = area.xMax - cabin.xMin, up = area.yMax - cabin.yMin;
             return left < up ? new Vector2(-left, 0f) : new Vector2(0f, -up);

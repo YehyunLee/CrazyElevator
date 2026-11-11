@@ -640,6 +640,16 @@ namespace CrazyElevator.Shared
             return waitingToExit;
         }
 
+        // The list shows this live base value; passenger and VIP bonuses are extra.
+        public int BaseDeliveryPoints(Rider rider)
+        {
+            if (rider == null) return 0;
+            int reward = rider.Remaining > 0
+                ? 100 + (int)(50 * rider.Remaining / Math.Max(.001f, rider.Patience))
+                : LateDeliveriesScore ? 25 : 0;
+            return rider.Mood == 1 ? reward / 2 : reward;
+        }
+
         // Resolve a delivery and calculate its reward or penalty.
         public OffboardResult Offboard(Rider p)
         {
@@ -653,9 +663,7 @@ namespace CrazyElevator.Shared
 
             // Base points depend on remaining patience; type bonuses come next.
             bool onTime = p.Remaining > 0;
-            int reward = onTime ? 100 + (int)(50 * p.Remaining / p.Patience) : LateDeliveriesScore ? 25 : 0;
-            // One missed stop halves the base reward.
-            if (p.Mood == 1) reward /= 2;
+            int reward = BaseDeliveryPoints(p);
             if (onTime && p.Mood > 0)
             {
                 Happy++;
