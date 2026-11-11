@@ -7,11 +7,12 @@ namespace CrazyElevator.Managers
         void DrawPauseScreen()
         {
             Matrix4x4 oldMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            Panel(new Rect(0, 0, Screen.width, Screen.height), new Color(0f, 0f, 0f, .82f));
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0f), Quaternion.identity,
                 new Vector3(scale, scale, 1f));
-            Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(0f, 0f, 0f, .82f));
             Rect panel = new Rect(430, 202, 840, 660);
             Panel(new Rect(panel.x + 8, panel.y + 10, panel.width, panel.height), Color.black);
             Panel(panel, new Color32(22, 27, 40, 255));
