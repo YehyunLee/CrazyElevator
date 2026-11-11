@@ -67,6 +67,7 @@ namespace CrazyElevator.Managers
             public bool MovePressed;
             public bool SelectPressed;
             public bool ConfirmPressed;
+            public bool SkipPressed;
             public bool BoardingLeftPressed;
             public bool BoardingFrontPressed;
             public bool BoardingRightPressed;
@@ -304,10 +305,29 @@ namespace CrazyElevator.Managers
 
         void RegisterNextGamepad()
         {
-            int seat = NextAvailableSeat;
-            if (seat < 0) return;
             var pad = GamepadActivityThisFrame(true);
             if (pad == null) return;
+
+            int seat = NextAvailableSeat;
+            if (seat < 0)
+            {
+                // A shared keyboard can fill one seat before the second
+                // controller joins. Give controllers both seats by replacing
+                // that keyboard PlayerInput when no seat is left.
+                seat = keyboardMouseSeat;
+                if (seat < 0) return;
+
+                var keyboardPlayer = ExistingPlayerInput(seat);
+                if (keyboardPlayer != null)
+                {
+                    keyboardPlayer.SwitchCurrentControlScheme("Gamepad", pad);
+                    RegisterPlayerInput(keyboardPlayer);
+                    return;
+                }
+
+                keyboardMouseSeat = -1;
+            }
+
             var playerInput = JoinGamepad(GetComponent<PlayerInputManager>(), seat, pad);
             if (playerInput != null) joinedGamepadIds[seat] = pad.deviceId;
         }
@@ -508,6 +528,8 @@ namespace CrazyElevator.Managers
                 ? playerTwoConfirm
                 : keyboardAvailable && keyboard.cKey.wasPressedThisFrame
                     || pad != null && pad.buttonSouth.wasPressedThisFrame;
+            bool skip = keyboardAvailable && !playerTwoKeyboard && keyboard.yKey.wasPressedThisFrame
+                || pad != null && pad.buttonNorth.wasPressedThisFrame;
             bool kickout = playerTwoKeyboard
                 ? keyboardAvailable && keyboard.commaKey.wasPressedThisFrame
                 : keyboardAvailable && keyboard.iKey.wasPressedThisFrame
@@ -545,6 +567,7 @@ namespace CrazyElevator.Managers
                 MovePressed = navigation.magnitude >= .55f,
                 SelectPressed = selection.magnitude >= .55f,
                 ConfirmPressed = confirm,
+                SkipPressed = skip,
                 BoardingLeftPressed = boardingLeft,
                 BoardingFrontPressed = boardingFront,
                 BoardingRightPressed = boardingRight,
@@ -640,7 +663,7 @@ namespace CrazyElevator.Managers
         {
             if (!controllerJoining && ActiveView == GameView.Menu)
                 DetectMenuInputSource();
-            if (controllerJoining && NextAvailableSeat >= 0)
+            if (controllerJoining && (NextAvailableSeat >= 0 || keyboardMouseSeat >= 0))
             {
                 RegisterNextGamepad();
                 if (NextAvailableSeat >= 0 && KeyboardActivityThisFrame())
@@ -742,7 +765,8 @@ namespace CrazyElevator.Managers
             }
 
             if (pause) OnPause?.Invoke();
-            if (overlay) OnOverlay?.Invoke();
+            if (overlay && (GameManager.Instance == null || !GameManager.Instance.AbilityIntroActive))
+                OnOverlay?.Invoke();
             if (confirm) OnConfirm?.Invoke();
             if (kickout) OnKickout?.Invoke();
             if (closeDoors) OnCloseDoors?.Invoke();

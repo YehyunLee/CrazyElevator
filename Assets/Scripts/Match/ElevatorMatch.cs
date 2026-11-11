@@ -192,6 +192,7 @@ namespace CrazyElevator.Match
                 UpdateDimensionReveal(dt);
                 return;
             }
+            if (MenuManager.RoundPassengerIntroductionActive) return;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
             expressFlash[0] = Mathf.Max(0f, expressFlash[0] - dt);
@@ -276,7 +277,7 @@ namespace CrazyElevator.Match
             // Pause is owned by GameManager so InputManager only fires once.
         }
 
-        // A rematch starts a fresh first-to-three series in the office.
+        // A rematch starts a fresh best-of-three series with a new dimension order.
         public void StartMatch()
         {
             GameManager.Instance?.ResetMatchProgress();
@@ -438,6 +439,11 @@ namespace CrazyElevator.Match
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
+            if (!MenuManager.BeginRoundPassengerIntroduction(player, Rival))
+            {
+                player.BeginRoundCountdown();
+                Rival?.BeginRoundCountdown();
+            }
         }
 
         bool DimensionRevealSeatHuman(int seat) => seat == 0 ? humanPlayer : humanRival && Rival != null;
@@ -1474,7 +1480,8 @@ namespace CrazyElevator.Match
             Fill(status, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             var badge = new Rect(status.x, status.y, statusWidth * .22f, status.height);
             Fill(badge, new Color32(29, 38, 54, 255));
-            GUI.Label(badge, "ROUND " + session.RoundNumber, roundStatus);
+            GUI.Label(badge, "ROUND " + session.RoundNumber + " / " + GameManager.RoundsPerMatch,
+                roundStatus);
             DrawRevealLabel(new Rect(badge.xMax + 8, status.y, statusWidth * .36f - 16, status.height),
                 session.ActiveDimensionName, roundStatus, 1f, ResultWorldColour(session.ActiveDimension));
             float winsWidth = statusWidth * .21f;
@@ -1543,8 +1550,9 @@ namespace CrazyElevator.Match
             Fill(new Rect(0, 0, Screen.width, Screen.height), new Color32(8, 11, 18, 255));
             var session = GameManager.Instance;
             bool matchFinished = session != null && session.MatchFinished;
-            bool draw = !matchFinished && player.Points == Rival.Points;
-            bool playerWon = matchFinished ? session.PlayerOneWins > session.PlayerTwoWins
+            bool seriesDraw = matchFinished && session.MatchWinner < 0;
+            bool draw = seriesDraw || !matchFinished && player.Points == Rival.Points;
+            bool playerWon = matchFinished ? session.MatchWinner == 0
                 : player.Points > Rival.Points;
             Color winnerColour = draw ? Gold : playerWon ? Coral : Teal;
 
@@ -1575,12 +1583,13 @@ namespace CrazyElevator.Match
                 string playerName = "PLAYER 1";
                 string rivalName = "PLAYER 2";
                 string winnerName = playerWon ? playerName : rivalName;
-                string headline = matchFinished ? winnerName + " WINS THE MATCH"
+                string headline = seriesDraw ? "MATCH TIED" : matchFinished ? winnerName + " WINS THE MATCH"
                     : draw ? "IT'S A DRAW" : winnerName + " WINS";
                 float winnerIn = Reveal01((time - 4.55f) / .6f);
                 DrawRevealLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
                 DrawRevealLabel(new Rect(180, 232, 1080, 30),
-                    matchFinished ? "BEST OF FIVE CHAMPION" : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
+                    matchFinished ? seriesDraw ? "SERIES TIED" : "BEST OF THREE CHAMPION"
+                        : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
                     resultTitle, winnerIn, new Color(.73f, .79f, .86f));
 
                 DrawRevealScoreCard(new Rect(220, 300, 488, 256), playerName, player.Points,
@@ -1720,7 +1729,7 @@ namespace CrazyElevator.Match
 
         void DrawRoundWinMarkers(Rect area, int wins, Color accent, float alpha = 1f)
         {
-            int target = GameManager.RoundsToWin;
+            int target = GameManager.RoundsPerMatch;
             wins = Mathf.Clamp(wins, 0, target);
             float gap = area.height * .4f;
             float size = Mathf.Min(area.height, (area.width - gap * (target - 1)) / target);

@@ -55,13 +55,16 @@ namespace CrazyElevator.Managers
         public bool IsAbilityIntroActor(ElevatorManager actor)
             => abilityIntroActive && actor != null && abilityIntroActor == actor;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
+        public const int RoundsPerMatch = MatchProgress.MaximumRounds;
         public int RoundNumber => matchProgress.RoundNumber;
-        public int ActiveDimension => DimensionForRound(matchProgress.RoundNumber - 1);
+        public int ActiveDimension => MenuManager.TutorialWillStart
+            ? 0 : DimensionForRound(matchProgress.RoundNumber - 1);
         public int PlayerOneWins => matchProgress.PlayerOneWins;
         public int PlayerTwoWins => matchProgress.PlayerTwoWins;
         public bool MatchFinished => matchProgress.Finished;
         public bool RoundRecorded => matchProgress.RoundRecorded;
         public int LastRoundWinner => matchProgress.LastRoundWinner;
+        public int MatchWinner => matchProgress.MatchWinner;
         public string ActiveDimensionName => DimensionDisplayName(ActiveDimension);
         public int FirstEnabledDimension => DimensionForRound(0);
         public int NextDimensionIndex => DimensionForRound(matchProgress.RoundNumber);
@@ -121,18 +124,24 @@ namespace CrazyElevator.Managers
 
         int DimensionForRound(int roundOffset)
         {
-            int mask = CurrentDimensionPoolMask;
-            int enabledCount = 0;
-            for (int i = 0; i < ElevatorRound.Dimensions; i++)
-                if ((mask & (1 << i)) != 0) enabledCount++;
+            return matchProgress.DimensionForRound(roundOffset);
+        }
 
-            int target = Mathf.Abs(roundOffset) % Mathf.Max(1, enabledCount);
+        int[] RandomDimensionOrder()
+        {
+            var enabled = new List<int>();
+            int mask = CurrentDimensionPoolMask;
             for (int i = 0; i < ElevatorRound.Dimensions; i++)
+                if ((mask & (1 << i)) != 0) enabled.Add(i);
+
+            for (int i = enabled.Count - 1; i > 0; i--)
             {
-                if ((mask & (1 << i)) == 0) continue;
-                if (target-- == 0) return i;
+                int swap = Random.Range(0, i + 1);
+                int dimension = enabled[i];
+                enabled[i] = enabled[swap];
+                enabled[swap] = dimension;
             }
-            return 0;
+            return enabled.ToArray();
         }
 
         public void ResetMatchProgress()
@@ -142,6 +151,7 @@ namespace CrazyElevator.Managers
             introducedAbilities.Clear();
             gameplayStartCueTime = 0f;
             matchProgress.Reset();
+            matchProgress.SetDimensionOrder(RandomDimensionOrder());
         }
 
         public void ShowGameplayStartCue()
@@ -322,6 +332,17 @@ namespace CrazyElevator.Managers
             if (AbilityIntroActive)
             {
                 if (abilityIntroActor == null)
+                {
+                    StopAbilityIntro();
+                    StartNextAbilityIntro();
+                    return;
+                }
+                InputManager abilityInput = InputManager.Instance;
+                bool skipPressed = abilityInput != null && abilityInput.ReadForSeat(abilityIntroActor.Seat,
+                    abilityIntroActor.Match != null).SkipPressed;
+                if (!skipPressed && abilityInput != null && abilityIntroActor.Match != null)
+                    skipPressed = abilityInput.ReadForSeat(1 - abilityIntroActor.Seat, true).SkipPressed;
+                if (skipPressed)
                 {
                     StopAbilityIntro();
                     StartNextAbilityIntro();

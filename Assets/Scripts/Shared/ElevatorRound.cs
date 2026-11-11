@@ -164,7 +164,7 @@ namespace CrazyElevator.Shared
                 return occupiedSpaces;
             }
         }
-        // Every round lasts one minute. Reaching the top or clearing all
+        // Every round lasts 90 seconds. Reaching the top or clearing all
         // waiting passengers does not end it; the final Score is the result.
         public bool Finished => TimeLeft <= 0;
 
@@ -461,7 +461,7 @@ namespace CrazyElevator.Shared
         public bool IsPassengerTypeUnlocked(Rider rider)
         {
             if (rider == null) return false;
-            // Each one-minute round starts with its world's complete mechanics.
+            // Each 90-second round starts with its world's complete mechanics.
             if (ActiveDimension >= 0) return ContainsFloor(rider.Origin);
             switch (rider.Kind)
             {

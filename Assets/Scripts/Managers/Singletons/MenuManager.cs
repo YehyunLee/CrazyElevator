@@ -118,8 +118,7 @@ namespace CrazyElevator.Managers
         bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
         GUIStyle poolToggleLabel, poolCycleCaption;
-        GUIStyle poolHeaderText, poolInstructionText, poolDimensionNameText;
-        GUIStyle poolDimensionDetailText, poolNoticeText;
+        GUIStyle poolHeaderText, poolInstructionText, poolDimensionNameText, poolNoticeText;
         GUIStyle guideHeaderText, guideCaptionText, guideCardTitleText;
         GUIStyle guideNeighborItemText, guideCurrentItemText, guideArrowText;
         GUIStyle guideNextStopHeaderText, guideNextStopDescriptionText, guidePreviewText;
@@ -155,7 +154,8 @@ namespace CrazyElevator.Managers
                 return menu != null
                     && (pauseOpen || menu.showingControllerInstructions
                         || menu.tutorialActive
-                            && menu.tutorialFinalePhase != TutorialFinalePhase.None);
+                            && menu.tutorialFinalePhase != TutorialFinalePhase.None
+                        || menu.roundPassengerIntroductionActive);
             }
         }
         // Survives Main reloads after the player picks a mode (LoadScene).
@@ -275,7 +275,12 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             OnDestroyDirectoryPreview();
-            if (Current == this) Current = null;
+            if (Current == this)
+            {
+                Current = null;
+                roundPassengerIntroductionActive = false;
+                RoundPassengerIntroductionActive = false;
+            }
             if (playerOneLabelTexture != null) Destroy(playerOneLabelTexture);
             if (rivalLabelTexture != null) Destroy(rivalLabelTexture);
             if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
@@ -296,6 +301,11 @@ namespace CrazyElevator.Managers
             if (pauseOpen)
             {
                 UpdatePauseNavigation();
+                return;
+            }
+            if (roundPassengerIntroductionActive)
+            {
+                UpdateRoundPassengerIntroduction();
                 return;
             }
             if (!IsOpen) return;
@@ -808,6 +818,14 @@ namespace CrazyElevator.Managers
                 }
                 DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
+                return;
+            }
+            if (roundPassengerIntroductionActive)
+            {
+                int previousDepth = GUI.depth;
+                GUI.depth = TutorialOverlayDepth;
+                DrawRoundPassengerIntroduction();
+                GUI.depth = previousDepth;
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();
@@ -1576,7 +1594,7 @@ namespace CrazyElevator.Managers
             poolHeaderText = FixedTextColorStyle(title, Cream);
             poolInstructionText = FixedTextColorStyle(caption, Cream);
             poolDimensionNameText = FixedTextColorStyle(cardTitle, Ink);
-            poolDimensionDetailText = FixedTextColorStyle(cardCaption, Ink);
+            poolDimensionNameText.alignment = TextAnchor.MiddleLeft;
             poolNoticeText = FixedTextColorStyle(caption, Cream);
             body = new GUIStyle(caption) { alignment = TextAnchor.MiddleLeft, fontSize = Mathf.Clamp(Screen.height / 55, 12, 16) };
             GameTypography.Apply(body);

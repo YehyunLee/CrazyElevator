@@ -695,7 +695,8 @@ namespace CrazyElevator.Managers
         {
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
-            if (round == null || eye == null || MenuManager.IsOpen) return;
+            if (round == null || eye == null || MenuManager.IsOpen
+                || MenuManager.RoundPassengerIntroductionActive) return;
             if (paused && MenuManager.PauseOpen) return;
             if (paused && Match == null && !MenuManager.TutorialActive)
             {
@@ -1171,14 +1172,15 @@ namespace CrazyElevator.Managers
                 Color accent = Palette[rider.Color % Palette.Length];
                 bool selected = rider == selectedRider || rider == draggedRider;
 
-                // Keep onboard floor markers, and give waiting passengers a
-                // large overhead badge above the selection arrow.
+                // Keep the waiting destination beside the passenger's feet,
+                // leaving the selection arrow and ability cue near the head.
                 if (!rider.Boarded && !rider.Resolved && round.IsOffered(rider))
                 {
                     string abilityIcon = PassengerAbilityIconKind(rider);
                     bool showAbility = !string.IsNullOrEmpty(abilityIcon);
                     float badgeWidth = showAbility ? 88f : 52f;
-                    Rect badge = new Rect(headX - badgeWidth * .5f, Mathf.Max(8f, headY - 74f), badgeWidth, 42f);
+                    Rect badge = new Rect(headX - badgeWidth * .5f,
+                        Mathf.Clamp(footY - 42f, 8f, viewHeight - 50f), badgeWidth, 42f);
                     Color abilityAccent = PassengerAbilityAccent(rider);
                     Color badgeBorder = rider.IsVip ? Gold : showAbility ? abilityAccent : selected
                         ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid : Teal;
@@ -1234,10 +1236,10 @@ namespace CrazyElevator.Managers
                 if (!string.IsNullOrEmpty(cue))
                 {
                     float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
-                    float cueX = headX + 22f + cueWidth <= viewWidth - 8f
-                        ? headX + 22f : headX - cueWidth - 22f;
+                    float cueX = headX + 12f + cueWidth <= viewWidth - 8f
+                        ? headX + 12f : headX - cueWidth - 12f;
                     Rect cueRect = new Rect(Mathf.Clamp(cueX, 8f, viewWidth - cueWidth - 8f),
-                        headY + 8f, cueWidth, 22f);
+                        headY + 2f, cueWidth, 22f);
                     FramedPanel(cueRect, PassengerAbilityAccent(rider), 2f);
                     Label(new Rect(cueRect.x + 8f, cueRect.y + 2f, cueRect.width - 12f, 18f), cue, small);
                 }
