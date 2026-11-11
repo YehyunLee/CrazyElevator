@@ -3,7 +3,7 @@ using UnityEngine;
 namespace CrazyElevator.Shared
 {
     // Restricts a themed passenger to floors in one world; Any keeps a type universal.
-    public enum PassengerTheme { Any, Office, Candy, Underwater }
+    public enum PassengerTheme { Any, Office, Candy, Underwater, Forest, Space }
 
     // Optional unique passenger traits. Custom logic lives where it fits cleanly
     // (boarding, scoring, impairment, speech) and checks these flags.
@@ -66,8 +66,10 @@ namespace CrazyElevator.Shared
         public static PassengerTheme ThemeAtFloor(int floor)
         {
             int bandSize = Mathf.Max(1, ElevatorRound.Floors / ElevatorRound.Dimensions);
-            return floor < bandSize ? PassengerTheme.Office
-                : floor < bandSize * 2 ? PassengerTheme.Candy : PassengerTheme.Underwater;
+            int dimension = floor / bandSize;
+            return dimension == 0 ? PassengerTheme.Office : dimension == 1 ? PassengerTheme.Candy
+                : dimension == 2 ? PassengerTheme.Underwater : dimension == 3 ? PassengerTheme.Forest
+                : PassengerTheme.Space;
         }
 
         public Rider CreateRider(int origin, int destination)

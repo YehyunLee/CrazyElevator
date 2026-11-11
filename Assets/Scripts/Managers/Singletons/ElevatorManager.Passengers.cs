@@ -1597,6 +1597,11 @@ namespace CrazyElevator.Managers
             if (rider.Data != null) template = rider.Data.prefab;
             foreach (PassengerView art in sceneView.passengers)
                 if (template == null && art != null && art.ResolvedKind == rider.Kind) template = art;
+            if (template == null)
+            {
+                GameObject resource = Resources.Load<GameObject>("Passenger-" + rider.Kind);
+                if (resource != null) template = resource.GetComponent<PassengerView>();
+            }
             // Older scenes may not have the special prefabs assigned yet.
             string fallbackKind = rider.Kind == "HUNTER" ? "INTERVIEW"
                 : rider.Kind == "DIVER" ? "HANDYMAN"

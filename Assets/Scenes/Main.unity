@@ -235,6 +235,30 @@ PrefabInstance:
       propertyPath: m_LocalPosition.x
       value: 3.5
       objectReference: {fileID: 0}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: passengers.Array.size
+      value: 15
+      objectReference: {fileID: 0}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: 'passengers.Array.data[10]'
+      value:
+      objectReference: {fileID: 5223959353872040417, guid: ac3ec83c7b6ed45f6be43001ef5a39c0, type: 3}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: 'passengers.Array.data[11]'
+      value:
+      objectReference: {fileID: 2948631079877552379, guid: f376a1d292b39415b96c4ef3ce96ced1, type: 3}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: 'passengers.Array.data[12]'
+      value:
+      objectReference: {fileID: 5442968558187153911, guid: c2d277161bef848478c16839a9b18e8f, type: 3}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: 'passengers.Array.data[13]'
+      value:
+      objectReference: {fileID: 4755531343729652466, guid: 3cb04bf2ee079408492ad9f1c3baa4ac, type: 3}
+    - target: {fileID: 1165839993512389393, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
+      propertyPath: 'passengers.Array.data[14]'
+      value:
+      objectReference: {fileID: 5410302637916904333, guid: 6e1e741f2c3ee477c8e9124175c51809, type: 3}
     - target: {fileID: 3235562237426862352, guid: 0089767753615e9a9c740a77c2319b69, type: 3}
       propertyPath: m_LocalPosition.x
       value: 3.5
@@ -1093,8 +1117,8 @@ MonoBehaviour:
   stopWindow: 0.24
   extendedInterior: 1
   personaPrefab: {fileID: 1004, guid: 12f45dcfd4b05de88943cbfa752d7274, type: 3}
-  candyStartsAtFloor: 4
-  underwaterStartsAtFloor: 8
+  candyStartsAtFloor: 8
+  underwaterStartsAtFloor: 16
   impairmentGaugePrefab: {fileID: 1004, guid: a28a526a065e598d9ed0c54a4cb147e8, type: 3}
   secondsPerRustLevel: 25
   underwaterSpeedMultiplier: 0.58
@@ -1427,13 +1451,19 @@ MonoBehaviour:
   dimensions:
   - name: office
     firstFloor: 0
-    lastFloor: 3
-  - name: candyland
-    firstFloor: 4
     lastFloor: 7
-  - name: underwater
+  - name: candyland
     firstFloor: 8
-    lastFloor: 11
+    lastFloor: 15
+  - name: underwater
+    firstFloor: 16
+    lastFloor: 23
+  - name: mystical forest
+    firstFloor: 24
+    lastFloor: 31
+  - name: space
+    firstFloor: 32
+    lastFloor: 39
 --- !u!1 &910000011
 GameObject:
   m_ObjectHideFlags: 0

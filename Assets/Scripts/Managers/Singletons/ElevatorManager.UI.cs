@@ -300,6 +300,12 @@ namespace CrazyElevator.Managers
                 GameObject art = Resources.Load<GameObject>("BG_under_water");
                 if (art != null) return art;
             }
+            else if (world == WorldBand.Forest || world == WorldBand.Space)
+            {
+                GameObject art = Resources.Load<GameObject>(world == WorldBand.Forest
+                    ? "BG_fairy_world" : "BG_space_world");
+                if (art != null) return art;
+            }
             string wanted = world == WorldBand.Office ? "Office Band"
                 : world == WorldBand.Candy ? "Candy Band" : "Water Band";
             string featuredSection = world == WorldBand.Office ? "Office Floor 1"

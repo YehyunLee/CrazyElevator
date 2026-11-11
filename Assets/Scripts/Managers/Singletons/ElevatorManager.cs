@@ -57,7 +57,11 @@ namespace CrazyElevator.Managers
             "LIBRARY", "BOARDROOM", "CANDY LOBBY", "SUGAR HALL", "ARCADE",
             "COTTON LOUNGE", "PARTY DECK", "BONBON BAR", "CANDY ROOF", "CLOUD DECK",
             "REEF LOBBY", "KELP HALL", "CORAL LAB", "PRESSURE LOCK", "SUB BAY",
-            "TRENCH VIEW", "ATLANTIS", "DEEP DECK"
+            "TRENCH VIEW", "ATLANTIS", "DEEP DECK",
+            "FOREST ENTRY", "MOSS PATH", "MUSHROOM GROVE", "FAIRY GLEN", "ANCIENT ROOTS",
+            "MOONLIT WOODS", "ENCHANTED CLEARING", "TREE CANOPY",
+            "SPACEPORT", "ORBITAL DECK", "LUNAR BAY", "STAR STATION", "NEBULA LAB",
+            "ASTEROID BELT", "PLANET VIEW", "DEEP SPACE"
         };
         const float IntroRevealStart = 3.05f;
         const float IntroRevealDuration = 4.2f;
@@ -78,11 +82,11 @@ namespace CrazyElevator.Managers
             Application.runInBackground = true;
             Time.timeScale = 1f;
             EnsureManagers();
+            SyncWorldFloorBands();
             round = CreateExtendedRound();
             if (!BindScene()) { enabled = false; return; }
             InitializeExtendedInterior();
             BindPhysicalCabin();
-            SyncWorldFloorBands();
             SyncRoundWorldVisibility();
             InitializeAudio();
             ResetRouteLateral();
@@ -962,6 +966,8 @@ namespace CrazyElevator.Managers
 
         WorldBand BandForFloor(float floor)
         {
+            if (floor >= ElevatorRound.FloorsPerDimension * 4) return WorldBand.Space;
+            if (floor >= ElevatorRound.FloorsPerDimension * 3) return WorldBand.Forest;
             if (floor >= underwaterStartsAtFloor) return WorldBand.Water;
             if (floor >= candyStartsAtFloor) return WorldBand.Candy;
             return WorldBand.Office;
@@ -1225,14 +1231,20 @@ namespace CrazyElevator.Managers
             {
                 appliedWorld = world;
                 var tint = new MaterialPropertyBlock();
-                Color wall = band == WorldBand.Office ? new Color(.82f, .79f, .72f)
+                Color wall = band == WorldBand.Forest ? new Color(.40f, .38f, .48f)
+                    : band == WorldBand.Space ? new Color(.25f, .24f, .40f)
+                    : band == WorldBand.Office ? new Color(.82f, .79f, .72f)
                     : band == WorldBand.Candy ? new Color(.90f, .72f, .84f)
                     : new Color(.18f, .34f, .36f);
                 // Lobby + cabin floors follow the world theme (navy carpet / pastel / deep sand).
-                Color floorTint = band == WorldBand.Office ? new Color(.14f, .20f, .38f)
+                Color floorTint = band == WorldBand.Forest ? new Color(.30f, .38f, .30f)
+                    : band == WorldBand.Space ? new Color(.17f, .15f, .32f)
+                    : band == WorldBand.Office ? new Color(.14f, .20f, .38f)
                     : band == WorldBand.Candy ? new Color(.93f, .78f, .88f)
                     : new Color(.10f, .30f, .34f);
-                Color ceilingTint = band == WorldBand.Office ? new Color(.92f, .90f, .84f)
+                Color ceilingTint = band == WorldBand.Forest ? new Color(.52f, .49f, .58f)
+                    : band == WorldBand.Space ? new Color(.35f, .30f, .51f)
+                    : band == WorldBand.Office ? new Color(.92f, .90f, .84f)
                     : band == WorldBand.Candy ? new Color(.95f, .88f, .96f)
                     : new Color(.12f, .40f, .48f);
                 foreach (var surface in stage.GetComponentsInChildren<Renderer>(true))
@@ -1535,7 +1547,7 @@ namespace CrazyElevator.Managers
         float rustExposure;
         StarfishImpairmentView interiorImpairment, exteriorImpairment;
         float MovementFloor => BuildingView ? travelFloor : round.Floor;
-        bool InWater => MovementFloor >= underwaterStartsAtFloor;
+        bool InWater => BandForFloor(MovementFloor) == WorldBand.Water;
         bool HasHandyman
         {
             get
@@ -1604,7 +1616,8 @@ namespace CrazyElevator.Managers
                 ? ElevatorRound.FromCatalog(passengerCatalog)
                 : new ElevatorRound();
             result.LateDeliveriesScore = !zeroScoreWhenMad;
-            for (int floor = underwaterStartsAtFloor; floor < ElevatorRound.Floors; floor++)
+            for (int floor = underwaterStartsAtFloor;
+                floor < underwaterStartsAtFloor + ElevatorRound.FloorsPerDimension; floor++)
             {
                 int first = result.Riders.FindIndex(rider => rider.Origin == floor);
                 PassengerData handyman = passengerCatalog != null ? passengerCatalog.FindKind("HANDYMAN") : null;
@@ -1802,7 +1815,9 @@ namespace CrazyElevator.Managers
             {
                 case WorldBand.Office: return "OFFICE";
                 case WorldBand.Candy: return "CANDY";
-                default: return "UNDERWATER";
+                case WorldBand.Water: return "UNDERWATER";
+                case WorldBand.Forest: return "MYSTICAL FOREST";
+                default: return "SPACE";
             }
         }
 
@@ -1812,7 +1827,9 @@ namespace CrazyElevator.Managers
             {
                 case WorldBand.Office: return "OFFICE  /  floors 1-" + ElevatorRound.FloorsPerDimension;
                 case WorldBand.Candy: return "CANDY  /  floors 1-" + ElevatorRound.FloorsPerDimension;
-                default: return "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair");
+                case WorldBand.Water: return "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair");
+                case WorldBand.Forest: return "MYSTICAL FOREST  /  floors 1-" + ElevatorRound.FloorsPerDimension;
+                default: return "SPACE  /  floors 1-" + ElevatorRound.FloorsPerDimension;
             }
         }
 
@@ -1822,12 +1839,16 @@ namespace CrazyElevator.Managers
             {
                 case WorldBand.Office: return new Color32(98, 132, 178, 255);
                 case WorldBand.Candy: return new Color32(236, 118, 188, 255);
-                default: return new Color32(48, 196, 210, 255);
+                case WorldBand.Water: return new Color32(48, 196, 210, 255);
+                case WorldBand.Forest: return new Color32(145, 204, 144, 255);
+                default: return new Color32(174, 143, 242, 255);
             }
         }
 
         Color WorldSky(float floor)
         {
+            if (floor >= ElevatorRound.FloorsPerDimension * 4) return new Color32(34, 20, 73, 255);
+            if (floor >= ElevatorRound.FloorsPerDimension * 3) return new Color32(40, 38, 79, 255);
             // Soft blend near band edges so travel reads as climbing through layers.
             float candy = candyStartsAtFloor;
             float water = underwaterStartsAtFloor;

@@ -44,6 +44,10 @@ namespace CrazyElevator.Managers
                         backdrop.gameObject.SetActive(round.ActiveDimension == 1);
                     else if (backdrop.name == "Water Backdrop")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 2);
+                    else if (backdrop.name == "Forest Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 3);
+                    else if (backdrop.name == "Space Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 4);
                 }
 
             Transform rails = world.Find("Floor Rails");

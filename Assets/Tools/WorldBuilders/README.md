@@ -10,6 +10,7 @@ when art needs another pass. They never run in Play Mode.
 | Rebuild doors-open lobby (office / candy / water) | **Crazy Elevator > World / Rebuild Lobby View (3D)** |
 | Rebuild travel shaft from band prefabs | **Crazy Elevator > World / Rebuild Shaft Map (3D bands)** |
 | Only recolor landings / ground | **Crazy Elevator > World / Reapply Exterior Band Materials** |
+| Rebuild the forest and space additions | **Tools > Crazy Elevator > Build Forest and Space Worlds** |
 
 Optional request file (Unity focused): write one word into `Temp/WorldBandTasks/request.txt`
 

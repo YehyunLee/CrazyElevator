@@ -260,7 +260,7 @@ namespace CrazyElevator.Managers
 
         void UpdateWorldEvent()
         {
-            if (round == null || round.ActiveDimension < 0 || MenuManager.TutorialActive)
+            if (round == null || round.ActiveDimension < 0 || round.ActiveDimension > 2 || MenuManager.TutorialActive)
             {
                 if (worldEventView != null) worldEventView.SetActive(false);
                 return;

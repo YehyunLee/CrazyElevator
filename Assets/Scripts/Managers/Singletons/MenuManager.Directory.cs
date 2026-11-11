@@ -189,19 +189,18 @@ namespace CrazyElevator.Managers
                 "Choose the worlds that can appear in future rounds.", poolInstructionText);
 
             GameManager game = GameManager.Instance;
-            string[] names = { "OFFICE", "CANDYLAND", "UNDERWATER" };
+            string[] names = { "OFFICE", "CANDYLAND", "UNDERWATER", "MYSTICAL FOREST", "SPACE" };
             string[] details = { "FLOORS 1–8  ·  OFFICE SHAFT", "FLOORS 1–8  ·  COTTON CANDY WORLD",
-                "FLOORS 1–8  ·  UNDERWATER SHAFT" };
+                "FLOORS 1–8  ·  UNDERWATER SHAFT", "FLOORS 1–8  ·  FOREST", "FLOORS 1–8  ·  SPACE" };
             for (int i = 0; i < ElevatorRound.Dimensions; i++)
             {
-                Rect row = new Rect(440, 240 + i * 142, 820, 112);
+                Rect row = new Rect(440, 220 + i * 108, 820, 94);
                 bool enabled = game == null || game.IsDimensionEnabled(i);
-                Color accent = i == 1 ? new Color32(236, 118, 188, 255)
-                    : i == 2 ? new Color32(48, 196, 210, 255) : Teal;
+                Color accent = ElevatorManager.DimensionIntroAccent((WorldBand)i);
                 DrawDirectoryCard(row, accent, i == poolSelection);
-                GUI.Label(new Rect(row.x + 34, row.y + 15, 500, 42), names[i], poolDimensionNameText);
-                GUI.Label(new Rect(row.x + 36, row.y + 63, 500, 28), details[i], poolDimensionDetailText);
-                Rect toggle = new Rect(row.xMax - 244, row.y + 22, 220, 68);
+                GUI.Label(new Rect(row.x + 34, row.y + 8, 500, 42), names[i], poolDimensionNameText);
+                GUI.Label(new Rect(row.x + 36, row.y + 53, 500, 28), details[i], poolDimensionDetailText);
+                Rect toggle = new Rect(row.xMax - 244, row.y + 14, 220, 66);
                 Panel(toggle, enabled ? accent : new Color32(81, 85, 96, 255));
                 GUI.Label(toggle, enabled ? "IN POOL  ✓" : "EXCLUDED", poolToggleLabel);
                 if (GUI.Button(row, GUIContent.none, GUIStyle.none))
@@ -212,16 +211,12 @@ namespace CrazyElevator.Managers
             }
 
             if (!string.IsNullOrEmpty(poolNotice) && Time.unscaledTime < poolNoticeUntil)
-                GUI.Label(new Rect(350, 688, 1000, 42), poolNotice, poolNoticeText);
+                GUI.Label(new Rect(350, 770, 1000, 42), poolNotice, poolNoticeText);
             int count = game != null ? game.EnabledDimensionCount : ElevatorRound.Dimensions;
-            List<string> enabledNames = new List<string>();
-            for (int i = 0; i < names.Length; i++)
-                if (game == null || game.IsDimensionEnabled(i)) enabledNames.Add(names[i]);
-            GUI.Label(new Rect(400, 742, 900, 38),
-                "ROUNDS CYCLE THROUGH " + count + " ENABLED " + (count == 1 ? "WORLD" : "WORLDS")
-                    + " IN " + string.Join(" > ", enabledNames.ToArray()) + " ORDER.", poolCycleCaption);
+            GUI.Label(new Rect(250, 810, 1200, 38),
+                "ROUNDS CYCLE THROUGH " + count + " ENABLED " + (count == 1 ? "WORLD" : "WORLDS") + ".", poolCycleCaption);
 
-            Rect back = new Rect(615, 852, 470, 76);
+            Rect back = new Rect(615, 910, 470, 76);
             DrawDirectoryCard(back, Cream, poolSelection == ElevatorRound.Dimensions);
             GUI.Label(back, "BACK", cardTitle);
             DrawKeyHint(new Rect(back.xMax + 18, back.y + 10, 54, 54), "B");
@@ -251,6 +246,14 @@ namespace CrazyElevator.Managers
             AddPassengerEntry(2, "DIVER", "THE DIVER", "Blocks tornado hits while aboard.");
             AddPassengerEntry(2, "HANDYMAN", "THE HANDYMAN", "Repairs rust while aboard and restores full elevator power.");
             AddPassengerEntry(2, "ELDERLY", "GRANDMA", "Slows the elevator and takes a little longer to reach the door.");
+
+            AddDimensionEntry(3, "MYSTICAL FOREST", "Meet the forest passengers.");
+            AddPassengerEntry(3, "FAIRY", "FAIRY", "A passenger from the forest.");
+            AddPassengerEntry(3, "GOBLIN", "GOBLIN", "A passenger from the forest.");
+            AddPassengerEntry(3, "MUSHROOM", "MUSHROOM", "A passenger from the forest.");
+            AddDimensionEntry(4, "SPACE", "Meet the passengers in space.");
+            AddPassengerEntry(4, "ASTRONAUT", "ASTRONAUT", "A passenger from space.");
+            AddPassengerEntry(4, "ALIEN", "ALIEN", "A passenger from space.");
         }
 
         void AddDimensionEntry(int dimension, string titleText, string description)
@@ -390,7 +393,8 @@ namespace CrazyElevator.Managers
             => entry != null && entry.Type == DirectoryEntryType.Quirk && entry.Title == "SHAFT HAZARDS";
 
         static bool HasDirectoryModelPreview(DirectoryEntry entry)
-            => entry != null && (entry.Type == DirectoryEntryType.Passenger || IsShaftHazardEntry(entry));
+            => entry != null && (entry.Type == DirectoryEntryType.Passenger || IsShaftHazardEntry(entry)
+                || entry.Type == DirectoryEntryType.Dimension && entry.Dimension >= 3);
 
         void UpdateDirectoryPreview()
         {
@@ -401,7 +405,8 @@ namespace CrazyElevator.Managers
                 ClearDirectoryPreviewModel();
                 return;
             }
-            string previewKey = IsShaftHazardEntry(entry) ? "SHAFT HAZARDS" : entry.PassengerKind;
+            string previewKey = IsShaftHazardEntry(entry) ? "SHAFT HAZARDS"
+                : entry.Type == DirectoryEntryType.Dimension ? entry.Title : entry.PassengerKind;
             if (directoryPreviewKind == previewKey && directoryPreviewModel != null)
             {
                 if (directoryPreviewCamera != null) directoryPreviewCamera.enabled = true;
@@ -411,6 +416,15 @@ namespace CrazyElevator.Managers
             EnsureDirectoryPreviewStage();
             if (IsShaftHazardEntry(entry))
                 CreateShaftHazardDirectoryPreview(previewKey);
+            else if (entry.Type == DirectoryEntryType.Dimension)
+            {
+                GameObject world = Resources.Load<GameObject>(entry.Dimension == 3 ? "BG_fairy_world" : "BG_space_world");
+                if (world != null)
+                {
+                    directoryPreviewModel = Instantiate(world, directoryPreviewStage, false);
+                    directoryPreviewModel.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+            }
             else
                 CreatePassengerDirectoryPreview(entry, previewKey);
             if (directoryPreviewModel == null) return;
@@ -522,10 +536,11 @@ namespace CrazyElevator.Managers
         {
             ElevatorManager player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             PassengerView[] passengers = player != null ? player.PassengerPrefabs : null;
-            if (passengers == null) return null;
-            foreach (PassengerView passenger in passengers)
-                if (passenger != null && passenger.ResolvedKind == kind) return passenger;
-            return null;
+            if (passengers != null)
+                foreach (PassengerView passenger in passengers)
+                    if (passenger != null && passenger.ResolvedKind == kind) return passenger;
+            GameObject resource = Resources.Load<GameObject>("Passenger-" + kind);
+            return resource != null ? resource.GetComponent<PassengerView>() : null;
         }
 
         void EnsureDirectoryPreviewStage()

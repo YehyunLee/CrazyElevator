@@ -83,8 +83,8 @@ namespace CrazyElevator.Shared
     // Pure game rules; independent of scene objects and frame rate.
     public sealed class ElevatorRound
     {
-        public const int Floors = 24;
-        public const int Dimensions = 3;
+        public const int Floors = 40;
+        public const int Dimensions = 5;
         public const int FloorsPerDimension = Floors / Dimensions;
         // Authored floor indices stay global; every world's signs start at 1.
         public static int FloorNumber(int floor)
@@ -96,7 +96,7 @@ namespace CrazyElevator.Shared
         public const int PracticePassengersPerSeat = 2;
         public const float Duration = 90f;
         // Seconds into the shift when candy (1) and underwater (2) open.
-        static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f };
+        static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f, 150f, 190f };
         public static float DimensionUnlockAt(int dimension)
             => DimensionUnlockSeconds[Math.Max(0, Math.Min(Dimensions - 1, dimension))];
         public const float ElderlyArrivalSeconds = 1.5f;
@@ -124,7 +124,9 @@ namespace CrazyElevator.Shared
         {
             new[] { 0, 2, 3, 2, 0 },
             new[] { 1, 2, 2, 2, 1 },
-            new[] { 2, 2, 1, 2, 2 }
+            new[] { 2, 2, 1, 2, 2 },
+            new[] { 1, 2, 2, 2, 1 },
+            new[] { 1, 2, 2, 2, 1 }
         };
         public float PeakTime;
         public float TimeLeft = Duration;
@@ -166,8 +168,8 @@ namespace CrazyElevator.Shared
         public static int MaxUnlockedFloorAt(float elapsed)
         {
             int unlockedDimensions = 1;
-            if (elapsed >= DimensionUnlockAt(1)) unlockedDimensions++;
-            if (elapsed >= DimensionUnlockAt(2)) unlockedDimensions++;
+            for (int dimension = 1; dimension < Dimensions; dimension++)
+                if (elapsed >= DimensionUnlockAt(dimension)) unlockedDimensions++;
             return Math.Min(Floors - 1, unlockedDimensions * FloorsPerDimension - 1);
         }
 
@@ -191,6 +193,7 @@ namespace CrazyElevator.Shared
                     if (type == null || type.kind == "HANDYMAN" || !type.CanWaitAt(f)) continue;
                     round.Riders.Add(type.CreateRider(f, DestinationFor(type.kind, f)));
                 }
+                round.AddNewWorldRiders(f);
             }
             return round;
         }
@@ -223,6 +226,11 @@ namespace CrazyElevator.Shared
             for (int f = 0; f < Floors; f++)
             {
                 PassengerTheme world = PassengerData.ThemeAtFloor(f);
+                if (world == PassengerTheme.Forest || world == PassengerTheme.Space)
+                {
+                    AddNewWorldRiders(f);
+                    continue;
+                }
                 if (world == PassengerTheme.Office)
                     Add("Remy", "COURIER", "Two spaces. Quick stop!", "BOX", f, 2, 34, 0, 0, 30);
                 if (world == PassengerTheme.Candy)
@@ -244,6 +252,29 @@ namespace CrazyElevator.Shared
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
             }
+        }
+
+        // Basic riders only: their special abilities can be designed later.
+        void AddNewWorldRiders(int floor)
+        {
+            PassengerTheme world = PassengerData.ThemeAtFloor(floor);
+            if (world == PassengerTheme.Forest)
+            {
+                AddNewWorldRider("Fairy", "FAIRY", floor, 0);
+                AddNewWorldRider("Goblin", "GOBLIN", floor, 1);
+                AddNewWorldRider("Mushroom", "MUSHROOM", floor, 2);
+            }
+            else if (world == PassengerTheme.Space)
+            {
+                AddNewWorldRider("Astronaut", "ASTRONAUT", floor, 3);
+                AddNewWorldRider("Alien", "ALIEN", floor, 4);
+            }
+        }
+
+        void AddNewWorldRider(string name, string kind, int floor, int color)
+        {
+            if (Riders.Exists(rider => rider.Origin == floor && rider.Kind == kind)) return;
+            Add(name, kind, "Take me to my floor.", "", floor, 1, 60f, 0f, color, 0);
         }
 
         // Store a passenger with fresh patience.
