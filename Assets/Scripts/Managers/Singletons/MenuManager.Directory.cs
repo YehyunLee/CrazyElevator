@@ -89,6 +89,7 @@ namespace CrazyElevator.Managers
         void UpdateDimensionPoolNavigation()
         {
             ReadDirectoryNavigation(out Vector2 move, out bool confirm, out bool back);
+            UpdateDimensionPoolMouseCursor();
             bool moving = Mathf.Abs(move.y) >= .55f;
             poolRepeatTimer -= Time.unscaledDeltaTime;
             if (moving && (!poolMoveHeld || poolRepeatTimer <= 0f))
@@ -101,6 +102,18 @@ namespace CrazyElevator.Managers
 
             if (confirm) TogglePoolSelection();
             if (back) CloseDimensionPool();
+        }
+
+        void UpdateDimensionPoolMouseCursor()
+        {
+            if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
+            for (int i = 0; i < ElevatorRound.Dimensions; i++)
+            {
+                Rect row = new Rect(440, 220 + i * 108, 820, 94);
+                if (!row.Contains(pointer)) continue;
+                poolSelection = i;
+                return;
+            }
         }
 
         void UpdatePassengerGuideNavigation()
@@ -196,7 +209,9 @@ namespace CrazyElevator.Managers
                 bool enabled = game == null || game.IsDimensionEnabled(i);
                 Color accent = ElevatorManager.DimensionIntroAccent((WorldBand)i);
                 DrawDirectoryCard(row, accent, i == poolSelection);
-                GUI.Label(new Rect(row.x + 34, row.y + 8, 500, row.height - 16), names[i], poolDimensionNameText);
+                GUI.Label(new Rect(row.x + 34, row.y + 8, 466, row.height - 16), names[i], poolDimensionNameText);
+                if (i == poolSelection)
+                    DrawKeyHint(new Rect(row.x + 518, row.center.y - 27, 54, 54), "A", true);
                 Rect toggle = new Rect(row.xMax - 244, row.y + 14, 220, 66);
                 Panel(toggle, enabled ? accent : new Color32(81, 85, 96, 255));
                 GUI.Label(toggle, enabled ? "IN POOL  ✓" : "EXCLUDED", poolToggleLabel);
