@@ -865,7 +865,7 @@ namespace CrazyElevator.Managers
             {
                 case -1: return "TUTORIAL";
                 case 0:
-                    if (!KeyboardHintsEnabled) return "MOVE THE LEFT STICK TOWARD A DOOR TO OPEN IT.";
+                    if (!KeyboardHintsEnabled) return "MOVE THE LEFT STICK TO OPEN A DOOR.";
                     return seat == 1 ? "PRESS ← (LEFT), ↑ (FRONT), OR → (RIGHT)."
                         : "PRESS A (LEFT), W (FRONT), OR D (RIGHT).";
                 case 1: return "OPEN ANOTHER DOOR.";
