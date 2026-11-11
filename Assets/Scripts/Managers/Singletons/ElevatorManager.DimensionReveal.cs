@@ -70,6 +70,8 @@ namespace CrazyElevator.Managers
             dimensionRevealExitTime = -1f;
             // The confirm that closed the card must not also act in the cabin.
             encounterConfirmationConsumedFrame = Time.frameCount;
+            if (Match == null && !MenuManager.BeginRoundPassengerIntroduction(this, null))
+                BeginRoundCountdown();
         }
 
         public void ResetDimensionReveal()

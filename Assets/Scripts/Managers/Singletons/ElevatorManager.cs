@@ -112,6 +112,7 @@ namespace CrazyElevator.Managers
                 TickDimensionReveal(Time.unscaledDeltaTime);
                 return;
             }
+            if (MenuManager.RoundPassengerIntroductionActive) return;
             // Countdown must keep advancing before the duel marks itself Running.
             if (Match != null && !Match.Running
                 && phase != Phase.Intro && phase != Phase.Countdown) return;
@@ -2452,14 +2453,14 @@ namespace CrazyElevator.Managers
             if (countdown) BeginRoundCountdown();
         }
 
-        // The world card holds this fresh countdown until the player is ready.
+        // The world and passenger cards finish before this countdown begins.
         public void BeginRoundIntroduction()
         {
             BeginRoundCountdown();
             BeginDimensionReveal(round != null && round.ActiveDimension >= 0 ? round.ActiveDimension : 0);
         }
 
-        void BeginRoundCountdown()
+        public void BeginRoundCountdown()
         {
             countdownTime = 0f;
             phase = Phase.Countdown;

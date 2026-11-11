@@ -192,6 +192,7 @@ namespace CrazyElevator.Match
                 UpdateDimensionReveal(dt);
                 return;
             }
+            if (MenuManager.RoundPassengerIntroductionActive) return;
             collisionCooldown = Mathf.Max(0f, collisionCooldown - dt);
             collisionFlash = Mathf.Max(0f, collisionFlash - dt);
             expressFlash[0] = Mathf.Max(0f, expressFlash[0] - dt);
@@ -276,7 +277,7 @@ namespace CrazyElevator.Match
             // Pause is owned by GameManager so InputManager only fires once.
         }
 
-        // A rematch starts a fresh best-of-three series in the office.
+        // A rematch starts a fresh best-of-three series with a new dimension order.
         public void StartMatch()
         {
             GameManager.Instance?.ResetMatchProgress();
@@ -438,6 +439,11 @@ namespace CrazyElevator.Match
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealExitTime = -1f;
+            if (!MenuManager.BeginRoundPassengerIntroduction(player, Rival))
+            {
+                player.BeginRoundCountdown();
+                Rival?.BeginRoundCountdown();
+            }
         }
 
         bool DimensionRevealSeatHuman(int seat) => seat == 0 ? humanPlayer : humanRival && Rival != null;

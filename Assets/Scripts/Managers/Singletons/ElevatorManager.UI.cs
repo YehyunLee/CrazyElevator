@@ -695,7 +695,8 @@ namespace CrazyElevator.Managers
         {
             // Mode select owns the first screen. Don't paint the intro curtain over it —
             // Update also freezes introTime while the menu is open, which would stick on black.
-            if (round == null || eye == null || MenuManager.IsOpen) return;
+            if (round == null || eye == null || MenuManager.IsOpen
+                || MenuManager.RoundPassengerIntroductionActive) return;
             if (paused && MenuManager.PauseOpen) return;
             if (paused && Match == null && !MenuManager.TutorialActive)
             {

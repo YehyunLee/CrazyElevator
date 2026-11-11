@@ -154,7 +154,8 @@ namespace CrazyElevator.Managers
                 return menu != null
                     && (pauseOpen || menu.showingControllerInstructions
                         || menu.tutorialActive
-                            && menu.tutorialFinalePhase != TutorialFinalePhase.None);
+                            && menu.tutorialFinalePhase != TutorialFinalePhase.None
+                        || menu.roundPassengerIntroductionActive);
             }
         }
         // Survives Main reloads after the player picks a mode (LoadScene).
@@ -274,7 +275,12 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             OnDestroyDirectoryPreview();
-            if (Current == this) Current = null;
+            if (Current == this)
+            {
+                Current = null;
+                roundPassengerIntroductionActive = false;
+                RoundPassengerIntroductionActive = false;
+            }
             if (playerOneLabelTexture != null) Destroy(playerOneLabelTexture);
             if (rivalLabelTexture != null) Destroy(rivalLabelTexture);
             if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
@@ -295,6 +301,11 @@ namespace CrazyElevator.Managers
             if (pauseOpen)
             {
                 UpdatePauseNavigation();
+                return;
+            }
+            if (roundPassengerIntroductionActive)
+            {
+                UpdateRoundPassengerIntroduction();
                 return;
             }
             if (!IsOpen) return;
@@ -807,6 +818,14 @@ namespace CrazyElevator.Managers
                 }
                 DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
+                return;
+            }
+            if (roundPassengerIntroductionActive)
+            {
+                int previousDepth = GUI.depth;
+                GUI.depth = TutorialOverlayDepth;
+                DrawRoundPassengerIntroduction();
+                GUI.depth = previousDepth;
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();
