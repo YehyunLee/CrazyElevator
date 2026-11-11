@@ -44,6 +44,10 @@ namespace CrazyElevator.Managers
                         backdrop.gameObject.SetActive(round.ActiveDimension == 1);
                     else if (backdrop.name == "Water Backdrop")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 2);
+                    else if (backdrop.name == "Forest Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 3);
+                    else if (backdrop.name == "Space Backdrop")
+                        backdrop.gameObject.SetActive(round.ActiveDimension == 4);
                 }
 
             Transform rails = world.Find("Floor Rails");
@@ -508,10 +512,13 @@ namespace CrazyElevator.Managers
             {
                 crowd.TryGetValue(rider, out CrowdFigure figure);
                 bool featuredVip = abilityIntroKind == "VIP" && abilityIntroVip == rider;
+                bool movingWithUfo = !rider.Boarded && !rider.Resolved
+                    && WorldOwner.worldEventPassengerMoved && WorldOwner.worldEventPassenger == rider
+                    && round.Elapsed - WorldOwner.worldEventPassengerMoveStart < 1.15f;
                 bool waiting = featuredVip || rider.Origin >= MinTravelFloor && rider.Origin <= MaxTravelFloor
                     && rider.Origin >= low - CrowdFloorRange
                     && rider.Origin <= high + CrowdFloorRange && round.IsQueuedAtStop(rider);
-                if (waiting)
+                if (waiting || movingWithUfo)
                 {
                     if (figure == null || figure.Root == null)
                     {
@@ -521,6 +528,7 @@ namespace CrazyElevator.Managers
                     figure.Root.gameObject.SetActive(true);
                     figure.Clock += Mathf.Max(0f, dt);
                     PlaceWaitingPassenger(rider, figure);
+                    if (movingWithUfo) AnimateSpacePassengerTransfer(WorldOwner, figure);
                     continue;
                 }
                 if (figure == null) continue;
@@ -548,6 +556,18 @@ namespace CrazyElevator.Managers
             foreach (CrowdFigure figure in crowd.Values)
                 if (figure.Root != null) Destroy(figure.Root.gameObject);
             crowd.Clear();
+        }
+
+        void AnimateSpacePassengerTransfer(ElevatorManager owner, CrowdFigure figure)
+        {
+            if (owner == null || figure.Root == null) return;
+            float progress = Mathf.Clamp01((round.Elapsed - owner.worldEventPassengerMoveStart) / 1.15f);
+            float arc = Mathf.Sin(progress * Mathf.PI) * 1.7f;
+            figure.Root.localPosition = Vector3.Lerp(owner.worldEventPassengerFrom,
+                owner.worldEventPassengerTo, Mathf.SmoothStep(0f, 1f, progress)) + Vector3.up * arc;
+            figure.Root.localRotation = Quaternion.Euler(0f, progress * 900f, 0f);
+            float scale = PhysicalCabinScale * (1f + .15f * Mathf.Sin(progress * Mathf.PI));
+            figure.Root.localScale = Vector3.one * scale;
         }
         // ---------- CPU navigation ----------
         int npcTargetStop = CenterStop;

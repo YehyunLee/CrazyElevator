@@ -71,6 +71,8 @@ namespace CrazyElevator.Shared
     {
         Office = 0,
         Candy = 1,
-        Water = 2
+        Water = 2,
+        Forest = 3,
+        Space = 4
     }
 }

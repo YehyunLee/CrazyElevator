@@ -23,8 +23,7 @@ namespace CrazyElevator.Managers
         public int DimensionRevealIndex => dimensionRevealIndex;
         public static WorldBand DimensionWorld(int index)
         {
-            return index <= 0 ? WorldBand.Office
-                : index == 1 ? WorldBand.Candy : WorldBand.Water;
+            return (WorldBand)Mathf.Clamp(index, 0, ElevatorRound.Dimensions - 1);
         }
 
         public void BeginDimensionReveal(int index)
@@ -135,23 +134,32 @@ namespace CrazyElevator.Managers
         static string[] DimensionPassengerKinds(WorldBand world) => world == WorldBand.Office
             ? new[] { "COURIER", "INTERVIEW", "ELDERLY" }
             : world == WorldBand.Candy ? new[] { "PREGNANT", "BOSS", "GROUP" }
+            : world == WorldBand.Forest ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
+            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "" }
             : new[] { "HANDYMAN", "RUST", "REPAIR" };
 
         public static string DimensionIntroTitle(WorldBand world) => world == WorldBand.Office ? "OFFICE"
-            : world == WorldBand.Candy ? "COTTON CANDY" : "UNDERWATER";
+            : world == WorldBand.Candy ? "COTTON CANDY" : world == WorldBand.Water ? "UNDERWATER"
+            : world == WorldBand.Forest ? "MYSTICAL FOREST" : "SPACE";
 
         public static Color DimensionIntroAccent(WorldBand world) => world == WorldBand.Office
             ? new Color32(98, 132, 178, 255) : world == WorldBand.Candy
-                ? new Color32(236, 118, 188, 255) : new Color32(48, 196, 210, 255);
+                ? new Color32(236, 118, 188, 255) : world == WorldBand.Water
+                ? new Color32(48, 196, 210, 255) : world == WorldBand.Forest
+                ? new Color32(145, 204, 144, 255) : new Color32(174, 143, 242, 255);
 
         public static string DimensionIntroSummary(WorldBand world) => world == WorldBand.Office
             ? "Plan your route. Keep your passengers happy."
             : world == WorldBand.Candy ? "Bigger groups. Louder passengers. Faster rides."
-            : "Watch the rust. Keep your elevator moving.";
+            : world == WorldBand.Water ? "Watch the rust. Keep your elevator moving."
+            : world == WorldBand.Forest ? "Vines sweep the tracks. Scout, cut through, or guard."
+            : "A UFO beam moves passengers. Gravity can pull your car sideways.";
 
         public static string[] DimensionIntroNames(WorldBand world) => world == WorldBand.Office
             ? new[] { "COURIER", "INTERVIEW", "GRANDMA" }
             : world == WorldBand.Candy ? new[] { "MOM + BABY", "THE BOSS", "THE TRIO" }
+            : world == WorldBand.Forest ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
+            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "UFO EVENT" }
             : new[] { "HANDYMAN", "RUST", "REPAIR" };
 
         public static string[] DimensionIntroLines(WorldBand world) => world == WorldBand.Office
@@ -160,6 +168,10 @@ namespace CrazyElevator.Managers
             : world == WorldBand.Candy
                 ? new[] { "Crying drains patience. Grandma calms the baby.", "On-time delivery pays a bonus.",
                     "Three spaces. Speeds the elevator up." }
+                : world == WorldBand.Forest
+                ? new[] { "Fireflies point out a clear route.", "Cuts a vine shortcut.", "Spores block a vine hit." }
+                : world == WorldBand.Space
+                ? new[] { "Tethers the car against the pull.", "Rides the UFO beam onto another track.", "The beam moves a waiting passenger." }
                 : new[] { "Fixes damaged gears while aboard.", "Cracked gears slow the elevator over time.", "Hold repair to patch the gears." };
 
         void PrepareDimensionLineup(WorldBand world)
@@ -209,7 +221,7 @@ namespace CrazyElevator.Managers
             if (string.IsNullOrEmpty(kind)) return null;
             foreach (PassengerView passenger in sceneView.passengers)
                 if (passenger != null && passenger.ResolvedKind == kind) return passenger.gameObject;
-            return null;
+            return Resources.Load<GameObject>("Passenger-" + kind);
         }
 
         bool FitLineupModel(GameObject model, Transform slot)

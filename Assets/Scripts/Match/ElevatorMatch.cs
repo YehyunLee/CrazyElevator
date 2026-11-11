@@ -1686,7 +1686,9 @@ namespace CrazyElevator.Match
         }
 
         static Color ResultWorldColour(int dimension) => dimension == 1 ? new Color32(236, 118, 188, 255)
-            : dimension == 2 ? new Color32(48, 196, 210, 255) : new Color32(130, 165, 214, 255);
+            : dimension == 2 ? new Color32(48, 196, 210, 255)
+            : dimension == 3 ? new Color32(145, 204, 144, 255)
+            : dimension == 4 ? new Color32(174, 143, 242, 255) : new Color32(130, 165, 214, 255);
 
         void DrawRevealScoreCard(Rect area, string name, int points, int wins, Color accent, bool winner, float reveal)
         {

@@ -50,6 +50,9 @@ namespace CrazyElevator.Managers
             GameObject passenger = FindPassengerTemplate(passengerKind);
             GameObject opponent = kind == "HUNTER" ? sceneView.monster
                 : kind == "DIVER" ? sceneView.tornado
+                : kind == "FAIRY" || kind == "GOBLIN" || kind == "MUSHROOM" ? sceneView.forestVineSweep
+                : kind == "ASTRONAUT" && sceneView.exteriorCar != null ? sceneView.exteriorCar.gameObject
+                : kind == "ALIEN" ? sceneView.spaceGravitySweep
                 : kind == "HANDYMAN" && impairmentGaugePrefab != null ? impairmentGaugePrefab.gameObject
                 : kind == "CALM" ? FindPassengerTemplate("PREGNANT")
                 : kind == "PREGNANT" ? FindPassengerTemplate("ELDERLY")
@@ -79,7 +82,10 @@ namespace CrazyElevator.Managers
             if (kind == "DIVER" && abilityIntroShield == null)
                 abilityIntroShield = PassengerIconLibrary.CreatePassengerBadge("DIVER", Teal, Ink, Cream);
             encounterPreviewCamera.backgroundColor = kind == "HUNTER" || kind == "ELDERLY" ? new Color(.12f, .17f, .26f)
-                : kind == "DIVER" || kind == "HANDYMAN" ? new Color(.04f, .24f, .30f) : new Color(.30f, .16f, .27f);
+                : kind == "DIVER" || kind == "HANDYMAN" ? new Color(.04f, .24f, .30f)
+                : kind == "FAIRY" || kind == "GOBLIN" || kind == "MUSHROOM" ? new Color(.10f, .19f, .21f)
+                : kind == "ASTRONAUT" || kind == "ALIEN" ? new Color(.09f, .06f, .20f)
+                : new Color(.30f, .16f, .27f);
             encounterPreviewCamera.nearClipPlane = .03f;
             encounterPreviewCamera.farClipPlane = 80f;
             encounterPreviewCamera.enabled = true;
@@ -376,6 +382,41 @@ namespace CrazyElevator.Managers
                 : Quaternion.Euler(0f, -12f, abilityIntroKind == "ELDERLY" ? -recoil * 9f
                     : speed || abilityIntroKind == "CALM" ? 0f : recoil * 22f);
 
+            if (abilityIntroKind == "FAIRY")
+            {
+                abilityIntroPassenger.localPosition = new Vector3(-1.1f + approach * .4f,
+                    .18f + .22f * Mathf.Sin(time * 5f), 0f);
+                abilityIntroOpponent.localPosition = new Vector3(.9f, .05f, 0f);
+                abilityIntroOpponent.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(time * 4f) * 8f);
+            }
+            else if (abilityIntroKind == "GOBLIN")
+            {
+                abilityIntroPassenger.localPosition = new Vector3(-1f + impact * .65f, -.1f, 0f);
+                abilityIntroPassenger.localRotation = Quaternion.Euler(0f, 0f, -impact * 28f);
+                abilityIntroOpponent.localPosition = new Vector3(1.4f + approach * .5f, .05f, 0f);
+                abilityIntroOpponent.localRotation = Quaternion.Euler(0f, 0f, -approach * 28f);
+            }
+            else if (abilityIntroKind == "MUSHROOM")
+            {
+                abilityIntroPassenger.localPosition = new Vector3(-1.05f, .05f + impact * .2f, 0f);
+                abilityIntroOpponent.localPosition = new Vector3(.85f + impact * .24f, .05f, 0f);
+                abilityIntroOpponent.localRotation = Quaternion.Euler(0f, 0f, impact * 8f);
+            }
+            else if (abilityIntroKind == "ASTRONAUT")
+            {
+                abilityIntroPassenger.localPosition = new Vector3(-1.2f, -.05f, 0f);
+                abilityIntroPassenger.localRotation = Quaternion.Euler(0f, 8f, -approach * 16f + impact * 20f);
+                abilityIntroOpponent.localPosition = new Vector3(.7f - approach * .3f, .04f, .5f);
+                abilityIntroOpponent.localRotation = Quaternion.Euler(0f, 0f, impact * 12f - recoil * 12f);
+            }
+            else if (abilityIntroKind == "ALIEN")
+            {
+                abilityIntroPassenger.localPosition = new Vector3(-1.15f, .05f + .1f * Mathf.Sin(time * 6f), 0f);
+                abilityIntroPassenger.localRotation = Quaternion.Euler(0f, 10f, Mathf.Sin(time * 4f) * 8f);
+                abilityIntroOpponent.localPosition = new Vector3(.9f + .18f * Mathf.Sin(time * 4f), .2f, 0f);
+                abilityIntroOpponent.localRotation = Quaternion.Euler(0f, 0f, time * 60f);
+            }
+
             // Start on the passenger, then pivot/zoom out to reveal the threat.
             float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.25f, 1.2f, time));
             encounterPreviewCamera.orthographicSize = Mathf.Lerp(1.2f, 2.1f, reveal);
@@ -457,7 +498,12 @@ namespace CrazyElevator.Managers
                 : abilityIntroKind == "GROUP" ? "SPEED + STICKY TRAIL"
                 : abilityIntroKind == "ELDERLY" ? "SLOWS ELEVATOR"
                 : abilityIntroKind == "PREGNANT" ? "PATIENCE DRAINS FASTER"
-                : abilityIntroKind == "CALM" ? "CALMS THE BABY" : "CLEARS RUST";
+                : abilityIntroKind == "CALM" ? "CALMS THE BABY"
+                : abilityIntroKind == "FAIRY" ? "FIREFLIES REVEAL A SAFE ROUTE"
+                : abilityIntroKind == "GOBLIN" ? "CUTS THROUGH VINES"
+                : abilityIntroKind == "MUSHROOM" ? "SPORES GUARD AGAINST VINES"
+                : abilityIntroKind == "ASTRONAUT" ? "TETHERS AGAINST GRAVITY"
+                : abilityIntroKind == "ALIEN" ? "RIDES THE UFO BEAM TO A SHORTCUT" : "CLEARS RUST";
             GUI.Label(new Rect(view.x, frame.yMax, view.width, view.yMax - frame.yMax), message, textStyle);
             textStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.height * .022f), 14, 24);
             string heading = showPlayer ? (IsNpc ? "CPU  ·  " : "PLAYER " + (Seat + 1) + "  ·  ") : "";
@@ -483,6 +529,16 @@ namespace CrazyElevator.Managers
                 GameManager.Instance?.RequestAbilityIntro(this, "GROUP");
             if (rider.HasFeature(PassengerFeature.SpeedSlow))
                 GameManager.Instance?.RequestAbilityIntro(this, "ELDERLY");
+            if (rider.HasFeature(PassengerFeature.ForestScout))
+                GameManager.Instance?.RequestAbilityIntro(this, "FAIRY");
+            if (rider.HasFeature(PassengerFeature.ForestShortcut))
+                GameManager.Instance?.RequestAbilityIntro(this, "GOBLIN");
+            if (rider.HasFeature(PassengerFeature.ForestSporeGuard))
+                GameManager.Instance?.RequestAbilityIntro(this, "MUSHROOM");
+            if (rider.HasFeature(PassengerFeature.GravityAnchor))
+                GameManager.Instance?.RequestAbilityIntro(this, "ASTRONAUT");
+            if (rider.HasFeature(PassengerFeature.UfoLink))
+                GameManager.Instance?.RequestAbilityIntro(this, "ALIEN");
         }
 
         public void FinishAbilityIntro()

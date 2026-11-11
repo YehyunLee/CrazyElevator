@@ -52,7 +52,7 @@ Gameplay and art must stay separable.
 
 ## Gameplay product rules
 
-- World order: office (floors 0–7), candy (8–15), underwater (16–23). Keep the start friendly to new players.
+- World order: office (floors 0–7), candy (8–15), underwater (16–23), mystical forest (24–31), space (32–39). Keep the start friendly to new players.
 - Do not change the three-minute delivery-score win condition without team agreement.
 - HUD / help text: short and readable. Prefer a focused feedback cue over another permanent panel.
 - Do not trade usable cabin space (or the outside view) for decoration or oversized UI (patience bars, overlays).

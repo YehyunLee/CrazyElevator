@@ -422,6 +422,10 @@ namespace CrazyElevator.Tools.WorldBuilders
                 new[] { "BG", "pPlane4" }, new[] { "pPlane3" });
             PlaceBackdrop(backdrops, WorldArtMaterials.WaterArt, "Water Backdrop", 2, "pPlane1",
                 new[] { "pPlane1", "pPlane2" }, null);
+            PlaceBackdrop(backdrops, "Assets/Art/Worlds/Resources/BG_fairy_world.fbx", "Forest Backdrop", 3,
+                "pPlane1", null, null);
+            PlaceBackdrop(backdrops, "Assets/Art/Worlds/Resources/BG_space_world.fbx", "Space Backdrop", 4,
+                "pPlane1", null, null);
         }
 
         // The dioramas are authored for a camera looking down -Z (Maya front view).
@@ -501,7 +505,11 @@ namespace CrazyElevator.Tools.WorldBuilders
         static Material Pick(int floor, Material office, Material candy, Material water)
         {
             int dimension = floor / FloorsPerDimension;
-            return dimension == 0 ? office : dimension == 1 ? candy : water;
+            if (dimension == 0) return office;
+            if (dimension == 1) return candy;
+            if (dimension == 2) return water;
+            string name = dimension == 3 ? "ForestLanding" : "SpaceLanding";
+            return AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Worlds/Materials/" + name + ".mat") ?? office;
         }
 
         static Material Mat(string name) => LoadMat($"{MatFolder}/{name}.mat");

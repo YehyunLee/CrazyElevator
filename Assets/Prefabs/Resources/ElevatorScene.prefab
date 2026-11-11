@@ -507,7 +507,17 @@ MonoBehaviour:
   leftDoor: {fileID: 6073588209357253364}
   rightDoor: {fileID: 3806951894439134116}
   passingLights: {fileID: 4955884886241188088}
+  leftSideDoor: {fileID: 0}
+  rightSideDoor: {fileID: 0}
+  leftSideDoorClosed: {x: -2.9, y: 1.5, z: 2.58}
+  rightSideDoorClosed: {x: 2.9, y: 1.5, z: 2.58}
+  sideDoorTravel: 3.2
+  frontDoorFrame: []
+  leftDoorFrame: []
+  rightDoorFrame: []
   floorDisplay: {fileID: 2955122831652903368}
+  gridDestinations: []
+  gridLabelShader: {fileID: 0}
   controlDisplays:
   - {fileID: 3631042582146380570}
   - {fileID: 6020580535879433083}
@@ -515,6 +525,8 @@ MonoBehaviour:
   rightDoorClosed: {x: 1.335, y: 1.54, z: 0.06}
   doorTravel: 2.7
   cabinCamera: {fileID: 7254945417990804567}
+  autoFrameCabin: 0
+  cabinCameraShake: 0
   exteriorCamera: {fileID: 3692253153373558024}
   clearCamera: {fileID: 573378027099400755}
   lights:
@@ -528,11 +540,18 @@ MonoBehaviour:
   - {fileID: 6851122490747818158, guid: cd49af0b78b064c628cccff556deb642, type: 3}
   - {fileID: 5982294781572636572, guid: 730494cd0f6644681b531e5aac54dd39, type: 3}
   - {fileID: 7360044963061388723, guid: e18e6497dfcde46cfa7a2a8d7b0e19c5, type: 3}
+  - {fileID: 5223959353872040417, guid: ac3ec83c7b6ed45f6be43001ef5a39c0, type: 3}
+  - {fileID: 2948631079877552379, guid: f376a1d292b39415b96c4ef3ce96ced1, type: 3}
+  - {fileID: 5442968558187153911, guid: c2d277161bef848478c16839a9b18e8f, type: 3}
+  - {fileID: 4755531343729652466, guid: 3cb04bf2ee079408492ad9f1c3baa4ac, type: 3}
+  - {fileID: 5410302637916904333, guid: 6e1e741f2c3ee477c8e9124175c51809, type: 3}
   tornado: {fileID: 100010, guid: 9d1d750bd76e48ae97d2f7eb13f1baf2, type: 3}
   monster: {fileID: 100010, guid: b877a14800bf4db8a1d762bafed063f5, type: 3}
   securitySweep: {fileID: 100010, guid: 44952d4fc7e641ea833d37aaaa2ef2e0, type: 3}
   syrupSurge: {fileID: 100010, guid: d9273127500943108c5309ba65d6860e, type: 3}
   oceanCurrent: {fileID: 100010, guid: 23a55251b3a24776ab5c24dacad193d2, type: 3}
+  forestVineSweep: {fileID: 3859166056323978726, guid: 328904cf9cae24123aa67649eeaaf132, type: 3}
+  spaceGravitySweep: {fileID: 1173592990379716868, guid: 50ccffe9eb37a4cd7a5fd3b175cd80a8, type: 3}
 --- !u!1001 &3672296175483465992
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -14,6 +14,7 @@ namespace CrazyElevator.Managers
 
         public const int MaxNumberOfFloors = ElevatorRound.Floors;
         const string DimensionPoolPreference = "CrazyElevator.DimensionPool.Mask";
+        const string DimensionPoolVersionPreference = "CrazyElevator.DimensionPool.Version";
         const int DefaultDimensionPoolMask = (1 << ElevatorRound.Dimensions) - 1;
 
         public DimensionRange[] dimensions =
@@ -22,6 +23,10 @@ namespace CrazyElevator.Managers
             new DimensionRange("candyland", ElevatorRound.FloorsPerDimension,
                 ElevatorRound.FloorsPerDimension * 2 - 1),
             new DimensionRange("underwater", ElevatorRound.FloorsPerDimension * 2,
+                ElevatorRound.FloorsPerDimension * 3 - 1),
+            new DimensionRange("mystical forest", ElevatorRound.FloorsPerDimension * 3,
+                ElevatorRound.FloorsPerDimension * 4 - 1),
+            new DimensionRange("space", ElevatorRound.FloorsPerDimension * 4,
                 ElevatorRound.Floors - 1)
         };
 
@@ -63,7 +68,8 @@ namespace CrazyElevator.Managers
         public string NextDimensionName => DimensionDisplayName(NextDimensionIndex);
 
         public static string DimensionDisplayName(int dimension) => dimension == 0 ? "OFFICE"
-            : dimension == 1 ? "CANDY" : "UNDERWATER";
+            : dimension == 1 ? "CANDY" : dimension == 2 ? "UNDERWATER"
+            : dimension == 3 ? "MYSTICAL FOREST" : "SPACE";
 
         public bool IsDimensionEnabled(int dimension)
         {
@@ -86,6 +92,16 @@ namespace CrazyElevator.Managers
         {
             get
             {
+                // Keep existing choices while making the two new worlds available
+                // to players who saved a pool before they were added.
+                if (PlayerPrefs.GetInt(DimensionPoolVersionPreference, 0) < 1)
+                {
+                    if (PlayerPrefs.HasKey(DimensionPoolPreference))
+                        PlayerPrefs.SetInt(DimensionPoolPreference,
+                            PlayerPrefs.GetInt(DimensionPoolPreference) | (1 << 3) | (1 << 4));
+                    PlayerPrefs.SetInt(DimensionPoolVersionPreference, 1);
+                    PlayerPrefs.Save();
+                }
                 int mask = PlayerPrefs.GetInt(DimensionPoolPreference, DefaultDimensionPoolMask)
                     & DefaultDimensionPoolMask;
                 return mask == 0 ? 1 : mask;

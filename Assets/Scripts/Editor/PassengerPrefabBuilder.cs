@@ -245,6 +245,22 @@ namespace CrazyElevator.EditorTools
             AssetDatabase.Refresh();
         }
 
+        [MenuItem("Tools/Crazy Elevator/Rebuild Forest and Space Passengers")]
+        public static void RebuildNewWorldPassengers()
+        {
+            BuildArtist("FAIRY", ResourcePrefabFolder + "/Passenger-FAIRY.prefab",
+                "SM_character_fairy.fbx", .5f, 2.05f);
+            BuildArtist("GOBLIN", ResourcePrefabFolder + "/Passenger-GOBLIN.prefab",
+                "SM_character_goblin.fbx", .5f, 2.05f);
+            BuildArtist("MUSHROOM", ResourcePrefabFolder + "/Passenger-MUSHROOM.prefab",
+                "SM_character_mushroom.fbx", .5f, 2.05f);
+            BuildArtist("ASTRONAUT", ResourcePrefabFolder + "/Passenger-ASTRONAUT.prefab",
+                "SM_character_astronaut.fbx", .5f, 2.05f);
+            BuildArtist("ALIEN", ResourcePrefabFolder + "/Passenger-ALIEN.prefab",
+                "SM_character_ailen.fbx", .5f, 2.05f);
+            AssetDatabase.SaveAssets();
+        }
+
         // Keep the team's character meshes intact and save the role-specific
         // accessories as editable children on each passenger prefab.
         static void BuildSpecialPassengers()

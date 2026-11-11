@@ -300,6 +300,12 @@ namespace CrazyElevator.Managers
                 GameObject art = Resources.Load<GameObject>("BG_under_water");
                 if (art != null) return art;
             }
+            else if (world == WorldBand.Forest || world == WorldBand.Space)
+            {
+                GameObject art = Resources.Load<GameObject>(world == WorldBand.Forest
+                    ? "BG_fairy_world" : "BG_space_world");
+                if (art != null) return art;
+            }
             string wanted = world == WorldBand.Office ? "Office Band"
                 : world == WorldBand.Candy ? "Candy Band" : "Water Band";
             string featuredSection = world == WorldBand.Office ? "Office Floor 1"
@@ -1266,6 +1272,11 @@ namespace CrazyElevator.Managers
             if (rider.Kind == "HUNTER") return "MONSTER STUN";
             if (rider.Kind == "DIVER") return "TORNADO SHIELD";
             if (rider.Kind == "BOUNCER") return "STRONG BUMP";
+            if (rider.Kind == "FAIRY") return "FIREFLY SCOUT";
+            if (rider.Kind == "GOBLIN") return "VINE SHORTCUT";
+            if (rider.Kind == "MUSHROOM") return "SPORE GUARD";
+            if (rider.Kind == "ASTRONAUT") return "GRAVITY TETHER";
+            if (rider.Kind == "ALIEN") return "UFO LINK";
             if (!rider.Boarded)
             {
                 if (rider.HasFeature(PassengerFeature.SpeedSlow)) return "SPEED DOWN";
@@ -1303,6 +1314,11 @@ namespace CrazyElevator.Managers
                 case "BOSS": return "BOSS";
                 case "INTERVIEW": return "INTERVIEW";
                 case "COURIER": return "COURIER";
+                case "FAIRY": return "FAIRY";
+                case "GOBLIN": return "GOBLIN";
+                case "MUSHROOM": return "MUSHROOM";
+                case "ASTRONAUT": return "ASTRONAUT";
+                case "ALIEN": return "ALIEN";
             }
             if (rider.HasFeature(PassengerFeature.SpeedSlow)) return "ELDERLY";
             if (rider.HasFeature(PassengerFeature.CryingBaby)) return "PREGNANT";
@@ -1327,6 +1343,11 @@ namespace CrazyElevator.Managers
                 case "BOSS": return new Color32(255, 205, 62, 255);
                 case "INTERVIEW": return new Color32(255, 238, 86, 255);
                 case "COURIER": return new Color32(255, 164, 55, 255);
+                case "FAIRY": return new Color32(235, 117, 216, 255);
+                case "GOBLIN": return new Color32(152, 214, 105, 255);
+                case "MUSHROOM": return new Color32(255, 127, 122, 255);
+                case "ASTRONAUT": return new Color32(137, 191, 255, 255);
+                case "ALIEN": return new Color32(90, 235, 208, 255);
             }
             if (rider.HasFeature(PassengerFeature.SpeedSlow)) return new Color32(255, 66, 65, 255);
             if (rider.HasFeature(PassengerFeature.CryingBaby)) return new Color32(255, 128, 34, 255);

@@ -67,6 +67,21 @@ namespace CrazyElevator.Shared
                     Polygon(pixels, size, new[] { center + new Vector2(-25, 24), center + new Vector2(25, 24),
                         center + new Vector2(21, -12), center + new Vector2(0, -31), center + new Vector2(-21, -12) }, cream);
                     break;
+                case "FAIRY":
+                    DrawSparkle(pixels, size, center, cream);
+                    break;
+                case "GOBLIN":
+                    DrawShears(pixels, size, center, cream);
+                    break;
+                case "MUSHROOM":
+                    DrawMushroom(pixels, size, center, cream);
+                    break;
+                case "ASTRONAUT":
+                    DrawTether(pixels, size, center, cream);
+                    break;
+                case "ALIEN":
+                    DrawSaucer(pixels, size, center, cream);
+                    break;
                 case "BOUNCER":
                     DrawGroup(pixels, size, center, cream);
                     break;
@@ -76,6 +91,68 @@ namespace CrazyElevator.Shared
             }
 
             return Texture(pixels, size, "Passenger " + kind + " icon");
+        }
+
+        static void DrawSparkle(Color32[] pixels, int size, Vector2 center, Color color)
+        {
+            Line(pixels, size, center + new Vector2(0, -31), center + new Vector2(0, 31), color, 6f);
+            Line(pixels, size, center + new Vector2(-31, 0), center + new Vector2(31, 0), color, 6f);
+            Line(pixels, size, center + new Vector2(-20, -20), center + new Vector2(20, 20), color, 5f);
+            Line(pixels, size, center + new Vector2(-20, 20), center + new Vector2(20, -20), color, 5f);
+            Circle(pixels, size, center, 8f, color, true);
+            Circle(pixels, size, center + new Vector2(24, -24), 4f, color, true);
+            Circle(pixels, size, center + new Vector2(-25, 21), 4f, color, true);
+        }
+
+        static void DrawShears(Color32[] pixels, int size, Vector2 center, Color color)
+        {
+            Circle(pixels, size, center + new Vector2(-19, -19), 10f, color, false, 5f);
+            Circle(pixels, size, center + new Vector2(19, -19), 10f, color, false, 5f);
+            Line(pixels, size, center + new Vector2(-13, -12), center + new Vector2(24, 27), color, 6f);
+            Line(pixels, size, center + new Vector2(13, -12), center + new Vector2(-24, 27), color, 6f);
+            Circle(pixels, size, center, 5f, color, true);
+        }
+
+        static void DrawMushroom(Color32[] pixels, int size, Vector2 center, Color color)
+        {
+            Rect(pixels, size, new Rect(center.x - 9, center.y - 27, 18, 37), color);
+            Polygon(pixels, size, new[]
+            {
+                center + new Vector2(-31, 3), center + new Vector2(-27, 16),
+                center + new Vector2(-17, 25), center + new Vector2(-3, 30),
+                center + new Vector2(15, 26), center + new Vector2(29, 16),
+                center + new Vector2(32, 3), center + new Vector2(20, -1),
+                center + new Vector2(-20, -1)
+            }, color);
+            Circle(pixels, size, center + new Vector2(-15, 13), 4f, Color.clear, true);
+            Circle(pixels, size, center + new Vector2(1, 19), 4f, Color.clear, true);
+            Circle(pixels, size, center + new Vector2(18, 10), 4f, Color.clear, true);
+        }
+
+        static void DrawTether(Color32[] pixels, int size, Vector2 center, Color color)
+        {
+            Circle(pixels, size, center + new Vector2(-7, 3), 20f, color, false, 5f);
+            Circle(pixels, size, center + new Vector2(-7, 3), 10f, color, false, 4f);
+            Line(pixels, size, center + new Vector2(12, -10), center + new Vector2(31, -27), color, 5f);
+            Line(pixels, size, center + new Vector2(31, -27), center + new Vector2(27, -11), color, 5f);
+            Line(pixels, size, center + new Vector2(31, -27), center + new Vector2(15, -23), color, 5f);
+            Circle(pixels, size, center + new Vector2(31, -27), 4f, color, true);
+        }
+
+        static void DrawSaucer(Color32[] pixels, int size, Vector2 center, Color color)
+        {
+            Polygon(pixels, size, new[]
+            {
+                center + new Vector2(-32, 1), center + new Vector2(-22, -8),
+                center + new Vector2(22, -8), center + new Vector2(32, 1),
+                center + new Vector2(22, 11), center + new Vector2(-22, 11)
+            }, color);
+            Circle(pixels, size, center + new Vector2(0, 12), 13f, color, false, 5f);
+            Line(pixels, size, center + new Vector2(-15, 15), center + new Vector2(-8, 30), color, 4f);
+            Line(pixels, size, center + new Vector2(15, 15), center + new Vector2(8, 30), color, 4f);
+            Circle(pixels, size, center + new Vector2(-18, 0), 3f, color, true);
+            Circle(pixels, size, center + new Vector2(0, -1), 3f, color, true);
+            Circle(pixels, size, center + new Vector2(18, 0), 3f, color, true);
         }
 
         static void DrawAngryFace(Color32[] pixels, int size, Vector2 center, Color face, Color ink)
