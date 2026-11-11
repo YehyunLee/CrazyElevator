@@ -62,6 +62,7 @@ namespace CrazyElevator.Managers
 
         static bool tutorialOnLoad;
         public static bool TutorialActive { get; private set; }
+        public static bool TutorialWillStart => tutorialOnLoad || TutorialActive;
 
         bool tutorialActive;
         bool tutorialIntroReady;
