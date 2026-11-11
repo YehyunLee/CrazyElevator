@@ -97,7 +97,7 @@ namespace CrazyElevator.Managers
         // Advance gameplay each frame; menus and pause stop the clock.
         void Update()
         {
-            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
+            if (GameManager.Instance != null && GameManager.Instance.IsAbilityIntroActor(this)) return;
             if (MenuManager.IsOpen) return;
             RefreshCabinCameraHome();
             sessionFadeAlpha = Mathf.MoveTowards(sessionFadeAlpha, 0f,
@@ -147,12 +147,14 @@ namespace CrazyElevator.Managers
             {
                 if (paused) return;
                 countdownTime += Time.unscaledDeltaTime;
-                if (countdownTime >= 4f)
+                if (countdownTime >= 3f)
                 {
                     countdownTime = 0f;
                     phase = Phase.Boarding;
                     phaseTime = 0f;
                     SetDoors(1f);
+                    if (Seat == 0 || Match == null)
+                        GameManager.Instance?.ShowGameplayStartCue();
                 }
                 return;
             }
@@ -178,6 +180,7 @@ namespace CrazyElevator.Managers
             bouncerImpact = Mathf.Max(0f, bouncerImpact - dt * 3.5f);
             TickHazardTimers(dt);
             UpdateShaftHazards(dt);
+            CheckWorldEventHit();
             UpdateShaftCrowd(dt);
             // Both cars may stop at one floor, but its shared waiting queue
             // should lose patience only once per frame.
@@ -324,6 +327,7 @@ namespace CrazyElevator.Managers
         // wall is cut away only for the exterior camera, like a dollhouse.
         float PhysicalCabinScale => stage.localScale.x;
         const float PassengerVisualScale = 1.2f;
+        const float ShaftPassengerVisualScale = 2.5f;
         Quaternion PhysicalCabinRotation => stage.localRotation;
         // Frame the usable floor and entrances. The cutaway's near upper corners
         // can extend off-screen without shrinking the floor to fit an empty box.
@@ -651,6 +655,7 @@ namespace CrazyElevator.Managers
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = bouncerImpact = 0;
             strongCollisionRecoil = false;
             hazardCooldown = carSpin = abilityFeedbackTime = 0f;
+            ResetWorldEvent();
             if (WorldOwner == this)
                 foreach (var hazard in hazards) hazard.Stunned = 0f;
             ResetRouteLateral();
@@ -1578,9 +1583,9 @@ namespace CrazyElevator.Managers
             }
         }
         float SpeedMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterSpeedMultiplier * Mathf.Lerp(1, .55f, (ImpairmentLevel - 1) * .5f))
-            * CollisionMultiplier * PassengerSpeedMultiplier;
+            * CollisionMultiplier * PassengerSpeedMultiplier * WorldHazardSpeedMultiplier;
         float AccelerationMultiplier => (ImpairmentLevel == 0 ? 1 : underwaterAccelerationMultiplier * Mathf.Lerp(1, .5f, (ImpairmentLevel - 1) * .5f))
-            * CollisionMultiplier * PassengerSpeedMultiplier;
+            * CollisionMultiplier * PassengerSpeedMultiplier * WorldHazardSpeedMultiplier;
         float WorldCruiseSpeed => BandForFloor(MovementFloor) == WorldBand.Candy ? candyFloorsPerSecond
             : BandForFloor(MovementFloor) == WorldBand.Water ? underwaterFloorsPerSecond : floorsPerSecond;
         float CruiseSpeed => WorldCruiseSpeed * SpeedMultiplier;
@@ -1839,6 +1844,7 @@ namespace CrazyElevator.Managers
             if (!MenuManager.TutorialActive) tutorialPassengerView = false;
             showingTravelView = DisplayBuildingView;
             bool cameraPaused = paused || MenuManager.IsOpen || Time.timeScale <= 0f || dimensionRevealActive
+                || GameManager.Instance != null && GameManager.Instance.IsAbilityIntroActor(this)
                 || Match != null && (Match.Paused || Match.DimensionRevealActive);
             float dt = cameraPaused ? 0f : Time.deltaTime;
             bool initializeView = !cameraViewReady;
@@ -1887,7 +1893,11 @@ namespace CrazyElevator.Managers
             if (!cameraPaused || initializeView) UpdateRideMotion(dt);
             eye.backgroundColor = WorldSky(travelFloor);
             EnsureCrazyRouteMap();
-            if (!cameraPaused || initializeView) UpdateCrazyTravelCamera(carLocal);
+            if (!cameraPaused || initializeView)
+            {
+                UpdateCrazyTravelCamera(carLocal);
+                ApplyWorldEventCameraAccent();
+            }
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
         }
 
@@ -1930,6 +1940,7 @@ namespace CrazyElevator.Managers
             DrawCabinPreviewCallouts();
             DrawCrazyJunctionGuide();
             DrawPassengerAbilityFeedback();
+            DrawWorldEventCue();
             // While moving, the marker shows the stop a stop press would glide into.
             bool moving = phase == Phase.Moving;
             int floor = moving ? GlideStopFloor() : NearbyFloor;

@@ -66,6 +66,20 @@ namespace CrazyElevator.Managers
         Vector3 abilityFeedbackPosition;
         Vector3 abilityFeedbackOrigin;
 
+        // One shared event per world, with independent hit tracking per car.
+        const float WorldEventFirst = 18f, WorldEventInterval = 22f;
+        const float WorldEventWarning = 2f, WorldEventDuration = 9f;
+        const float WorldEventApproachDistance = 1.5f, WorldEventSweepDistance = 10f;
+        GameObject worldEventView;
+        int worldEventId, worldEventSeen, worldEventAnnounced, worldEventNearby, worldEventResult, worldEventDimension = -1;
+        float worldEventStart = -1f, worldEventFloor, worldEventX, worldEventStartX;
+        int worldEventDirection;
+        GameObject worldLeakEffect;
+        float worldLeakTime;
+        GameObject worldStatusEffect;
+        float worldScanTime, worldSyrupTime;
+        float WorldHazardSpeedMultiplier => worldScanTime > 0f ? .18f : worldSyrupTime > 0f ? .42f : 1f;
+
         public bool HasBouncer => round != null && round.HasOnboardFeature(PassengerFeature.StrongCollision);
 
         public void ShowPassengerAbility(string label, Vector3 worldPosition)
@@ -86,6 +100,14 @@ namespace CrazyElevator.Managers
             hazardCooldown = Mathf.Max(0f, hazardCooldown - dt);
             carSpin = Mathf.Max(0f, carSpin - dt / TornadoSpinSeconds);
             abilityFeedbackTime = Mathf.Max(0f, abilityFeedbackTime - dt);
+            worldLeakTime = Mathf.Max(0f, worldLeakTime - dt);
+            worldScanTime = Mathf.Max(0f, worldScanTime - dt);
+            worldSyrupTime = Mathf.Max(0f, worldSyrupTime - dt);
+            if (worldStatusEffect != null)
+                worldStatusEffect.SetActive(worldScanTime > 0f || worldSyrupTime > 0f);
+            if (worldLeakEffect != null)
+                worldLeakEffect.SetActive(worldLeakTime > 0f && !HasHandyman && repairedFor <= 0f);
+            TickWorldEventFeedback();
         }
 
         bool HazardOpen(HazardSpec spec) => !MenuManager.TutorialActive && round != null
@@ -96,6 +118,7 @@ namespace CrazyElevator.Managers
         {
             if (WorldOwner != this || exteriorCar == null || sceneView == null) return;
             if (hazardRoot == null) SpawnHazards();
+            UpdateWorldEvent();
             eventHazardTime = Mathf.Max(0f, eventHazardTime - dt);
             foreach (ShaftHazard hazard in hazards)
             {
@@ -217,6 +240,227 @@ namespace CrazyElevator.Managers
                 HitHazard(hazard, car, centre);
                 return;
             }
+        }
+
+        void ResetWorldEvent()
+        {
+            worldEventSeen = worldEventAnnounced = worldEventNearby = worldEventResult = 0;
+            worldLeakTime = 0f;
+            worldScanTime = worldSyrupTime = 0f;
+            if (worldStatusEffect != null) Destroy(worldStatusEffect);
+            worldStatusEffect = null;
+            if (worldLeakEffect != null) worldLeakEffect.SetActive(false);
+            if (WorldOwner != this) return;
+            worldEventId = 0;
+            worldEventStart = -1f;
+            worldEventDimension = -1;
+            if (worldEventView != null) Destroy(worldEventView);
+            worldEventView = null;
+        }
+
+        void UpdateWorldEvent()
+        {
+            if (round == null || round.ActiveDimension < 0 || MenuManager.TutorialActive)
+            {
+                if (worldEventView != null) worldEventView.SetActive(false);
+                return;
+            }
+            int dimension = round.ActiveDimension;
+            if (worldEventDimension != dimension)
+            {
+                if (worldEventView != null) Destroy(worldEventView);
+                worldEventView = null;
+                worldEventDimension = dimension;
+                worldEventStart = -1f;
+                worldEventId = 0;
+            }
+            float elapsed = round.Elapsed;
+            ElevatorManager other = Match != null ? Match.Rival : null;
+            ElevatorManager travellingCar = phase == Phase.Moving ? this
+                : other != null && other.phase == Phase.Moving ? other : null;
+            float nextStart = worldEventId == 0 ? WorldEventFirst : worldEventStart + WorldEventInterval;
+            if (elapsed >= nextStart && travellingCar != null)
+            {
+                worldEventId++;
+                worldEventStart = elapsed;
+                float introWarning = worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
+                // The sweep starts just ahead of the travelling car and reaches its lane
+                // about one second after the warning ends. Predict to that moment so the
+                // visible pass and the collision row stay together at every world speed.
+                float forecast = travellingCar.travelVelocity * (introWarning + 1f);
+                worldEventFloor = travellingCar.railRiding ? travellingCar.railFloor
+                    : Mathf.Clamp(Mathf.RoundToInt(travellingCar.travelFloor + forecast),
+                        travellingCar.MinTravelFloor, travellingCar.MaxTravelFloor);
+                worldEventDirection = travellingCar.RouteLateralX <= ElevatorMatchType.ShaftCenterX ? 1 : -1;
+                worldEventStartX = travellingCar.RouteLateralX - worldEventDirection * WorldEventApproachDistance;
+                GameObject prefab = dimension == 0 ? sceneView.securitySweep
+                    : dimension == 1 ? sceneView.syrupSurge : sceneView.oceanCurrent;
+                if (worldEventView != null) Destroy(worldEventView);
+                worldEventView = prefab != null ? Instantiate(prefab, hazardRoot, false) : null;
+            }
+            if (worldEventView == null) return;
+            float age = elapsed - worldEventStart;
+            bool active = age >= 0f && age < WorldEventDuration;
+            if (worldEventView.activeSelf != active) worldEventView.SetActive(active);
+            if (!active) return;
+            float warning = worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
+            float progress = Mathf.Clamp01((age - warning) / (WorldEventDuration - warning));
+            worldEventX = worldEventStartX + worldEventDirection * WorldEventSweepDistance * progress;
+            worldEventView.transform.localPosition = new Vector3(worldEventX, worldEventFloor * ShaftFloorHeight + 2f, HazardDepth);
+            float pulse = age < warning ? .7f + .3f * Mathf.Abs(Mathf.Sin(age * 9f))
+                : 1f + .06f * Mathf.Sin(age * 5f);
+            worldEventView.transform.localScale = new Vector3(pulse * worldEventDirection, pulse, pulse);
+            if (dimension == 2)
+            {
+                AnimateCurrentBubble("Bubble one", .2f, age);
+                AnimateCurrentBubble("Bubble two", .45f, age + 1f);
+                AnimateCurrentBubble("Bubble three", -.2f, age + 2f);
+            }
+        }
+
+        void AnimateCurrentBubble(string name, float height, float time)
+        {
+            Transform bubble = worldEventView.transform.Find(name);
+            if (bubble == null) return;
+            Vector3 position = bubble.localPosition;
+            position.y = height + .3f * Mathf.Sin(time * 3f);
+            bubble.localPosition = position;
+        }
+
+        void CheckWorldEventHit()
+        {
+            ElevatorManager owner = WorldOwner;
+            if (phase != Phase.Moving || round == null || MenuManager.TutorialActive
+                || owner.worldEventView == null || !owner.worldEventView.activeSelf
+                || owner.worldEventId == worldEventSeen || round.ActiveDimension != owner.worldEventDimension) return;
+            float age = owner.round.Elapsed - owner.worldEventStart;
+            float warning = owner.worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
+            if (age < warning || age >= WorldEventDuration) return;
+            if (Mathf.Abs(travelFloor - owner.worldEventFloor) < 1.35f
+                && Mathf.Abs(RouteLateralX - owner.worldEventX) < 10f) worldEventNearby = owner.worldEventId;
+            if (Mathf.Abs(travelFloor - owner.worldEventFloor) > 1f
+                || Mathf.Abs(RouteLateralX - owner.worldEventX) > 5.5f) return;
+            worldEventSeen = owner.worldEventId;
+            if (owner.worldEventDimension == 2 && round.HasOnboardFeature(PassengerFeature.BlocksTornado))
+            {
+                ShowActionFeedback("CURRENT BLOCKED!", true);
+                Play(chime);
+                return;
+            }
+            collisionImpact = 1f;
+            if (owner.worldEventDimension == 2)
+            {
+                StartRailRide(Mathf.Clamp(Mathf.RoundToInt(travelFloor), MinTravelFloor, MaxTravelFloor),
+                    owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
+                if (!HasHandyman && repairedFor <= 0f)
+                {
+                    rustExposure = Mathf.Min(secondsPerRustLevel * 2f, rustExposure + secondsPerRustLevel * .45f);
+                    ShowCurrentLeak();
+                }
+                ShowActionFeedback("PUSHED BY CURRENT", false);
+                Play(kickWhoosh);
+            }
+            else
+            {
+                bool scanner = owner.worldEventDimension == 0;
+                if (scanner) worldScanTime = 2.5f;
+                else worldSyrupTime = 4.5f;
+                travelVelocity *= scanner ? .2f : .42f;
+                railVelocity *= scanner ? .2f : .42f;
+                ShowWorldStatus(scanner ? sceneView.securitySweep : sceneView.syrupSurge, scanner);
+                ShowActionFeedback(scanner ? "SCANNER HIT · SLOWED" : "SYRUP HIT · SLOWED", false);
+                Play(buzz);
+            }
+        }
+
+        void ShowWorldStatus(GameObject prefab, bool scanner)
+        {
+            if (worldStatusEffect != null) Destroy(worldStatusEffect);
+            if (prefab == null || exteriorCar == null) return;
+            worldStatusEffect = Instantiate(prefab, exteriorCar, false);
+            worldStatusEffect.name = scanner ? "Security scan impact" : "Syrup stuck to elevator";
+            worldStatusEffect.transform.localPosition = new Vector3(0f, scanner ? 2.7f : .65f, -1.5f);
+            worldStatusEffect.transform.localScale = Vector3.one * (scanner ? .35f : .55f);
+        }
+
+        void ShowCurrentLeak()
+        {
+            if (exteriorCar == null || sceneView == null || sceneView.oceanCurrent == null) return;
+            if (worldLeakEffect == null)
+            {
+                worldLeakEffect = Instantiate(sceneView.oceanCurrent, exteriorCar, false);
+                worldLeakEffect.name = "Current splash";
+                worldLeakEffect.transform.localPosition = new Vector3(2f, 2.1f, -.8f);
+                worldLeakEffect.transform.localRotation = Quaternion.Euler(0f, 0f, -65f);
+                worldLeakEffect.transform.localScale = Vector3.one * .3f;
+            }
+            worldLeakTime = 4f;
+            worldLeakEffect.SetActive(true);
+        }
+
+        void TickWorldEventFeedback()
+        {
+            ElevatorManager owner = WorldOwner;
+            if (owner.round == null || owner.worldEventId == 0 || owner.worldEventView == null || round == null
+                || round.ActiveDimension != owner.worldEventDimension || MenuManager.TutorialActive) return;
+            float age = owner.round.Elapsed - owner.worldEventStart;
+            float warning = owner.worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
+            if (age >= 0f && age < warning && worldEventAnnounced != owner.worldEventId
+                && DisplayBuildingView && Mathf.Abs(CurrentFloor - owner.worldEventFloor) < 3f)
+            {
+                worldEventAnnounced = owner.worldEventId;
+                string label = owner.worldEventDimension == 0 ? "SCAN" : owner.worldEventDimension == 1 ? "SYRUP" : "CURRENT";
+                ShowActionFeedback(label + (owner.worldEventDirection > 0 ? "  →" : "  ←"), true);
+                Play(chime);
+            }
+            if (age >= WorldEventDuration && worldEventNearby == owner.worldEventId
+                && worldEventSeen != owner.worldEventId && worldEventResult != owner.worldEventId)
+            {
+                worldEventResult = owner.worldEventId;
+                ShowActionFeedback("DODGED!", true);
+                Play(chime);
+            }
+        }
+
+        void DrawWorldEventCue()
+        {
+            ElevatorManager owner = WorldOwner;
+            if (owner.worldEventView == null || !owner.worldEventView.activeSelf || exteriorCamera == null) return;
+            Vector3 screen = exteriorCamera.WorldToScreenPoint(owner.worldEventView.transform.position);
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            float y = Screen.height - screen.y;
+            if (screen.z <= 0f || screen.x < view.x || screen.x > view.xMax || y < view.y || y > view.yMax) return;
+            string label = owner.worldEventDimension == 0 ? "SCAN" : owner.worldEventDimension == 1 ? "SYRUP" : "CURRENT";
+            label += owner.worldEventDirection > 0 ? "  →" : "  ←";
+            GUIStyle style = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Mathf.Clamp(view.height / 35f, 16f, 26f)), fontStyle = FontStyle.Bold };
+            float width = Mathf.Min(180f, Mathf.Max(1f, view.width - 8f));
+            float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
+            float safeTop = Mathf.Min(view.yMax - 40f, view.y + Mathf.Max(90f, view.height * .11f));
+            float top = Mathf.Clamp(y - 65f, safeTop, view.yMax - 40f);
+            if (showCabinPreview && eye != null && eye.enabled)
+            {
+                Rect pixels = eye.pixelRect;
+                Rect preview = new Rect(pixels.x, Screen.height - pixels.yMax, pixels.width, pixels.height);
+                if (preview.Overlaps(new Rect(x, top, width, 36f)))
+                {
+                    if (preview.xMin - view.x >= width + 8f) x = preview.xMin - width - 8f;
+                    else top = Mathf.Min(view.yMax - 40f, preview.yMax + 8f);
+                }
+            }
+            OutlinedLabel(new Rect(x, top, width, 36f), label, style, Gold);
+        }
+
+        // Briefly draw attention to the first warning without stopping either car.
+        void ApplyWorldEventCameraAccent()
+        {
+            ElevatorManager owner = WorldOwner;
+            if (!DisplayBuildingView || owner.worldEventId != 1 || owner.worldEventView == null
+                || !owner.worldEventView.activeSelf || owner.round == null || exteriorCamera == null
+                || Mathf.Abs(CurrentFloor - owner.worldEventFloor) > 3f) return;
+            float age = owner.round.Elapsed - owner.worldEventStart;
+            if (age < 0f || age >= 1.6f) return;
+            float emphasis = Mathf.Sin(Mathf.PI * age / 1.6f);
+            exteriorCamera.fieldOfView *= 1f - .08f * emphasis;
         }
 
         void HitHazard(ShaftHazard hazard, Vector2 car, Vector2 centre)

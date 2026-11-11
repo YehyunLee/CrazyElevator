@@ -13,7 +13,7 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
-            rewardPoints, rewardCaption, actionWord, calloutNumber, calloutText, selectionArrow,
+            rewardPoints, rewardCaption, scoreFlightStyle, actionWord, calloutNumber, calloutText, selectionArrow,
             encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
@@ -99,6 +99,8 @@ namespace CrazyElevator.Managers
             GameTypography.Apply(rewardPoints, true);
             rewardCaption = new GUIStyle(buttonStyle) { fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             GameTypography.Apply(rewardCaption, true);
+            scoreFlightStyle = new GUIStyle(rewardCaption) { fontSize = 18, fontStyle = FontStyle.Bold };
+            GameTypography.Apply(scoreFlightStyle, true);
             actionWord = new GUIStyle(buttonStyle) { fontSize = 24, alignment = TextAnchor.MiddleCenter,
                 wordWrap = false, clipping = TextClipping.Clip };
             GameTypography.Apply(actionWord, true);
@@ -784,6 +786,7 @@ namespace CrazyElevator.Managers
                 DrawDeliveryPopups(Screen.width, Screen.height);
                 DrawEncounterCard(Screen.width, Screen.height);
                 DrawActionFeedback(Screen.width, Screen.height);
+                DrawScoreFlights(Screen.width, Screen.height, SoloScoreHudAnchor());
             }
             DrawSessionFade(sessionFadeAlpha);
         }
@@ -804,15 +807,11 @@ namespace CrazyElevator.Managers
             int previousDepth = GUI.depth;
             GUI.depth = -1000;
             Panel(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
-            string countdown = countdownTime < 3f
-                ? (3 - Mathf.FloorToInt(countdownTime)).ToString()
-                : "START";
+            string countdown = (3 - Mathf.FloorToInt(countdownTime)).ToString();
             int previousSize = title.fontSize;
             TextAnchor previousAlignment = title.alignment;
             Color previousTextColor = title.normal.textColor;
-            title.fontSize = countdown == "START"
-                ? Mathf.Clamp(Mathf.RoundToInt(Screen.width * .07f), 64, 118)
-                : Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
+            title.fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
             title.alignment = TextAnchor.MiddleCenter;
             title.normal.textColor = Cream;
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
@@ -875,6 +874,80 @@ namespace CrazyElevator.Managers
             DrawEncounterCard(view.width, view.height);
             DrawActionFeedback(view.width, view.height);
             GUI.matrix = previous;
+        }
+
+        Vector2 SoloScoreHudAnchor()
+        {
+            float hudScale = extendedInterior ? Mathf.Max(1f, Screen.height / 900f) : 1f;
+            if (extendedInterior && compactTopHud)
+                return new Vector2(222f * hudScale, 40f * hudScale);
+
+            float x = Mathf.Max(12f, Screen.width / hudScale - 258f);
+            return new Vector2((x + 123f) * hudScale, 92f * hudScale);
+        }
+
+        // Reward tokens fly from the delivery point to this player's score tile.
+        public void DrawScoreFlights(float viewWidth, float viewHeight, Vector2 scoreAnchor)
+        {
+            float now = Time.unscaledTime;
+            for (int i = scoreFlights.Count - 1; i >= 0; i--)
+                if (now - scoreFlights[i].StartedAt >= ScoreFlightDuration)
+                    scoreFlights.RemoveAt(i);
+            if (scoreFlights.Count == 0 || Event.current.type != EventType.Repaint) return;
+
+            Styles();
+            float uiScale = Mathf.Clamp(viewHeight / 900f, .72f, 1.15f);
+            for (int i = 0; i < scoreFlights.Count; i++)
+            {
+                ScoreFlight flight = scoreFlights[i];
+                float age = now - flight.StartedAt;
+                if (age < 0f) continue;
+
+                float t = Mathf.Clamp01(age / ScoreFlightDuration);
+                float eased = EaseOut(t);
+                Vector2 start = new Vector2(flight.Viewport.x * viewWidth,
+                    (1f - flight.Viewport.y) * viewHeight);
+                Vector2 position = Vector2.Lerp(start, scoreAnchor, eased);
+                position.y -= Mathf.Sin(t * Mathf.PI) * Mathf.Min(58f * uiScale, viewHeight * .1f);
+                position.x += Mathf.Sin(t * Mathf.PI * 2f + flight.Serial * .73f) * 9f * (1f - t) * uiScale;
+
+                float alpha = Mathf.Clamp01(age / .08f)
+                    * (1f - Mathf.Clamp01((t - .82f) / .18f));
+                float tokenScale = Mathf.Lerp(1.08f, .76f, eased);
+                float width = 78f * uiScale * tokenScale;
+                float height = 32f * uiScale * tokenScale;
+                Color accent = Match != null ? (Seat == 0
+                    ? new Color32(255, 124, 104, 255) : new Color32(75, 226, 202, 255)) : Teal;
+
+                // A short dotted trail makes the flight direction readable without
+                // leaving a persistent line across the playfield.
+                for (int trail = 3; trail >= 1; trail--)
+                {
+                    float trailT = Mathf.Clamp01(t - trail * .055f);
+                    Vector2 trailPosition = Vector2.Lerp(start, scoreAnchor, EaseOut(trailT));
+                    trailPosition.y -= Mathf.Sin(trailT * Mathf.PI)
+                        * Mathf.Min(58f * uiScale, viewHeight * .1f);
+                    float dotSize = (5f - trail) * uiScale;
+                    Color dotColor = accent;
+                    dotColor.a = alpha * (1f - trail * .2f);
+                    Panel(new Rect(trailPosition.x - dotSize * .5f,
+                        trailPosition.y - dotSize * .5f, dotSize, dotSize), dotColor);
+                }
+
+                Rect token = new Rect(position.x - width * .5f, position.y - height * .5f,
+                    width, height);
+                Color panel = new Color(UiBlack.r, UiBlack.g, UiBlack.b, .94f * alpha);
+                Panel(token, panel);
+                Panel(new Rect(token.x, token.y, 3f * uiScale, token.height),
+                    new Color(accent.r, accent.g, accent.b, alpha));
+                int previousFontSize = scoreFlightStyle.fontSize;
+                Color previousTextColor = scoreFlightStyle.normal.textColor;
+                scoreFlightStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(18f * uiScale), 13, 20);
+                scoreFlightStyle.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, alpha);
+                GUI.Label(token, "+" + flight.Points, scoreFlightStyle);
+                scoreFlightStyle.fontSize = previousFontSize;
+                scoreFlightStyle.normal.textColor = previousTextColor;
+            }
         }
 
         // One short cue per car, so mistakes and steals stay readable in split screen.

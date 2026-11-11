@@ -37,14 +37,18 @@ namespace CrazyElevator.Managers
 
         readonly MatchProgress matchProgress = new MatchProgress();
         const float AbilityIntroSeconds = 3.5f;
+        const float GameplayStartCueSeconds = .9f;
         readonly HashSet<string> introducedAbilities = new HashSet<string>();
         readonly Queue<(ElevatorManager actor, string kind, SharedRider rider)> pendingAbilityIntros =
             new Queue<(ElevatorManager actor, string kind, SharedRider rider)>();
         ElevatorManager abilityIntroActor;
         string abilityIntroKind;
         bool abilityIntroActive;
-        float abilityIntroTime, abilityIntroPreviousTimeScale = 1f;
+        float abilityIntroTime;
+        float gameplayStartCueTime;
         public bool AbilityIntroActive => abilityIntroActive;
+        public bool IsAbilityIntroActor(ElevatorManager actor)
+            => abilityIntroActive && actor != null && abilityIntroActor == actor;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
         public int RoundNumber => matchProgress.RoundNumber;
         public int ActiveDimension => DimensionForRound(matchProgress.RoundNumber - 1);
@@ -120,7 +124,13 @@ namespace CrazyElevator.Managers
             StopAbilityIntro();
             pendingAbilityIntros.Clear();
             introducedAbilities.Clear();
+            gameplayStartCueTime = 0f;
             matchProgress.Reset();
+        }
+
+        public void ShowGameplayStartCue()
+        {
+            gameplayStartCueTime = GameplayStartCueSeconds;
         }
 
         public void RequestAbilityIntro(ElevatorManager actor, string kind)
@@ -175,8 +185,6 @@ namespace CrazyElevator.Managers
                 abilityIntroKind = next.kind;
                 abilityIntroActive = true;
                 abilityIntroTime = 0f;
-                abilityIntroPreviousTimeScale = Time.timeScale;
-                Time.timeScale = 0f;
                 return;
             }
         }
@@ -188,7 +196,6 @@ namespace CrazyElevator.Managers
             abilityIntroActor = null;
             abilityIntroKind = null;
             abilityIntroActive = false;
-            Time.timeScale = abilityIntroPreviousTimeScale;
         }
         public void RecordRoundResult(int playerOneScore, int playerTwoScore)
             => matchProgress.RecordResult(playerOneScore, playerTwoScore);
@@ -316,6 +323,8 @@ namespace CrazyElevator.Managers
                 }
                 return;
             }
+            if (!MenuManager.IsOpen && !IsPaused)
+                gameplayStartCueTime = Mathf.Max(0f, gameplayStartCueTime - Time.unscaledDeltaTime);
             if (Player == null) return;
             if (MenuManager.IsOpen)
             {
@@ -349,7 +358,41 @@ namespace CrazyElevator.Managers
                 bool shared = abilityIntroKind == "VIP" || abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen;
                 abilityIntroActor.DrawAbilityIntro(abilityIntroTime, AbilityIntroView(),
                     shared && match != null && abilityIntroKind != "VIP", !shared);
+                return;
             }
+            if (gameplayStartCueTime <= 0f || MenuManager.FullScreenOverlayActive
+                || MenuManager.IsOpen || IsPaused) return;
+
+            float elapsed = GameplayStartCueSeconds - gameplayStartCueTime;
+            float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / .12f));
+            float fadeOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(gameplayStartCueTime / .32f));
+            float alpha = Mathf.Min(fadeIn, fadeOut);
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColour = GUI.color;
+            Color previousContentColour = GUI.contentColor;
+            int previousDepth = GUI.depth;
+            GUI.matrix = Matrix4x4.identity;
+            GUI.color = Color.white;
+            GUI.contentColor = Color.white;
+            GUI.depth = -1000;
+            GameTypography.ApplyToSkin(GUI.skin);
+            var startStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(Screen.width * .09f,
+                    Screen.height * .16f)), 58, 132),
+                fontStyle = FontStyle.Bold,
+                wordWrap = false
+            };
+            var label = new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .3f);
+            startStyle.normal.textColor = new Color(.02f, .04f, .08f, alpha * .8f);
+            GUI.Label(new Rect(label.x + 3f, label.y + 4f, label.width, label.height), "START!", startStyle);
+            startStyle.normal.textColor = new Color(.99f, .97f, .91f, alpha);
+            GUI.Label(label, "START!", startStyle);
+            GUI.matrix = previousMatrix;
+            GUI.color = previousColour;
+            GUI.contentColor = previousContentColour;
+            GUI.depth = previousDepth;
         }
 
         Rect AbilityIntroView()

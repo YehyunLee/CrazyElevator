@@ -57,9 +57,9 @@ namespace CrazyElevator.Shared
         public bool CanWaitAt(int floor)
         {
             if (floor < 0 || floor >= ElevatorRound.Floors) return false;
-            // Grandma appears on only two underwater floors per round.
+            // Grandma appears on alternating underwater floors.
             if (kind == "ELDERLY" && ThemeAtFloor(floor) == PassengerTheme.Underwater
-                && (floor - ElevatorRound.FloorsPerDimension * 2) % 4 != 0) return false;
+                && (floor - ElevatorRound.FloorsPerDimension * 2) % 2 != 0) return false;
             return theme == PassengerTheme.Any || theme == ThemeAtFloor(floor);
         }
 

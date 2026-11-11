@@ -24,7 +24,8 @@ namespace CrazyElevator.Match
 
         void Update()
         {
-            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
+            if (game != null && GameManager.Instance != null
+                && GameManager.Instance.IsAbilityIntroActor(game)) return;
             // Tutorial mode owns the match until the player has completed it.
             // Keep the CPU from boarding, travelling, or making decisions early.
             if (MenuManager.TutorialActive) return;

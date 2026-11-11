@@ -228,15 +228,17 @@ namespace CrazyElevator.Shared
                     Add("Mina & Baby", "PREGNANT", "WAAAH! Keep the baby calm.", "BABY", f, 2, 42, 0, 1, 70);
                 if (world == PassengerTheme.Office)
                     Add("Jules", "INTERVIEW", "My interview starts soon!", "!", f, 1, 13, 0, 2, 120);
-                if (world == PassengerTheme.Office && f % 3 == 1)
+                if (world == PassengerTheme.Office && f % 2 == 1)
                     Add("Hunter", "HUNTER", "Stuns monsters", "STUN", f, 1, 50, 0, 2, 100);
                 if (world == PassengerTheme.Candy)
                     Add("Morgan", "BOSS", "Deliver me on time for my bonus.", "B", f, 1, 30, 0, 3, 140);
-                if (world == PassengerTheme.Candy && f % 3 == 0)
+                if (world == PassengerTheme.Candy
+                    && (f - FloorsPerDimension) % 2 == 0)
                     Add("Bouncer", "BOUNCER", "Stronger collision", "BUMP", f, 2, 50, 0, 3, 100);
                 if (world == PassengerTheme.Underwater)
                     Add("Diver", "DIVER", "Blocks tornadoes", "SHIELD", f, 1, 60, 0, 4, 100);
-                if (world != PassengerTheme.Underwater || (f - FloorsPerDimension * 2) % 4 == 0)
+                if (world != PassengerTheme.Underwater
+                    || (f - FloorsPerDimension * 2) % 2 == 0)
                     Add("Eli", "ELDERLY", "Please wait for me...", "SLOW", f, 1, 58, ElderlyArrivalSeconds, 4, 175);
                 if (world == PassengerTheme.Candy)
                     Add("The Trio", "GROUP", "All three or none!", "3X", f, 3, 32, 0, 5, 130);
@@ -492,6 +494,32 @@ namespace CrazyElevator.Shared
         // Once shown, a landing keeps those exact passengers until they leave.
         public bool IsOffered(Rider candidate) => WaitsHere(candidate) && IsQueuedAtStop(candidate);
 
+        List<Rider> QueueCandidatesAt(int floor, int stop)
+        {
+            var candidates = new List<Rider>();
+            foreach (Rider rider in Riders)
+                if (rider.Origin == floor && rider.OriginStop == stop && !rider.Resolved
+                    && !rider.Boarded && rider.SpawnDelay <= 0 && IsPassengerTypeUnlocked(rider))
+                    candidates.Add(rider);
+            return candidates;
+        }
+
+        static int QueueRotation(int floor, int stop, int count)
+        {
+            if (count <= 0 || (floor == 0 && stop == CenterStop)) return 0;
+            return (floor * Stops + stop) % count;
+        }
+
+        bool QueueIncludesCandidate(Rider candidate, List<Rider> candidates)
+        {
+            if (candidate == null || candidates.Count == 0) return false;
+            int index = candidates.IndexOf(candidate);
+            if (index < 0) return false;
+            int rotation = QueueRotation(candidate.Origin, candidate.OriginStop, candidates.Count);
+            int position = (index - rotation + candidates.Count) % candidates.Count;
+            return position < Math.Min(OfferLimitAt(candidate.Origin), candidates.Count);
+        }
+
         // Capture before showing a landing or changing its passengers. Merely
         // querying an unseen stop (for example for CPU navigation) stays read-only.
         public void RevealQueue(int floor, int stop)
@@ -500,17 +528,17 @@ namespace CrazyElevator.Shared
             int key = floor * Stops + stop;
             if (revealedQueues.ContainsKey(key)) return;
             var queue = new HashSet<Rider>();
-            int limit = OfferLimitAt(floor);
-            foreach (Rider rider in Riders)
+            List<Rider> candidates = QueueCandidatesAt(floor, stop);
+            int count = Math.Min(OfferLimitAt(floor), candidates.Count);
+            int rotation = QueueRotation(floor, stop, candidates.Count);
+            for (int i = 0; i < count; i++)
             {
-                if (rider.Origin != floor || rider.OriginStop != stop || rider.Resolved
-                    || rider.Boarded || rider.SpawnDelay > 0 || !IsPassengerTypeUnlocked(rider)) continue;
+                Rider rider = candidates[(rotation + i) % candidates.Count];
                 // Capture doors together with the visible roster. Hidden or
                 // locked riders must not consume the front entrance's place.
                 rider.PickupDoor = QueueDoor(floor, stop, queue.Count);
                 rider.PickupQueueSlot = queue.Count;
                 queue.Add(rider);
-                if (queue.Count >= limit) break;
             }
             revealedQueues.Add(key, queue);
         }
@@ -524,15 +552,8 @@ namespace CrazyElevator.Shared
             int key = candidate.Origin * Stops + candidate.OriginStop;
             if (revealedQueues.TryGetValue(key, out HashSet<Rider> queue)) return queue.Contains(candidate);
             if (!IsPassengerTypeUnlocked(candidate)) return false;
-            int offered = 0;
-            foreach (var p in Riders)
-            {
-                if (p.Resolved || p.Boarded || p.SpawnDelay > 0 || p.Origin != candidate.Origin
-                    || p.OriginStop != candidate.OriginStop || !IsPassengerTypeUnlocked(p)) continue;
-                if (p == candidate) return offered < OfferLimitAt(candidate.Origin);
-                offered++;
-            }
-            return false;
+            return QueueIncludesCandidate(candidate,
+                QueueCandidatesAt(candidate.Origin, candidate.OriginStop));
         }
 
         // Resolve an onboard passenger with the eject penalty.

@@ -46,7 +46,9 @@ namespace CrazyElevator.Match
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        bool collisionContactActive;
         bool bouncerCollision;
+        const int BumpRewardPoints = 50;
         SharedRider matchVip;
         bool hazardEventStarted;
         bool vipRevealStarted;
@@ -187,7 +189,6 @@ namespace CrazyElevator.Match
         void Update()
         {
             if (!enabled || player == null) return;
-            if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
             if (Paused || MenuManager.IsOpen) return;
             float dt = Time.unscaledDeltaTime;
             if (dimensionRevealActive)
@@ -214,9 +215,11 @@ namespace CrazyElevator.Match
                 && (Mathf.Abs(player.TravelVelocity) > .05f || Mathf.Abs(player.LateralTravelVelocity) > .05f);
             bool rivalTravelling = Rival != null && Rival.MovingInShaft
                 && (Mathf.Abs(Rival.TravelVelocity) > .05f || Mathf.Abs(Rival.LateralTravelVelocity) > .05f);
+            bool carsOverlap = CarsOverlap(player, Rival);
+            if (!carsOverlap) collisionContactActive = false;
             if (Running && !Paused && (playerTravelling || rivalTravelling
                     || playerWasSwitching || rivalWasSwitching)
-                && CarsOverlap(player, Rival))
+                && carsOverlap)
             {
                 trackPosition[0] = playerTrackBefore;
                 trackPosition[1] = rivalTrackBefore;
@@ -256,7 +259,6 @@ namespace CrazyElevator.Match
             if (Running && !Finished && !MenuManager.TutorialActive)
             {
                 UpdateRivalInteractions(Time.deltaTime);
-                if (GameManager.Instance != null && GameManager.Instance.AbilityIntroActive) return;
             }
             var input = InputManager.Instance;
             if (input == null) return;
@@ -329,6 +331,7 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            collisionContactActive = false;
             bouncerCollision = false;
             collisionCount = 0;
             int firstExpressTrack = Random.Range(0, 2);
@@ -769,9 +772,12 @@ namespace CrazyElevator.Match
         void PlayCollision(Game first, Game second, float verticalDirection,
             float closingSpeed, Game tutorialTarget = null)
         {
-            if (collisionCooldown > 0f) return;
+            if (collisionCooldown > 0f || collisionContactActive) return;
             bool practicePair = IsTutorialCollisionParticipant(first)
                 && IsTutorialCollisionParticipant(second);
+            Game bumpWinner = MenuManager.TutorialActive || practicePair
+                ? null : ResolveBumpWinner(first, second, verticalDirection, closingSpeed);
+            collisionContactActive = true;
             bool practiceHit = practicePair && !tutorialCollisionCompleted
                 && verticalDirection != 0f && closingSpeed > .05f
                 && tutorialCollisionAttacker.TravelInputActive;
@@ -825,25 +831,58 @@ namespace CrazyElevator.Match
             if (first != null && second != null)
                 EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
-            if (!bouncerCollision) return;
+            if (bouncerCollision)
+            {
+                first?.PulseMatchImpact(true);
+                second?.PulseMatchImpact(true);
+                if (firstBoost && secondBoost)
+                {
+                    first.ShowActionFeedback("BOUNCER CLASH!", true, true);
+                    second.ShowActionFeedback("BOUNCER CLASH!", true, true);
+                }
+                else if (firstBoost)
+                {
+                    first.ShowActionFeedback("BOUNCER HIT!", true, true);
+                    second?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
+                }
+                else
+                {
+                    second.ShowActionFeedback("BOUNCER HIT!", true, true);
+                    first?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
+                }
+            }
 
-            first?.PulseMatchImpact(true);
-            second?.PulseMatchImpact(true);
-            if (firstBoost && secondBoost)
+            if (bumpWinner != null)
             {
-                first.ShowActionFeedback("BOUNCER CLASH!", true, true);
-                second.ShowActionFeedback("BOUNCER CLASH!", true, true);
+                Vector3 impactPoint = (first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f;
+                if (bumpWinner.AwardBumpPoints(BumpRewardPoints, impactPoint))
+                {
+                    bumpWinner.ShowActionFeedback("+" + BumpRewardPoints + " BUMP!", true, true);
+                    Game bumped = bumpWinner == first ? second : first;
+                    bumped?.ShowActionFeedback("BUMPED!", false);
+                }
             }
-            else if (firstBoost)
-            {
-                first.ShowActionFeedback("BOUNCER HIT!", true, true);
-                second?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
-            }
-            else
-            {
-                second.ShowActionFeedback("BOUNCER HIT!", true, true);
-                first?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
-            }
+        }
+
+        static Game ResolveBumpWinner(Game first, Game second, float verticalDirection,
+            float closingSpeed)
+        {
+            if (first == null || second == null) return null;
+            bool firstHasBouncer = first.HasBouncer;
+            bool secondHasBouncer = second.HasBouncer;
+            if (firstHasBouncer != secondHasBouncer)
+                return firstHasBouncer ? first : second;
+            if (firstHasBouncer) return null;
+
+            // Vertical contact is reported with the advancing car first. For
+            // a lateral impact, reward the car carrying more impact momentum;
+            // equal-force clashes have no clear winner.
+            if (Mathf.Abs(verticalDirection) > .01f && closingSpeed > .05f) return first;
+            float firstImpact = Mathf.Abs(first.TravelVelocity) + Mathf.Abs(first.LateralTravelVelocity);
+            float secondImpact = Mathf.Abs(second.TravelVelocity) + Mathf.Abs(second.LateralTravelVelocity);
+            if (firstImpact - secondImpact > .12f) return first;
+            if (secondImpact - firstImpact > .12f) return second;
+            return null;
         }
 
         static Game TutorialCollisionTarget(Game first, Game second)
@@ -1047,6 +1086,8 @@ namespace CrazyElevator.Match
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Teal);
             if (SplitScreen) DrawSplitDivider();
             DrawSharedRoundHUD();
+            if (IsVisibleSeat(0)) DrawSeatScoreFlights(player, 0);
+            if (IsVisibleSeat(1)) DrawSeatScoreFlights(Rival, 1);
             DrawCollisionFeedback();
             if (Finished) DrawResultReveal();
             DrawSessionFade(player.SessionFadeAlpha);
@@ -1244,17 +1285,36 @@ namespace CrazyElevator.Match
 
         float SharedClockWidth => Mathf.Clamp(Screen.width * .13f, 104f, 160f);
 
+        Rect SeatScoreBarRect(int seat)
+        {
+            Rect view = ViewRect(seat);
+            float availableWidth = SplitScreen ? view.width - SharedClockWidth * .5f - 16f
+                : (view.width - SharedClockWidth) * .5f - 16f;
+            float barWidth = Mathf.Max(1f, SplitScreen ? availableWidth : Mathf.Min(availableWidth, 760f));
+            float barX = SplitScreen && seat == 1 ? view.xMax - 8f - barWidth : view.x + 8f;
+            return new Rect(barX, view.y + 8f, barWidth, 58f);
+        }
+
+        void DrawSeatScoreFlights(Game actor, int seat)
+        {
+            if (actor == null) return;
+            Rect view = ViewRect(seat);
+            Rect bar = SeatScoreBarRect(seat);
+            Vector2 anchor = new Vector2(bar.x + bar.width * .25f - view.x,
+                bar.center.y - view.y);
+            Matrix4x4 previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0f));
+            actor.DrawScoreFlights(view.width, view.height, anchor);
+            GUI.matrix = previousMatrix;
+        }
+
         void DrawSeat(Game actor, int seat, Color colour)
         {
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
             DrawRivalInteractions(actor, seat, view);
             DrawPlayerScreenBorder(view, colour);
-            float availableWidth = SplitScreen ? view.width - SharedClockWidth * .5f - 16f
-                : (view.width - SharedClockWidth) * .5f - 16f;
-            float barWidth = Mathf.Max(1f, SplitScreen ? availableWidth : Mathf.Min(availableWidth, 760f));
-            float barX = SplitScreen && seat == 1 ? view.xMax - 8f - barWidth : view.x + 8f;
-            var bar = new Rect(barX, view.y + 8f, barWidth, 58f);
+            Rect bar = SeatScoreBarRect(seat);
             Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
             Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             float tileWidth = bar.width * .5f;
