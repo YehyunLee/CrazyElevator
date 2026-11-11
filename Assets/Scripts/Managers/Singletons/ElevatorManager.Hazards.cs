@@ -437,14 +437,13 @@ namespace CrazyElevator.Managers
             float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
             float safeTop = Mathf.Min(view.yMax - 40f, view.y + Mathf.Max(90f, view.height * .11f));
             float top = Mathf.Clamp(y - 65f, safeTop, view.yMax - 40f);
-            if (showCabinPreview && eye != null && eye.enabled)
+            if (showPassengerList && BuildingView && cameraViewBlend >= .99f)
             {
-                Rect pixels = eye.pixelRect;
-                Rect preview = new Rect(pixels.x, Screen.height - pixels.yMax, pixels.width, pixels.height);
-                if (preview.Overlaps(new Rect(x, top, width, 36f)))
+                Rect passengerList = PassengerListRect();
+                if (passengerList.Overlaps(new Rect(x, top, width, 36f)))
                 {
-                    if (preview.xMin - view.x >= width + 8f) x = preview.xMin - width - 8f;
-                    else top = Mathf.Min(view.yMax - 40f, preview.yMax + 8f);
+                    if (passengerList.xMin - view.x >= width + 8f) x = passengerList.xMin - width - 8f;
+                    else top = Mathf.Min(view.yMax - 40f, passengerList.yMax + 8f);
                 }
             }
             OutlinedLabel(new Rect(x, top, width, 36f), label, style, Gold);
