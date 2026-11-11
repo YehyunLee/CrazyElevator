@@ -293,9 +293,6 @@ namespace CrazyElevator.Managers
                 }
 
                 int step = tutorialSteps[i];
-                // Both seats practice with the same landing. Keep its doorways
-                // supplied until each driver has boarded their two passengers.
-                if (step <= 1) tutorialActors[i].RefillTutorialPassengers();
                 if (step == TutorialWaitingStep)
                 {
                     tutorialCompletionTimes[i] += Time.unscaledDeltaTime;
@@ -332,7 +329,7 @@ namespace CrazyElevator.Managers
                     return actor.HasChosenBoardingDoor
                         && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
                 case 1:
-                    return actor.CurrentPassengers.Count >= 2
+                    return actor.CurrentPassengers.Count >= ElevatorRound.PracticePassengersPerSeat
                         && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
                 case 2:
                     return actor.TravelStartCount > tutorialTravelStartBaseline[index];
@@ -426,8 +423,8 @@ namespace CrazyElevator.Managers
             return false;
         }
 
-        // During the STOP step the car may only dock at the floor the card asks for.
-        public static bool TutorialAllowsStopAt(ElevatorManager actor, int floor)
+        // Tutorial passengers use the center stop, where they can actually get off.
+        public static bool TutorialAllowsStopAt(ElevatorManager actor, int floor, int stop)
         {
             MenuManager menu = Current;
             InputManager input = InputManager.Instance;
@@ -436,7 +433,8 @@ namespace CrazyElevator.Managers
             if (index < 0 || input.GetTutorialInputMode(actor.Seat) != InputManager.TutorialInputMode.Stop)
                 return true;
             int target = menu.tutorialTargetFloor[index];
-            return target >= 0 ? floor == target : TutorialHasPassengerFor(actor, floor);
+            return stop == ElevatorRound.CenterStop
+                && (target >= 0 ? floor == target : TutorialHasPassengerFor(actor, floor));
         }
 
         int FindTutorialPassengerFloor(ElevatorManager actor)
@@ -452,12 +450,9 @@ namespace CrazyElevator.Managers
             tutorialNextSteps[index] = nextStep;
             tutorialStepSettledTimes[index] = 0f;
             tutorialResumeActorOnCardSettled[index] = resumeWhenSettled;
-            if (nextStep != LateralTravelStep)
-            {
-                InputManager.TutorialInputMode inputMode = TutorialInputModeForStep(nextStep);
-                InputManager.Instance?.SetTutorialInputMode(tutorialActors[index] != null
-                    ? tutorialActors[index].Seat : index, inputMode);
-            }
+            InputManager.TutorialInputMode inputMode = TutorialInputModeForStep(nextStep);
+            InputManager.Instance?.SetTutorialInputMode(tutorialActors[index] != null
+                ? tutorialActors[index].Seat : index, inputMode);
             if (nextStep == TutorialWaitingStep)
             {
                 // The waiting state is a handoff, not another tutorial card.
@@ -483,10 +478,11 @@ namespace CrazyElevator.Managers
         {
             switch (step)
             {
-                case 0: return InputManager.TutorialInputMode.SelectPassenger;
+                case 0: return InputManager.TutorialInputMode.OpenDoor;
                 case 1: return InputManager.TutorialInputMode.BoardPassengers;
                 case 2: return InputManager.TutorialInputMode.CloseDoors;
-                case 3: return InputManager.TutorialInputMode.Move;
+                case 3:
+                case LateralTravelStep: return InputManager.TutorialInputMode.Move;
                 case 4: return InputManager.TutorialInputMode.Boost;
                 case 5: return InputManager.TutorialInputMode.Stop;
                 case 6: return InputManager.TutorialInputMode.SelectPassenger;
@@ -510,9 +506,6 @@ namespace CrazyElevator.Managers
 
             tutorialCardMotions[index] = TutorialCardMotion.Settled;
             tutorialCardMotionTimes[index] = TutorialCardTravelSeconds;
-            if (tutorialSteps[index] == LateralTravelStep)
-                InputManager.Instance?.SetTutorialInputMode(tutorialActors[index].Seat,
-                    InputManager.TutorialInputMode.LateralTravel);
             if (tutorialResumeActorOnCardSettled[index]
                 && tutorialSteps[index] != TutorialWaitingStep)
                 ResumeTutorialActor(index);

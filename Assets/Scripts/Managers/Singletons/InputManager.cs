@@ -34,7 +34,7 @@ namespace CrazyElevator.Managers
             HelpPassenger,
             Kickout,
             Collision,
-            LateralTravel
+            OpenDoor
         }
 
         public GameView ActiveView { get; private set; } = GameView.Menu;
@@ -580,10 +580,7 @@ namespace CrazyElevator.Managers
 
             bool pause = input.PausePressed;
             Vector2 select = input.Select;
-            // Travel steps teach up/down only; a slightly diagonal stick must not
-            // turn the car onto a floor rail or switch duel lanes.
-            Vector2 lateralMove = input.Move;
-            Vector2 move = new Vector2(0f, input.Move.y);
+            Vector2 move = input.Move;
             bool boost = input.BoostHeld || controllerAssigned && input.RepairHeld;
             bool collisionBoost = input.BoostHeld;
             bool confirm = input.ConfirmPressed;
@@ -597,6 +594,8 @@ namespace CrazyElevator.Managers
 
             switch (mode)
             {
+                case TutorialInputMode.OpenDoor:
+                case TutorialInputMode.BoardPassengers:
                 case TutorialInputMode.SelectPassenger:
                 case TutorialInputMode.HelpPassenger:
                 case TutorialInputMode.Kickout:
@@ -610,24 +609,12 @@ namespace CrazyElevator.Managers
                     else if (mode == TutorialInputMode.Kickout)
                         input.KickoutPressed = kickout;
                     break;
-                case TutorialInputMode.BoardPassengers:
-                    input.Select = select;
-                    input.SelectPressed = select.magnitude >= .55f;
-                    input.ConfirmPressed = confirm;
-                    input.BoardingLeftPressed = boardingLeft;
-                    input.BoardingFrontPressed = boardingFront;
-                    input.BoardingRightPressed = boardingRight;
-                    break;
                 case TutorialInputMode.CloseDoors:
                     input.CloseDoorsPressed = closeDoors;
                     break;
                 case TutorialInputMode.Move:
                     input.Move = move;
                     input.MovePressed = move.magnitude >= .55f;
-                    break;
-                case TutorialInputMode.LateralTravel:
-                    input.Move = lateralMove;
-                    input.MovePressed = lateralMove.magnitude >= .55f;
                     break;
                 case TutorialInputMode.Collision:
                     input.Move = new Vector2(0f, Mathf.Max(0f, move.y));

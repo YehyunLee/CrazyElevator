@@ -26,6 +26,8 @@ namespace CrazyElevator.Managers
         {
             if (phase != Phase.Boarding || round == null || round.Finished) return;
             if ((int)door < 0 || (int)door >= boardingDoorOpenness.Length) return;
+            if (hasChosenBoardingDoor && MenuManager.TutorialActive && InputManager.Instance != null
+                && InputManager.Instance.GetTutorialInputMode(Seat) == InputManager.TutorialInputMode.OpenDoor) return;
             selectedBoardingDoor = door;
             hasChosenBoardingDoor = true;
             bool newlyOpened = !boardingDoorOpen[(int)door];
@@ -75,12 +77,6 @@ namespace CrazyElevator.Managers
                 && round.IsOffered(rider) && rider.Arrival <= 0f
                 && figures.TryGetValue(rider, out var figure) && figure != null;
 
-        public void RefillTutorialPassengers()
-        {
-            if (!MenuManager.TutorialActive || round == null || phase != Phase.Boarding) return;
-            round.RefillPracticeQueue();
-        }
-
         // Automatic drop-offs can empty the practice cabin before the kick step.
         // Give that step one real selectable rider without changing live queues.
         public bool PrepareTutorialKickPassenger()
@@ -128,9 +124,15 @@ namespace CrazyElevator.Managers
         void TickAutoBoarding(float dt)
         {
             if (phase != Phase.Boarding || PersonaBusy) return;
-            if (MenuManager.TutorialActive && InputManager.Instance != null
-                && (InputManager.Instance.IsTutorialInputLocked(Seat)
-                    || InputManager.Instance.GetTutorialInputMode(Seat) != InputManager.TutorialInputMode.BoardPassengers)) return;
+            bool practice = MenuManager.TutorialActive;
+            InputManager input = InputManager.Instance;
+            if (practice && input != null)
+            {
+                InputManager.TutorialInputMode mode = input.GetTutorialInputMode(Seat);
+                if (input.IsTutorialInputLocked(Seat)
+                    || (mode != InputManager.TutorialInputMode.OpenDoor
+                        && mode != InputManager.TutorialInputMode.BoardPassengers)) return;
+            }
             autoBoardWait -= dt;
             if (autoBoardWait > 0f) return;
 
@@ -154,6 +156,7 @@ namespace CrazyElevator.Managers
             if (next == null) return;
 
             autoBoardWait = PassengerBoardingSeconds;
+            if (practice && CurrentPassengers.Count >= ElevatorRound.PracticePassengersPerSeat) return;
             nextAutoBoardDoor = (entryDoor + 1) % boardingDoorOpen.Length;
             // Each open door serves its own finite queue in turn.
             if (!HasBoardingSpace(next))

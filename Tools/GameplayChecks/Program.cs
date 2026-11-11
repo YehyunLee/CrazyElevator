@@ -441,43 +441,34 @@ internal static class Program
         Require(bouncer.HasFeature(PassengerFeature.StrongCollision), "Bouncer is missing its collision ability.");
     }
 
-    static void CheckTutorialReplenishment()
+    static void CheckFiniteTutorialBoarding()
     {
         var left = new ElevatorRound();
         left.Riders.Clear();
-        Rider front = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front);
-        Rider side = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Left);
-        left.Riders.AddRange(new[] { front, side });
+        for (int i = 0; i < 5; i++)
+            left.Riders.Add(NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front));
+        left.Riders[2].Arrival = ElevatorRound.ElderlyArrivalSeconds;
+
+        left.RevealPracticeQueue(2);
         var right = new ElevatorRound();
         right.SharePassengerPoolWith(left, 1);
-        left.RevealQueue(0, ElevatorRound.CenterStop);
-        Require(left.Board(front) && left.Board(side), "Left player could not take the starting passengers.");
-        Require(!right.Riders.Any(right.IsOffered) && left.Riders.Count == 2,
-            "Ordinary boarding unexpectedly respawned finite match passengers.");
+        Rider[] waiting = left.Riders.Where(left.IsOffered).ToArray();
+        Require(waiting.Length == 4 && waiting.All(rider => rider.Arrival == 0f),
+            "The opening practice group must have four riders already at their doors.");
+        Require(waiting.Select(rider => rider.PickupDoor).Distinct().Count() == 3,
+            "The practice riders should use all three doors.");
 
-        Require(right.RefillPracticeQueue() == 2, "Tutorial did not replace both claimed passengers.");
-        Rider[] replacements = right.Riders.Where(right.IsOffered).ToArray();
-        Require(replacements.Length == 2 && replacements.All(r => !ReferenceEquals(r, front)
-            && !ReferenceEquals(r, side) && r.Remaining == r.Patience && r.Arrival == 0
-            && r.BoardedBySeat == -1 && !r.IsVip), "Replacements copied consumed state or reused a cabin passenger.");
-        Require(replacements[0].PickupDoor == front.PickupDoor
-            && replacements[0].PickupQueueSlot == front.PickupQueueSlot
-            && replacements[0].Destination == front.Destination, "Replenishment changed the doorway or route.");
-        Require(left.Owns(front) && left.Owns(side) && !right.Owns(front),
-            "Replenishing the right queue changed the left cabin's ownership.");
-        Require(left.RefillPracticeQueue() == 0 && right.RefillPracticeQueue() == 0 && left.Riders.Count == 4,
-            "Two-seat replenishment duplicated waiting passengers on consecutive frames.");
-        Require(right.Board(replacements[0]) && right.Board(replacements[1]),
-            "Right player cannot finish their two-passenger tutorial step.");
-        Require(left.Owns(front) && right.Owns(replacements[0]), "Boarding a replacement stole the original.");
-        Require(left.RefillPracticeQueue() == 2 && right.Riders.Count(right.IsOffered) == 2,
-            "Tutorial replacements cannot replenish again.");
-        Rider rejected = right.Riders.First(right.IsOffered);
-        Require(right.Reject(rejected) && left.RefillPracticeQueue() == 1,
-            "Tutorial failed to replace a resolved waiting passenger.");
-        left.Arrive(front.Destination, front.DestinationStop);
-        Require(left.Offboard(front) == OffboardResult.Happy && right.Owns(replacements[0]),
-            "A respawn broke the original passenger's delivery or the rival's cabin.");
+        Require(left.Board(waiting[0]) && left.Board(waiting[1]),
+            "The first player could not board two waiting riders.");
+        Require(right.Riders.Where(right.IsOffered).SequenceEqual(waiting.Skip(2)),
+            "The second player did not get the remaining original riders.");
+        Require(right.Board(waiting[2]) && right.Board(waiting[3]),
+            "The second player could not board the remaining pair.");
+
+        right.RevealPracticeQueue(2);
+        left.RevealQueue(0, ElevatorRound.CenterStop);
+        Require(left.Riders.Count == 5 && !left.Riders.Any(left.IsOffered) && !right.Riders.Any(right.IsOffered),
+            "Boarding or revisiting a practice queue should not reveal replacements.");
     }
 
     static void CheckBaseDeliveryPoints()
@@ -519,7 +510,7 @@ internal static class Program
             { "Six dimension rounds reset clocks and rosters while sharing identities between seats", CheckSharedDimensionResets },
             { "First-to-three results, ties, idempotent wins, cycling, championship lock, and Play Again", CheckFirstToThreeMatch },
             { "Passenger abilities follow their owning elevator", CheckAbilityOwnership },
-            { "Tutorial replenishment lets both seats board while live queues remain finite", CheckTutorialReplenishment }
+            { "Both tutorial seats board from one finite waiting group", CheckFiniteTutorialBoarding }
         };
         int failures = 0;
         foreach (var check in checks)
