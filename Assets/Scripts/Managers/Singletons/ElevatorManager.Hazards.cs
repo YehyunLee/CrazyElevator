@@ -709,7 +709,9 @@ namespace CrazyElevator.Managers
                 label = "FIREFLY ROUTE · " + (owner.worldEventDirection > 0 ? "←" : "→");
             if (owner.worldEventDimension < 3) label += owner.worldEventDirection > 0 ? "  →" : "  ←";
             GUIStyle style = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Mathf.Clamp(view.height / 35f, 16f, 26f)), fontStyle = FontStyle.Bold };
-            float width = Mathf.Min(230f, Mathf.Max(1f, view.width - 8f));
+            if (view.width <= 24f || view.height < 44f) return;
+            style.wordWrap = false;
+            float width = FitFeedbackText(style, new GUIContent(label), view.width - 24f) + 16f;
             float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
             float safeTop = Mathf.Min(view.yMax - 40f, view.y + Mathf.Max(90f, view.height * .11f));
             float top = Mathf.Clamp(y - 65f, safeTop, view.yMax - 40f);
@@ -819,10 +821,14 @@ namespace CrazyElevator.Managers
                     GUI.matrix = previousMatrix;
                 }
             }
-            float x = Mathf.Clamp(screen.x, view.x + 90f, view.xMax - 90f);
-            float y = Mathf.Clamp(Screen.height - screen.y, view.y + 80f, view.yMax - 45f);
-            GUIStyle style = new GUIStyle(large) { alignment = TextAnchor.MiddleCenter, fontSize = 30 };
-            OutlinedLabel(new Rect(x - 90f, y - 30f, 180f, 45f), abilityFeedback, style, Gold);
+            if (view.width <= 24f || view.height < 53f) return;
+            GUIStyle style = new GUIStyle(large)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 30, wordWrap = false };
+            float width = FitFeedbackText(style, new GUIContent(abilityFeedback), view.width - 24f) + 16f;
+            float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
+            float y = Mathf.Clamp(Screen.height - screen.y - 30f,
+                Mathf.Min(view.y + 50f, view.yMax - 49f), view.yMax - 49f);
+            OutlinedLabel(new Rect(x, y, width, 45f), abilityFeedback, style, Gold);
         }
     }
 }

@@ -959,6 +959,17 @@ namespace CrazyElevator.Managers
             actionFeedbackEmphasized = false;
         }
 
+        static float FitFeedbackText(GUIStyle style, GUIContent content, float availableWidth)
+        {
+            float width = style.CalcSize(content).x;
+            while (width > availableWidth && style.fontSize > 1)
+            {
+                style.fontSize--;
+                width = style.CalcSize(content).x;
+            }
+            return width;
+        }
+
         void DrawActionFeedback(float viewWidth, float viewHeight)
         {
             if (string.IsNullOrEmpty(actionFeedbackText) || Event.current.type != EventType.Repaint) return;
@@ -968,11 +979,19 @@ namespace CrazyElevator.Managers
             float scale = Mathf.Clamp(viewHeight / 900f, .7f, 1.1f);
             float entrance = EaseOut(Mathf.Clamp01(age / .15f));
             float alpha = Mathf.Clamp01((ActionFeedbackSeconds - age) / .27f) * entrance;
-            float width = Mathf.Min(viewWidth - 24f, (actionFeedbackEmphasized ? 330f : 270f) * scale);
+            float maxWidth = viewWidth - 24f;
+            float padding = 16f * scale;
+            if (maxWidth <= padding) return;
+            var content = new GUIContent(actionFeedbackText);
+            actionWord.fontSize = Mathf.RoundToInt((actionFeedbackEmphasized ? 26f : 21f) * scale);
+            float textWidth = FitFeedbackText(actionWord, content, maxWidth - padding);
+            float width = Mathf.Min(maxWidth,
+                Mathf.Max((actionFeedbackEmphasized ? 330f : 270f) * scale, textWidth + padding));
             float height = (actionFeedbackEmphasized ? 56f : 44f) * scale;
             // Clear the match collision banner and any passenger introduction card.
             float minimumY = activeEncounterCard != null ? 260f : 154f;
-            float y = Mathf.Max(minimumY, viewHeight * .18f) + (1f - entrance) * 12f * scale;
+            float y = Mathf.Clamp(Mathf.Max(minimumY, viewHeight * .18f) + (1f - entrance) * 12f * scale,
+                0f, Mathf.Max(0f, viewHeight - height - 8f));
             Rect cue = new Rect((viewWidth - width) * .5f, y, width, height);
             Color accent = actionFeedbackPositive ? Teal : Coral;
             Panel(cue, new Color(UiBlack.r, UiBlack.g, UiBlack.b, .84f * alpha));
@@ -983,10 +1002,9 @@ namespace CrazyElevator.Managers
                     cue.width - 8f * scale, 2f * scale),
                     new Color(accent.r, accent.g, accent.b, .7f * alpha));
 
-            actionWord.fontSize = Mathf.RoundToInt((actionFeedbackEmphasized ? 26f : 21f) * scale);
             actionWord.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, alpha);
             GUI.Label(new Rect(cue.x + 8f * scale, cue.y + 4f * scale,
-                cue.width - 16f * scale, cue.height - 8f * scale), actionFeedbackText, actionWord);
+                cue.width - padding, cue.height - 8f * scale), content, actionWord);
         }
 
         // Screen-space points stay readable while the 3D passenger exits.
