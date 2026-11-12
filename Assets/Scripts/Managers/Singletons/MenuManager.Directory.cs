@@ -142,8 +142,11 @@ namespace CrazyElevator.Managers
             if (directoryPreviewModel == null || directoryEntries.Count == 0) return;
             DirectoryEntry entry = directoryEntries[Mathf.Clamp(directorySelection, 0, directoryEntries.Count - 1)];
             if (entry.Type == DirectoryEntryType.Passenger)
-                directoryPreviewModel.transform.localRotation = Quaternion.Euler(0f,
-                    180f + Mathf.Sin(Time.unscaledTime * 1.2f) * 5f, 0f);
+            {
+                // Passenger prefabs face -Z, toward the preview camera, at zero yaw.
+                float yaw = Mathf.Sin(Time.unscaledTime * 1.2f) * 5f;
+                directoryPreviewModel.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            }
         }
 
         static void ReadDirectoryNavigation(out Vector2 move, out bool confirm, out bool back)
