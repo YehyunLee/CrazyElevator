@@ -610,7 +610,7 @@ namespace CrazyElevator.Managers
             foreach (Transform child in root) SetDirectoryLayer(child, layer);
         }
 
-        void FitDirectoryModel(Transform model, float targetHeight, float maxWidth)
+        void FitDirectoryModel(Transform model, float targetHeight, float maxWidth, bool centerHorizontally = false)
         {
             Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
             Bounds bounds = new Bounds(model.position, Vector3.zero);
@@ -635,7 +635,11 @@ namespace CrazyElevator.Managers
                 else bounds.Encapsulate(renderer.bounds);
             }
             if (hasBounds)
-                model.position += directoryPreviewStage.up * (1f - (bounds.center.y - directoryPreviewStage.position.y));
+            {
+                Vector3 center = bounds.center - directoryPreviewStage.position;
+                model.position += directoryPreviewStage.up * (1f - center.y);
+                if (centerHorizontally) model.position -= directoryPreviewStage.right * center.x;
+            }
         }
 
         void ClearDirectoryPreviewModel()

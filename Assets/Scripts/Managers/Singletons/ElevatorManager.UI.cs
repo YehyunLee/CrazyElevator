@@ -14,7 +14,8 @@ namespace CrazyElevator.Managers
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
             rewardPoints, rewardCaption, scoreFlightStyle, actionWord, calloutNumber, calloutText, selectionArrow,
-            encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge;
+            encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge,
+            manifestTitle, manifestDetail;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
         const float ActionFeedbackSeconds = 1.2f;
@@ -82,6 +83,12 @@ namespace CrazyElevator.Managers
             small = new GUIStyle(body) { fontSize = 12 };
             title = new GUIStyle(body) { fontSize = 36, fontStyle = FontStyle.Bold };
             GameTypography.Apply(title, true);
+            manifestDetail = new GUIStyle(small)
+            {
+                padding = new RectOffset(), wordWrap = false, clipping = TextClipping.Clip
+            };
+            manifestTitle = new GUIStyle(manifestDetail);
+            GameTypography.Apply(manifestTitle, true);
             large = new GUIStyle(body) { fontSize = 24, fontStyle = FontStyle.Bold };
             GameTypography.Apply(large, true);
             buttonStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
@@ -1390,18 +1397,54 @@ namespace CrazyElevator.Managers
         }
 
         readonly List<Rider> manifestRiders = new List<Rider>();
+        readonly Dictionary<Rider, RenderTexture> manifestRiderPortraits = new Dictionary<Rider, RenderTexture>();
         Vector2 manifestScroll;
-        static readonly Color ManifestPatienceRed = new Color32(248, 84, 97, 255);
+        const float ManifestHeaderHeight = 46f;
+        const float ManifestRowHeight = 88f;
+        const float ManifestRowGap = 5f;
+        const float ManifestInset = 8f;
+        const float ManifestShadow = 4f;
+        static readonly Color ManifestPortraitBacking = new Color32(166, 152, 197, 255);
+        static readonly Color ManifestPatienceTrack = new Color32(221, 209, 188, 255);
+        static readonly Color ManifestUrgentText = new Color32(148, 44, 55, 255);
+
+        void UpdateManifestPortraits()
+        {
+            manifestRiderPortraits.Clear();
+            MenuManager menu = MenuManager.Current;
+            if (menu == null) return;
+
+            foreach (Rider rider in round.Riders)
+            {
+                if (!round.Owns(rider)) continue;
+                PassengerView prefab = FindPassengerArt(rider);
+                if (prefab != null)
+                    manifestRiderPortraits[rider] = menu.GetManifestPortrait(prefab, PassengerJacket(rider));
+            }
+        }
+
+        Rect ManifestView => Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+
+        static float ManifestScale(Rect view) => Mathf.Min(Mathf.Clamp(view.height / 900f, .8f, 1.4f),
+            view.width / 650f);
+
+        static Rect ManifestBoardRect(Rect view, float widthRatio, float uiScale, int riderCount)
+        {
+            float width = Mathf.Min(view.width * .44f, Mathf.Clamp(view.width * widthRatio,
+                282f * uiScale, 360f * uiScale));
+            float contentHeight = riderCount == 0 ? 38f : riderCount * ManifestRowHeight - ManifestRowGap;
+            float height = Mathf.Min(view.height * .6f,
+                (ManifestHeaderHeight + contentHeight + ManifestInset + ManifestShadow) * uiScale);
+            float top = Mathf.Min(view.height * .3f, Mathf.Max(102f, view.height * .14f));
+            return new Rect(view.xMax - width - 14f * uiScale, view.y + top, width, height);
+        }
 
         Rect PassengerListRect()
         {
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
-            float width = Mathf.Min(view.width * .44f, Mathf.Max(190f, view.width * passengerListWidth));
-            float rowHeight = Mathf.Clamp(view.height * .066f, 44f, 62f);
+            Rect view = ManifestView;
             int count = 0;
             foreach (Rider rider in round.Riders) if (round.Owns(rider)) count++;
-            float height = Mathf.Min(view.height * .64f, 55f + Mathf.Max(1, count) * rowHeight);
-            return new Rect(view.xMax - width - 12f, view.y + Mathf.Max(84f, view.height * .14f), width, height);
+            return ManifestBoardRect(view, passengerListWidth, ManifestScale(view), count);
         }
 
         void DrawPassengerList()
@@ -1419,71 +1462,109 @@ namespace CrazyElevator.Managers
                 { manifestRiders[j + 1] = manifestRiders[j]; j--; }
                 manifestRiders[j + 1] = rider;
             }
-            Rect card = PassengerListRect();
-            var labelStyle = new GUIStyle(small)
+            Rect view = ManifestView;
+            float uiScale = ManifestScale(view);
+            int count = manifestRiders.Count;
+            Rect board = ManifestBoardRect(view, passengerListWidth, uiScale, count);
+            DrawManifestHeader(board, count, uiScale);
+
+            float inset = ManifestInset * uiScale;
+            float headerHeight = ManifestHeaderHeight * uiScale;
+            Rect scroll = new Rect(board.x + inset, board.y + headerHeight, board.width - 2f * inset,
+                board.height - headerHeight - inset - ManifestShadow * uiScale);
+            if (count == 0)
             {
-                padding = new RectOffset(),
-                wordWrap = false,
-                clipping = TextClipping.Clip
-            };
-            Panel(card, new Color32(20, 28, 45, 247));
-            Panel(new Rect(card.x, card.y, card.width, 3), Teal);
-            ManifestText(labelStyle, new Rect(card.x + 10, card.y + 9, card.width - 20, 24),
-                "ON BOARD  " + manifestRiders.Count, 17, Cream);
-            if (manifestRiders.Count == 0)
-            {
-                ManifestText(labelStyle, new Rect(card.x + 10, card.y + 40, card.width - 20, 32),
-                    "NO PASSENGERS YET", 12, Cream);
+                manifestScroll = Vector2.zero;
+                ManifestText(manifestDetail, scroll, "NO PASSENGERS YET", 15f * uiScale,
+                    MenuPresentation.Paper, TextAnchor.MiddleCenter);
                 return;
             }
-            float viewHeight = Match != null ? Match.ViewRect(Seat).height : Screen.height;
-            float rowHeight = Mathf.Clamp(viewHeight * .066f, 44f, 62f);
-            Rect scroll = new Rect(card.x + 6, card.y + 40, card.width - 12, card.height - 46);
-            bool overflow = manifestRiders.Count * rowHeight > scroll.height;
-            float rowWidth = scroll.width - (overflow ? 17 : 0);
+
+            float rowHeight = ManifestRowHeight * uiScale;
+            float rowGap = ManifestRowGap * uiScale;
+            float contentHeight = count * rowHeight - rowGap;
+            bool overflow = contentHeight - scroll.height > .01f;
+            GUIStyle scrollbar = GUI.skin.verticalScrollbar;
+            float scrollbarWidth = Mathf.Max(17f, scrollbar.fixedWidth + scrollbar.margin.horizontal);
+            float rowWidth = scroll.width - (overflow ? scrollbarWidth : 0f);
+            manifestScroll.y = Mathf.Clamp(manifestScroll.y, 0f, Mathf.Max(0f, contentHeight - scroll.height));
             manifestScroll = GUI.BeginScrollView(scroll, manifestScroll,
-                new Rect(0, 0, rowWidth, manifestRiders.Count * rowHeight), false, overflow);
-            for (int i = 0; i < manifestRiders.Count; i++)
-            {
-                Rider rider = manifestRiders[i];
-                Rect row = new Rect(0, i * rowHeight, rowWidth, rowHeight - 3);
-                Color accent = rider.Remaining <= rider.Patience * .25f ? Coral : Teal;
-                Panel(row, new Color32(35, 46, 66, 255));
-                float icon = Mathf.Min(row.height - 6, Mathf.Min(rowWidth * .22f, 46f));
-                DrawManifestPortrait(new Rect(4, row.center.y - icon * .5f, icon, icon), rider.Kind);
-                float textX = icon + 10f;
-                float textWidth = rowWidth - textX - 5f;
-                const int destinationSize = 16;
-                string destination = "F" + DestinationTag(rider);
-                labelStyle.fontSize = destinationSize;
-                float destinationWidth = Mathf.Min(labelStyle.CalcSize(new GUIContent(destination)).x + 2f,
-                    textWidth * .46f);
-                float detailsWidth = textWidth - destinationWidth - 6f;
-                int nameSize = Mathf.Clamp(Mathf.RoundToInt(rowWidth / 20), 10, 13);
-                float textY = row.y + Mathf.Max(2f, (row.height - 39f) * .35f);
-                ManifestText(labelStyle, new Rect(textX, textY, detailsWidth, 18f),
-                    PassengerRoleName(rider.Kind), nameSize, Cream);
-                ManifestText(labelStyle, new Rect(textX, textY + 17f, detailsWidth, 16f),
-                    Mathf.CeilToInt(Mathf.Max(0, rider.Remaining)) + "s / +" + round.BaseDeliveryPoints(rider),
-                    12, accent);
-                ManifestText(labelStyle, new Rect(rowWidth - destinationWidth - 5f, textY,
-                    destinationWidth, 33f), destination, destinationSize, Teal, TextAnchor.MiddleRight);
-                float patience = Mathf.Clamp01(rider.Remaining / Mathf.Max(.001f, rider.Patience));
-                Panel(new Rect(textX, row.yMax - 5f, textWidth, 3f), Ink);
-                Panel(new Rect(textX, row.yMax - 5f, textWidth * patience, 3f), ManifestPatienceRed);
-            }
+                new Rect(0, 0, rowWidth, overflow ? contentHeight : scroll.height), false, overflow);
+            for (int i = 0; i < count; i++)
+                DrawManifestRow(new Rect(0, i * rowHeight, rowWidth, rowHeight - rowGap), manifestRiders[i], uiScale);
             GUI.EndScrollView();
         }
 
-        void ManifestText(GUIStyle style, Rect rect, string text, int fontSize, Color colour,
+        void DrawManifestHeader(Rect board, int count, float uiScale)
+        {
+            float shadow = ManifestShadow * uiScale;
+            float radius = 12f * uiScale;
+            PaintManifestShape(new Rect(board.x, board.y + shadow, board.width, board.height - shadow),
+                MenuPresentation.Ink, radius);
+            PaintManifestShape(new Rect(board.x, board.y, board.width, board.height - shadow),
+                MenuPresentation.Wall, radius);
+
+            float inset = ManifestInset * uiScale;
+            Rect header = new Rect(board.x + inset, board.y + inset, board.width - 2f * inset, 32f * uiScale);
+            PaintManifestShape(header, MenuPresentation.Brass, 7f * uiScale);
+            Rect counter = new Rect(header.xMax - 37f * uiScale, header.y + 4f * uiScale, 32f * uiScale, 24f * uiScale);
+            PaintManifestShape(counter, MenuPresentation.Ink, 7f * uiScale);
+            ManifestText(manifestTitle, counter, count.ToString(), 17f * uiScale, MenuPresentation.Paper,
+                TextAnchor.MiddleCenter);
+            ManifestText(manifestTitle, new Rect(header.x + 10f * uiScale, header.y,
+                counter.x - header.x - 15f * uiScale, header.height), "ON BOARD", 19f * uiScale, MenuPresentation.Ink);
+        }
+
+        void DrawManifestRow(Rect row, Rider rider, float uiScale)
+        {
+            float patience = Mathf.Clamp01(rider.Remaining / Mathf.Max(.001f, rider.Patience));
+            bool urgent = patience <= .25f;
+            PaintManifestShape(row, MenuPresentation.Paper, 8f * uiScale);
+
+            float portraitSize = 73f * uiScale;
+            Rect portrait = new Rect(row.x + 5f * uiScale, row.center.y - portraitSize * .5f, portraitSize, portraitSize);
+            PaintManifestShape(portrait, ManifestPortraitBacking, 6f * uiScale);
+            DrawManifestPortrait(portrait, rider);
+
+            float textX = portrait.xMax + 9f * uiScale;
+            float textWidth = row.xMax - textX - 8f * uiScale;
+            ManifestText(manifestTitle, new Rect(textX, row.y + 5f * uiScale, textWidth, 25f * uiScale),
+                PassengerRoleName(rider.Kind), 19f * uiScale, MenuPresentation.Ink);
+
+            ManifestText(manifestDetail, new Rect(textX, row.y + 30f * uiScale, textWidth, 22f * uiScale),
+                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s  ·  +" + round.BaseDeliveryPoints(rider),
+                15f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
+
+            float badgeWidth = 60f * uiScale;
+            Rect destination = new Rect(row.xMax - 8f * uiScale - badgeWidth, row.y + 53f * uiScale,
+                badgeWidth, 23f * uiScale);
+            PaintManifestShape(destination, MenuPresentation.Teal, 6f * uiScale);
+            ManifestText(manifestTitle, destination, "F" + DestinationTag(rider), 16f * uiScale,
+                MenuPresentation.Ink, TextAnchor.MiddleCenter);
+
+            float barHeight = 8f * uiScale;
+            Rect bar = new Rect(textX, destination.center.y - barHeight * .5f,
+                destination.x - textX - 8f * uiScale, barHeight);
+            PaintManifestShape(bar, ManifestPatienceTrack, bar.height * .5f);
+            bar.width *= patience;
+            if (bar.width > 0f)
+                PaintManifestShape(bar, urgent ? MenuPresentation.Coral : MenuPresentation.Teal,
+                    Mathf.Min(bar.width, bar.height) * .5f);
+        }
+
+        static void PaintManifestShape(Rect rect, Color colour, float radius)
+            => GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                MenuPresentation.DisplayColor(colour), 0f, radius);
+
+        static void ManifestText(GUIStyle style, Rect rect, string text, float fontSize, Color colour,
             TextAnchor alignment = TextAnchor.MiddleLeft)
         {
             GUIContent content = new GUIContent(text);
             style.alignment = alignment;
-            style.fontSize = fontSize;
+            style.fontSize = Mathf.Max(8, Mathf.RoundToInt(fontSize));
             while (style.fontSize > 8 && style.CalcSize(content).x > rect.width)
                 style.fontSize--;
-            style.normal.textColor = colour;
+            style.normal.textColor = MenuPresentation.DisplayColor(colour);
             GUI.Label(rect, content, style);
         }
 
@@ -1511,28 +1592,12 @@ namespace CrazyElevator.Managers
             }
         }
 
-        void DrawManifestPortrait(Rect rect, string kind)
+        void DrawManifestPortrait(Rect rect, Rider rider)
         {
-            if (passengerPortraitAtlas == null) { DrawPassengerBadgeIcon(rect, kind, Teal); return; }
-            int cell;
-            switch (kind)
-            {
-                case "MAD": cell = 1; break;
-                case "GROUP": cell = 2; break;
-                case "SPEEDBOOST": cell = 3; break;
-                case "BOSS": cell = 4; break;
-                case "ELDERLY": cell = 5; break;
-                case "PREGNANT": cell = 6; break;
-                case "HANDYMAN": cell = 7; break;
-                case "COURIER": cell = 8; break;
-                case "INTERVIEW": cell = 9; break;
-                case "HUNTER": cell = 10; break;
-                case "DIVER": cell = 11; break;
-                case "BOUNCER": cell = 12; break;
-                default: cell = 0; break;
-            }
-            GUI.DrawTextureWithTexCoords(rect, passengerPortraitAtlas,
-                new Rect(cell % 4 * .25f, 1f - (cell / 4 + 1) * .25f, .25f, .25f));
+            if (manifestRiderPortraits.TryGetValue(rider, out RenderTexture portrait) && portrait != null)
+                MenuPresentation.DrawTexture(rect, portrait);
+            else
+                DrawPassengerBadgeIcon(rect, rider.Kind, Teal);
         }
 
         string PassengerCalloutText(Rider rider)

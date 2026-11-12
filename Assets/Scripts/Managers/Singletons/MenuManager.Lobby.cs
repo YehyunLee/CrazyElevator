@@ -15,6 +15,8 @@ namespace CrazyElevator.Managers
         static readonly Color LobbyMetal = new Color32(113, 72, 52, 255);
         static readonly Color LobbyShadow = new Color32(38, 29, 44, 255);
         readonly Dictionary<string, RenderTexture> lobbyPortraits = new Dictionary<string, RenderTexture>();
+        readonly Dictionary<(PassengerView prefab, Color jacket), RenderTexture> manifestPortraits =
+            new Dictionary<(PassengerView prefab, Color jacket), RenderTexture>();
         readonly int[] lobbyHeldDirection = new int[2];
         readonly int[] lobbyConfirmFrame = { -1, -1 };
 
@@ -55,57 +57,73 @@ namespace CrazyElevator.Managers
                 string kind = LobbyCharacters[lobbyCharacterSelection[seat]];
                 if (lobbyPortraits.ContainsKey(kind)) continue;
                 PassengerView prefab = FindDirectoryPassenger(kind);
-                if (prefab != null) lobbyPortraits.Add(kind, CaptureLobbyPortrait(prefab));
+                if (prefab != null) lobbyPortraits.Add(kind, CapturePassengerPortrait(prefab, 320, LobbyPortraitBacking));
             }
         }
 
-        // The guide's preview camera photographs the actual prefab once per character.
-        RenderTexture CaptureLobbyPortrait(PassengerView prefab)
+        internal RenderTexture GetManifestPortrait(PassengerView prefab, Material jacket)
+        {
+            var key = (prefab, jacket.color);
+            if (manifestPortraits.TryGetValue(key, out RenderTexture portrait)) return portrait;
+
+            portrait = CapturePassengerPortrait(prefab, 128, Color.clear, jacket);
+            manifestPortraits.Add(key, portrait);
+            return portrait;
+        }
+
+        // Capture a still from the same front-facing preview stage used by the guide.
+        RenderTexture CapturePassengerPortrait(PassengerView prefab, int size, Color background,
+            Material jacket = null)
         {
             EnsureDirectoryPreviewStage();
-            GameObject model = Instantiate(prefab.gameObject, directoryPreviewStage, false);
+            PassengerView model = Instantiate(prefab, directoryPreviewStage, false);
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.Euler(0f, -14f, 0f);
-            model.SetActive(true);
+            model.gameObject.SetActive(true);
+            if (jacket != null && model.jackets != null)
+                foreach (Renderer renderer in model.jackets)
+                    if (renderer != null) renderer.sharedMaterial = jacket;
             foreach (TextMesh label in model.GetComponentsInChildren<TextMesh>(true))
                 label.gameObject.SetActive(false);
-            PrepareDirectoryPreviewModel(model);
-            FitDirectoryModel(model.transform, 2.06f, 2.08f);
+            PrepareDirectoryPreviewModel(model.gameObject);
+            FitDirectoryModel(model.transform, 2.06f, 2.08f, centerHorizontally: true);
 
-            var portrait = new RenderTexture(320, 320, 24, RenderTextureFormat.ARGB32)
+            var portrait = new RenderTexture(size, size, 24, RenderTextureFormat.ARGB32)
             {
-                name = prefab.ResolvedKind + " lobby portrait",
+                name = prefab.ResolvedKind + " passenger portrait",
                 antiAliasing = 2,
                 filterMode = FilterMode.Bilinear,
                 hideFlags = HideFlags.HideAndDontSave
             };
             portrait.Create();
             RenderTexture previousTexture = directoryPreviewCamera.targetTexture;
+            RenderTexture previousActive = RenderTexture.active;
             Color previousBackground = directoryPreviewCamera.backgroundColor;
             try
             {
                 directoryPreviewCamera.targetTexture = portrait;
-                directoryPreviewCamera.backgroundColor = LobbyPortraitBacking;
+                directoryPreviewCamera.backgroundColor = background;
                 directoryPreviewCamera.Render();
             }
             finally
             {
                 directoryPreviewCamera.targetTexture = previousTexture;
                 directoryPreviewCamera.backgroundColor = previousBackground;
-                model.SetActive(false);
-                Destroy(model);
+                RenderTexture.active = previousActive;
+                model.gameObject.SetActive(false);
+                Destroy(model.gameObject);
             }
             return portrait;
         }
 
-        void ReleaseLobbyPortraits()
+        void ReleasePassengerPortraits()
         {
             foreach (RenderTexture portrait in lobbyPortraits.Values)
-            {
-                portrait.Release();
                 Destroy(portrait);
-            }
+            foreach (RenderTexture portrait in manifestPortraits.Values)
+                Destroy(portrait);
             lobbyPortraits.Clear();
+            manifestPortraits.Clear();
         }
 
         void DrawFixedTwoPlayerLobby()

@@ -24,6 +24,36 @@ namespace CrazyElevator.Managers
         static readonly Color DoorwayEdge = new Color32(139, 72, 49, 255);
         static readonly Color DoorwayShade = new Color32(47, 33, 41, 255);
         [System.NonSerialized] GUIStyle titleWordmark, titleActionText, titleIndicator;
+        bool titleMoveHeld;
+
+        void UpdateTitleNavigation(Vector2 move)
+        {
+            bool vertical = Mathf.Abs(move.y) >= Mathf.Abs(move.x);
+            float direction = vertical ? -move.y : move.x;
+            bool moving = Mathf.Abs(direction) >= .55f;
+            bool movePressed = moving && !titleMoveHeld;
+            titleMoveHeld = moving;
+            if (choosingMode || !movePressed) return;
+
+            Rect selected = TitleButtonRects[titleSelection];
+            float closestDistance = float.PositiveInfinity;
+            for (int i = 0; i < TitleButtonRects.Length; i++)
+            {
+                Rect candidate = TitleButtonRects[i];
+                Vector2 offset = candidate.center - selected.center;
+                float distance = vertical ? offset.y : offset.x;
+                if (distance * direction <= 0f) continue;
+
+                // A straight move can reach buttons that overlap on the other axis.
+                bool aligned = vertical
+                    ? candidate.xMin < selected.xMax && candidate.xMax > selected.xMin
+                    : candidate.yMin < selected.yMax && candidate.yMax > selected.yMin;
+                if (!aligned || offset.sqrMagnitude >= closestDistance) continue;
+
+                closestDistance = offset.sqrMagnitude;
+                titleSelection = i;
+            }
+        }
 
         void DrawModeSelect()
         {

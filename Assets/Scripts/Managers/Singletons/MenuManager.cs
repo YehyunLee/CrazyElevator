@@ -71,8 +71,6 @@ namespace CrazyElevator.Managers
         static bool inputHintsLoaded;
         static bool tutorialMode = true;
         static bool tutorialModeLoaded;
-        bool horizontalHeld;
-        bool verticalHeld;
         GUIStyle title, cardTitle, caption, cardCaption, body, menuLabelText, readyLabelText, startCircle;
         GUIStyle poolToggleLabel, poolCycleCaption;
         GUIStyle poolHeaderText, poolInstructionText, poolDimensionNameText, poolNoticeText;
@@ -242,7 +240,7 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             MenuPresentation.ReleaseTextureMaterial();
-            ReleaseLobbyPortraits();
+            ReleasePassengerPortraits();
             OnDestroyDirectoryPreview();
             if (Current == this)
             {
@@ -372,35 +370,10 @@ namespace CrazyElevator.Managers
             Vector2 titleNavigation = input.Move;
             if (!choosingMode)
             {
-                if (keyboard != null)
-                {
-                    titleNavigation += new Vector2(
-                        (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0)
-                            - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0),
-                        (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0)
-                            - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0));
-                }
+                titleNavigation += KeyboardMenuMove(false);
                 UpdateTitleMouseCursor();
             }
-            bool horizontal = Mathf.Abs(titleNavigation.x) >= .55f;
-            bool vertical = Mathf.Abs(titleNavigation.y) >= .55f;
-            if (!choosingMode && vertical && !verticalHeld)
-                titleSelection = (titleSelection + (titleNavigation.y < 0 ? 1 : 4)) % TitleButtonRects.Length;
-            else if (!choosingMode && horizontal && !horizontalHeld)
-            {
-                if (titleNavigation.x > 0f)
-                {
-                    if (titleSelection == 0) titleSelection = 1;
-                    else if (titleSelection == 2 || titleSelection == 4) titleSelection = 3;
-                }
-                else
-                {
-                    if (titleSelection == 1) titleSelection = 0;
-                    else if (titleSelection == 3) titleSelection = 2;
-                }
-            }
-            horizontalHeld = horizontal;
-            verticalHeld = vertical;
+            UpdateTitleNavigation(titleNavigation);
 
             if (choosingMode && transition >= TransitionSeconds)
             {

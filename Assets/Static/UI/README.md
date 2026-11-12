@@ -1,6 +1,6 @@
 # Passenger portrait UI
 
-`PassengerPortraitAtlas.png` is a reusable 4 x 4 sheet used by the passenger manifest and two-player lobby. Both Main scene managers have explicit Inspector references; the atlas is copied to Player 2 with its elevator configuration. Point filtering, no mipmaps, uncompressed.
+The passenger manifest and two-player lobby render portraits from passenger prefabs. `PassengerPortraitAtlas.png` is the original 4 x 4 illustration sheet.
 
 Reading order: office worker, angry worker, trio, clown; boss, grandma, mom and baby, handyman; courier, interviewee, hunter, diver; bouncer, worker, starfish, elevator.
 
