@@ -1765,8 +1765,6 @@ namespace CrazyElevator.Managers
         public bool showPassengerList = true;
         [UnityEngine.Serialization.FormerlySerializedAs("cabinPreviewWidth")]
         [Range(.2f, .45f)] public float passengerListWidth = .3f;
-        [Tooltip("Reusable 4 x 4 passenger portrait sheet, in reading order.")]
-        public Texture2D passengerPortraitAtlas;
         [Range(0, .04f)] public float cabinTravelShake = .022f;
         [Range(0, .25f)] public float shaftTravelShake = .1f;
         Camera exteriorCamera;
@@ -1939,6 +1937,8 @@ namespace CrazyElevator.Managers
                 ApplyWorldEventCameraAccent();
             }
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
+            if (visible && showingTravelView && showPassengerList && !MenuManager.IsOpen)
+                UpdateManifestPortraits();
         }
 
         float AdvanceCameraView(bool travelView, float dt)
@@ -2456,7 +2456,6 @@ namespace CrazyElevator.Managers
             target.stopWindow = stopWindow;
             target.showPassengerList = showPassengerList;
             target.passengerListWidth = passengerListWidth;
-            target.passengerPortraitAtlas = passengerPortraitAtlas;
             target.cabinTravelShake = cabinTravelShake;
             target.shaftTravelShake = shaftTravelShake;
             target.backgroundMusic = null;

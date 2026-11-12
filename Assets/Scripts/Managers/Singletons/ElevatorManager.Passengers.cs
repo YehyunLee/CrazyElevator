@@ -1592,34 +1592,43 @@ namespace CrazyElevator.Managers
         static readonly Color BabyTearColor = new Color32(75, 220, 255, 255);
         static readonly Color GrandmaComfortColor = new Color32(255, 211, 61, 255);
 
-        // Both cabin and moving-shaft views use the same model and jacket tint.
-        PassengerView SpawnPassengerArt(Rider rider, Transform parent)
+        PassengerView FindPassengerArt(Rider rider)
         {
-            PassengerView template = null;
             // A catalog can override the scene's editable passenger prefabs.
-            if (rider.Data != null) template = rider.Data.prefab;
-            foreach (PassengerView art in sceneView.passengers)
-                if (template == null && art != null && art.ResolvedKind == rider.Kind) template = art;
-            if (template == null)
-            {
-                GameObject resource = Resources.Load<GameObject>("Passenger-" + rider.Kind);
-                if (resource != null) template = resource.GetComponent<PassengerView>();
-            }
+            if (rider.Data != null && rider.Data.prefab != null) return rider.Data.prefab;
+            PassengerView[] prefabs = PassengerPrefabs;
+            if (prefabs != null)
+                foreach (PassengerView art in prefabs)
+                    if (art != null && art.ResolvedKind == rider.Kind) return art;
+
+            GameObject resource = Resources.Load<GameObject>("Passenger-" + rider.Kind);
+            if (resource != null && resource.TryGetComponent(out PassengerView template)) return template;
+
             // Older scenes may not have the special prefabs assigned yet.
             string fallbackKind = rider.Kind == "HUNTER" ? "INTERVIEW"
                 : rider.Kind == "DIVER" ? "HANDYMAN"
                 : rider.Kind == "BOUNCER" ? "BOSS" : rider.Kind;
-            foreach (PassengerView art in sceneView.passengers)
-                if (template == null && art != null && art.ResolvedKind == fallbackKind) template = art;
+            if (prefabs != null && fallbackKind != rider.Kind)
+                foreach (PassengerView art in prefabs)
+                    if (art != null && art.ResolvedKind == fallbackKind) return art;
+            return null;
+        }
+
+        Material PassengerJacket(Rider rider) => Mat(Palette[rider.Color % Palette.Length]);
+
+        // The cabin, shaft, and manifest use the same model and jacket tint.
+        PassengerView SpawnPassengerArt(Rider rider, Transform parent)
+        {
+            PassengerView template = FindPassengerArt(rider);
             if (template == null)
                 throw new System.InvalidOperationException("Assign passenger art for " + rider.Kind + " in Elevator Scene.");
             PassengerView view = Instantiate(template, parent, false);
             view.transform.localScale = Vector3.one * PassengerVisualScale;
             foreach (Transform part in view.GetComponentsInChildren<Transform>(true))
                 part.gameObject.layer = ExteriorLayer;
-            Color color = Palette[rider.Color % Palette.Length];
+            Material jacketMaterial = PassengerJacket(rider);
             foreach (Renderer jacket in view.jackets)
-                if (jacket != null) jacket.sharedMaterial = Mat(color);
+                if (jacket != null) jacket.sharedMaterial = jacketMaterial;
             return view;
         }
 

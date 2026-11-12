@@ -773,8 +773,7 @@ public static class ExtendedInteriorChecks
         var menu = CrazyElevator.Managers.MenuManager.Current;
         Type type = menu.GetType();
         object Field(string key) => type.GetField(key, Flags).GetValue(menu);
-        Require(Field("menuArtwork") != null && Field("passengerPortraitAtlas") != null,
-            "Menu artwork and portraits must be assigned in Main.");
+        Require(Field("menuArtwork") != null, "Menu artwork must be assigned in Main.");
         foreach (string name in new[] { "GameManager", "InputManager", "MenuManager", "MusicManager", "SfxManager" })
             Require(GameObject.Find(name)?.GetComponent(name) != null, "Missing authored manager " + name);
         for (int i = 0; i < 20; i++) yield return null;
@@ -800,14 +799,17 @@ public static class ExtendedInteriorChecks
             "Menu launch must create two human seats.");
         match.StartMatch();
         CheckMatchRoundIntroduction(match, 0);
+        var passengers = new (string Name, string Kind)[]
+        {
+            ("Courier", "COURIER"), ("Grandma", "ELDERLY"), ("Fairy", "FAIRY"),
+            ("Alien", "ALIEN"), ("Hunter", "HUNTER"), ("Second Courier", "COURIER")
+        };
         foreach (Game game in new[] { match.player, match.Rival })
         {
-            Require(game.passengerPortraitAtlas != null, "Each elevator needs the serialized portrait atlas.");
             var round = (Round)Get(game, "round");
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < passengers.Length; i++)
             {
-                var rider = new SharedRider { Name = new[] { "Courier", "Grandma", "Boss", "Interview", "Hunter", "Worker" }[i],
-                    Kind = new[] { "COURIER", "ELDERLY", "BOSS", "INTERVIEW", "HUNTER", "COURIER" }[i],
+                var rider = new SharedRider { Name = passengers[i].Name, Kind = passengers[i].Kind,
                     Origin = 0, Destination = i + 1, Space = 1, Patience = 60, Remaining = 10 + i * 8,
                     Boarded = true, BoardedBySeat = round.Seat };
                 round.Riders.Add(rider);
@@ -828,9 +830,23 @@ public static class ExtendedInteriorChecks
             Require(riders.Count == 6, "Manifest must contain only this seat's six riders.");
             for (int i = 1; i < riders.Count; i++)
                 Require(riders[i-1].Remaining <= riders[i].Remaining, "Manifest urgency order is wrong.");
+            var portraits = (Dictionary<SharedRider, RenderTexture>)Get(game, "manifestRiderPortraits");
+            var portraitsByKind = new Dictionary<string, RenderTexture>();
+            foreach (SharedRider rider in riders)
+            {
+                Require(portraits.TryGetValue(rider, out RenderTexture portrait) && portrait != null && portrait.IsCreated(),
+                    "Manifest did not render a character portrait for " + rider.Kind + ".");
+                if (portraitsByKind.TryGetValue(rider.Kind, out RenderTexture existing))
+                    Require(portrait == existing, "Matching character appearances should reuse a manifest portrait.");
+                else
+                {
+                    Require(!portraitsByKind.ContainsValue(portrait), "Different characters shared a manifest portrait.");
+                    portraitsByKind.Add(rider.Kind, portrait);
+                }
+            }
             Require(!((Camera)Get(game, "eye")).enabled, "Cabin inset camera remains enabled in travel view.");
         }
-        File.WriteAllText(output + "/result.txt", "PASS: saved managers and art references, menu to two-human match, independent ready/undo, full round introduction, per-seat manifests sorted by patience, travel camera; screenshots captured.");
+        File.WriteAllText(output + "/result.txt", "PASS: saved managers and art references, menu to two-human match, independent ready/undo, full round introduction, per-seat manifests with character portraits sorted by patience, travel camera; screenshots captured.");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Single-Dimension Match")]
