@@ -512,7 +512,8 @@ namespace CrazyElevator.Managers
             if (round.Floor == MinTravelFloor) travelDirection = 1;
             if (round.Floor >= MaxTravelFloor) travelDirection = -1;
             destination = -1; phase = Phase.Closing; phaseTime = 0;
-            notice = "Doors closing. Choose up/down outside, then press C near a floor to stop.";
+            notice = "Doors closing. Steer with " + GameplayVerticalKeys + ". "
+                + GameplayConfirmKey + " stops near a floor.";
             Play(click);
         }
         void BeginBuildingTravel()
@@ -528,7 +529,8 @@ namespace CrazyElevator.Managers
             boostAxis = 0; boostHeld = false;
             PrepareRouteDeparture();
             phase = Phase.Moving; phaseTime = 0; destination = -1;
-            notice = "Cruising. Hold Shift / shoulder / trigger with up/down for extra speed. Confirm near a floor to stop.";
+            notice = "Cruising. Hold " + GameplayBoostKey + " with " + GameplayVerticalKeys
+                + " to boost. " + GameplayConfirmKey + " stops near a floor.";
         }
         // Stop works anywhere: close to a floor it docks there, otherwise the car
         // glides on into the next floor ahead (staying on its side track).
@@ -656,7 +658,8 @@ namespace CrazyElevator.Managers
                     ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
             }
             if (!railRiding && Mathf.Approximately(before, travelFloor))
-                notice = "End of track. Press A/D to take this floor's rail, confirm to stop, or reverse.";
+                notice = "End of track. " + GameplayHorizontalKeys + " takes this floor's rail. "
+                    + GameplayConfirmKey + " stops. You can also reverse.";
         }
         void ResetBuildingTravel()
         {
@@ -1489,7 +1492,10 @@ namespace CrazyElevator.Managers
                     : OnFloorRail ? (railVelocity >= 0 ? "GOING RIGHT" : "GOING LEFT") + "  /  FLOOR " + ElevatorRound.FloorNumber(railFloor)
                     : (travelVelocity >= 0 ? "GOING UP" : "GOING DOWN") + "  /  " + (travelFloor % ElevatorRound.FloorsPerDimension + 1f).ToString("0.0");
                 Label(new Rect(24, 49, 500, 30), status, large);
-                Label(new Rect(24, 84, 500, 28), phase == Phase.Moving ? "Press C to stop at floor " + ElevatorRound.FloorNumber(GlideStopFloor()) : "Hold UP / DOWN or W / S or left joystick", body);
+                string moveHint = phase == Phase.Moving
+                    ? GameplayConfirmKey + " to stop at floor " + ElevatorRound.FloorNumber(GlideStopFloor())
+                    : "Hold " + GameplayVerticalKeys + " to move";
+                Label(new Rect(24, 84, 500, 28), moveHint, body);
                 Label(new Rect(24, 112, 500, 24), WorldName(travelFloor), small);
                 bool accelerating = OnFloorRail ? railBoost : boostHeld && boostAxis != 0;
                 Label(new Rect(24, 137, 525, 24), RouteSpeed.ToString("0.00") + " floors/s  |  " + (accelerating ? "ACCELERATING" : "COASTING"), body);
@@ -1505,28 +1511,30 @@ namespace CrazyElevator.Managers
             AngularPanel(new Rect(12, screenHeight - 54, width, 42),
                 WorldAccent(DisplayBuildingView ? travelFloor : round.Floor));
             string prompt;
+            string footerKey;
             if (DisplayBuildingView)
             {
                 prompt = Match != null
-                    ? "LEFT / RIGHT OR A / D SWITCH TRACK   ·   STOP NEAR A FLOOR"
+                    ? GameplayHorizontalKeys + " SWITCH TRACK   ·   STOP NEAR A FLOOR"
                     : "STOP NEAR A FLOOR   ·   HOLD DIRECTION TO BUILD SPEED";
+                footerKey = GameplayConfirmKey;
             }
             else if (selectedRider == null)
             {
-                prompt = "LEFT / UP / RIGHT OPENS DOORS   ·   AUTO BOARD";
+                prompt = "OPEN DOORS   ·   AUTO BOARD";
+                footerKey = GameplayDoorKeys;
             }
             else
             {
                 prompt = selectedRider.Name + " → F" + DestinationTag(selectedRider)
-                    + (selectedRider.Boarded ? "   ·   UNLOAD / KICK   ·   DRAG OUT"
-                        : "   ·   BOARD   ·   DRAG IN");
+                    + (selectedRider.Boarded ? "   ·   KICK OUT" : "   ·   AUTO BOARD");
+                if (GameplayUsesKeyboard)
+                    prompt += selectedRider.Boarded ? "   ·   DRAG OUT" : "   ·   DRAG IN";
+                footerKey = selectedRider.Boarded ? GameplayKickoutKey : null;
             }
-            string footerKey = !DisplayBuildingView && selectedRider == null
-                ? (GameplayUsesKeyboard && Seat == 0 ? "W/A/D" : "←/↑/→")
-                : !DisplayBuildingView && selectedRider != null && selectedRider.Boarded
-                    ? GameplayKickoutKey : GameplayConfirmKey;
             DrawGameplayKeyHint(new Rect(24, screenHeight - 53, 42, 42), footerKey);
-            Label(new Rect(76, screenHeight - 48, width - 76, 30),
+            float promptX = footerKey != null ? 76 : 24;
+            Label(new Rect(promptX, screenHeight - 48, width - promptX, 30),
                 DisplayBuildingView ? WorldName(travelFloor) + "   ·   " + prompt : prompt, body);
         }
     }
@@ -2476,7 +2484,8 @@ namespace CrazyElevator.Managers
             travelVelocity *= Mathf.Clamp01(retainedSpeed);
             boostAxis = 0f;
             boostHeld = false;
-            notice = IsNpc ? "BLOCKED — SWITCHING TRACK" : "COLLISION! USE LEFT / RIGHT OR A / D TO SWITCH TRACKS";
+            notice = IsNpc ? "BLOCKED — SWITCHING TRACK"
+                : "COLLISION! USE " + GameplayHorizontalKeys + " TO SWITCH TRACKS";
         }
 
         // Move the authored car and its cabin together for a short Bouncer hit.
@@ -2510,7 +2519,7 @@ namespace CrazyElevator.Managers
             RetargetNpcAfterCollision();
             notice = knockedFromStop
                 ? (IsNpc ? "KNOCKED OFF THE FLOOR!" : "KNOCKED OFF YOUR STOP — RECOVER!")
-                : (IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE A / D TO PASS");
+                : (IsNpc ? "BOUNCED — FINDING A WAY AROUND" : "BOUNCE! USE " + GameplayHorizontalKeys + " TO PASS");
         }
 
         public float LateralTravelVelocity => railRiding ? railVelocity : 0f;

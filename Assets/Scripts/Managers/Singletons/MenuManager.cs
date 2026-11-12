@@ -12,17 +12,14 @@ namespace CrazyElevator.Managers
     {
         const string SinglePlayerScene = "Assets/Scenes/Main.unity";
         const string DuelScene = SinglePlayerScene;
-        static readonly Color Ink = new Color32(9, 11, 16, 255);
-        static readonly Color Teal = new Color32(75, 226, 202, 255);
-        // Match the turquoise baked into the title artwork's menu buttons.
+        static Color Ink => PresentingMenu ? MenuPresentation.Ink : new Color32(9, 11, 16, 255);
+        static Color Teal => PresentingMenu ? MenuPresentation.Teal : new Color32(75, 226, 202, 255);
+        // Shared with the original shaft artwork and the input hints.
         static readonly Color TitleTeal = new Color32(90, 201, 179, 255);
-        static readonly Color Coral = new Color32(255, 124, 104, 255);
-        static readonly Color Cream = new Color32(255, 250, 234, 255);
+        static Color Coral => PresentingMenu ? MenuPresentation.Coral : new Color32(255, 124, 104, 255);
+        static Color Cream => PresentingMenu ? MenuPresentation.Paper : new Color32(255, 250, 234, 255);
         static readonly Color PlayerOneColour = new Color32(255, 80, 80, 255);
         static readonly Color PlayerTwoColour = new Color32(80, 145, 255, 255);
-        static readonly Color LobbySurface = new Color32(55, 59, 68, 255);
-        static readonly Color CpuReadyColour = new Color32(145, 150, 160, 255);
-        static readonly Color DisabledColour = new Color32(100, 105, 112, 255);
         [SerializeField] Texture2D menuArtwork;
         [SerializeField] Texture2D controllerInstructions;
         const float ArtWidth = 1700f;
@@ -35,16 +32,6 @@ namespace CrazyElevator.Managers
         const float MenuFadeSeconds = .55f;
         // Lower IMGUI depths draw in front of gameplay HUD and ability overlays.
         const int TutorialOverlayDepth = -3000;
-        // Keep the IMGUI cursor and action hint locked to the same reference-
-        // resolution rectangles as the title Canvas buttons in Main.unity.
-        static readonly Rect[] TitleButtonRects =
-        {
-            new Rect(300f, 680f, 310f, 70f), // START, left column
-            new Rect(650f, 740f, 310f, 70f), // DIMENSION POOL, right column
-            new Rect(300f, 825f, 310f, 70f), // GUIDE, left column
-            new Rect(650f, 885f, 310f, 70f), // OPTIONS, right column
-            new Rect(300f, 970f, 310f, 70f)  // EXIT, left column
-        };
         static readonly Rect[] OptionsButtonRects =
         {
             new Rect(440f, 290f, 820f, 110f),
@@ -63,7 +50,6 @@ namespace CrazyElevator.Managers
         [SerializeField] Rect playerTwoReadyButton = new Rect(940, 665, 460, 80);
         [SerializeField] Rect startButton = new Rect(720, 930, 260, 72);
         [SerializeField] Rect backButton = new Rect(48, 46, 220, 58);
-        Texture2D triangleCursorTexture;
         Texture2D keyIconTexture;
         Texture2D leftChoiceArrowTexture, rightChoiceArrowTexture;
         float transition;
@@ -73,11 +59,8 @@ namespace CrazyElevator.Managers
         bool playerOneReady;
         bool playerTwoReady;
         bool lastPlayerTwoRegistered;
+        bool playerTwoHadController;
         bool playerOneHuman = true;
-        int playerOneCursor;
-        int playerTwoCursor;
-        bool playerOneCursorHeld;
-        bool playerTwoCursorHeld;
         int titleSelection;
         int modeSelection;
         bool showingOptions;
@@ -96,6 +79,7 @@ namespace CrazyElevator.Managers
         GUIStyle guideHeaderText, guideCaptionText, guideCardTitleText;
         GUIStyle guideNeighborItemText, guideCurrentItemText, guideArrowText;
         GUIStyle guideNextStopHeaderText, guideNextStopDescriptionText, guidePreviewText;
+        bool stylesForMenu;
         static bool startDuelOnLoad;
         static bool showControllerInstructionsOnLoad;
         static bool playerTwoHumanOnLoad;
@@ -115,6 +99,14 @@ namespace CrazyElevator.Managers
         public static bool IsOpen { get; private set; }
         public static bool PauseOpen => pauseOpen;
         public static MenuManager Current { get; private set; }
+        static bool PresentingMenu => IsOpen || pauseOpen || Current != null
+            && (Current.showingControllerInstructions || Current.roundPassengerIntroductionActive
+                || Current.tutorialFinalePhase == TutorialFinalePhase.Story
+                || Current.tutorialFinalePhase == TutorialFinalePhase.Controls
+                || Current.tutorialFinalePhase == TutorialFinalePhase.Countdown);
+
+        static Color MenuColor(Color color)
+            => PresentingMenu ? MenuPresentation.DisplayColor(color) : color;
         public static bool FullScreenOverlayActive
         {
             get
@@ -206,6 +198,7 @@ namespace CrazyElevator.Managers
             inputHintsLoaded = false;
             tutorialModeLoaded = false;
             tutorialMode = true;
+            ResetLobbyCharacterSelection();
         }
 
         void Awake()
@@ -248,6 +241,8 @@ namespace CrazyElevator.Managers
 
         void OnDestroy()
         {
+            MenuPresentation.ReleaseTextureMaterial();
+            ReleaseLobbyPortraits();
             OnDestroyDirectoryPreview();
             if (Current == this)
             {
@@ -255,7 +250,6 @@ namespace CrazyElevator.Managers
                 roundPassengerIntroductionActive = false;
                 RoundPassengerIntroductionActive = false;
             }
-            if (triangleCursorTexture != null) Destroy(triangleCursorTexture);
             if (keyIconTexture != null) Destroy(keyIconTexture);
             if (leftChoiceArrowTexture != null) Destroy(leftChoiceArrowTexture);
             if (rightChoiceArrowTexture != null) Destroy(rightChoiceArrowTexture);
@@ -323,7 +317,8 @@ namespace CrazyElevator.Managers
                 && (keyboard.cKey.wasPressedThisFrame
                     || keyboard.enterKey.wasPressedThisFrame
                     || keyboard.spaceKey.wasPressedThisFrame);
-            bool splitKeyboardMenu = keyboard != null && !input.HasController(1);
+            bool playerTwoHasController = input.HasController(1);
+            bool splitKeyboardMenu = keyboard != null && !playerTwoHasController;
             if (splitKeyboardMenu)
             {
                 // Keep Player 2's menu controls independent from PlayerInput
@@ -340,8 +335,7 @@ namespace CrazyElevator.Managers
             }
             if (keyboard != null && choosingMode)
             {
-                // The lobby's Player 1 cursor is shared by keyboard, controller,
-                // and mouse. Keep Player 2's arrow-key controls independent.
+                // Keep Player 2's arrow keys independent of Player 1's keyboard controls.
                 playerOneInput.Move += KeyboardMenuMove(splitKeyboardMenu);
                 playerOneInput.ConfirmPressed |= keyboardMenuConfirm;
                 playerOneInput.StartPressed |= keyboardMenuConfirm;
@@ -364,6 +358,9 @@ namespace CrazyElevator.Managers
             }
             if (choosingMode)
             {
+                if (playerTwoHasController != playerTwoHadController)
+                    lobbyHeldDirection[1] = 0;
+                playerTwoHadController = playerTwoHasController;
                 if (playerTwoRegistered && !lastPlayerTwoRegistered)
                 {
                     playerTwoSelected = true;
@@ -407,20 +404,19 @@ namespace CrazyElevator.Managers
 
             if (choosingMode && transition >= TransitionSeconds)
             {
-                MoveLobbyCursor(ref playerOneCursor, playerOneInput.Move, ref playerOneCursorHeld, 0);
-                if (playerTwoAvailable)
-                    MoveLobbyCursor(ref playerTwoCursor, playerTwoInput.Move, ref playerTwoCursorHeld, 1);
-                UpdateLobbyMouseCursor(playerTwoAvailable);
+                UpdateLobbyCharacterNavigation(0, playerOneInput.Move.x);
+                UpdateLobbyCharacterNavigation(1, playerTwoAvailable ? playerTwoInput.Move.x : 0f);
+                UpdateLobbyPortraits();
             }
 
             if (playerOneInput.ConfirmPressed)
             {
                 if (choosingMode && transition >= TransitionSeconds)
-                    HandleLobbyConfirm(0);
+                    ConfirmLobbySeat(0);
             }
             if (choosingMode && transition >= TransitionSeconds && playerTwoAvailable
                 && playerTwoInput.ConfirmPressed)
-                HandleLobbyConfirm(1);
+                ConfirmLobbySeat(1);
             if (TryStartReadyLobby()) return;
             if (!choosingMode && (playerOneInput.StartPressed || playerOneInput.ConfirmPressed
                 || playerTwoInput.StartPressed || playerTwoInput.ConfirmPressed
@@ -432,13 +428,14 @@ namespace CrazyElevator.Managers
 
         void SyncTitleButtons()
         {
-            if (titleButtons == null) return;
-            // The IMGUI transition veil fades the entire Canvas together. Keep the
-            // artwork and scene Buttons visible underneath it until the mode screen takes over.
-            bool titleVisible = !showingDimensionPool && !showingPassengerGuide && !showingOptions;
-            titleButtons.alpha = IsOpen && titleVisible && (!choosingMode || transition < TransitionSeconds) ? 1f : 0f;
-            titleButtons.interactable = IsOpen && titleVisible && !choosingMode;
-            titleButtons.blocksRaycasts = IsOpen && titleVisible && !choosingMode;
+            // The title now draws and handles its buttons in the same IMGUI space.
+            if (titleButtons != null)
+            {
+                titleButtons.alpha = 0f;
+                titleButtons.interactable = false;
+                titleButtons.blocksRaycasts = false;
+            }
+            SyncTitlePreview();
         }
 
         public void OnTitleStart() { titleSelection = 0; BeginModeSelection(); }
@@ -464,47 +461,30 @@ namespace CrazyElevator.Managers
 
         void UpdateOptionsNavigation()
         {
-            var input = InputManager.Instance;
-            if (input == null) return;
-
             UpdateOptionsMouseCursor();
-
-            var playerOne = input.ReadForSeat(0, true);
-            var keyboard = Keyboard.current;
-            if (keyboard != null)
-            {
-                playerOne.Move += new Vector2(
-                    (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0)
-                        - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0),
-                    (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0)
-                        - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0));
-                playerOne.ConfirmPressed |= keyboard.cKey.wasPressedThisFrame;
-                playerOne.StartPressed |= keyboard.enterKey.wasPressedThisFrame
-                    || keyboard.spaceKey.wasPressedThisFrame;
-            }
-            bool vertical = Mathf.Abs(playerOne.Move.y) >= .55f;
-            bool horizontal = Mathf.Abs(playerOne.Move.x) >= .55f;
-            if (vertical && !optionsVerticalHeld)
-                optionsSelection = (optionsSelection + (playerOne.Move.y < 0 ? 1 : -1) + 2) % 2;
-            if (horizontal && !optionsHorizontalHeld && optionsSelection == 0)
-                SetKeyboardHints(playerOne.Move.x > 0);
-
-            optionsVerticalHeld = vertical;
-            optionsHorizontalHeld = horizontal;
-
-            bool confirm = playerOne.ConfirmPressed || playerOne.StartPressed;
-            bool back = keyboard != null
-                && (keyboard.escapeKey.wasPressedThisFrame || keyboard.bKey.wasPressedThisFrame);
-            foreach (Gamepad pad in Gamepad.all)
-                if (pad != null) back |= pad.buttonEast.wasPressedThisFrame;
-            if (confirm)
-            {
-                if (optionsSelection == 1) SetTutorialMode(!TutorialModeEnabled);
-            }
+            ReadDirectoryNavigation(out Vector2 move, out bool confirm, out bool back);
+            confirm |= InputManager.Instance?.ReadForSeat(0, true).StartPressed == true;
+            back |= Keyboard.current?.bKey.wasPressedThisFrame == true;
             if (back)
             {
                 CloseOptions();
+                return;
             }
+
+            bool vertical = Mathf.Abs(move.y) >= .55f;
+            bool horizontal = Mathf.Abs(move.x) >= .55f;
+            if (vertical && !optionsVerticalHeld)
+                optionsSelection = 1 - optionsSelection;
+            if (confirm)
+            {
+                if (optionsSelection == 0) SetKeyboardHints(!KeyboardHintsEnabled);
+                else SetTutorialMode(!TutorialModeEnabled);
+            }
+            else if (horizontal && !optionsHorizontalHeld && optionsSelection == 0)
+                SetKeyboardHints(move.x > 0);
+
+            optionsVerticalHeld = vertical;
+            optionsHorizontalHeld = horizontal;
         }
 
         void CloseOptions()
@@ -522,12 +502,9 @@ namespace CrazyElevator.Managers
             // Each seat belongs to a human; a shared keyboard is always supported.
             playerTwoSelected = true;
             playerOneHuman = true;
-            // Each confirm controls only that player's ready state.
-            playerOneCursor = 2;
-            playerTwoCursor = 3;
-            playerOneCursorHeld = false;
-            playerTwoCursorHeld = false;
+            lobbyHeldDirection[0] = lobbyHeldDirection[1] = 0;
             lastPlayerTwoRegistered = false;
+            playerTwoHadController = false;
             InputManager.Instance?.BeginControllerJoining();
             SyncTitleButtons();
         }
@@ -546,25 +523,8 @@ namespace CrazyElevator.Managers
         void HandleLobbyConfirm(int seat)
         {
             if (launching) return;
-            if (seat == 0)
-            {
-                playerOneReady = !playerOneReady;
-                playerOneCursor = playerOneReady ? 4 : 2;
-            }
-            else
-            {
-                playerTwoReady = !playerTwoReady;
-                playerTwoCursor = playerTwoReady ? 4 : 3;
-            }
-        }
-
-        void MoveLobbyCursor(ref int cursor, Vector2 move, ref bool held, int seat)
-        {
-            // The ready control is each player's only choice until they are
-            // ready, then focus moves to the automatic start indicator.
-            bool ready = seat == 0 ? playerOneReady : playerTwoReady;
-            cursor = ready ? 4 : seat == 0 ? 2 : 3;
-            held = move.magnitude >= .55f;
+            if (seat == 0) playerOneReady = !playerOneReady;
+            else playerTwoReady = !playerTwoReady;
         }
 
         Vector2 KeyboardMenuMove(bool splitKeyboard)
@@ -585,14 +545,6 @@ namespace CrazyElevator.Managers
             if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
             int hovered = MenuRectIndex(pointer, OptionsButtonRects);
             if (hovered >= 0) optionsSelection = hovered;
-        }
-
-        void UpdateLobbyMouseCursor(bool playerTwoAvailable)
-        {
-            if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
-
-            if (playerOneReadyButton.Contains(pointer)) playerOneCursor = 2;
-            if (playerTwoReadyButton.Contains(pointer)) playerTwoCursor = 3;
         }
 
         static int MenuRectIndex(Vector2 point, Rect[] rects)
@@ -645,7 +597,11 @@ namespace CrazyElevator.Managers
         }
 
         public static void Open() => IsOpen = true;
-        public static void Close() => IsOpen = false;
+        public static void Close()
+        {
+            IsOpen = false;
+            Current?.SyncTitleButtons();
+        }
 
         public static void OpenPause()
         {
@@ -822,9 +778,9 @@ namespace CrazyElevator.Managers
             Panel(button, Cream);
             if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
             Color previousCaption = caption.normal.textColor;
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(button.x, button.yMax + 3f, button.width, 22f),
-                "TAB / VIEW", caption);
+                KeyboardHintsEnabled ? "TAB" : "VIEW", caption);
             caption.normal.textColor = previousCaption;
             GUI.depth = previousDepth;
         }
@@ -834,7 +790,7 @@ namespace CrazyElevator.Managers
             int previousDepth = GUI.depth;
             GUI.depth = tutorialActive ? TutorialOverlayDepth : -1000;
             Matrix4x4 previousMatrix = GUI.matrix;
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Color.black);
+            MenuPresentation.Backdrop(new Rect(0, 0, Screen.width, Screen.height));
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
@@ -859,7 +815,17 @@ namespace CrazyElevator.Managers
             {
                 DrawRectOutline(Expand(startButton, 5f), PlayerTwoColour, 5f);
             }
-            DrawKeyHint(new Rect(startButton.xMax + 16f, startButton.y + 11f, 54f, 54f), StartHintKey);
+            Rect confirmHint = new Rect(startButton.xMax + 16f, startButton.y + 11f, 54f, 54f);
+            if (KeyboardHintsEnabled && RequiresBothControllerInstructionConfirmations)
+            {
+                DrawKeyHint(new Rect(startButton.x - 70f, confirmHint.y, 54f, 54f), "C");
+                DrawKeyHint(confirmHint, ".");
+            }
+            else
+            {
+                string key = KeyboardHintsEnabled ? (tutorialGame?.Seat == 1 ? "." : "C") : "A";
+                DrawKeyHint(confirmHint, key);
+            }
             if (GUI.Button(startButton, "START", cardTitle))
             {
                 // A shared screen click counts as Player 1's confirmation;
@@ -871,15 +837,13 @@ namespace CrazyElevator.Managers
             GUI.depth = previousDepth;
         }
 
-        string StartHintKey => KeyboardHintsEnabled ? "C" : "A";
-
         void DrawGamepadInstructions()
         {
             if (controllerInstructions != null)
             {
                 // Fit the complete diagram above the shared ready button at any aspect ratio.
-                GUI.DrawTexture(new Rect(180, 124, 1340, 748), controllerInstructions,
-                    ScaleMode.ScaleToFit, true);
+                MenuPresentation.DrawTexture(new Rect(180, 124, 1340, 748), controllerInstructions,
+                    ScaleMode.ScaleToFit);
                 GUI.Label(new Rect(100, 884, 1500, 44),
                     "AT A STOP: STICK / D-PAD OPENS DOORS  ·  A STOPS / CLOSES  ·  LB BOOSTS  ·  RB REPAIRS",
                     caption);
@@ -946,7 +910,7 @@ namespace CrazyElevator.Managers
             }
 
             Color previousCaption = caption.normal.textColor;
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(rect.x, rect.y + 62f, rect.width, 30f), label, caption);
             caption.normal.textColor = previousCaption;
         }
@@ -961,8 +925,11 @@ namespace CrazyElevator.Managers
             Color previousTextColor = cardTitle.normal.textColor;
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .55f), 15, 24);
             cardTitle.alignment = TextAnchor.MiddleCenter;
-            cardTitle.normal.textColor = Cream;
-            GUI.Label(rect, key, cardTitle);
+            cardTitle.normal.textColor = MenuColor(Cream);
+            var content = new GUIContent(key);
+            while (cardTitle.fontSize > 12 && cardTitle.CalcSize(content).x > rect.width - 8f)
+                cardTitle.fontSize--;
+            GUI.Label(rect, content, cardTitle);
             cardTitle.fontSize = previousFontSize;
             cardTitle.alignment = previousAlignment;
             cardTitle.normal.textColor = previousTextColor;
@@ -970,7 +937,7 @@ namespace CrazyElevator.Managers
 
         void DrawOptionsScreen()
         {
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
+            MenuPresentation.Backdrop(new Rect(0, 0, Screen.width, Screen.height));
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
@@ -980,45 +947,45 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(290, 154, 1120, 46),
                 "Choose your controls and tutorial settings.", poolInstructionText);
 
-            Rect modeButton = OptionsButtonRects[0];
-            DrawDirectoryCard(modeButton, Teal, optionsSelection == 0);
-            GUI.Label(new Rect(modeButton.x + 34, modeButton.y + 8, 470, modeButton.height - 16),
-                "CONTROL HINTS", poolDimensionNameText);
-            Rect modeValue = new Rect(modeButton.xMax - 244, modeButton.y + 22, 220, 66);
-            Panel(modeValue, Teal);
-            GUI.Label(modeValue, KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER", poolToggleLabel);
-            if (optionsSelection == 0)
-            {
-                DrawKeyHint(new Rect(modeButton.xMax + 18, modeButton.center.y - 27, 54, 54), "A", true);
-                GUI.Label(new Rect(modeButton.xMax + 82, modeButton.center.y - 24, 250, 48),
-                    "CHANGE", poolCycleCaption);
-            }
-            if (GUI.Button(modeButton, GUIContent.none, GUIStyle.none))
+            if (DrawOptionsRow(0, "CONTROL HINTS", KeyboardHintsEnabled ? "KEYBOARD" : "CONTROLLER",
+                Teal, Teal, "CHANGE"))
                 SetKeyboardHints(!KeyboardHintsEnabled);
 
-            Rect tutorialButton = OptionsButtonRects[1];
-            DrawDirectoryCard(tutorialButton, Coral, optionsSelection == 1);
-            GUI.Label(new Rect(tutorialButton.x + 34, tutorialButton.y + 8,
-                    470, tutorialButton.height - 16), "TUTORIAL MODE", poolDimensionNameText);
-            Rect tutorialValue = new Rect(tutorialButton.xMax - 244, tutorialButton.y + 22, 220, 66);
-            Panel(tutorialValue, TutorialModeEnabled ? Teal : Coral);
-            GUI.Label(tutorialValue, TutorialModeEnabled ? "ON" : "OFF", poolToggleLabel);
-            if (optionsSelection == 1)
-            {
-                DrawKeyHint(new Rect(tutorialButton.xMax + 18, tutorialButton.center.y - 27, 54, 54), "A", true);
-                GUI.Label(new Rect(tutorialButton.xMax + 82, tutorialButton.center.y - 24, 250, 48),
-                    "TOGGLE", poolCycleCaption);
-            }
-            if (GUI.Button(tutorialButton, GUIContent.none, GUIStyle.none))
+            bool tutorialEnabled = TutorialModeEnabled;
+            if (DrawOptionsRow(1, "TUTORIAL MODE", tutorialEnabled ? "ON" : "OFF",
+                Coral, tutorialEnabled ? Teal : Coral, "TOGGLE"))
                 SetTutorialMode(!TutorialModeEnabled);
 
             Rect back = new Rect(615, 910, 470, 76);
             DrawDirectoryCard(back, Cream, false);
             GUI.Label(back, "BACK", guideCardTitleText);
-            DrawKeyHint(new Rect(back.xMax + 18f, back.y + 10f, 54f, 54f), "B", true);
+            DrawKeyHint(new Rect(back.xMax + 18f, back.center.y - 27f, 54f, 54f),
+                KeyboardHintsEnabled ? "ESC" : "B", true);
             if (GUI.Button(back, GUIContent.none, GUIStyle.none)) CloseOptions();
 
             GUI.matrix = Matrix4x4.identity;
+        }
+
+        bool DrawOptionsRow(int index, string label, string value, Color border, Color valueColor, string action)
+        {
+            Rect row = OptionsButtonRects[index];
+            DrawDirectoryCard(row, border, optionsSelection == index);
+
+            const float valueWidth = 280f;
+            Rect pill = new Rect(row.xMax - 24f - valueWidth, row.y + 22f, valueWidth, 66f);
+            float labelX = row.x + 34f;
+            GUI.Label(new Rect(labelX, row.y + 8f, pill.x - labelX - 16f, row.height - 16f),
+                label, poolDimensionNameText);
+            Panel(pill, valueColor);
+            GUI.Label(new Rect(pill.x + 14f, pill.y, pill.width - 28f, pill.height), value, poolToggleLabel);
+
+            if (optionsSelection == index)
+            {
+                DrawKeyHint(new Rect(row.xMax + 18f, row.center.y - 27f, 54f, 54f),
+                    KeyboardHintsEnabled ? "C" : "A", true);
+                GUI.Label(new Rect(row.xMax + 80f, row.center.y - 24f, 108f, 48f), action, poolCycleCaption);
+            }
+            return GUI.Button(row, GUIContent.none, GUIStyle.none);
         }
 
         void DismissControllerInstructions()
@@ -1037,123 +1004,6 @@ namespace CrazyElevator.Managers
             Close();
             SyncTitleButtons();
             InputManager.Instance?.SetView(GameView.ControlElevator);
-        }
-
-        void DrawModeSelect() => DrawArtworkMenu();
-
-        void DrawArtworkMenu()
-        {
-            bool hasCanvasTitle = titleButtons != null;
-            float fade = Mathf.Clamp01(transition / TransitionSeconds);
-            float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
-            var oldMatrix = GUI.matrix;
-            if (!hasCanvasTitle)
-                Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-            else if (choosingMode)
-                Panel(new Rect(0, 0, Screen.width, Screen.height),
-                    new Color(Ink.r, Ink.g, Ink.b, fade));
-            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
-                (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
-                new Vector3(scale, scale, 1));
-
-            if (!hasCanvasTitle && fade < 1f)
-            {
-                DrawArt(new Rect(0, 0, ArtWidth, ArtHeight), new Rect(0, 0, 1, 1), 1f - fade);
-                // Fallback if this script is opened in a scene without the title Canvas.
-                Color cleanBackground = Color.Lerp(new Color32(16, 16, 17, 255), Ink, fade);
-                Panel(new Rect(380, 690, 315, 370), cleanBackground);
-                Panel(new Rect(278, 733, 112, 66), cleanBackground);
-            }
-            if (!choosingMode || fade < 1f)
-            {
-                if (triangleCursorTexture == null) triangleCursorTexture = CreateTriangleCursor();
-                const float cursorWidth = 48f;
-                const float cursorGap = 2f;
-                Rect selectedButton = TitleButtonRects[titleSelection];
-                float cursorX = selectedButton.x - cursorWidth - cursorGap;
-                float cursorY = selectedButton.y + (selectedButton.height - cursorWidth) * .5f;
-                Color cursorColor = GUI.color;
-                GUI.color = new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b,
-                    choosingMode ? 1f - fade : 1f);
-                GUI.DrawTexture(new Rect(cursorX, cursorY,
-                    cursorWidth, cursorWidth), triangleCursorTexture);
-                GUI.color = cursorColor;
-                if (!choosingMode)
-                {
-                    DrawTitleActionHint();
-                    DrawMovingTracks(new Rect(1060, 0, 495, ArtHeight), 1);
-                    if (!hasCanvasTitle)
-                    {
-                        for (int i = 0; i < TitleButtonRects.Length; i++)
-                        {
-                            if (!GUI.Button(TitleButtonRects[i], GUIContent.none, GUIStyle.none))
-                                continue;
-                            titleSelection = i;
-                            ActivateTitleSelection();
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (choosingMode)
-            {
-                float eased = fade * fade * (3f - 2f * fade);
-                float descent = launching
-                    ? Mathf.Pow(Mathf.Clamp01(launchTimer / LaunchSeconds), 2f) * (ArtHeight + 200f)
-                    : 0f;
-                DrawShaft(new Rect(Mathf.Lerp(1060, 500, eased), 0,
-                    Mathf.Lerp(495, 330, eased), ArtHeight), 1f, descent);
-                DrawShaft(new Rect(870, 0, 330, ArtHeight), eased, descent);
-                if (fade >= 1f && !launching)
-                    DrawFixedTwoPlayerLobby();
-                if (launching)
-                {
-                    Panel(new Rect(0, 0, ArtWidth, ArtHeight), new Color(0, 0, 0,
-                        Mathf.Clamp01((launchTimer / LaunchSeconds - .55f) * 2.2f)));
-                }
-            }
-            GUI.matrix = oldMatrix;
-        }
-
-        void DrawFixedTwoPlayerLobby()
-        {
-            Panel(backButton, Cream);
-            GUI.Label(backButton, "BACK", cardTitle);
-            DrawKeyHint(new Rect(backButton.x + backButton.width + 16f,
-                backButton.y + 2f, 54f, 54f), "B");
-            if (GUI.Button(backButton, GUIContent.none, GUIStyle.none))
-            {
-                choosingMode = false;
-                transition = 0f;
-                playerOneReady = playerTwoReady = false;
-                SyncTitleButtons();
-            }
-
-            DrawPlayerCard(playerOneButton, "PLAYER 1", PlayerOneColour);
-            DrawPlayerCard(rivalButton, "PLAYER 2", Teal);
-            GUI.Label(new Rect(810, 480, 80, 65), "VS", cardTitle);
-
-            DrawStatusBar(playerOneReadyButton, playerOneReady ? "READY" : "NOT READY",
-                playerOneReady ? PlayerOneColour : LobbySurface,
-                playerOneReady ? Ink : Cream, playerOneCursor == 2, false);
-            DrawStatusBar(playerTwoReadyButton, playerTwoReady ? "READY" : "NOT READY",
-                playerTwoReady ? PlayerTwoColour : LobbySurface,
-                playerTwoReady ? Ink : Cream, false, playerTwoCursor == 3);
-            DrawLobbyKeyHint(playerOneReadyButton, 0, playerOneCursor == 2);
-            DrawLobbyKeyHint(playerTwoReadyButton, 1, playerTwoCursor == 3);
-
-            Color startFill = AllPlayersReady ? Teal : DisabledColour;
-            DrawActionButton(startButton, AllPlayersReady ? "START" : "WAITING",
-                startFill, AllPlayersReady ? Ink : Cream, playerOneCursor == 4,
-                playerTwoCursor == 4);
-            GUI.Label(new Rect(310, 810, 1080, 46), AllPlayersReady
-                ? "BOTH PLAYERS READY" : "BOTH PLAYERS: CONFIRM TO GET READY", caption);
-
-            if (GUI.Button(playerOneReadyButton, GUIContent.none, GUIStyle.none))
-                HandleLobbyConfirm(0);
-            if (GUI.Button(playerTwoReadyButton, GUIContent.none, GUIStyle.none))
-                HandleLobbyConfirm(1);
         }
 
         void DrawTitleActionHint()
@@ -1177,10 +1027,15 @@ namespace CrazyElevator.Managers
 
         void DrawKeyHint(Rect hint, string key, bool fixedTextColor = false)
         {
+            if (KeyboardHintsEnabled)
+            {
+                DrawKeyboardKeycap(hint, key);
+                return;
+            }
             if (keyIconTexture == null) keyIconTexture = CreateKeyIcon();
 
             Color previous = GUI.color;
-            GUI.color = new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b, .98f);
+            GUI.color = MenuColor(new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b, .98f));
             GUI.DrawTexture(hint, keyIconTexture);
             GUI.color = previous;
 
@@ -1193,18 +1048,8 @@ namespace CrazyElevator.Managers
                 padding = new RectOffset(0, 0, 0, 0)
             };
             if (fixedTextColor) SetFixedTextColor(keyLabel, Cream);
-            else keyLabel.normal.textColor = Cream;
+            else keyLabel.normal.textColor = MenuColor(Cream);
             GUI.Label(hint, key, keyLabel);
-        }
-
-        void DrawLobbyKeyHint(Rect control, int seat, bool selected)
-        {
-            if (!selected) return;
-            string key = !KeyboardHintsEnabled ? "A" : seat == 0 ? "C" : ".";
-            Rect hint = seat == 0
-                ? new Rect(control.x - 120f, control.y + (control.height - 54f) * .5f, 54f, 54f)
-                : new Rect(control.xMax + 66f, control.y + (control.height - 54f) * .5f, 54f, 54f);
-            DrawKeyHint(hint, key);
         }
 
         void DrawShaft(Rect rect, float alpha, float descent)
@@ -1245,70 +1090,14 @@ namespace CrazyElevator.Managers
             GUI.EndGroup();
         }
 
-        void DrawPlayerCard(Rect rect, string label, Color borderColour)
-        {
-            float side = Mathf.Min(rect.width, rect.height);
-            Rect square = new Rect(rect.center.x - side * .5f,
-                rect.center.y - side * .5f, side, side);
-            Panel(square, new Color32(15, 20, 31, 255));
-            DrawRectOutline(square, borderColour, 8f);
-            DrawLabel(square, label, menuLabelText, Cream);
-        }
-
-        void DrawStatusBar(Rect rect, string label, Color fill, Color textColour,
-            bool playerOneHovering, bool playerTwoHovering)
-        {
-            DrawSelectionFrame(rect, playerOneHovering, playerTwoHovering);
-            Panel(rect, fill);
-            DrawLabel(rect, label, readyLabelText, textColour);
-            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
-        }
-
-        void DrawActionButton(Rect rect, string label, Color fill, Color textColour,
-            bool playerOneHovering, bool playerTwoHovering)
-        {
-            DrawSelectionFrame(rect, playerOneHovering, playerTwoHovering);
-            Panel(rect, fill);
-            DrawLabel(rect, label, menuLabelText, textColour);
-            DrawSelectionArrows(rect, playerOneHovering, playerTwoHovering);
-        }
-
-        void DrawSelectionArrows(Rect rect, bool playerOneHovering, bool playerTwoHovering)
-        {
-            const float arrowWidth = 52f;
-            const float arrowGap = 8f;
-            if (playerOneHovering)
-            {
-                DrawChoiceArrow(new Rect(rect.x - arrowWidth - arrowGap, rect.y,
-                    arrowWidth, rect.height), true, PlayerOneColour,
-                    ref leftChoiceArrowTexture);
-            }
-            if (playerTwoHovering)
-            {
-                DrawChoiceArrow(new Rect(rect.xMax + arrowGap, rect.y,
-                    arrowWidth, rect.height), false, PlayerTwoColour,
-                    ref rightChoiceArrowTexture);
-            }
-        }
-
-        static void DrawSelectionFrame(Rect rect, bool playerOneHovering, bool playerTwoHovering)
-        {
-            if (playerOneHovering && playerTwoHovering)
-            {
-                Panel(Expand(rect, 10f), PlayerOneColour);
-                Panel(Expand(rect, 5f), PlayerTwoColour);
-            }
-            else if (playerOneHovering || playerTwoHovering)
-            {
-                Panel(Expand(rect, 5f), playerOneHovering ? PlayerOneColour : PlayerTwoColour);
-            }
-        }
-
         static void DrawLabel(Rect rect, string label, GUIStyle style, Color colour)
         {
+            if (Event.current.type != EventType.Repaint) return;
+
             Color previous = style.normal.textColor;
-            style.normal.textColor = colour;
-            GUI.Label(rect, label, style);
+            style.normal.textColor = MenuColor(colour);
+            // The plaque handles selection and input. Its label always uses the normal color.
+            style.Draw(rect, new GUIContent(label), false, false, false, false);
             style.normal.textColor = previous;
         }
 
@@ -1323,30 +1112,6 @@ namespace CrazyElevator.Managers
             float sideHeight = Mathf.Max(0f, rect.height - thickness * 2f);
             Panel(new Rect(rect.x, rect.y + thickness, thickness, sideHeight), colour);
             Panel(new Rect(rect.xMax - thickness, rect.y + thickness, thickness, sideHeight), colour);
-        }
-
-        static Texture2D CreateTriangleCursor()
-        {
-            const int width = 48, height = 48;
-            var pixels = new Color32[width * height];
-            // Equal side lengths create a regular triangle rotated right.
-            Vector2 leftTop = new Vector2(2, 2), leftBottom = new Vector2(2, 46),
-                tip = new Vector2(40, 24);
-            for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                Vector2 point = new Vector2(x + .5f, y + .5f);
-                float distance = Mathf.Min(DistanceToSegment(point, leftTop, leftBottom),
-                    Mathf.Min(DistanceToSegment(point, leftBottom, tip),
-                        DistanceToSegment(point, tip, leftTop)));
-                byte alpha = (byte)(Mathf.Clamp01(3f - distance) * 255);
-                pixels[y * width + x] = new Color32(255, 255, 255, alpha);
-            }
-            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
-            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            return texture;
         }
 
         static Texture2D CreateKeyIcon()
@@ -1380,7 +1145,7 @@ namespace CrazyElevator.Managers
         {
             if (texture == null) texture = CreateChoiceArrow(pointsRight);
             Color previous = GUI.color;
-            GUI.color = colour;
+            GUI.color = MenuColor(colour);
             GUI.DrawTexture(new Rect(hitArea.center.x - 13, hitArea.center.y - 16, 26, 32), texture);
             GUI.color = previous;
         }
@@ -1415,18 +1180,11 @@ namespace CrazyElevator.Managers
         static float Cross(Vector2 a, Vector2 b, Vector2 point) =>
             (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
 
-        static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
-        {
-            Vector2 segment = b - a;
-            float position = Mathf.Clamp01(Vector2.Dot(point - a, segment) / segment.sqrMagnitude);
-            return Vector2.Distance(point, a + segment * position);
-        }
-
         void DrawArt(Rect destination, Rect source, float alpha)
         {
             Color previous = GUI.color;
             GUI.color = new Color(1, 1, 1, alpha);
-            GUI.DrawTextureWithTexCoords(destination, menuArtwork, source);
+            MenuPresentation.DrawTextureUV(destination, menuArtwork, source);
             GUI.color = previous;
         }
 
@@ -1464,24 +1222,25 @@ namespace CrazyElevator.Managers
 
         void Styles()
         {
-            if (title != null) return;
+            if (title != null && stylesForMenu == PresentingMenu) return;
+            stylesForMenu = PresentingMenu;
             title = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Clamp(Screen.height / 16, 30, 56), fontStyle = FontStyle.Bold };
             GameTypography.Apply(title, true);
-            title.normal.textColor = Cream;
+            title.normal.textColor = MenuColor(Cream);
             cardTitle = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 25, 23, 38) };
             GameTypography.Apply(cardTitle, true);
-            cardTitle.normal.textColor = Ink;
+            cardTitle.normal.textColor = MenuColor(Ink);
             menuLabelText = new GUIStyle(cardTitle) { fontSize = 42 };
-            menuLabelText.normal.textColor = Ink;
+            menuLabelText.normal.textColor = MenuColor(Ink);
             readyLabelText = new GUIStyle(menuLabelText) { fontSize = 26 };
             caption = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 48, 14, 19), fontStyle = FontStyle.Normal };
             GameTypography.Apply(caption);
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             cardCaption = new GUIStyle(caption)
             { fontSize = Mathf.Clamp(Screen.height / 58, 12, 16) };
             GameTypography.Apply(cardCaption);
-            cardCaption.normal.textColor = Ink;
+            cardCaption.normal.textColor = MenuColor(Ink);
             poolToggleLabel = new GUIStyle(cardTitle)
             {
                 alignment = TextAnchor.MiddleCenter,
@@ -1535,7 +1294,7 @@ namespace CrazyElevator.Managers
             guidePreviewText.wordWrap = false;
             startCircle = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = 48, fontStyle = FontStyle.Bold };
-            startCircle.normal.textColor = Ink;
+            startCircle.normal.textColor = MenuColor(Ink);
         }
 
         static GUIStyle FixedTextColorStyle(GUIStyle source, Color color)
@@ -1547,6 +1306,7 @@ namespace CrazyElevator.Managers
 
         static void SetFixedTextColor(GUIStyle style, Color color)
         {
+            color = MenuColor(color);
             style.normal.textColor = color;
             style.hover.textColor = color;
             style.active.textColor = color;
@@ -1601,7 +1361,7 @@ namespace CrazyElevator.Managers
         static void Panel(Rect rect, Color colour)
         {
             Color previous = GUI.color;
-            GUI.color = colour;
+            GUI.color = MenuColor(colour);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
         }

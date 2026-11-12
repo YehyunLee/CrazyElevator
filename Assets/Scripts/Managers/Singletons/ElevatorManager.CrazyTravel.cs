@@ -281,7 +281,7 @@ namespace CrazyElevator.Managers
             {
                 routeLateralX = Mathf.Clamp(routeLateralX, GroundLeftX, GroundRightX);
                 railVelocity = 0f;
-                notice = "End of the rail. Steer back, or press W/S to take a track.";
+                notice = "End of the rail. Steer back, or use " + GameplayVerticalKeys + " to take a track.";
             }
             CheckTeleportGates(before, routeLateralX);
             if (pendingTrackDirection != 0 && !(strongCollisionRecoil && collisionRecoilTimer > 0f))
@@ -657,7 +657,8 @@ namespace CrazyElevator.Managers
             {
                 DrawRouteGuide(view, pendingTrackDirection != 0
                     ? "TURNING " + (pendingTrackDirection > 0 ? "UP" : "DOWN") + " AT NEXT TRACK"
-                    : "FLOOR " + ElevatorRound.FloorNumber(railFloor) + " RAIL  ·  W/S TO TURN AT NEXT TRACK", Gold);
+                    : "F" + ElevatorRound.FloorNumber(railFloor) + " RAIL  ·  "
+                        + GameplayVerticalKeys + " TURNS AT NEXT TRACK", Gold);
                 return;
             }
             if (pendingRailDirection != 0)

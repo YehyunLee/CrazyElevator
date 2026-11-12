@@ -1708,6 +1708,8 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 291fe3bafed1494b84f59d6a45bb97ac, type: 3}
   - {fileID: 2800000, guid: ab672d6f216942069f1b592654560ea2, type: 3}
   - {fileID: 2800000, guid: 54cc659fed694a05ae5149b396fddc97, type: 3}
+  - {fileID: 2800000, guid: 3100a6b6a85844b184c608639bd11fdb, type: 3}
+  - {fileID: 2800000, guid: 4626d38d185f4104b1ff1cc73989e5ed, type: 3}
   menuArtwork: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
   controllerInstructions: {fileID: 2800000, guid: 559a3286dac74179894e4e458f441042, type: 3}
   titleButtons: {fileID: 910001005}
@@ -1762,7 +1764,7 @@ GameObject:
   - component: {fileID: 910001005}
   m_Layer: 5
   m_Name: Title Menu Canvas
-  m_TagString: Untagged
+  m_TagString: EditorOnly
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1808,7 +1810,7 @@ Canvas:
   m_Camera: {fileID: 0}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
-  m_ReceivesEvents: 1
+  m_ReceivesEvents: 0
   m_OverrideSorting: 0
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
@@ -1849,7 +1851,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 910001000}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
   m_Name:
@@ -1868,8 +1870,8 @@ CanvasGroup:
   m_GameObject: {fileID: 910001000}
   m_Enabled: 1
   m_Alpha: 1
-  m_Interactable: 1
-  m_BlocksRaycasts: 1
+  m_Interactable: 0
+  m_BlocksRaycasts: 0
   m_IgnoreParentGroups: 0
 --- !u!1 &910001010
 GameObject:
@@ -1889,7 +1891,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001011
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2101,7 +2103,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001021
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2313,7 +2315,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001031
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2598,7 +2600,7 @@ GameObject:
   - component: {fileID: 910001052}
   - component: {fileID: 910001053}
   m_Layer: 5
-  m_Name: Title Artwork Background
+  m_Name: Redesigned Title Preview
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2651,7 +2653,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Texture: {fileID: 2800000, guid: e0534d9ce3cd49d4fa0bfc7789dfe9c1, type: 3}
+  m_Texture: {fileID: 2800000, guid: 97684c17c7264ad39f3d4eb5438b919a, type: 3}
   m_UVRect:
     serializedVersion: 2
     x: 0
@@ -2675,7 +2677,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001061
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2750,7 +2752,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001071
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2820,7 +2822,7 @@ GameObject:
   - component: {fileID: 910001082}
   - component: {fileID: 910001083}
   m_Layer: 5
-  m_Name: Title Screen Dark Backdrop
+  m_Name: Title Preview Backdrop
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2862,27 +2864,24 @@ MonoBehaviour:
   m_GameObject: {fileID: 910001080}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   m_Material: {fileID: 0}
-  m_Color: {r: 0.0627451, g: 0.0627451, b: 0.06666667, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
+  m_Texture: {fileID: 2800000, guid: 97684c17c7264ad39f3d4eb5438b919a, type: 3}
+  m_UVRect:
+    serializedVersion: 2
+    x: 0.02
+    y: 0.95
+    width: 0.01
+    height: 0.01
 --- !u!1 &910001090
 GameObject:
   m_ObjectHideFlags: 0
@@ -2901,7 +2900,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001091
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3113,7 +3112,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &910001101
 RectTransform:
   m_ObjectHideFlags: 0

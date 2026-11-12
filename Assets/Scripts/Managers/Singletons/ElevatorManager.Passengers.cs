@@ -1563,7 +1563,10 @@ namespace CrazyElevator.Managers
             public Transform Root;
             public Transform Border;
             public TextMesh Label;
+            public MeshRenderer LabelRenderer;
         }
+        const float FloorMarkerPanelWidth = .44f;
+        const float FloorMarkerPanelDepth = .30f;
         readonly Dictionary<Rider, FloorMarker> floorMarkers = new Dictionary<Rider, FloorMarker>();
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
@@ -1691,7 +1694,8 @@ namespace CrazyElevator.Managers
             Transform border = Shape("Destination floor marker border", PrimitiveType.Cube,
                 new Vector3(0, -.018f, 0), new Vector3(.54f, .022f, .40f), Cream, root);
             Transform panel = Shape("Destination floor marker panel", PrimitiveType.Cube,
-                new Vector3(0, .002f, 0), new Vector3(.44f, .028f, .30f), Ink, root);
+                new Vector3(0, .002f, 0), new Vector3(FloorMarkerPanelWidth, .028f, FloorMarkerPanelDepth),
+                Ink, root);
             DisableCollider(border);
             DisableCollider(panel);
 
@@ -1719,7 +1723,8 @@ namespace CrazyElevator.Managers
             }
 
             root.gameObject.SetActive(false);
-            floorMarkers[rider] = new FloorMarker { Root = root, Border = border, Label = label };
+            floorMarkers[rider] = new FloorMarker
+                { Root = root, Border = border, Label = label, LabelRenderer = renderer };
         }
 
         void UpdateFloorMarker(Rider rider, Transform figure, bool hidden)
@@ -1732,7 +1737,18 @@ namespace CrazyElevator.Managers
 
             marker.Root.position = PassengerFloorMarkerAnchor(rider, figure);
             marker.Root.localRotation = Quaternion.identity;
-            marker.Label.text = DestinationTag(rider);
+            string destination = DestinationTag(rider);
+            if (marker.Label.text != destination)
+            {
+                marker.Label.text = destination;
+                Bounds bounds = marker.LabelRenderer.localBounds;
+                float width = 2f * Mathf.Max(-bounds.min.x, bounds.max.x);
+                float height = 2f * Mathf.Max(-bounds.min.y, bounds.max.y);
+                const float padding = .04f;
+                float fit = Mathf.Min(1f, (FloorMarkerPanelWidth - padding) / Mathf.Max(width, .001f),
+                    (FloorMarkerPanelDepth - padding) / Mathf.Max(height, .001f));
+                marker.Label.transform.localScale = new Vector3(fit, fit, 1f);
+            }
             bool selected = rider == selectedRider || rider == draggedRider;
             Color borderColor = selected
                 ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
