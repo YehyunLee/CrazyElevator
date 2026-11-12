@@ -1098,12 +1098,12 @@ namespace CrazyElevator.Match
             GameTypography.Apply(resultWinner, true);
             resultWinner.normal.textColor = Color.white;
             resultSmall = new GUIStyle(resultName) { fontSize = 12 };
-            resultSmall.normal.textColor = new Color32(208, 191, 181, 255);
+            resultSmall.normal.textColor = MenuPresentation.DisplayColor(new Color32(208, 191, 181, 255));
             resultWorld = new GUIStyle(resultName) { fontSize = 28 };
             resultAction = new GUIStyle(centred) { fontSize = 20 };
-            resultAction.normal.textColor = MenuPresentation.Ink;
+            resultAction.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
             resultKey = new GUIStyle(centred) { fontSize = 12 };
-            resultKey.normal.textColor = MenuPresentation.Ink;
+            resultKey.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
             resultWinBadge = new GUIStyle(resultKey) { fontSize = 11 };
         }
 
@@ -1438,7 +1438,7 @@ namespace CrazyElevator.Match
             {
                 EnsureResultGlow();
                 float light = Reveal01((time - 1.35f) / .8f);
-                GUI.color = new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light);
+                GUI.color = MenuPresentation.DisplayColor(new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light));
                 GUI.DrawTexture(new Rect(160, 0, 1120, 820), resultGlowTexture, ScaleMode.StretchToFill, true);
                 GUI.color = Color.white;
 
@@ -1613,7 +1613,11 @@ namespace CrazyElevator.Match
                 Color colour = i < wins ? accent : new Color(.28f, .34f, .43f);
                 Color face = new Color(colour.r, colour.g, colour.b, alpha);
                 Color inset = new Color(18f / 255f, 24f / 255f, 36f / 255f, alpha);
-                if (menuColours) inset = new Color(62f / 255f, 46f / 255f, 65f / 255f, alpha);
+                if (menuColours)
+                {
+                    face = MenuPresentation.DisplayColor(face);
+                    inset = MenuPresentation.DisplayColor(new Color(62f / 255f, 46f / 255f, 65f / 255f, alpha));
+                }
                 Fill(marker, face);
                 if (i >= wins)
                     Fill(new Rect(marker.x + 2, marker.y + 2, marker.width - 4, marker.height - 4), inset);
@@ -1622,7 +1626,7 @@ namespace CrazyElevator.Match
 
         void DrawResultLabel(Rect area, string value, GUIStyle style, float reveal, Color colour)
         {
-            DrawRevealLabel(area, value, style, reveal, colour);
+            DrawRevealLabel(area, value, style, reveal, MenuPresentation.DisplayColor(colour));
         }
 
         void DrawRevealLabel(Rect area, string value, GUIStyle style, float reveal, Color colour)

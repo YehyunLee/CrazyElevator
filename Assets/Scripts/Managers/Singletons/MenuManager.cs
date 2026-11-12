@@ -105,6 +105,8 @@ namespace CrazyElevator.Managers
                 || Current.tutorialFinalePhase == TutorialFinalePhase.Controls
                 || Current.tutorialFinalePhase == TutorialFinalePhase.Countdown);
 
+        static Color MenuColor(Color color)
+            => PresentingMenu ? MenuPresentation.DisplayColor(color) : color;
         public static bool FullScreenOverlayActive
         {
             get
@@ -776,7 +778,7 @@ namespace CrazyElevator.Managers
             Panel(button, Cream);
             if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
             Color previousCaption = caption.normal.textColor;
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(button.x, button.yMax + 3f, button.width, 22f),
                 KeyboardHintsEnabled ? "TAB" : "VIEW", caption);
             caption.normal.textColor = previousCaption;
@@ -908,7 +910,7 @@ namespace CrazyElevator.Managers
             }
 
             Color previousCaption = caption.normal.textColor;
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(rect.x, rect.y + 62f, rect.width, 30f), label, caption);
             caption.normal.textColor = previousCaption;
         }
@@ -923,7 +925,7 @@ namespace CrazyElevator.Managers
             Color previousTextColor = cardTitle.normal.textColor;
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .55f), 15, 24);
             cardTitle.alignment = TextAnchor.MiddleCenter;
-            cardTitle.normal.textColor = Cream;
+            cardTitle.normal.textColor = MenuColor(Cream);
             var content = new GUIContent(key);
             while (cardTitle.fontSize > 12 && cardTitle.CalcSize(content).x > rect.width - 8f)
                 cardTitle.fontSize--;
@@ -1033,7 +1035,7 @@ namespace CrazyElevator.Managers
             if (keyIconTexture == null) keyIconTexture = CreateKeyIcon();
 
             Color previous = GUI.color;
-            GUI.color = new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b, .98f);
+            GUI.color = MenuColor(new Color(TitleTeal.r, TitleTeal.g, TitleTeal.b, .98f));
             GUI.DrawTexture(hint, keyIconTexture);
             GUI.color = previous;
 
@@ -1046,7 +1048,7 @@ namespace CrazyElevator.Managers
                 padding = new RectOffset(0, 0, 0, 0)
             };
             if (fixedTextColor) SetFixedTextColor(keyLabel, Cream);
-            else keyLabel.normal.textColor = Cream;
+            else keyLabel.normal.textColor = MenuColor(Cream);
             GUI.Label(hint, key, keyLabel);
         }
 
@@ -1093,7 +1095,7 @@ namespace CrazyElevator.Managers
             if (Event.current.type != EventType.Repaint) return;
 
             Color previous = style.normal.textColor;
-            style.normal.textColor = colour;
+            style.normal.textColor = MenuColor(colour);
             // The plaque handles selection and input. Its label always uses the normal color.
             style.Draw(rect, new GUIContent(label), false, false, false, false);
             style.normal.textColor = previous;
@@ -1143,7 +1145,7 @@ namespace CrazyElevator.Managers
         {
             if (texture == null) texture = CreateChoiceArrow(pointsRight);
             Color previous = GUI.color;
-            GUI.color = colour;
+            GUI.color = MenuColor(colour);
             GUI.DrawTexture(new Rect(hitArea.center.x - 13, hitArea.center.y - 16, 26, 32), texture);
             GUI.color = previous;
         }
@@ -1225,20 +1227,20 @@ namespace CrazyElevator.Managers
             title = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Clamp(Screen.height / 16, 30, 56), fontStyle = FontStyle.Bold };
             GameTypography.Apply(title, true);
-            title.normal.textColor = Cream;
+            title.normal.textColor = MenuColor(Cream);
             cardTitle = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 25, 23, 38) };
             GameTypography.Apply(cardTitle, true);
-            cardTitle.normal.textColor = Ink;
+            cardTitle.normal.textColor = MenuColor(Ink);
             menuLabelText = new GUIStyle(cardTitle) { fontSize = 42 };
-            menuLabelText.normal.textColor = Ink;
+            menuLabelText.normal.textColor = MenuColor(Ink);
             readyLabelText = new GUIStyle(menuLabelText) { fontSize = 26 };
             caption = new GUIStyle(title) { fontSize = Mathf.Clamp(Screen.height / 48, 14, 19), fontStyle = FontStyle.Normal };
             GameTypography.Apply(caption);
-            caption.normal.textColor = Cream;
+            caption.normal.textColor = MenuColor(Cream);
             cardCaption = new GUIStyle(caption)
             { fontSize = Mathf.Clamp(Screen.height / 58, 12, 16) };
             GameTypography.Apply(cardCaption);
-            cardCaption.normal.textColor = Ink;
+            cardCaption.normal.textColor = MenuColor(Ink);
             poolToggleLabel = new GUIStyle(cardTitle)
             {
                 alignment = TextAnchor.MiddleCenter,
@@ -1292,7 +1294,7 @@ namespace CrazyElevator.Managers
             guidePreviewText.wordWrap = false;
             startCircle = new GUIStyle(GUI.skin.label)
             { alignment = TextAnchor.MiddleCenter, fontSize = 48, fontStyle = FontStyle.Bold };
-            startCircle.normal.textColor = Ink;
+            startCircle.normal.textColor = MenuColor(Ink);
         }
 
         static GUIStyle FixedTextColorStyle(GUIStyle source, Color color)
@@ -1304,6 +1306,7 @@ namespace CrazyElevator.Managers
 
         static void SetFixedTextColor(GUIStyle style, Color color)
         {
+            color = MenuColor(color);
             style.normal.textColor = color;
             style.hover.textColor = color;
             style.active.textColor = color;
@@ -1358,7 +1361,7 @@ namespace CrazyElevator.Managers
         static void Panel(Rect rect, Color colour)
         {
             Color previous = GUI.color;
-            GUI.color = colour;
+            GUI.color = MenuColor(colour);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
         }

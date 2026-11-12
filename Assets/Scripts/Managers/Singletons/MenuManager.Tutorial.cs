@@ -919,9 +919,9 @@ namespace CrazyElevator.Managers
             int previousBodySize = body.fontSize;
             TextAnchor previousBodyAlignment = body.alignment;
             bool previousBodyWrap = body.wordWrap;
-            cardTitle.normal.textColor = Cream;
-            body.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, .9f);
-            caption.normal.textColor = accent;
+            cardTitle.normal.textColor = MenuColor(Cream);
+            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .9f));
+            caption.normal.textColor = MenuColor(accent);
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .06f), 34, 48);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .034f), 19, 28);
             body.alignment = TextAnchor.MiddleLeft;
@@ -961,7 +961,7 @@ namespace CrazyElevator.Managers
             {
                 int previousFooterSize = caption.fontSize;
                 caption.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .022f), 13, 18);
-                caption.normal.textColor = Cream;
+                caption.normal.textColor = MenuColor(Cream);
                 GUI.Label(new Rect(card.x + 30f, card.yMax - 38f, card.width - 60f, 24f), footer, caption);
                 caption.fontSize = previousFooterSize;
             }
@@ -993,7 +993,7 @@ namespace CrazyElevator.Managers
             Color previousTextColor = cardTitle.normal.textColor;
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .075f), 52, 90);
             cardTitle.alignment = TextAnchor.MiddleCenter;
-            cardTitle.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+            cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
             GUI.Label(new Rect(30f, (view.height - 120f) * .5f, view.width - 60f, 120f),
                 "TUTORIAL", cardTitle);
             cardTitle.fontSize = previousFontSize;
@@ -1021,9 +1021,9 @@ namespace CrazyElevator.Managers
             TextAnchor previousTitleAlignment = cardTitle.alignment;
             TextAnchor previousBodyAlignment = body.alignment;
             bool previousTitleWrap = cardTitle.wordWrap;
-            cardTitle.normal.textColor = Cream;
-            body.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, .92f);
-            caption.normal.textColor = accent;
+            cardTitle.normal.textColor = MenuColor(Cream);
+            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .92f));
+            caption.normal.textColor = MenuColor(accent);
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .045f), 24, 36);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .027f), 18, 25);
             cardTitle.alignment = TextAnchor.MiddleCenter;
@@ -1072,7 +1072,7 @@ namespace CrazyElevator.Managers
             Color previousCountdownTextColor = title.normal.textColor;
             title.fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
             title.alignment = TextAnchor.MiddleCenter;
-            title.normal.textColor = Cream;
+            title.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
                 countdown, title);
             title.fontSize = previousCountdownFontSize;
@@ -1093,8 +1093,8 @@ namespace CrazyElevator.Managers
                 { fontSize = 34, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             var label = new GUIStyle(caption)
                 { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            heading.normal.textColor = ink;
-            label.normal.textColor = ink;
+            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
+            label.normal.textColor = MenuPresentation.DisplayColor(ink);
 
             Rect display = new Rect(254f, 108f, 692f, 416f);
             MenuPresentation.Plaque(display, brass, brassEdge, 10f);
@@ -1144,7 +1144,7 @@ namespace CrazyElevator.Managers
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .072f), 26, 58);
             cardTitle.alignment = TextAnchor.MiddleCenter;
             cardTitle.wordWrap = true;
-            cardTitle.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+            cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
             float slideIn = Mathf.Lerp(30f, 0f, fadeIn);
             float slideOut = Mathf.Lerp(-30f, 0f, fadeOut);
             GUI.Label(new Rect(24f, view.height * .34f + slideIn + slideOut,
@@ -1215,7 +1215,7 @@ namespace CrazyElevator.Managers
         {
             TutorialControllerOval(rect, pressed ? accent : Ink);
             GUIStyle style = new GUIStyle(caption) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = pressed ? Ink : Cream;
+            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
             GUI.Label(rect, label, style);
         }
 
@@ -1225,7 +1225,7 @@ namespace CrazyElevator.Managers
             Panel(new Rect(rect.x, rect.y + (pressed ? 2f : 0f), rect.width, rect.height),
                 pressed ? accent : Ink);
             GUIStyle style = new GUIStyle(caption) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = pressed ? Ink : Cream;
+            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
             GUI.Label(rect, label, style);
         }
 

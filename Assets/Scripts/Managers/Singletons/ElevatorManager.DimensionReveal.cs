@@ -328,7 +328,7 @@ namespace CrazyElevator.Managers
                 fontSize = 19, alignment = TextAnchor.MiddleCenter, wordWrap = false
             };
             GameTypography.Apply(heading, true);
-            heading.normal.textColor = ink;
+            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
             var progress = GameManager.Instance;
             GUI.Label(badge, "ROUND " + (progress != null ? progress.RoundNumber : 1), heading);
 
@@ -344,7 +344,7 @@ namespace CrazyElevator.Managers
                 fontSize = 19, alignment = TextAnchor.UpperCenter, wordWrap = true
             };
             GameTypography.Apply(description);
-            description.normal.textColor = ink;
+            description.normal.textColor = MenuPresentation.DisplayColor(ink);
             GUI.Label(new Rect(80f, 450f, 354f, 105f), DimensionIntroSummary(world), description);
 
             string[] names = DimensionIntroNames(world);

@@ -1,6 +1,10 @@
 Shader "CrazyElevator/Menu Texture"
 {
-    Properties { _MainTex ("Image", 2D) = "white" {} }
+    Properties
+    {
+        _MainTex ("Image", 2D) = "white" {}
+        [HideInInspector] _EncodeToSrgb ("Encode for display", Float) = 0
+    }
     SubShader
     {
         Tags { "Queue" = "Overlay" }
@@ -13,6 +17,7 @@ Shader "CrazyElevator/Menu Texture"
             #pragma fragment Frag
             #include "UnityCG.cginc"
             sampler2D _MainTex;
+            float _EncodeToSrgb;
             sampler2D _GUIClipTexture;
             float4x4 unity_GUIClipTextureMatrix;
             struct Input
@@ -41,8 +46,7 @@ Shader "CrazyElevator/Menu Texture"
             half4 Frag(Output input) : SV_Target
             {
                 half4 color = tex2D(_MainTex, input.uv);
-                // The IMGUI overlay draws display colors directly.
-                if (!IsGammaSpace()) color.rgb = LinearToGammaSpace(color.rgb);
+                if (_EncodeToSrgb > 0.5) color.rgb = LinearToGammaSpace(color.rgb);
                 color *= input.color;
                 color.a *= tex2D(_GUIClipTexture, input.clipUV).a;
                 return color;

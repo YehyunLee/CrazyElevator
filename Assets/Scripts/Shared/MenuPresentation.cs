@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace CrazyElevator.Shared
 {
@@ -11,6 +12,13 @@ namespace CrazyElevator.Shared
         public static readonly Color Teal = new Color32(104, 182, 168, 255);
         public static readonly Color Coral = new Color32(231, 128, 113, 255);
         static Material textureMaterial;
+
+        // In this project's Linear rendering setup, Metal encodes the IMGUI
+        // target for display. The Direct3D overlay takes display colors directly.
+        static bool UsesLinearGuiTarget => QualitySettings.activeColorSpace == ColorSpace.Linear
+            && SystemInfo.graphicsDeviceType == GraphicsDeviceType.Metal;
+
+        public static Color DisplayColor(Color color) => UsesLinearGuiTarget ? color.linear : color;
 
         public static void ReleaseTextureMaterial()
         {
@@ -44,15 +52,19 @@ namespace CrazyElevator.Shared
         {
             if (texture == null || Event.current.type != EventType.Repaint) return;
             if (textureMaterial == null)
+            {
                 textureMaterial = new Material(Resources.Load<Shader>("MenuTexture"))
                     { hideFlags = HideFlags.HideAndDontSave };
+                bool encodeToSrgb = QualitySettings.activeColorSpace == ColorSpace.Linear && !UsesLinearGuiTarget;
+                textureMaterial.SetFloat("_EncodeToSrgb", encodeToSrgb ? 1f : 0f);
+            }
             Graphics.DrawTexture(rect, texture, uv, 0, 0, 0, 0, GUI.color, textureMaterial);
         }
 
         public static void Paint(Rect rect, Color color)
         {
             Color previous = GUI.color;
-            GUI.color = previous * color;
+            GUI.color = previous * DisplayColor(color);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
         }
