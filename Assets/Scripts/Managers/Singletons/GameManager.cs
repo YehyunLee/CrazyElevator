@@ -165,7 +165,8 @@ namespace CrazyElevator.Managers
 
         public void RequestAbilityIntro(ElevatorManager actor, string kind)
         {
-            if (actor == null || MenuManager.TutorialActive || string.IsNullOrEmpty(kind)) return;
+            if (!MenuManager.AbilityCutawaysEnabled || actor == null
+                || MenuManager.TutorialActive || string.IsNullOrEmpty(kind)) return;
             // Only show personal effects for a visible player pane.
             if (kind != "BOUNCER" && actor.Match != null && !actor.Match.IsVisibleSeat(actor.Seat)) return;
             string seenKey = AbilityIntroKey(actor, kind);

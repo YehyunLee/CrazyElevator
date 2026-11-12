@@ -35,10 +35,14 @@ namespace CrazyElevator.Managers
         static readonly Rect[] OptionsButtonRects =
         {
             new Rect(440f, 290f, 820f, 110f),
-            new Rect(440f, 445f, 820f, 110f)
+            new Rect(440f, 445f, 820f, 110f),
+            new Rect(440f, 600f, 820f, 110f)
         };
         const string InputHintsPreference = "CrazyElevator.InputHints.Keyboard";
         const string TutorialModePreference = "CrazyElevator.TutorialMode.Enabled";
+        const string AbilityCutawaysPreference = "CrazyElevator.AbilityCutaways.Enabled";
+        public static bool AbilityCutawaysEnabled => PlayerPrefs.GetInt(AbilityCutawaysPreference, 1) == 1;
+
         [Header("First menu buttons")]
         [SerializeField] CanvasGroup titleButtons;
         [Header("Mode screen button rectangles (1700 x 1082)")]
@@ -474,17 +478,25 @@ namespace CrazyElevator.Managers
             bool vertical = Mathf.Abs(move.y) >= .55f;
             bool horizontal = Mathf.Abs(move.x) >= .55f;
             if (vertical && !optionsVerticalHeld)
-                optionsSelection = 1 - optionsSelection;
+                optionsSelection = (optionsSelection + (move.y > 0f ? -1 : 1)
+                    + OptionsButtonRects.Length) % OptionsButtonRects.Length;
             if (confirm)
             {
                 if (optionsSelection == 0) SetKeyboardHints(!KeyboardHintsEnabled);
-                else SetTutorialMode(!TutorialModeEnabled);
+                else if (optionsSelection == 1) SetTutorialMode(!TutorialModeEnabled);
+                else ToggleAbilityCutaways();
             }
             else if (horizontal && !optionsHorizontalHeld && optionsSelection == 0)
                 SetKeyboardHints(move.x > 0);
 
             optionsVerticalHeld = vertical;
             optionsHorizontalHeld = horizontal;
+        }
+
+        static void ToggleAbilityCutaways()
+        {
+            PlayerPrefs.SetInt(AbilityCutawaysPreference, AbilityCutawaysEnabled ? 0 : 1);
+            PlayerPrefs.Save();
         }
 
         void CloseOptions()
@@ -958,6 +970,11 @@ namespace CrazyElevator.Managers
             if (DrawOptionsRow(1, "TUTORIAL MODE", tutorialEnabled ? "ON" : "OFF",
                 Coral, tutorialEnabled ? Teal : Coral, "TOGGLE"))
                 SetTutorialMode(!TutorialModeEnabled);
+
+            bool cutawaysEnabled = AbilityCutawaysEnabled;
+            if (DrawOptionsRow(2, "ABILITY CUTAWAYS", cutawaysEnabled ? "ON" : "OFF",
+                Coral, cutawaysEnabled ? Teal : Coral, "TOGGLE"))
+                ToggleAbilityCutaways();
 
             Rect back = new Rect(615, 910, 470, 76);
             DrawDirectoryCard(back, Cream, false);
