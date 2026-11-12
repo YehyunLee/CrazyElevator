@@ -52,6 +52,10 @@ namespace CrazyElevator.Managers
         float abilityIntroTime;
         float gameplayStartCueTime;
         public bool AbilityIntroActive => abilityIntroActive;
+        internal int AbilityIntroPaneSeat => abilityIntroActive && abilityIntroKind != "VIP"
+            && abilityIntroKind != "BOUNCER" && abilityIntroActor != null
+            && abilityIntroActor.Match != null && abilityIntroActor.Match.SplitScreen
+            ? abilityIntroActor.Seat : -1;
         public bool IsAbilityIntroActor(ElevatorManager actor)
             => abilityIntroActive && actor != null && abilityIntroActor == actor;
         public const int RoundsToWin = MatchProgress.RoundsToWin;
@@ -389,7 +393,7 @@ namespace CrazyElevator.Managers
             if (AbilityIntroActive && abilityIntroActor != null)
             {
                 var match = abilityIntroActor.Match;
-                bool shared = abilityIntroKind == "VIP" || abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen;
+                bool shared = AbilityIntroPaneSeat < 0;
                 abilityIntroActor.DrawAbilityIntro(abilityIntroTime, AbilityIntroView(),
                     shared && match != null && abilityIntroKind != "VIP", !shared);
                 return;
@@ -431,10 +435,9 @@ namespace CrazyElevator.Managers
 
         Rect AbilityIntroView()
         {
-            var match = abilityIntroActor != null ? abilityIntroActor.Match : null;
-            return abilityIntroKind == "VIP" || abilityIntroKind == "BOUNCER" || match == null || !match.SplitScreen
-                ? new Rect(0f, 0f, Screen.width, Screen.height)
-                : match.ViewRect(abilityIntroActor.Seat);
+            int seat = AbilityIntroPaneSeat;
+            return seat < 0 ? new Rect(0f, 0f, Screen.width, Screen.height)
+                : abilityIntroActor.Match.ViewRect(seat);
         }
     }
 }

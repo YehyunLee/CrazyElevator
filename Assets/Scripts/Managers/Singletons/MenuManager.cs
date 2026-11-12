@@ -747,14 +747,17 @@ namespace CrazyElevator.Managers
             if (!tutorialActive || tutorialGame == null) return;
             int previousDepth = GUI.depth;
             GUI.depth = TutorialOverlayDepth - 1;
-            Rect button = new Rect(Screen.width - 220f, 18f, 200f, 48f);
-            Panel(button, Cream);
-            if (GUI.Button(button, "SKIP TUTORIAL", cardCaption)) SkipTutorial();
-            Color previousCaption = caption.normal.textColor;
-            caption.normal.textColor = MenuColor(Cream);
-            GUI.Label(new Rect(button.x, button.yMax + 3f, button.width, 22f),
-                KeyboardHintsEnabled ? "TAB" : "VIEW", caption);
-            caption.normal.textColor = previousCaption;
+            bool overGameplay = !FullScreenOverlayActive;
+            float top = overGameplay ? (tutorialGame.Match != null ? 102f : 76f) : 18f;
+            Rect button = new Rect(Screen.width - 184f, top, 172f, 32f);
+            MenuPresentation.Plaque(button, MenuPresentation.Paper, MenuPresentation.Metal, 3f);
+            Rect key = new Rect(button.x + 4f, button.y + 4f, 40f, 24f);
+            MenuPresentation.Paint(key, MenuPresentation.Ink);
+            MenuPresentation.Label(key, new GUIContent(KeyboardHintsEnabled ? "TAB" : "VIEW"),
+                caption, MenuPresentation.Paper);
+            MenuPresentation.Label(new Rect(key.xMax, button.y, button.width - 44f, button.height),
+                new GUIContent("SKIP TUTORIAL"), caption, MenuPresentation.Ink);
+            if (GUI.Button(button, GUIContent.none, GUIStyle.none)) SkipTutorial();
             GUI.depth = previousDepth;
         }
 

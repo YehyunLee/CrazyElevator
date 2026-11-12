@@ -1989,12 +1989,20 @@ namespace CrazyElevator.Managers
             if (point.z <= 0) return;
             float size = Mathf.Max(1, Screen.height / 900f);
             float x = point.x, y = Screen.height - point.y;
-            Color accent = moving ? Teal : WorldAccent(floor);
-            Panel(new Rect(x - 70 * size, y + 44 * size, 140 * size, 3 * size), accent);
-            var markerStyle = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * size) };
-            Panel(new Rect(x - 98 * size, y + 49 * size, 196 * size, 28 * size), new Color(Ink.r, Ink.g, Ink.b, .92f));
-            Label(new Rect(x - 96 * size, y + 50 * size, 192 * size, 26 * size),
-                moving ? "F" + ElevatorRound.FloorNumber(floor) + side + "  ·  STOP" : "F" + ElevatorRound.FloorNumber(floor) + "  ·  " + WorldName(floor), markerStyle);
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            if (!view.Contains(new Vector2(x, y))) return;
+            float width = Mathf.Min(196f * size, view.width - 16f);
+            float left = Mathf.Clamp(x - width * .5f, view.x + 8f, view.xMax - width - 8f);
+            Rect stopPlate = new Rect(left, y + 46f * size, width, 28f * size);
+            MenuPresentation.HudPlate(stopPlate, moving ? MenuPresentation.Brass : MenuPresentation.Teal);
+            var markerStyle = new GUIStyle(buttonStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = Mathf.RoundToInt(14f * size),
+                wordWrap = false
+            };
+            string marker = "F" + ElevatorRound.FloorNumber(floor) + (moving ? side + "  ·  STOP" : "  ·  " + WorldName(floor));
+            MenuPresentation.Label(stopPlate, new GUIContent(marker), markerStyle, MenuPresentation.Paper);
         }
 
         void ReleaseCabinPreview() { if (eye) eye.targetTexture = null; }

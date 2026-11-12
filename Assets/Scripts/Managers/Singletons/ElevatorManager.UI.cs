@@ -135,12 +135,6 @@ namespace CrazyElevator.Managers
         }
         // Draw a solid panel and restore the GUI tint.
         void Panel(Rect r, Color c) { var old = GUI.color; GUI.color = c; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = old; }
-        void AccentBar(Rect r, Color color)
-        {
-            float width = Mathf.Clamp(r.width * .55f, 4f, 8f);
-            Panel(new Rect(Mathf.Round(r.center.x - width * .5f), Mathf.Round(r.y),
-                Mathf.Round(width), Mathf.Round(r.height)), color);
-        }
         void AngularPanel(Rect r, Color accent)
         {
             FramedPanel(r, accent, 3f);
@@ -159,18 +153,6 @@ namespace CrazyElevator.Managers
                 outer.x + border, outer.y + border,
                 Mathf.Max(1f, outer.width - border * 2f),
                 Mathf.Max(1f, outer.height - border * 2f)), UiBlack);
-        }
-        void GameplayControlPanel(Rect r, Color accent, bool pressed)
-        {
-            const float border = 3f;
-            Rect outer = new Rect(
-                Mathf.Round(r.x), Mathf.Round(r.y),
-                Mathf.Max(1f, Mathf.Round(r.width)), Mathf.Max(1f, Mathf.Round(r.height)));
-            Panel(outer, accent);
-            Panel(new Rect(
-                outer.x + border, outer.y + border,
-                Mathf.Max(1f, outer.width - border * 2f),
-                Mathf.Max(1f, outer.height - border * 2f)), pressed ? accent : Ink);
         }
         // Use the body style unless a custom style is supplied.
         void Label(Rect r, string text, GUIStyle style = null)
@@ -887,7 +869,10 @@ namespace CrazyElevator.Managers
         {
             float hudScale = extendedInterior ? Mathf.Max(1f, Screen.height / 900f) : 1f;
             if (extendedInterior && compactTopHud)
-                return new Vector2(222f * hudScale, 40f * hudScale);
+            {
+                Rect hud = SoloHudRect();
+                return new Vector2(hud.x + hud.width * .57f, hud.y + 37f) * hudScale;
+            }
 
             float x = Mathf.Max(12f, Screen.width / hudScale - 258f);
             return new Vector2((x + 123f) * hudScale, 92f * hudScale);
@@ -1115,23 +1100,25 @@ namespace CrazyElevator.Managers
 
         // A single compact strip keeps essential information readable without
         // covering the world with separate status boxes.
+        Rect SoloHudRect()
+        {
+            float hudScale = Mathf.Max(1f, Screen.height / 900f);
+            return new Rect(12f, 8f, Mathf.Min(424f, Screen.width / hudScale - 24f), 58f);
+        }
+
         void DrawCompactTopHUD()
         {
             int seconds = Mathf.CeilToInt(round.TimeLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            const float totalWidth = 524f;
-            const float y = 16f;
-            const float x = 16f;
-
-            Panel(new Rect(x - 5, y - 5, totalWidth + 10, 68), UiWhite);
-            Panel(new Rect(x - 2, y - 2, totalWidth + 4, 62), UiBlack);
-            float cursor = x;
-            DrawHudTile(new Rect(cursor, y, 148, 48), WorldAccent(round.Floor),
-                "ROUND " + (session != null ? session.RoundNumber : 1) + " / " + WorldName(round.Floor),
-                "F" + ElevatorRound.FloorNumber(round.Floor)); cursor += 152;
-            DrawHudTile(new Rect(cursor, y, 108, 48), Teal, "SCORE", round.Score.ToString()); cursor += 112;
-            DrawHudTile(new Rect(cursor, y, 108, 48), Coral, "HAPPY", round.Happy.ToString()); cursor += 112;
-            DrawHudTile(new Rect(cursor, y, 148, 48), Sky, "TIME", clock);
+            Rect hud = SoloHudRect();
+            MenuPresentation.HudPlate(hud, MenuPresentation.Teal);
+            Rect floor = new Rect(hud.x, hud.y, hud.width * .42f, hud.height);
+            Rect points = new Rect(floor.xMax, hud.y, hud.width * .30f, hud.height);
+            Rect time = new Rect(points.xMax, hud.y, hud.width * .28f, hud.height);
+            DrawHudTile(floor, MenuPresentation.Paper, WorldName(round.Floor),
+                "F" + ElevatorRound.FloorNumber(round.Floor));
+            DrawHudTile(points, MenuPresentation.Brass, "SCORE", round.Score.ToString());
+            DrawHudTile(time, seconds <= 10 ? MenuPresentation.Coral : MenuPresentation.Paper, "TIME", clock);
         }
 
         readonly List<Rect> passengerBadgeObstacles = new List<Rect>();
@@ -1399,13 +1386,12 @@ namespace CrazyElevator.Managers
         readonly List<Rider> manifestRiders = new List<Rider>();
         readonly Dictionary<Rider, RenderTexture> manifestRiderPortraits = new Dictionary<Rider, RenderTexture>();
         Vector2 manifestScroll;
-        const float ManifestHeaderHeight = 46f;
-        const float ManifestRowHeight = 88f;
-        const float ManifestRowGap = 5f;
-        const float ManifestInset = 8f;
-        const float ManifestShadow = 4f;
+        const float ManifestHeaderHeight = 35f;
+        const float ManifestRowHeight = 60f;
+        const float ManifestRowGap = 4f;
+        const float ManifestInset = 6f;
+        const float ManifestShadow = 3f;
         static readonly Color ManifestPortraitBacking = new Color32(166, 152, 197, 255);
-        static readonly Color ManifestPatienceTrack = new Color32(221, 209, 188, 255);
         static readonly Color ManifestUrgentText = new Color32(148, 44, 55, 255);
 
         void UpdateManifestPortraits()
@@ -1428,14 +1414,15 @@ namespace CrazyElevator.Managers
         static float ManifestScale(Rect view) => Mathf.Min(Mathf.Clamp(view.height / 900f, .8f, 1.4f),
             view.width / 650f);
 
-        static Rect ManifestBoardRect(Rect view, float widthRatio, float uiScale, int riderCount)
+        Rect ManifestBoardRect(Rect view, float uiScale, int riderCount)
         {
-            float width = Mathf.Min(view.width * .44f, Mathf.Clamp(view.width * widthRatio,
-                282f * uiScale, 360f * uiScale));
-            float contentHeight = riderCount == 0 ? 38f : riderCount * ManifestRowHeight - ManifestRowGap;
-            float height = Mathf.Min(view.height * .6f,
+            float width = Mathf.Clamp(view.width * passengerListWidth, 200f * uiScale, 240f * uiScale);
+            float contentHeight = riderCount == 0 ? 26f : riderCount * ManifestRowHeight - ManifestRowGap;
+            // Keep clear of the rival marker above and the travel controls below.
+            float top = Mathf.Min(view.height * .4f, Mathf.Max(Match != null ? 140f : 102f, view.height * .14f));
+            float availableHeight = Mathf.Max(76f * uiScale, view.height - top - 205f);
+            float height = Mathf.Min(Mathf.Min(view.height * .52f, availableHeight),
                 (ManifestHeaderHeight + contentHeight + ManifestInset + ManifestShadow) * uiScale);
-            float top = Mathf.Min(view.height * .3f, Mathf.Max(102f, view.height * .14f));
             return new Rect(view.xMax - width - 14f * uiScale, view.y + top, width, height);
         }
 
@@ -1444,7 +1431,7 @@ namespace CrazyElevator.Managers
             Rect view = ManifestView;
             int count = 0;
             foreach (Rider rider in round.Riders) if (round.Owns(rider)) count++;
-            return ManifestBoardRect(view, passengerListWidth, ManifestScale(view), count);
+            return ManifestBoardRect(view, ManifestScale(view), count);
         }
 
         void DrawPassengerList()
@@ -1465,8 +1452,15 @@ namespace CrazyElevator.Managers
             Rect view = ManifestView;
             float uiScale = ManifestScale(view);
             int count = manifestRiders.Count;
-            Rect board = ManifestBoardRect(view, passengerListWidth, uiScale, count);
-            DrawManifestHeader(board, count, uiScale);
+            Rect board = ManifestBoardRect(view, uiScale, count);
+            int stopFloor = phase == Phase.Moving ? GlideStopFloor()
+                : phase == Phase.Docking ? destination : round.Floor;
+            int stopSide = phase == Phase.Moving ? NearestStop(RouteLateralX)
+                : phase == Phase.Docking ? dockingStop : round.Stop;
+            int dropOffCount = 0;
+            foreach (Rider rider in manifestRiders)
+                if (rider.Destination == stopFloor && rider.DestinationStop == stopSide) dropOffCount++;
+            DrawManifestHeader(board, count, dropOffCount, uiScale);
 
             float inset = ManifestInset * uiScale;
             float headerHeight = ManifestHeaderHeight * uiScale;
@@ -1475,7 +1469,7 @@ namespace CrazyElevator.Managers
             if (count == 0)
             {
                 manifestScroll = Vector2.zero;
-                ManifestText(manifestDetail, scroll, "NO PASSENGERS YET", 15f * uiScale,
+                ManifestText(manifestDetail, scroll, "NO PASSENGERS YET", 13f * uiScale,
                     MenuPresentation.Paper, TextAnchor.MiddleCenter);
                 return;
             }
@@ -1491,65 +1485,96 @@ namespace CrazyElevator.Managers
             manifestScroll = GUI.BeginScrollView(scroll, manifestScroll,
                 new Rect(0, 0, rowWidth, overflow ? contentHeight : scroll.height), false, overflow);
             for (int i = 0; i < count; i++)
-                DrawManifestRow(new Rect(0, i * rowHeight, rowWidth, rowHeight - rowGap), manifestRiders[i], uiScale);
+            {
+                Rider rider = manifestRiders[i];
+                bool atStop = rider.Destination == stopFloor && rider.DestinationStop == stopSide;
+                DrawManifestRow(new Rect(0, i * rowHeight, rowWidth, rowHeight - rowGap), rider, uiScale, atStop);
+            }
             GUI.EndScrollView();
         }
 
-        void DrawManifestHeader(Rect board, int count, float uiScale)
+        void DrawManifestHeader(Rect board, int count, int dropOffCount, float uiScale)
         {
             float shadow = ManifestShadow * uiScale;
-            float radius = 12f * uiScale;
+            float radius = 9f * uiScale;
             PaintManifestShape(new Rect(board.x, board.y + shadow, board.width, board.height - shadow),
                 MenuPresentation.Ink, radius);
             PaintManifestShape(new Rect(board.x, board.y, board.width, board.height - shadow),
                 MenuPresentation.Wall, radius);
 
             float inset = ManifestInset * uiScale;
-            Rect header = new Rect(board.x + inset, board.y + inset, board.width - 2f * inset, 32f * uiScale);
-            PaintManifestShape(header, MenuPresentation.Brass, 7f * uiScale);
-            Rect counter = new Rect(header.xMax - 37f * uiScale, header.y + 4f * uiScale, 32f * uiScale, 24f * uiScale);
-            PaintManifestShape(counter, MenuPresentation.Ink, 7f * uiScale);
-            ManifestText(manifestTitle, counter, count.ToString(), 17f * uiScale, MenuPresentation.Paper,
+            Rect header = new Rect(board.x + inset, board.y + inset, board.width - 2f * inset, 24f * uiScale);
+            PaintManifestShape(header, MenuPresentation.Brass, 5f * uiScale);
+            Rect counter = new Rect(header.xMax - 27f * uiScale, header.y + 3f * uiScale, 24f * uiScale, 18f * uiScale);
+            PaintManifestShape(counter, MenuPresentation.Ink, 5f * uiScale);
+            ManifestText(manifestTitle, counter, count.ToString(), 14f * uiScale, MenuPresentation.Paper,
                 TextAnchor.MiddleCenter);
-            ManifestText(manifestTitle, new Rect(header.x + 10f * uiScale, header.y,
-                counter.x - header.x - 15f * uiScale, header.height), "ON BOARD", 19f * uiScale, MenuPresentation.Ink);
+            Rect title = Rect.MinMaxRect(header.x + 7f * uiScale, header.y,
+                counter.x - 4f * uiScale, header.yMax);
+            if (dropOffCount > 0)
+            {
+                Rect dropOff = new Rect(title.xMax - 70f * uiScale, title.y, 70f * uiScale, title.height);
+                title.xMax = dropOff.x - 4f * uiScale;
+                ManifestText(manifestDetail, dropOff, dropOffCount + (phase == Phase.Opening ? " AT STOP" : " NEXT STOP"),
+                    11f * uiScale, MenuPresentation.Ink, TextAnchor.MiddleRight);
+            }
+            ManifestText(manifestTitle, title, "ON BOARD", 16f * uiScale, MenuPresentation.Ink);
         }
 
-        void DrawManifestRow(Rect row, Rider rider, float uiScale)
+        void DrawManifestRow(Rect row, Rider rider, float uiScale, bool atStop)
         {
             float patience = Mathf.Clamp01(rider.Remaining / Mathf.Max(.001f, rider.Patience));
             bool urgent = patience <= .25f;
-            PaintManifestShape(row, MenuPresentation.Paper, 8f * uiScale);
+            PaintManifestShape(row, MenuPresentation.Paper, 6f * uiScale);
 
-            float portraitSize = 73f * uiScale;
-            Rect portrait = new Rect(row.x + 5f * uiScale, row.center.y - portraitSize * .5f, portraitSize, portraitSize);
-            PaintManifestShape(portrait, ManifestPortraitBacking, 6f * uiScale);
+            float frameSize = 48f * uiScale;
+            float thickness = 3f * uiScale;
+            Rect frame = new Rect(row.x + 5f * uiScale, row.center.y - frameSize * .5f, frameSize, frameSize);
+            Color patienceColour = urgent ? MenuPresentation.Coral
+                : patience <= .5f ? MenuPresentation.Brass : MenuPresentation.Teal;
+            DrawManifestPatienceFrame(frame, thickness, patience, patienceColour);
+            Rect portrait = Rect.MinMaxRect(frame.x + thickness, frame.y + thickness,
+                frame.xMax - thickness, frame.yMax - thickness);
+            MenuPresentation.Paint(portrait, ManifestPortraitBacking);
             DrawManifestPortrait(portrait, rider);
 
-            float textX = portrait.xMax + 9f * uiScale;
-            float textWidth = row.xMax - textX - 8f * uiScale;
-            ManifestText(manifestTitle, new Rect(textX, row.y + 5f * uiScale, textWidth, 25f * uiScale),
-                PassengerRoleName(rider.Kind), 19f * uiScale, MenuPresentation.Ink);
+            float textX = frame.xMax + 7f * uiScale;
+            float textRight = row.xMax - 6f * uiScale;
+            ManifestText(manifestTitle, new Rect(textX, row.y + 7f * uiScale, textRight - textX, 20f * uiScale),
+                PassengerRoleName(rider.Kind), 16f * uiScale, MenuPresentation.Ink);
 
-            ManifestText(manifestDetail, new Rect(textX, row.y + 30f * uiScale, textWidth, 22f * uiScale),
-                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s  ·  +" + round.BaseDeliveryPoints(rider),
-                15f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
-
-            float badgeWidth = 60f * uiScale;
-            Rect destination = new Rect(row.xMax - 8f * uiScale - badgeWidth, row.y + 53f * uiScale,
-                badgeWidth, 23f * uiScale);
-            PaintManifestShape(destination, MenuPresentation.Teal, 6f * uiScale);
-            ManifestText(manifestTitle, destination, "F" + DestinationTag(rider), 16f * uiScale,
+            float badgeWidth = 42f * uiScale;
+            Rect destination = new Rect(textRight - badgeWidth, row.y + 29f * uiScale, badgeWidth, 19f * uiScale);
+            ManifestText(manifestDetail, Rect.MinMaxRect(textX, destination.y, destination.x - 4f * uiScale, destination.yMax),
+                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s · +" + round.BaseDeliveryPoints(rider),
+                13f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
+            PaintManifestShape(destination, atStop ? MenuPresentation.Brass : MenuPresentation.Teal, 5f * uiScale);
+            string destinationText = (rider.DestinationStop == CenterStop ? "F" : "") + DestinationTag(rider);
+            ManifestText(manifestTitle, destination, destinationText, 14f * uiScale,
                 MenuPresentation.Ink, TextAnchor.MiddleCenter);
+        }
 
-            float barHeight = 8f * uiScale;
-            Rect bar = new Rect(textX, destination.center.y - barHeight * .5f,
-                destination.x - textX - 8f * uiScale, barHeight);
-            PaintManifestShape(bar, ManifestPatienceTrack, bar.height * .5f);
-            bar.width *= patience;
-            if (bar.width > 0f)
-                PaintManifestShape(bar, urgent ? MenuPresentation.Coral : MenuPresentation.Teal,
-                    Mathf.Min(bar.width, bar.height) * .5f);
+        static void DrawManifestPatienceFrame(Rect frame, float thickness, float patience, Color colour)
+        {
+            MenuPresentation.Paint(frame, MenuPresentation.Wall);
+            // Fill clockwise from the top left, counting each corner as part of one edge.
+            float progress = patience * 4f;
+            float edge = frame.width - thickness;
+            if (progress > 0f)
+                MenuPresentation.Paint(new Rect(frame.x, frame.y, edge * Mathf.Clamp01(progress), thickness), colour);
+            if (progress > 1f)
+                MenuPresentation.Paint(new Rect(frame.xMax - thickness, frame.y, thickness,
+                    edge * Mathf.Clamp01(progress - 1f)), colour);
+            if (progress > 2f)
+            {
+                float length = edge * Mathf.Clamp01(progress - 2f);
+                MenuPresentation.Paint(new Rect(frame.xMax - length, frame.yMax - thickness, length, thickness), colour);
+            }
+            if (progress > 3f)
+            {
+                float length = edge * Mathf.Clamp01(progress - 3f);
+                MenuPresentation.Paint(new Rect(frame.x, frame.yMax - length, thickness, length), colour);
+            }
         }
 
         static void PaintManifestShape(Rect rect, Color colour, float radius)
@@ -1564,8 +1589,7 @@ namespace CrazyElevator.Managers
             style.fontSize = Mathf.Max(8, Mathf.RoundToInt(fontSize));
             while (style.fontSize > 8 && style.CalcSize(content).x > rect.width)
                 style.fontSize--;
-            style.normal.textColor = MenuPresentation.DisplayColor(colour);
-            GUI.Label(rect, content, style);
+            MenuPresentation.Label(rect, content, style, colour);
         }
 
         static string PassengerRoleName(string kind)
@@ -1597,7 +1621,7 @@ namespace CrazyElevator.Managers
             if (manifestRiderPortraits.TryGetValue(rider, out RenderTexture portrait) && portrait != null)
                 MenuPresentation.DrawTexture(rect, portrait);
             else
-                DrawPassengerBadgeIcon(rect, rider.Kind, Teal);
+                DrawPassengerBadgeIcon(rect, rider.Kind, PassengerAbilityAccent(rider));
         }
 
         string PassengerCalloutText(Rider rider)
@@ -1683,12 +1707,12 @@ namespace CrazyElevator.Managers
             up = down = stop = close = kickout = repair = new Rect();
             if (!extendedInterior || paused) return;
             bool split = Match != null && Match.SplitScreen;
-            float width = split
-                ? Mathf.Clamp(ViewWidth * .25f, 170f, 220f)
-                : Mathf.Clamp(ViewWidth * .18f, 220f, 280f);
-            float height = split ? 50f : 56f;
-            float gap = split ? 8f : 10f;
             float margin = split ? 12f : 18f;
+            float preferredWidth = split ? Mathf.Clamp(ViewWidth * .28f, 156f, 210f)
+                : Mathf.Clamp(ViewWidth * .18f, 204f, 254f);
+            float width = Mathf.Min(preferredWidth, ViewWidth - margin * 2f);
+            float height = split ? 44f : 50f;
+            float gap = 6f;
             float x = ViewWidth - width - margin;
             if (phase == Phase.Moving)
             {
@@ -1719,13 +1743,13 @@ namespace CrazyElevator.Managers
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
-            DrawMouseControl(up, "HOLD  ↑  UP", Teal, GameplayUpKey);
-            DrawMouseControl(down, "HOLD  ↓  DOWN", Teal, GameplayDownKey);
-            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP", Gold,
-                GameplayConfirmKey);
-            DrawMouseControl(close, "CLOSE & TRAVEL", Coral, GameplayCloseKey);
-            DrawMouseControl(kickout, "KICK OUT", Coral, GameplayKickoutKey);
-            DrawMouseControl(repair, "HOLD TO REPAIR", Gold, GameplayRepairKey);
+            DrawMouseControl(up, "HOLD TO GO UP", MenuPresentation.Teal, GameplayUpKey);
+            DrawMouseControl(down, "HOLD TO GO DOWN", MenuPresentation.Teal, GameplayDownKey);
+            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP",
+                MenuPresentation.Brass, GameplayConfirmKey);
+            DrawMouseControl(close, "CLOSE & TRAVEL", MenuPresentation.Brass, GameplayCloseKey);
+            DrawMouseControl(kickout, "KICK OUT", MenuPresentation.Coral, GameplayKickoutKey);
+            DrawMouseControl(repair, "HOLD TO REPAIR", MenuPresentation.Teal, GameplayRepairKey);
         }
 
         bool ReadDoorClick(InputManager.SeatInput input)
@@ -1746,7 +1770,7 @@ namespace CrazyElevator.Managers
                     ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
                     : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
                 DrawGameplayKeyHint(BoardingDoorHintRect(door, slot), direction,
-                    boardingDoorOpen[(int)door] ? Gold : Teal);
+                    MenuPresentation.Teal, boardingDoorOpen[(int)door]);
             }
         }
 
@@ -1797,8 +1821,8 @@ namespace CrazyElevator.Managers
                 cursor.y -= view.y;
             }
             bool pressed = mouse != null && mouse.leftButton.isPressed && rect.Contains(cursor);
-            GameplayControlPanel(rect, accent, pressed);
-            Color previous = buttonStyle.normal.textColor;
+            if (pressed) MenuPresentation.Plaque(rect, MenuPresentation.Paper, MenuPresentation.Metal, 2f);
+            else MenuPresentation.HudPlate(rect, accent);
             int previousFontSize = buttonStyle.fontSize;
             TextAnchor previousAlignment = buttonStyle.alignment;
             bool previousWordWrap = buttonStyle.wordWrap;
@@ -1810,9 +1834,9 @@ namespace CrazyElevator.Managers
             Rect labelRect = rect;
             if (!string.IsNullOrEmpty(key))
             {
-                float keySize = Mathf.Min(rect.height - 12f, 44f);
-                const float keyInset = 12f;
-                const float keyGap = 12f;
+                float keySize = Mathf.Min(rect.height - 8f, 42f);
+                const float keyInset = 9f;
+                const float keyGap = 8f;
                 float maxLabelWidth = Mathf.Max(1f,
                     rect.width - keyInset - keySize - keyGap - 8f);
                 while (buttonStyle.fontSize > 12 &&
@@ -1824,16 +1848,16 @@ namespace CrazyElevator.Managers
                     rect.y + (rect.height - keySize) * .5f,
                     keySize, keySize);
                 DrawGameplayKeyHint(hint, key, accent, pressed);
+                buttonStyle.alignment = TextAnchor.MiddleLeft;
                 labelRect = new Rect(hint.xMax + keyGap, rect.y,
                     maxLabelWidth, rect.height);
             }
-            buttonStyle.normal.textColor = UiWhite;
-            GUI.Label(labelRect, text, buttonStyle);
+            MenuPresentation.Label(labelRect, new GUIContent(text), buttonStyle,
+                pressed ? MenuPresentation.Ink : MenuPresentation.Paper);
             buttonStyle.fontSize = previousFontSize;
             buttonStyle.alignment = previousAlignment;
             buttonStyle.wordWrap = previousWordWrap;
             buttonStyle.clipping = previousClipping;
-            buttonStyle.normal.textColor = previous;
         }
 
         bool GameplayUsesKeyboard => MenuManager.KeyboardHintsEnabled;
@@ -1851,30 +1875,18 @@ namespace CrazyElevator.Managers
 
         void DrawGameplayKeyHint(Rect rect, string key)
         {
-            DrawGameplayKeyHint(rect, key, Teal);
+            DrawGameplayKeyHint(rect, key, MenuPresentation.Teal);
         }
 
-        void DrawGameplayKeyHint(Rect rect, string key, Color accent)
+        void DrawGameplayKeyHint(Rect rect, string key, Color accent, bool active = false)
         {
             if (string.IsNullOrEmpty(key)) return;
-
-            DrawGameplayKeyIcon(rect, key, accent);
-        }
-
-        void DrawGameplayKeyHint(Rect rect, string key, Color accent, bool pressed)
-        {
-            if (string.IsNullOrEmpty(key)) return;
-
-            DrawGameplayKeyIcon(rect, key, accent);
-        }
-
-        void DrawGameplayKeyIcon(Rect rect, string key, Color accent)
-        {
+            if (active) accent = MenuPresentation.Brass;
             if (gameplayKeyIconTexture == null)
                 gameplayKeyIconTexture = CreateGameplayKeyIcon();
 
             Color previousGuiColor = GUI.color;
-            GUI.color = accent;
+            GUI.color = MenuPresentation.DisplayColor(accent);
             GUI.DrawTexture(rect, gameplayKeyIconTexture);
             GUI.color = previousGuiColor;
 
@@ -1883,7 +1895,7 @@ namespace CrazyElevator.Managers
             Color previousTextColor = buttonStyle.normal.textColor;
             buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .42f), 11, 20);
             buttonStyle.alignment = TextAnchor.MiddleCenter;
-            buttonStyle.normal.textColor = UiWhite;
+            buttonStyle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
             var label = new GUIContent(key);
             while (buttonStyle.fontSize > 9 && buttonStyle.CalcSize(label).x > rect.width - 5f)
                 buttonStyle.fontSize--;
@@ -1922,16 +1934,13 @@ namespace CrazyElevator.Managers
 
         void DrawHudTile(Rect area, Color color, string caption, string value)
         {
-            Panel(area, UiBlack);
-            Panel(new Rect(area.x, area.yMax + 5f, area.width, 5f), color);
-            AccentBar(new Rect(area.x + 4f, area.y + 7f, 7f, area.height - 18f), color);
-
+            MenuPresentation.Paint(new Rect(area.x, area.y + 11f, 1f, area.height - 22f), MenuPresentation.Ink);
             Color oldSmall = inkSmall.normal.textColor;
             Color oldLarge = inkLarge.normal.textColor;
-            inkSmall.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, .72f);
-            inkLarge.normal.textColor = UiWhite;
-            GUI.Label(new Rect(area.x + 18, area.y + 3, area.width - 22, 18), caption, inkSmall);
-            GUI.Label(new Rect(area.x + 18, area.y + 18, area.width - 22, 27), value, inkLarge);
+            inkSmall.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            inkLarge.normal.textColor = MenuPresentation.DisplayColor(color);
+            GUI.Label(new Rect(area.x + 10f, area.y + 5f, area.width - 15f, 18f), caption, inkSmall);
+            GUI.Label(new Rect(area.x + 10f, area.y + 21f, area.width - 15f, 30f), value, inkLarge);
             inkSmall.normal.textColor = oldSmall;
             inkLarge.normal.textColor = oldLarge;
         }

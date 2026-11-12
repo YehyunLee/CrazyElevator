@@ -12,7 +12,6 @@ namespace CrazyElevator.Managers
         };
         static readonly int[] lobbyCharacterSelection = { 0, 1 };
         static readonly Color LobbyPortraitBacking = new Color32(62, 49, 67, 255);
-        static readonly Color LobbyMetal = new Color32(113, 72, 52, 255);
         static readonly Color LobbyShadow = new Color32(38, 29, 44, 255);
         readonly Dictionary<string, RenderTexture> lobbyPortraits = new Dictionary<string, RenderTexture>();
         readonly Dictionary<(PassengerView prefab, Color jacket), RenderTexture> manifestPortraits =
@@ -142,8 +141,8 @@ namespace CrazyElevator.Managers
             }
 
             Rect header = new Rect(540f, 144f, 620f, 78f);
-            MenuPresentation.Plaque(header, MenuPresentation.Paper, LobbyMetal, 8f);
-            MenuPresentation.Fasteners(header, LobbyMetal);
+            MenuPresentation.Plaque(header, MenuPresentation.Paper, MenuPresentation.Metal, 8f);
+            MenuPresentation.Fasteners(header, MenuPresentation.Metal);
             DrawLabel(header, "CHOOSE CHARACTER", menuLabelText, MenuPresentation.Ink);
             float launch = launching ? Mathf.Clamp01(launchTimer / LaunchSeconds) : 0f;
             float descent = launch * launch * (ArtHeight + 150f);
@@ -151,7 +150,7 @@ namespace CrazyElevator.Managers
             DrawLobbySeat(1, rivalButton, playerTwoReadyButton, MenuPresentation.Teal, descent);
 
             Rect versus = new Rect(814f, 497f, 72f, 58f);
-            MenuPresentation.Plaque(versus, MenuPresentation.Brass, LobbyMetal);
+            MenuPresentation.Plaque(versus, MenuPresentation.Brass, MenuPresentation.Metal);
             DrawLabel(versus, "VS", readyLabelText, MenuPresentation.Ink);
             MenuPresentation.Plaque(startButton,
                 launching ? MenuPresentation.Brass : LobbyPortraitBacking, LobbyShadow);
@@ -165,7 +164,7 @@ namespace CrazyElevator.Managers
 
         bool DrawLobbyBack()
         {
-            MenuPresentation.Plaque(backButton, MenuPresentation.Paper, LobbyMetal);
+            MenuPresentation.Plaque(backButton, MenuPresentation.Paper, MenuPresentation.Metal);
             DrawLabel(backButton, "BACK", readyLabelText, MenuPresentation.Ink);
             DrawKeyHint(new Rect(backButton.xMax + 14f, backButton.y + 2f, 54f, 54f),
                 KeyboardHintsEnabled ? "ESC" : "B");
@@ -176,19 +175,19 @@ namespace CrazyElevator.Managers
         {
             card.y += descent;
             confirm.y += descent;
-            MenuPresentation.Plaque(card, MenuPresentation.Brass, LobbyMetal, 10f);
+            MenuPresentation.Plaque(card, MenuPresentation.Brass, MenuPresentation.Metal, 10f);
             MenuPresentation.Paint(Expand(card, -10f), LobbyShadow);
-            MenuPresentation.Fasteners(card, LobbyMetal);
+            MenuPresentation.Fasteners(card, MenuPresentation.Metal);
 
             Rect seatPlate = new Rect(card.center.x - 124f, card.y - 25f, 248f, 54f);
-            MenuPresentation.Plaque(seatPlate, accent, LobbyMetal);
+            MenuPresentation.Plaque(seatPlate, accent, MenuPresentation.Metal);
             DrawLabel(seatPlate, seat == 0 ? "PLAYER 1" : "PLAYER 2", readyLabelText, MenuPresentation.Ink);
 
             string character = LobbyCharacters[lobbyCharacterSelection[seat]];
             float portraitSize = Mathf.Max(1f, Mathf.Min(card.width - 156f, confirm.y - card.y - 106f));
             Rect portrait = new Rect(card.center.x - portraitSize * .5f, card.y + 44f,
                 portraitSize, portraitSize);
-            MenuPresentation.Paint(Expand(portrait, 4f), LobbyMetal);
+            MenuPresentation.Paint(Expand(portrait, 4f), MenuPresentation.Metal);
             MenuPresentation.Paint(portrait, LobbyPortraitBacking);
             if (lobbyPortraits.TryGetValue(character, out RenderTexture texture))
                 MenuPresentation.DrawTexture(portrait, texture, ScaleMode.ScaleToFit);
@@ -204,7 +203,7 @@ namespace CrazyElevator.Managers
                 DrawLobbyArrow(right, seat, 1, accent);
             }
 
-            MenuPresentation.Plaque(confirm, ready ? accent : MenuPresentation.Paper, LobbyMetal);
+            MenuPresentation.Plaque(confirm, ready ? accent : MenuPresentation.Paper, MenuPresentation.Metal);
             DrawLabel(confirm, ready ? "READY" : "CONFIRM", readyLabelText, MenuPresentation.Ink);
             if (launching) return;
             string key = KeyboardHintsEnabled ? (seat == 0 ? "C" : ".") : "A";
@@ -215,7 +214,7 @@ namespace CrazyElevator.Managers
 
         void DrawLobbyArrow(Rect rect, int seat, int direction, Color accent)
         {
-            MenuPresentation.Plaque(rect, accent, LobbyMetal, 4f);
+            MenuPresentation.Plaque(rect, accent, MenuPresentation.Metal, 4f);
             if (direction < 0) DrawChoiceArrow(rect, false, MenuPresentation.Ink, ref leftChoiceArrowTexture);
             else DrawChoiceArrow(rect, true, MenuPresentation.Ink, ref rightChoiceArrowTexture);
             if (KeyboardHintsEnabled)
