@@ -1130,6 +1130,17 @@ namespace CrazyElevator.Match
 
         float SharedClockWidth => Mathf.Clamp(Screen.width * .13f, 104f, 160f);
 
+        Rect SharedClockRect => new Rect((Screen.width - SharedClockWidth) * .5f, 8f, SharedClockWidth, 58f);
+
+        Rect SharedRoundStatusRect
+        {
+            get
+            {
+                float width = Mathf.Min(Screen.width - 16f, 520f);
+                return new Rect((Screen.width - width) * .5f, SharedClockRect.yMax + 4f, width, 26f);
+            }
+        }
+
         Rect SeatScoreBarRect(int seat)
         {
             Rect view = ViewRect(seat);
@@ -1172,6 +1183,9 @@ namespace CrazyElevator.Match
 
         void DrawRivalInteractions(Game actor, int seat, Rect view)
         {
+            const float markerHeight = 28f;
+            const float hudGap = 8f;
+            float hintTop = SharedRoundStatusRect.yMax + hudGap;
             if (IsTutorialCollisionParticipant(actor) && actor == tutorialCollisionAttacker)
             {
                 Camera tutorialCamera = actor.sceneView != null ? actor.sceneView.exteriorCamera : null;
@@ -1182,8 +1196,9 @@ namespace CrazyElevator.Match
                     if (target.z > 0f)
                     {
                         float x = Mathf.Clamp(target.x, view.x + 60f, view.xMax - 60f);
-                        float y = Mathf.Clamp(Screen.height - target.y, view.y + 80f, view.yMax - 80f);
-                        Rect marker = new Rect(x - 54f, y - 28f, 108f, 28f);
+                        float y = Mathf.Clamp(Screen.height - target.y - markerHeight,
+                            hintTop, Mathf.Max(hintTop, view.yMax - 80f - markerHeight));
+                        Rect marker = new Rect(x - 54f, y, 108f, markerHeight);
                         Fill(marker, Ink);
                         var targetLabel = new GUIStyle(centred) { fontSize = 18 };
                         targetLabel.normal.textColor = Gold;
@@ -1199,15 +1214,17 @@ namespace CrazyElevator.Match
             if (Mathf.Abs(delta) <= 3f)
             {
                 string arrow = delta > .45f ? "↑" : delta < -.45f ? "↓" : "↔";
-                Rect marker = new Rect(view.xMax - 154f, view.y + 78f, 146f, 28f);
+                Rect marker = new Rect(view.xMax - 154f, hintTop, 146f, markerHeight);
                 Fill(marker, new Color(Ink.r, Ink.g, Ink.b, .88f));
                 label.normal.textColor = rivalColor;
                 GUI.Label(marker, arrow + " RIVAL "
                     + "F" + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor), rival.ActiveMinFloor, rival.ActiveMaxFloor)), label);
+                hintTop = marker.yMax + hudGap;
             }
             if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
             {
-                Rect message = new Rect(view.x + view.width * .15f, view.y + view.height * .18f, view.width * .7f, 38f);
+                float messageY = Mathf.Max(hintTop, view.y + view.height * .18f);
+                Rect message = new Rect(view.x + view.width * .15f, messageY, view.width * .7f, 38f);
                 Fill(message, new Color(Ink.r, Ink.g, Ink.b, .88f));
                 label.normal.textColor = contestMessageTimes[seat] > 0f ? Gold : Coral;
                 GUI.Label(message, contestMessageTimes[seat] > 0f ? contestMessages[seat] : eventMessage, label);
@@ -1322,15 +1339,15 @@ namespace CrazyElevator.Match
             float remaining = session != null ? session.MainTimer : player.SecondsLeft;
             int seconds = Mathf.CeilToInt(remaining);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            var timer = new Rect((Screen.width - SharedClockWidth) * .5f, 8f, SharedClockWidth, 58f);
+            Rect timer = SharedClockRect;
             Fill(new Rect(timer.x - 2f, timer.y - 2f, timer.width + 4f, timer.height + 4f), Color.white);
             Fill(timer, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             GUI.Label(timer, clock, sharedClock);
             Fill(new Rect(timer.x, timer.yMax - 5f, timer.width * .5f, 5f), Coral);
             Fill(new Rect(timer.center.x, timer.yMax - 5f, timer.width * .5f, 5f), Teal);
             if (session == null) return;
-            float statusWidth = Mathf.Min(Screen.width - 16f, 520f);
-            var status = new Rect((Screen.width - statusWidth) * .5f, timer.yMax + 4f, statusWidth, 26f);
+            Rect status = SharedRoundStatusRect;
+            float statusWidth = status.width;
             Fill(status, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
             var badge = new Rect(status.x, status.y, statusWidth * .22f, status.height);
             Fill(badge, new Color32(29, 38, 54, 255));
