@@ -7,6 +7,7 @@ namespace CrazyElevator.Shared
     {
         public static readonly Color Wall = new Color32(72, 55, 78, 255);
         public static readonly Color Ink = new Color32(50, 36, 45, 255);
+        public static readonly Color Metal = new Color32(113, 72, 52, 255);
         public static readonly Color Paper = new Color32(255, 242, 213, 255);
         public static readonly Color Brass = new Color32(238, 180, 91, 255);
         public static readonly Color Teal = new Color32(104, 182, 168, 255);
@@ -75,6 +76,21 @@ namespace CrazyElevator.Shared
             Paint(rect, face);
             Paint(new Rect(rect.x + 3f, rect.y + 3f, rect.width - 6f, 2f),
                 new Color(1f, 1f, 1f, .26f));
+        }
+
+        public static void Label(Rect rect, GUIContent content, GUIStyle style, Color colour)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            Color previous = style.normal.textColor;
+            style.normal.textColor = DisplayColor(colour);
+            style.Draw(rect, content, false, false, false, false);
+            style.normal.textColor = previous;
+        }
+
+        public static void HudPlate(Rect rect, Color accent)
+        {
+            Plaque(rect, Wall, Ink, 3f);
+            Paint(new Rect(rect.x, rect.y, rect.width, 2f), accent);
         }
 
         public static void Fasteners(Rect rect, Color tint)

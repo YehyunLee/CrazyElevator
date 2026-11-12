@@ -1037,8 +1037,8 @@ namespace CrazyElevator.Match
                 GUI.contentColor = previousContent;
                 return;
             }
-            if (IsVisibleSeat(0)) DrawSeat(player, 0, Coral);
-            if (IsVisibleSeat(1)) DrawSeat(Rival, 1, Teal);
+            if (IsVisibleSeat(0)) DrawSeat(player, 0, MenuPresentation.Coral);
+            if (IsVisibleSeat(1)) DrawSeat(Rival, 1, MenuPresentation.Teal);
             if (SplitScreen) DrawSplitDivider();
             DrawSharedRoundHUD();
             if (IsVisibleSeat(0)) DrawSeatScoreFlights(player, 0);
@@ -1077,8 +1077,10 @@ namespace CrazyElevator.Match
             GameTypography.Apply(roundStatus, true);
             tileCaption = new GUIStyle(text) { fontSize = 11, fontStyle = FontStyle.Bold };
             GameTypography.Apply(tileCaption, true);
-            tileCaption.normal.textColor = new Color(1f, 1f, 1f, .72f);
-            tileValue = new GUIStyle(score) { fontSize = 22 };
+            tileCaption.alignment = TextAnchor.MiddleCenter;
+            tileCaption.wordWrap = false;
+            tileCaption.normal.textColor = Color.white;
+            tileValue = new GUIStyle(score) { fontSize = 24, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(tileValue, true);
             tileValue.normal.textColor = Color.white;
             sharedClock = new GUIStyle(tileValue) { fontSize = 32, alignment = TextAnchor.MiddleCenter };
@@ -1123,41 +1125,51 @@ namespace CrazyElevator.Match
 
             const float width = 12f;
             float x = Screen.width * .5f;
-            Fill(new Rect(x - width * .5f, 0, width, Screen.height), Ink);
-            Fill(new Rect(x - width * .5f, 0, 2f, Screen.height), Teal);
-            Fill(new Rect(x + width * .5f - 2f, 0, 2f, Screen.height), Coral);
+            MenuPresentation.Paint(new Rect(x - width * .5f, 0, width, Screen.height), MenuPresentation.Ink);
+            MenuPresentation.Paint(new Rect(x - width * .5f, 0, 2f, Screen.height), MenuPresentation.Coral);
+            MenuPresentation.Paint(new Rect(x + width * .5f - 2f, 0, 2f, Screen.height), MenuPresentation.Teal);
         }
 
         float SharedClockWidth => Mathf.Clamp(Screen.width * .13f, 104f, 160f);
 
-        Rect SharedClockRect => new Rect((Screen.width - SharedClockWidth) * .5f, 8f, SharedClockWidth, 58f);
+        int AbilityIntroPaneSeat => GameManager.Instance != null ? GameManager.Instance.AbilityIntroPaneSeat : -1;
 
-        Rect SharedRoundStatusRect
+        Rect SharedHudRect(float width, float top, float height)
         {
-            get
-            {
-                float width = Mathf.Min(Screen.width - 16f, 520f);
-                return new Rect((Screen.width - width) * .5f, SharedClockRect.yMax + 4f, width, 26f);
-            }
+            int introSeat = AbilityIntroPaneSeat;
+            if (introSeat < 0) return new Rect((Screen.width - width) * .5f, top, width, height);
+
+            // Keep the shared timer and round label entirely on the pane still playing.
+            Rect activeView = ViewRect(1 - introSeat);
+            width = Mathf.Min(width, activeView.width - 20f);
+            float x = introSeat == 0 ? activeView.x + 10f : activeView.xMax - width - 10f;
+            return new Rect(x, top, width, height);
         }
+
+        Rect SharedClockRect => SharedHudRect(SharedClockWidth, 8f, 58f);
+        Rect SharedRoundStatusRect => SharedHudRect(Mathf.Min(Screen.width - 16f, 520f), 70f, 26f);
 
         Rect SeatScoreBarRect(int seat)
         {
             Rect view = ViewRect(seat);
-            float availableWidth = SplitScreen ? view.width - SharedClockWidth * .5f - 16f
+            float clockSpace = AbilityIntroPaneSeat == 1 - seat ? SharedClockWidth + 4f : SharedClockWidth * .5f;
+            float availableWidth = SplitScreen ? view.width - clockSpace - 16f
                 : (view.width - SharedClockWidth) * .5f - 16f;
-            float barWidth = Mathf.Max(1f, SplitScreen ? availableWidth : Mathf.Min(availableWidth, 760f));
+            float barWidth = Mathf.Clamp(availableWidth, 1f, 290f);
             float barX = SplitScreen && seat == 1 ? view.xMax - 8f - barWidth : view.x + 8f;
             return new Rect(barX, view.y + 8f, barWidth, 58f);
         }
+
+        static Rect SeatScoreTile(Rect bar) =>
+            new Rect(bar.x + bar.width * .34f, bar.y, bar.width * .38f, bar.height);
 
         void DrawSeatScoreFlights(Game actor, int seat)
         {
             if (actor == null) return;
             Rect view = ViewRect(seat);
             Rect bar = SeatScoreBarRect(seat);
-            Vector2 anchor = new Vector2(bar.x + bar.width * .25f - view.x,
-                bar.center.y - view.y);
+            Vector2 anchor = SeatScoreTile(bar).center - view.position;
+            anchor.y += 8f;
             Matrix4x4 previousMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0f));
             actor.DrawScoreFlights(view.width, view.height, anchor);
@@ -1171,14 +1183,18 @@ namespace CrazyElevator.Match
             DrawRivalInteractions(actor, seat, view);
             DrawPlayerScreenBorder(view, colour);
             Rect bar = SeatScoreBarRect(seat);
-            Fill(new Rect(bar.x - 2f, bar.y - 2f, bar.width + 4f, bar.height + 4f), Color.white);
-            Fill(bar, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            float tileWidth = bar.width * .5f;
-            DrawSeatTile(new Rect(bar.x, bar.y, tileWidth, bar.height), colour,
-                "PLAYER " + (seat + 1) + " SCORE", actor.Points.ToString());
-            DrawSeatTile(new Rect(bar.x + tileWidth, bar.y, tileWidth, bar.height),
-                colour, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(actor.CurrentFloor),
-                    actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString());
+            MenuPresentation.HudPlate(bar, colour);
+            Rect badge = new Rect(bar.x + 6f, bar.y + 7f, bar.width * .34f - 12f, bar.height - 14f);
+            MenuPresentation.Plaque(badge, colour, MenuPresentation.Metal, 2f);
+            DrawResultLabel(badge, badge.width >= 78f ? "PLAYER " + (seat + 1) : "P" + (seat + 1),
+                roundStatus, 1f, MenuPresentation.Ink);
+
+            Rect scoreTile = SeatScoreTile(bar);
+            DrawSeatTile(scoreTile, "SCORE", actor.Points.ToString(), MenuPresentation.Brass);
+            Rect floorTile = Rect.MinMaxRect(scoreTile.xMax, bar.y, bar.xMax, bar.yMax);
+            DrawSeatTile(floorTile, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(
+                Mathf.RoundToInt(actor.CurrentFloor), actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString(),
+                MenuPresentation.Paper);
         }
 
         void DrawRivalInteractions(Game actor, int seat, Rect view)
@@ -1209,16 +1225,16 @@ namespace CrazyElevator.Match
             if (MenuManager.TutorialActive || Finished || actor.IntroPlaying || actor.CountdownPlaying) return;
             Game rival = seat == 0 ? Rival : player;
             var label = new GUIStyle(centred) { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };
-            Color rivalColor = seat == 0 ? Teal : Coral;
             float delta = rival.CurrentFloor - actor.CurrentFloor;
             if (Mathf.Abs(delta) <= 3f)
             {
                 string arrow = delta > .45f ? "↑" : delta < -.45f ? "↓" : "↔";
                 Rect marker = new Rect(view.xMax - 154f, hintTop, 146f, markerHeight);
-                Fill(marker, new Color(Ink.r, Ink.g, Ink.b, .88f));
-                label.normal.textColor = rivalColor;
-                GUI.Label(marker, arrow + " RIVAL "
-                    + "F" + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor), rival.ActiveMinFloor, rival.ActiveMaxFloor)), label);
+                Color accent = seat == 0 ? MenuPresentation.Teal : MenuPresentation.Coral;
+                MenuPresentation.HudPlate(marker, accent);
+                MenuPresentation.Label(marker, new GUIContent(arrow + " RIVAL F"
+                    + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor),
+                        rival.ActiveMinFloor, rival.ActiveMaxFloor))), label, MenuPresentation.Paper);
                 hintTop = marker.yMax + hudGap;
             }
             if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
@@ -1340,51 +1356,49 @@ namespace CrazyElevator.Match
             int seconds = Mathf.CeilToInt(remaining);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
             Rect timer = SharedClockRect;
-            Fill(new Rect(timer.x - 2f, timer.y - 2f, timer.width + 4f, timer.height + 4f), Color.white);
-            Fill(timer, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            GUI.Label(timer, clock, sharedClock);
-            Fill(new Rect(timer.x, timer.yMax - 5f, timer.width * .5f, 5f), Coral);
-            Fill(new Rect(timer.center.x, timer.yMax - 5f, timer.width * .5f, 5f), Teal);
+            Color clockFace = seconds <= 10 ? MenuPresentation.Coral : MenuPresentation.Paper;
+            MenuPresentation.Plaque(timer, clockFace, MenuPresentation.Metal, 3f);
+            DrawResultLabel(new Rect(timer.x, timer.y + 4f, timer.width, 15f),
+                "TIME", tileCaption, 1f, MenuPresentation.Ink);
+            DrawResultLabel(new Rect(timer.x, timer.y + 16f, timer.width, 39f),
+                clock, sharedClock, 1f, MenuPresentation.Ink);
             if (session == null) return;
             Rect status = SharedRoundStatusRect;
             float statusWidth = status.width;
-            Fill(status, new Color(9f / 255f, 11f / 255f, 16f / 255f, .96f));
-            var badge = new Rect(status.x, status.y, statusWidth * .22f, status.height);
-            Fill(badge, new Color32(29, 38, 54, 255));
-            GUI.Label(badge, "ROUND " + session.RoundNumber + " / " + GameManager.RoundsPerMatch,
-                roundStatus);
-            DrawRevealLabel(new Rect(badge.xMax + 8, status.y, statusWidth * .36f - 16, status.height),
-                session.ActiveDimensionName, roundStatus, 1f, ResultWorldColour(session.ActiveDimension));
+            MenuPresentation.HudPlate(status, MenuPresentation.Brass);
+            var badge = new Rect(status.x + 4f, status.y + 4f, statusWidth * .22f - 4f, status.height - 6f);
+            MenuPresentation.Paint(badge, MenuPresentation.Ink);
+            DrawResultLabel(badge, "ROUND " + session.RoundNumber + " / " + GameManager.RoundsPerMatch,
+                roundStatus, 1f, MenuPresentation.Paper);
+            DrawResultLabel(new Rect(badge.xMax + 4f, status.y + 2f, statusWidth * .36f - 8f, status.height - 2f),
+                session.ActiveDimensionName, roundStatus, 1f, MenuPresentation.Paper);
             float winsWidth = statusWidth * .21f;
             for (int seat = 0; seat < 2; seat++)
             {
                 float x = status.x + statusWidth * .58f + winsWidth * seat;
-                Color accent = seat == 0 ? Coral : Teal;
-                DrawRevealLabel(new Rect(x, status.y, 26, status.height), "P" + (seat + 1),
+                Color accent = seat == 0 ? MenuPresentation.Coral : MenuPresentation.Teal;
+                DrawResultLabel(new Rect(x, status.y, 26, status.height), "P" + (seat + 1),
                     roundStatus, 1f, accent);
-                DrawRoundWinMarkers(new Rect(x + 26, status.y + 8, winsWidth - 28, 10),
-                    seat == 0 ? session.PlayerOneWins : session.PlayerTwoWins, accent);
+                DrawRoundWinMarkers(new Rect(x + 26f, status.y + 9f, winsWidth - 28f, 9f),
+                    seat == 0 ? session.PlayerOneWins : session.PlayerTwoWins, accent, menuColours: true);
             }
         }
 
         void DrawPlayerScreenBorder(Rect view, Color playerColour)
         {
-            const float thickness = 6f;
-            Color border = new Color(playerColour.r, playerColour.g, playerColour.b, .42f);
-
-            Fill(new Rect(view.x, view.y, view.width, thickness), border);
-            Fill(new Rect(view.x, view.yMax - thickness, view.width, thickness), border);
-            Fill(new Rect(view.x, view.y + thickness, thickness, Mathf.Max(0f, view.height - thickness * 2f)), border);
-            Fill(new Rect(view.xMax - thickness, view.y + thickness, thickness,
-                Mathf.Max(0f, view.height - thickness * 2f)), border);
+            const float thickness = 3f;
+            Color border = new Color(playerColour.r, playerColour.g, playerColour.b, .65f);
+            MenuPresentation.Paint(new Rect(view.x, view.y, view.width, thickness), border);
+            MenuPresentation.Paint(new Rect(view.x, view.yMax - thickness, view.width, thickness), border);
         }
 
-        void DrawSeatTile(Rect area, Color accent, string caption, string value)
+        void DrawSeatTile(Rect area, string caption, string value, Color valueColour)
         {
-            Fill(new Rect(area.x, area.yMax - 5f, area.width, 5f), accent);
-            Fill(new Rect(area.x + 5f, area.y + 7f, 5f, area.height - 19f), accent);
-            GUI.Label(new Rect(area.x + 16f, area.y + 3f, area.width - 18f, 18f), caption, tileCaption);
-            GUI.Label(new Rect(area.x + 16f, area.y + 19f, area.width - 18f, 30f), value, tileValue);
+            MenuPresentation.Paint(new Rect(area.x, area.y + 11f, 1f, area.height - 22f), MenuPresentation.Ink);
+            DrawResultLabel(new Rect(area.x, area.y + 5f, area.width, 18f),
+                caption, tileCaption, 1f, MenuPresentation.Paper);
+            DrawResultLabel(new Rect(area.x, area.y + 21f, area.width, 30f),
+                value, tileValue, 1f, valueColour);
         }
 
         void DrawCollisionFeedback()

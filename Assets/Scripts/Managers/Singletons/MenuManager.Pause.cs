@@ -15,23 +15,22 @@ namespace CrazyElevator.Managers
                 (Screen.height - ArtHeight * scale) * .5f, 0f), Quaternion.identity,
                 new Vector3(scale, scale, 1f));
             Rect panel = new Rect(430, 202, 840, 660);
-            Panel(new Rect(panel.x + 8, panel.y + 10, panel.width, panel.height), Color.black);
-            Panel(panel, MenuPresentation.Wall);
-            Panel(new Rect(panel.x, panel.y, panel.width, 12), Teal);
-            Panel(new Rect(panel.x, panel.y + 12, 10, panel.height - 12), Coral);
-            GUI.Label(new Rect(panel.x + 60, panel.y + 44, panel.width - 120, 80), "TAKE A BREATHER", title);
-            GUI.Label(new Rect(panel.x + 72, panel.y + 132, panel.width - 144, 60),
-                "The clock is paused. Pick up where you left off when you're ready.", caption);
+            MenuPresentation.Plaque(panel, MenuPresentation.Wall, MenuPresentation.Ink, 10f);
+            MenuPresentation.Fasteners(panel, MenuPresentation.Brass);
+            Rect header = new Rect(panel.x + 104, panel.y + 48, panel.width - 208, 100);
+            MenuPresentation.Plaque(header, MenuPresentation.Paper, MenuPresentation.Metal);
+            DrawLabel(header, "SHIFT PAUSED", cardTitle, MenuPresentation.Ink);
 
-            string[] actions = { "RESUME SHIFT", "RETURN TO MODE LOBBY", "MAIN MENU" };
-            Color[] accents = { Teal, Coral, MenuPresentation.Brass };
+            string[] actions = { "RESUME SHIFT", "RETURN TO LOBBY", "MAIN MENU" };
+            Color[] accents = { MenuPresentation.Teal, MenuPresentation.Coral, MenuPresentation.Brass };
             for (int i = 0; i < actions.Length; i++)
             {
-                Rect button = new Rect(panel.x + 104, panel.y + 224 + i * 102, panel.width - 208, 76);
-                if (pauseSelection == i) Panel(new Rect(button.x - 7, button.y - 7,
-                    button.width + 14, button.height + 14), Cream);
-                Panel(button, accents[i]);
-                GUI.Label(button, actions[i], cardTitle);
+                Rect button = new Rect(panel.x + 104, panel.y + 200 + i * 104, panel.width - 208, 76);
+                bool selected = pauseSelection == i;
+                MenuPresentation.Plaque(button, selected ? accents[i] : MenuPresentation.Ink,
+                    selected ? MenuPresentation.Metal : MenuPresentation.Ink, 4f);
+                DrawLabel(button, actions[i], cardTitle,
+                    selected ? MenuPresentation.Ink : MenuPresentation.Paper);
                 if (GUI.Button(button, GUIContent.none, GUIStyle.none))
                 {
                     if (i == 0) ResumeFromPause();

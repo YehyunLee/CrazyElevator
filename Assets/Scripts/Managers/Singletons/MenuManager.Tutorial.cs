@@ -892,11 +892,15 @@ namespace CrazyElevator.Managers
                 return;
             }
 
-            float width = Mathf.Min(view.width - 36f, view.width < 1200f ? 700f : 860f);
-            float height = Mathf.Clamp(view.height * .25f, 280f, 300f);
-            float margin = Mathf.Clamp(view.width * .035f, 18f, 32f);
+            const float margin = 14f;
+            bool split = tutorialGame.Match != null && tutorialGame.Match.SplitScreen;
+            float roomBesideControls = view.width - (split ? 244f : 296f);
+            bool aboveControls = roomBesideControls < 350f;
+            float width = Mathf.Min(620f, aboveControls ? view.width - margin * 2f : roomBesideControls);
+            float height = collisionPractice ? 208f : 184f;
             float settledX = margin;
-            float settledY = Mathf.Max(margin, view.height - height - margin);
+            float bottomInset = aboveControls ? (split ? 164f : 188f) : margin;
+            float settledY = Mathf.Max(margin, view.height - height - bottomInset);
             float motionT = Mathf.Clamp01(tutorialCardMotionTimes[index] / TutorialCardTravelSeconds);
             float eased = 1f - Mathf.Pow(1f - motionT, 3f);
             float cardX = settledX;
@@ -906,11 +910,11 @@ namespace CrazyElevator.Managers
             else if (tutorialCardMotions[index] == TutorialCardMotion.Exiting)
                 cardY = Mathf.Lerp(settledY, view.height + 28f, eased);
             Rect card = new Rect(cardX, cardY, width, height);
-            Color accent = step == 6 ? Coral
-                : step == 7 ? new Color32(255, 205, 82, 255) : Teal;
-            Panel(new Rect(card.x + 6f, card.y + 7f, card.width, card.height), new Color(0f, 0f, 0f, .38f));
-            Panel(card, accent);
-            Panel(new Rect(card.x + 4f, card.y + 4f, card.width - 8f, card.height - 8f), Ink);
+            Color accent = step == 7 || collisionPractice ? MenuPresentation.Brass
+                : tutorialActors[index].Seat == 0 && split ? MenuPresentation.Coral : MenuPresentation.Teal;
+            MenuPresentation.HudPlate(card, accent);
+            Rect badge = new Rect(card.x + 15f, card.y + 10f, 102f, 22f);
+            MenuPresentation.Plaque(badge, accent, MenuPresentation.Metal, 2f);
 
             Color previousTitle = cardTitle.normal.textColor;
             Color previousBody = body.normal.textColor;
@@ -919,53 +923,46 @@ namespace CrazyElevator.Managers
             int previousBodySize = body.fontSize;
             TextAnchor previousBodyAlignment = body.alignment;
             bool previousBodyWrap = body.wordWrap;
-            cardTitle.normal.textColor = MenuColor(Cream);
-            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .9f));
-            caption.normal.textColor = MenuColor(accent);
-            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .06f), 34, 48);
-            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .034f), 19, 28);
+            TextAnchor previousTitleAlignment = cardTitle.alignment;
+            cardTitle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            body.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .066f), 20, 35);
+            cardTitle.alignment = TextAnchor.MiddleLeft;
+            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .041f), 14, 23);
             body.alignment = TextAnchor.MiddleLeft;
             body.wordWrap = true;
-            GUI.Label(new Rect(card.x + 30f, card.y + 17f, card.width - 60f, 24f),
-                "TUTORIAL", caption);
-            GUI.Label(new Rect(card.x + 30f, card.y + 44f, card.width - 60f, 58f),
+            MenuPresentation.Label(badge, new GUIContent("TUTORIAL"), caption, MenuPresentation.Ink);
+            GUI.Label(new Rect(card.x + 15f, card.y + 36f, card.width - 30f, 39f),
                 TutorialTitle(step), cardTitle);
 
-            float rowY = card.y + 106f;
-            if (step >= 0)
+            float rowY = card.y + 78f;
+            float hintWidth;
+            if (!KeyboardHintsEnabled && step != 6)
             {
-                float hintWidth;
-                if (!KeyboardHintsEnabled && step != 6)
-                {
-                    hintWidth = Mathf.Min(220f, card.width * .35f);
-                    DrawTutorialController(new Rect(card.x + 24f, rowY - 15f, hintWidth, 145f), step, accent);
-                }
-                else
-                {
-                    string key = step == 6 ? "AUTO" : TutorialKeyboardKey(step, inputSeat);
-                    hintWidth = key.Length > 4 ? 82f : 68f;
-                    DrawKeyHint(new Rect(card.x + 30f, rowY, hintWidth, 68f), key);
-                }
-                float textX = card.x + 48f + hintWidth;
-                GUI.Label(new Rect(textX, rowY - 4f, card.xMax - textX - 24f, 78f),
-                    TutorialBody(step, index), body);
+                hintWidth = Mathf.Min(162f, card.width * .32f);
+                DrawTutorialController(new Rect(card.x + 15f, rowY, hintWidth, 96f), step, accent);
             }
             else
             {
-                GUI.Label(new Rect(card.x + 30f, rowY + 10f, card.width - 60f, 48f),
-                    TutorialBody(step, index), body);
+                string key = step == 6 ? "AUTO" : TutorialKeyboardKey(step, inputSeat);
+                hintWidth = key.Length > 4 ? 74f : 52f;
+                DrawKeyHint(new Rect(card.x + 15f, rowY + 20f, hintWidth, 52f), key);
             }
+            float textX = card.x + 26f + hintWidth;
+            GUI.Label(new Rect(textX, rowY, card.xMax - textX - 15f, 96f),
+                TutorialBody(step, index), body);
 
-            string footer = collisionPractice ? "BUMP THEM AWAY. BOARD FIRST." : "";
-            if (!string.IsNullOrEmpty(footer))
+            if (collisionPractice)
             {
                 int previousFooterSize = caption.fontSize;
-                caption.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .022f), 13, 18);
-                caption.normal.textColor = MenuColor(Cream);
-                GUI.Label(new Rect(card.x + 30f, card.yMax - 38f, card.width - 60f, 24f), footer, caption);
+                caption.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .032f), 12, 17);
+                caption.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Brass);
+                GUI.Label(new Rect(card.x + 15f, card.yMax - 30f, card.width - 30f, 22f),
+                    "BUMP THEM AWAY. BOARD FIRST.", caption);
                 caption.fontSize = previousFooterSize;
             }
 
+            cardTitle.alignment = previousTitleAlignment;
             cardTitle.fontSize = previousTitleSize;
             body.fontSize = previousBodySize;
             body.alignment = previousBodyAlignment;
@@ -1003,44 +1000,28 @@ namespace CrazyElevator.Managers
 
         void DrawTutorialWaitingPanel(Rect view, bool waitingForOtherPlayer)
         {
-            float width = Mathf.Min(view.width - 36f, view.width < 1200f ? 700f : 860f);
-            float height = Mathf.Clamp(view.height * .23f, 205f, 235f);
-            float x = Mathf.Max(18f, (view.width - width) * .5f);
-            float y = Mathf.Max(18f, view.height - height - 28f);
-            Color accent = waitingForOtherPlayer
-                ? new Color32(255, 205, 82, 255) : Teal;
-            Panel(new Rect(x + 6f, y + 7f, width, height), new Color(0f, 0f, 0f, .38f));
-            Panel(new Rect(x, y, width, height), accent);
-            Panel(new Rect(x + 4f, y + 4f, width - 8f, height - 8f), Ink);
+            float width = Mathf.Min(view.width - 28f, 470f);
+            const float height = 96f;
+            Rect card = new Rect((view.width - width) * .5f, view.height - height - 16f, width, height);
+            Color accent = waitingForOtherPlayer ? MenuPresentation.Brass : MenuPresentation.Teal;
+            MenuPresentation.HudPlate(card, accent);
+            var label = new GUIStyle(caption);
+            label.normal.textColor = MenuPresentation.DisplayColor(accent);
+            GUI.Label(new Rect(card.x + 14f, card.y + 9f, card.width - 28f, 22f),
+                waitingForOtherPlayer ? "TUTORIAL COMPLETE" : "PRACTICE COMPLETE", label);
 
-            Color previousTitle = cardTitle.normal.textColor;
-            Color previousBody = body.normal.textColor;
-            Color previousCaption = caption.normal.textColor;
-            int previousTitleSize = cardTitle.fontSize;
-            int previousBodySize = body.fontSize;
-            TextAnchor previousTitleAlignment = cardTitle.alignment;
-            TextAnchor previousBodyAlignment = body.alignment;
-            bool previousTitleWrap = cardTitle.wordWrap;
-            cardTitle.normal.textColor = MenuColor(Cream);
-            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .92f));
-            caption.normal.textColor = MenuColor(accent);
-            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .045f), 24, 36);
-            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .027f), 18, 25);
-            cardTitle.alignment = TextAnchor.MiddleCenter;
-            body.alignment = TextAnchor.MiddleCenter;
-            cardTitle.wordWrap = false;
-            GUI.Label(new Rect(x + 24f, y + 18f, width - 48f, 26f),
-                waitingForOtherPlayer ? "WAITING" : "TUTORIAL COMPLETE", caption);
-            GUI.Label(new Rect(x + 24f, y + 50f, width - 48f, 48f),
-                waitingForOtherPlayer ? "OTHER DRIVER'S TURN." : "GET READY.", cardTitle);
-            cardTitle.fontSize = previousTitleSize;
-            body.fontSize = previousBodySize;
-            cardTitle.alignment = previousTitleAlignment;
-            body.alignment = previousBodyAlignment;
-            cardTitle.wordWrap = previousTitleWrap;
-            cardTitle.normal.textColor = previousTitle;
-            body.normal.textColor = previousBody;
-            caption.normal.textColor = previousCaption;
+            var heading = new GUIStyle(cardTitle)
+            {
+                fontSize = Mathf.Clamp(Mathf.RoundToInt(width * .066f), 16, 30),
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false
+            };
+            heading.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            var message = new GUIContent(waitingForOtherPlayer ? "OTHER DRIVER’S TURN" : "GET READY");
+            Rect textArea = new Rect(card.x + 12f, card.y + 34f, card.width - 24f, 45f);
+            while (heading.fontSize > 12 && heading.CalcSize(message).x > textArea.width)
+                heading.fontSize--;
+            GUI.Label(textArea, message, heading);
         }
 
         void DrawTutorialFinale()
@@ -1093,8 +1074,6 @@ namespace CrazyElevator.Managers
                 { fontSize = 34, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             var label = new GUIStyle(caption)
                 { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
-            label.normal.textColor = MenuPresentation.DisplayColor(ink);
 
             Rect display = new Rect(254f, 108f, 692f, 416f);
             MenuPresentation.Plaque(display, brass, brassEdge, 10f);
@@ -1107,20 +1086,20 @@ namespace CrazyElevator.Managers
 
             Rect counter = new Rect(449f, 31f, 302f, 39f);
             MenuPresentation.Plaque(counter, MenuPresentation.Teal, ink, 5f);
-            GUI.Label(counter, kicker, label);
+            DrawLabel(counter, kicker, label, ink);
 
             Rect nameplate = new Rect(330f, 482f, 540f, 62f);
             MenuPresentation.Plaque(nameplate, MenuPresentation.Paper, brassEdge, 7f);
             MenuPresentation.Fasteners(nameplate, brassEdge);
-            GUI.Label(new Rect(nameplate.x + 22f, nameplate.y, nameplate.width - 44f, nameplate.height),
-                headingText, heading);
+            DrawLabel(new Rect(nameplate.x + 22f, nameplate.y, nameplate.width - 44f, nameplate.height),
+                headingText, heading, ink);
 
             if (roundPassengerTimer >= RoundPassengerSkipDelay)
             {
                 Rect confirm = new Rect(481f, 573f, 238f, 48f);
                 Color face = confirm.Contains(Event.current.mousePosition) ? MenuPresentation.Paper : MenuPresentation.Teal;
                 MenuPresentation.Plaque(confirm, face, ink, 5f);
-                GUI.Label(confirm, "CONFIRM TO SKIP", label);
+                DrawLabel(confirm, "CONFIRM TO SKIP", label, ink);
                 if (GUI.Button(confirm, GUIContent.none, GUIStyle.none)) AdvanceRoundPassenger();
             }
             GUI.matrix = previousMatrix;
