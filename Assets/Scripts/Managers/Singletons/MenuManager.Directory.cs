@@ -190,8 +190,7 @@ namespace CrazyElevator.Managers
         {
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-            Panel(new Rect(0, 0, Screen.width, Screen.height), new Color(.25f, .08f, .20f, .38f));
+            MenuPresentation.Backdrop(new Rect(0, 0, Screen.width, Screen.height));
 
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
@@ -211,7 +210,8 @@ namespace CrazyElevator.Managers
                 DrawDirectoryCard(row, accent, i == poolSelection);
                 GUI.Label(new Rect(row.x + 34, row.y + 8, 466, row.height - 16), names[i], poolDimensionNameText);
                 if (i == poolSelection)
-                    DrawKeyHint(new Rect(row.x + 518, row.center.y - 27, 54, 54), "A", true);
+                    DrawKeyHint(new Rect(row.x + 518, row.center.y - 27, 54, 54),
+                        KeyboardHintsEnabled ? "C" : "A", true);
                 Rect toggle = new Rect(row.xMax - 244, row.y + 14, 220, 66);
                 Panel(toggle, enabled ? accent : new Color32(81, 85, 96, 255));
                 GUI.Label(toggle, enabled ? "IN POOL  ✓" : "EXCLUDED", poolToggleLabel);
@@ -231,7 +231,7 @@ namespace CrazyElevator.Managers
             Rect back = new Rect(615, 910, 470, 76);
             DrawDirectoryCard(back, Cream, poolSelection == ElevatorRound.Dimensions);
             GUI.Label(back, "BACK", cardTitle);
-            DrawKeyHint(new Rect(back.xMax + 18, back.y + 10, 54, 54), "B");
+            DrawKeyHint(new Rect(back.xMax + 18, back.y + 10, 54, 54), KeyboardHintsEnabled ? "ESC" : "B");
             if (GUI.Button(back, GUIContent.none, GUIStyle.none)) CloseDimensionPool();
             GUI.matrix = oldMatrix;
         }
@@ -316,8 +316,7 @@ namespace CrazyElevator.Managers
             if (directoryEntries.Count == 0) BuildDirectoryEntries();
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-            Panel(new Rect(0, 0, Screen.width, Screen.height), new Color(.30f, .07f, .22f, .30f));
+            MenuPresentation.Backdrop(new Rect(0, 0, Screen.width, Screen.height));
 
             float scale = Mathf.Min(Screen.width / ArtWidth, Screen.height / ArtHeight);
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
@@ -364,7 +363,8 @@ namespace CrazyElevator.Managers
                 StepDirectory(1);
             }
             Rect selectedArrow = directoryButtonSelection == 0 ? previous : next;
-            DrawKeyHint(new Rect(selectedArrow.xMax + 16f, selectedArrow.y + 5f, 54f, 54f), "A", true);
+            DrawKeyHint(new Rect(selectedArrow.xMax + 16f, selectedArrow.y + 5f, 54f, 54f),
+                KeyboardHintsEnabled ? "C" : "A", true);
 
             GUI.Label(new Rect(700, 650, 300, 34),
                 (directorySelection + 1) + "  /  " + directoryEntries.Count, guideCaptionText);
@@ -379,7 +379,8 @@ namespace CrazyElevator.Managers
             Rect back = new Rect(732.5f, 812, 235, 70);
             DrawDirectoryCard(back, Cream, false);
             GUI.Label(back, "BACK", guideCardTitleText);
-            DrawKeyHint(new Rect(back.xMax + 18f, back.y + 8f, 54f, 54f), "B", true);
+            DrawKeyHint(new Rect(back.xMax + 18f, back.y + 8f, 54f, 54f),
+                KeyboardHintsEnabled ? "ESC" : "B", true);
             if (GUI.Button(back, GUIContent.none, GUIStyle.none)) ClosePassengerGuide();
 
             GUI.Label(new Rect(245, 35, 1210, 70), "PASSENGER & DIMENSION GUIDE", guideHeaderText);
@@ -397,7 +398,7 @@ namespace CrazyElevator.Managers
                 image = dimensionGuideImages[entry.Dimension];
 
             Rect inner = new Rect(window.x + 12, window.y + 12, window.width - 24, window.height - 24);
-            if (image != null) GUI.DrawTexture(inner, image, ScaleMode.ScaleToFit, true);
+            if (image != null) MenuPresentation.DrawTexture(inner, image, ScaleMode.ScaleToFit);
             else GUI.Label(inner, "PREVIEW", guidePreviewText);
             GUI.Label(new Rect(window.x, window.yMax - 42f, window.width, 34f),
                 "PREVIEW", guidePreviewText);
@@ -594,15 +595,10 @@ namespace CrazyElevator.Managers
             directoryPreviewTexture.Create();
             directoryPreviewCamera.targetTexture = directoryPreviewTexture;
 
-            GameObject lightObject = new GameObject("Passenger directory preview light")
-                { hideFlags = HideFlags.HideAndDontSave };
-            lightObject.transform.SetParent(directoryPreviewStage, false);
-            lightObject.transform.localRotation = Quaternion.Euler(28f, -28f, 0f);
-            Light key = lightObject.AddComponent<Light>();
-            key.type = LightType.Directional;
-            key.intensity = 1.4f;
-            key.color = Color.white;
-            key.cullingMask = 1 << DirectoryPreviewLayer;
+            ElevatorManager player = GameManager.Instance != null ? GameManager.Instance.Player : null;
+            MenuPresentation.ExcludePreviewLayer(player != null && player.sceneView != null
+                ? player.sceneView.lights : null, DirectoryPreviewLayer);
+            MenuPresentation.LightPreview(directoryPreviewStage, Vector3.up, DirectoryPreviewLayer);
         }
 
         static void SetDirectoryLayer(Transform root, int layer)
@@ -642,7 +638,11 @@ namespace CrazyElevator.Managers
         void ClearDirectoryPreviewModel()
         {
             if (directoryPreviewCamera != null) directoryPreviewCamera.enabled = false;
-            if (directoryPreviewModel != null) Destroy(directoryPreviewModel);
+            if (directoryPreviewModel != null)
+            {
+                directoryPreviewModel.SetActive(false);
+                Destroy(directoryPreviewModel);
+            }
             directoryPreviewModel = null;
             directoryPreviewKind = null;
         }

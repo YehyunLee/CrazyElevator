@@ -1349,7 +1349,8 @@ public static class ExtendedInteriorChecks
             object Lobby(string field) => menuType.GetField(field, Flags).GetValue(menu);
             menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
             Require((bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
-                && (int)Lobby("playerOneCursor") == 2, "Local lobby does not start on Player 1 READY.");
+                && !(bool)Lobby("playerOneReady") && !(bool)Lobby("playerTwoReady"),
+                "The local character picker must start with both players unready.");
             menuType.GetField("transition", Flags).SetValue(menu, 10f);
             MethodInfo tryStartLobby = menuType.GetMethod("TryStartReadyLobby", Flags);
             menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 0 });
@@ -1357,9 +1358,8 @@ public static class ExtendedInteriorChecks
                 "The lobby started before both human players were ready.");
             menuType.GetMethod("HandleLobbyConfirm", Flags).Invoke(menu, new object[] { 1 });
             Require((bool)Lobby("playerOneReady") && (bool)Lobby("playerTwoReady")
-                && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected")
-                && (int)Lobby("playerOneCursor") == 4 && (int)Lobby("playerTwoCursor") == 4,
-                "Ready confirmations changed a human to CPU or failed to reach Start.");
+                && (bool)Lobby("playerOneHuman") && (bool)Lobby("playerTwoSelected"),
+                "Ready confirmations failed to prepare both human players.");
             Require((bool)tryStartLobby.Invoke(menu, null) && (bool)Lobby("launching")
                 && !(bool)tryStartLobby.Invoke(menu, null),
                 "The lobby did not start once when both players were ready.");

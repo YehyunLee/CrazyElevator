@@ -1030,7 +1030,8 @@ namespace CrazyElevator.Match
             }
             if (dimensionRevealActive)
             {
-                DrawDimensionReveal();
+                player.DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height),
+                    dimensionRevealTime);
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -1097,12 +1098,12 @@ namespace CrazyElevator.Match
             GameTypography.Apply(resultWinner, true);
             resultWinner.normal.textColor = Color.white;
             resultSmall = new GUIStyle(resultName) { fontSize = 12 };
-            resultSmall.normal.textColor = new Color(.65f, .71f, .79f);
+            resultSmall.normal.textColor = MenuPresentation.DisplayColor(new Color32(208, 191, 181, 255));
             resultWorld = new GUIStyle(resultName) { fontSize = 28 };
             resultAction = new GUIStyle(centred) { fontSize = 20 };
-            resultAction.normal.textColor = Ink;
+            resultAction.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
             resultKey = new GUIStyle(centred) { fontSize = 12 };
-            resultKey.normal.textColor = Ink;
+            resultKey.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
             resultWinBadge = new GUIStyle(resultKey) { fontSize = 11 };
         }
 
@@ -1112,85 +1113,6 @@ namespace CrazyElevator.Match
             GUI.color = colour;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
-        }
-
-        void DrawDimensionReveal()
-        {
-            float contentAlpha = Game.DimensionRevealAlpha(dimensionRevealTime);
-            Fill(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
-            if (contentAlpha <= .001f) return;
-
-            WorldBand world = Game.DimensionWorld(dimensionRevealIndex);
-            Color accent = Game.DimensionIntroAccent(world);
-            float width = Mathf.Min(Screen.width - 72f, 1120f);
-            float height = Mathf.Min(Screen.height - 96f, 720f);
-            Rect card = new Rect((Screen.width - width) * .5f,
-                (Screen.height - height) * .5f, width, height);
-            Fill(new Rect(card.x + 12f, card.y + 14f, card.width, card.height),
-                new Color(0f, 0f, 0f, .42f * contentAlpha));
-            Fill(card, new Color(Ink.r, Ink.g, Ink.b, contentAlpha));
-            Fill(new Rect(card.x, card.y, card.width, 6f),
-                new Color(accent.r, accent.g, accent.b, contentAlpha));
-
-            Texture preview = player != null ? player.DimensionRevealTexture : null;
-            if (preview != null)
-            {
-                Rect image = new Rect(card.x + 26f, card.y + 18f,
-                    card.width - 52f, card.height * .26f);
-                Color previous = GUI.color;
-                GUI.color = new Color(1f, 1f, 1f, contentAlpha);
-                GUI.DrawTexture(image, preview, ScaleMode.ScaleToFit, true);
-                GUI.color = previous;
-            }
-
-            Color previousText = heading.normal.textColor;
-            int previousHeadingSize = heading.fontSize;
-            TextAnchor previousAlign = heading.alignment;
-            heading.alignment = TextAnchor.MiddleCenter;
-            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .015f, 14f, 22f));
-            heading.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .30f, card.width - 48f, 28f),
-                "ROUND " + (GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1), heading);
-            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .04f, 32f, 58f));
-            heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .35f,
-                card.width - 48f, 56f), Game.DimensionIntroTitle(world), heading);
-            heading.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .014f, 14f, 20f));
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .435f,
-                card.width - 48f, 28f), Game.DimensionIntroSummary(world), heading);
-
-            string[] names = Game.DimensionIntroNames(world);
-            string[] lines = Game.DimensionIntroLines(world);
-
-            float rowTop = card.y + card.height * .50f;
-            float rowWidth = (card.width - 80f) / 3f;
-            int nameSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .02f, 18f, 28f));
-            Color previousBody = text.normal.textColor;
-            TextAnchor previousBodyAlign = text.alignment;
-            int previousBodySize = text.fontSize;
-            bool previousWrap = text.wordWrap;
-            text.alignment = TextAnchor.UpperCenter;
-            text.wordWrap = true;
-            for (int i = 0; i < 3; i++)
-            {
-                Rect row = new Rect(card.x + 28f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .36f);
-                Fill(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
-                heading.fontSize = nameSize;
-                heading.normal.textColor = new Color(1f, 1f, 1f, contentAlpha);
-                GUI.Label(new Rect(row.x + 8f, row.y + 12f, row.width - 16f, 34f), names[i], heading);
-                text.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width * .014f, 14f, 20f));
-                text.normal.textColor = new Color(1f, 1f, 1f, .9f * contentAlpha);
-                GUI.Label(new Rect(row.x + 12f, row.y + 48f, row.width - 24f, 70f), lines[i], text);
-                player?.DrawDimensionPassenger(new Rect(row.x, row.y + 120f, row.width, row.height - 124f),
-                    i, contentAlpha);
-            }
-            heading.fontSize = previousHeadingSize;
-            heading.normal.textColor = previousText;
-            heading.alignment = previousAlign;
-            text.fontSize = previousBodySize;
-            text.normal.textColor = previousBody;
-            text.alignment = previousBodyAlign;
-            text.wordWrap = previousWrap;
         }
 
         void DrawSplitDivider()
@@ -1475,18 +1397,18 @@ namespace CrazyElevator.Match
             float time = ResultRevealTime;
             float curtain = Reveal01(time / .85f);
             float panelWidth = Screen.width * .5f * curtain;
-            Fill(new Rect(0, 0, panelWidth, Screen.height), Color.black);
-            Fill(new Rect(Screen.width - panelWidth, 0, panelWidth, Screen.height), Color.black);
+            MenuPresentation.Paint(new Rect(0, 0, panelWidth, Screen.height), Color.black);
+            MenuPresentation.Paint(new Rect(Screen.width - panelWidth, 0, panelWidth, Screen.height), Color.black);
             if (time < .85f) return;
 
-            Fill(new Rect(0, 0, Screen.width, Screen.height), new Color32(8, 11, 18, 255));
+            MenuPresentation.Paint(new Rect(0, 0, Screen.width, Screen.height), MenuPresentation.Wall);
             var session = GameManager.Instance;
             bool matchFinished = session != null && session.MatchFinished;
             bool seriesDraw = matchFinished && session.MatchWinner < 0;
             bool draw = seriesDraw || !matchFinished && player.Points == Rival.Points;
             bool playerWon = matchFinished ? session.MatchWinner == 0
                 : player.Points > Rival.Points;
-            Color winnerColour = draw ? Gold : playerWon ? Coral : Teal;
+            Color winnerColour = draw ? MenuPresentation.Brass : playerWon ? MenuPresentation.Coral : MenuPresentation.Teal;
 
             // Scale the whole composition, including typography and mouse hitboxes.
             Matrix4x4 previousMatrix = GUI.matrix;
@@ -1499,18 +1421,18 @@ namespace CrazyElevator.Match
             {
                 EnsureResultGlow();
                 float light = Reveal01((time - 1.35f) / .8f);
-                GUI.color = new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light);
+                GUI.color = MenuPresentation.DisplayColor(new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light));
                 GUI.DrawTexture(new Rect(160, 0, 1120, 820), resultGlowTexture, ScaleMode.StretchToFill, true);
                 GUI.color = Color.white;
 
                 float titleIn = Reveal01((time - 2.05f) / .45f);
                 int dimension = session != null ? session.ActiveDimension : 0;
                 Color worldColour = ResultWorldColour(dimension);
-                Fill(new Rect(530, 78, 140, 36), new Color(worldColour.r, worldColour.g, worldColour.b, .16f * titleIn));
-                DrawRevealLabel(new Rect(530, 78, 140, 36),
+                MenuPresentation.Paint(new Rect(530, 78, 140, 36), new Color(worldColour.r, worldColour.g, worldColour.b, .16f * titleIn));
+                DrawResultLabel(new Rect(530, 78, 140, 36),
                     "ROUND " + (session != null ? session.RoundNumber : 1), resultTitle, titleIn, worldColour);
-                DrawRevealLabel(new Rect(694, 78, 260, 36),
-                    session != null ? session.ActiveDimensionName : "OFFICE", resultName, titleIn, Color.white);
+                DrawResultLabel(new Rect(694, 78, 260, 36),
+                    session != null ? session.ActiveDimensionName : "OFFICE", resultName, titleIn, MenuPresentation.Paper);
 
                 string playerName = "PLAYER 1";
                 string rivalName = "PLAYER 2";
@@ -1518,28 +1440,28 @@ namespace CrazyElevator.Match
                 string headline = seriesDraw ? "MATCH TIED" : matchFinished ? winnerName + " WINS THE MATCH"
                     : draw ? "IT'S A DRAW" : winnerName + " WINS";
                 float winnerIn = Reveal01((time - 4.55f) / .6f);
-                DrawRevealLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
-                DrawRevealLabel(new Rect(180, 232, 1080, 30),
+                DrawResultLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
+                DrawResultLabel(new Rect(180, 232, 1080, 30),
                     matchFinished ? seriesDraw ? "SERIES TIED" : "BEST OF THREE CHAMPION"
                         : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
-                    resultTitle, winnerIn, new Color(.73f, .79f, .86f));
+                    resultTitle, winnerIn, new Color32(210, 191, 178, 255));
 
                 DrawRevealScoreCard(new Rect(220, 300, 488, 256), playerName, player.Points,
-                    session != null ? session.PlayerOneWins : 0, Coral, !draw && playerWon,
+                    session != null ? session.PlayerOneWins : 0, MenuPresentation.Coral, !draw && playerWon,
                     Reveal01((time - 2.65f) / .75f));
                 DrawRevealScoreCard(new Rect(732, 300, 488, 256), rivalName, Rival.Points,
-                    session != null ? session.PlayerTwoWins : 0, Teal, !draw && !playerWon,
+                    session != null ? session.PlayerTwoWins : 0, MenuPresentation.Teal, !draw && !playerWon,
                     Reveal01((time - 3.55f) / .75f));
 
                 if (time < ResultRevealInputAt) return;
                 int nextDimension = matchFinished && session != null ? session.FirstEnabledDimension
                     : (dimension + 1) % ElevatorRound.Dimensions;
                 Color nextColour = ResultWorldColour(nextDimension);
-                Fill(new Rect(220, 596, 1000, 112), new Color32(18, 24, 36, 255));
-                Fill(new Rect(220, 596, 4, 112), nextColour);
-                DrawRevealLabel(new Rect(248, 614, 500, 24),
-                    matchFinished ? "REMATCH STARTS IN" : "NEXT WORLD", resultSmall, 1f, Color.white);
-                DrawRevealLabel(new Rect(248, 642, 500, 44),
+                MenuPresentation.Paint(new Rect(220, 596, 1000, 112), new Color32(62, 46, 65, 255));
+                MenuPresentation.Paint(new Rect(220, 596, 4, 112), nextColour);
+                DrawResultLabel(new Rect(248, 614, 500, 24),
+                    matchFinished ? "REMATCH STARTS IN" : "NEXT WORLD", resultSmall, 1f, MenuPresentation.Paper);
+                DrawResultLabel(new Rect(248, 642, 500, 44),
                     matchFinished ? GameManager.DimensionDisplayName(nextDimension)
                         : session != null ? session.NextDimensionName : "CANDY",
                     resultWorld, 1f, nextColour);
@@ -1547,24 +1469,24 @@ namespace CrazyElevator.Match
                 if (matchFinished)
                 {
                     DrawFinalResultActionButton(new Rect(220, 746, 306, 64),
-                        "PLAY AGAIN", Teal, 0);
+                        "PLAY AGAIN", MenuPresentation.Teal, 0);
                     DrawFinalResultActionButton(new Rect(557, 746, 306, 64),
-                        "RETURN TO LOBBY", Coral, 1);
+                        "RETURN TO LOBBY", MenuPresentation.Coral, 1);
                     DrawFinalResultActionButton(new Rect(894, 746, 306, 64),
-                        "RETURN TO MAIN MENU", Gold, 2);
+                        "RETURN TO MAIN MENU", MenuPresentation.Brass, 2);
                 }
                 else
                 {
                     Rect button = new Rect(832, 620, 364, 64);
                     bool hovered = button.Contains(Event.current.mousePosition);
-                    Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
-                    Fill(button, hovered ? Color.Lerp(Teal, Color.white, .2f) : Teal);
+                    MenuPresentation.Paint(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+                    MenuPresentation.Paint(button, hovered ? Color.Lerp(MenuPresentation.Teal, MenuPresentation.Paper, .2f) : MenuPresentation.Teal);
                     GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height),
                         "NEXT ROUND", resultAction);
                     var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
-                    Fill(key, new Color(0, 0, 0, .2f));
-                    Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
-                    GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
+                    MenuPresentation.Paint(key, new Color(0, 0, 0, .2f));
+                    MenuPresentation.Paint(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
+                    GUI.Label(key, ResultConfirmHint, resultKey);
                     if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
                 }
             }
@@ -1603,21 +1525,23 @@ namespace CrazyElevator.Match
             bool hovered = button.Contains(Event.current.mousePosition);
             if (hovered) resultActionSelection = action;
             bool selected = resultActionSelection == action || hovered;
-            Fill(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+            MenuPresentation.Paint(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
             if (selected)
-                Fill(new Rect(button.x - 3, button.y - 3, button.width + 6, button.height + 6), Color.white);
-            Fill(button, selected ? Color.Lerp(accent, Color.white, .18f) : accent);
+                MenuPresentation.Paint(new Rect(button.x - 3, button.y - 3, button.width + 6, button.height + 6), MenuPresentation.Paper);
+            MenuPresentation.Paint(button, selected ? Color.Lerp(accent, MenuPresentation.Paper, .18f) : accent);
             GUI.Label(new Rect(button.x + 8, button.y, button.width - 76, button.height), label, resultAction);
             if (selected)
             {
                 Rect key = new Rect(button.xMax - 64, button.y + 15, 54, 34);
-                Fill(key, new Color(0, 0, 0, .13f));
-                Fill(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2),
+                MenuPresentation.Paint(key, new Color(0, 0, 0, .13f));
+                MenuPresentation.Paint(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2),
                     new Color(1, 1, 1, .24f));
-                GUI.Label(key, MenuManager.KeyboardHintsEnabled ? "ENTER" : "A", resultKey);
+                GUI.Label(key, ResultConfirmHint, resultKey);
             }
             if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ActivateResultAction(action);
         }
+
+        static string ResultConfirmHint => MenuManager.KeyboardHintsEnabled ? "C / ." : "A";
 
         void ActivateResultAction(int action)
         {
@@ -1635,31 +1559,31 @@ namespace CrazyElevator.Match
         {
             if (reveal <= 0f) return;
             area.y += Mathf.Lerp(26f, 0f, reveal);
-            Color border = Color.Lerp(Ink, accent, winner ? .75f : .25f);
-            Fill(new Rect(area.x - 2, area.y - 2, area.width + 4, area.height + 4),
+            Color border = Color.Lerp(MenuPresentation.Wall, accent, winner ? .75f : .25f);
+            MenuPresentation.Paint(new Rect(area.x - 2, area.y - 2, area.width + 4, area.height + 4),
                 new Color(border.r, border.g, border.b, reveal));
-            Fill(area, new Color(18f / 255f, 24f / 255f, 36f / 255f, reveal));
-            Fill(new Rect(area.x, area.y, area.width, 5), new Color(accent.r, accent.g, accent.b, reveal));
-            DrawRevealLabel(new Rect(area.x + 26, area.y + 22, area.width - 160, 30),
+            MenuPresentation.Paint(area, new Color(62f / 255f, 46f / 255f, 65f / 255f, reveal));
+            MenuPresentation.Paint(new Rect(area.x, area.y, area.width, 5), new Color(accent.r, accent.g, accent.b, reveal));
+            DrawResultLabel(new Rect(area.x + 26, area.y + 22, area.width - 160, 30),
                 name, resultName, reveal, accent);
             if (winner)
             {
                 Rect badge = new Rect(area.xMax - 112, area.y + 24, 86, 26);
-                Fill(badge, new Color(accent.r, accent.g, accent.b, reveal));
-                DrawRevealLabel(badge, "WINNER", resultWinBadge, reveal, Color.white);
+                MenuPresentation.Paint(badge, new Color(accent.r, accent.g, accent.b, reveal));
+                DrawResultLabel(badge, "WINNER", resultWinBadge, reveal, MenuPresentation.Paper);
             }
             int shownPoints = Mathf.RoundToInt(Mathf.Lerp(0f, points, reveal));
-            DrawRevealLabel(new Rect(area.x + 24, area.y + 62, area.width - 48, 108),
-                shownPoints.ToString(), resultPoints, reveal, Color.white);
-            DrawRevealLabel(new Rect(area.x + 28, area.y + 170, area.width - 56, 22),
-                "DELIVERY SCORE", resultSmall, reveal, Color.white);
-            Fill(new Rect(area.x + 26, area.y + 207, area.width - 52, 1), new Color(1, 1, 1, .1f * reveal));
-            DrawRevealLabel(new Rect(area.x + 28, area.y + 218, 200, 24),
-                "ROUND WINS", resultSmall, reveal, Color.white);
-            DrawRoundWinMarkers(new Rect(area.xMax - 122, area.y + 218, 96, 24), wins, accent, reveal);
+            DrawResultLabel(new Rect(area.x + 24, area.y + 62, area.width - 48, 108),
+                shownPoints.ToString(), resultPoints, reveal, MenuPresentation.Paper);
+            DrawResultLabel(new Rect(area.x + 28, area.y + 170, area.width - 56, 22),
+                "DELIVERY SCORE", resultSmall, reveal, MenuPresentation.Paper);
+            MenuPresentation.Paint(new Rect(area.x + 26, area.y + 207, area.width - 52, 1), new Color(1, 1, 1, .1f * reveal));
+            DrawResultLabel(new Rect(area.x + 28, area.y + 218, 200, 24),
+                "ROUND WINS", resultSmall, reveal, MenuPresentation.Paper);
+            DrawRoundWinMarkers(new Rect(area.xMax - 122, area.y + 218, 96, 24), wins, accent, reveal, true);
         }
 
-        void DrawRoundWinMarkers(Rect area, int wins, Color accent, float alpha = 1f)
+        void DrawRoundWinMarkers(Rect area, int wins, Color accent, float alpha = 1f, bool menuColours = false)
         {
             int target = GameManager.RoundsPerMatch;
             wins = Mathf.Clamp(wins, 0, target);
@@ -1670,11 +1594,22 @@ namespace CrazyElevator.Match
             {
                 var marker = new Rect(x + i * (size + gap), area.y, size, size);
                 Color colour = i < wins ? accent : new Color(.28f, .34f, .43f);
-                Fill(marker, new Color(colour.r, colour.g, colour.b, alpha));
+                Color face = new Color(colour.r, colour.g, colour.b, alpha);
+                Color inset = new Color(18f / 255f, 24f / 255f, 36f / 255f, alpha);
+                if (menuColours)
+                {
+                    face = MenuPresentation.DisplayColor(face);
+                    inset = MenuPresentation.DisplayColor(new Color(62f / 255f, 46f / 255f, 65f / 255f, alpha));
+                }
+                Fill(marker, face);
                 if (i >= wins)
-                    Fill(new Rect(marker.x + 2, marker.y + 2, marker.width - 4, marker.height - 4),
-                        new Color(18f / 255f, 24f / 255f, 36f / 255f, alpha));
+                    Fill(new Rect(marker.x + 2, marker.y + 2, marker.width - 4, marker.height - 4), inset);
             }
+        }
+
+        void DrawResultLabel(Rect area, string value, GUIStyle style, float reveal, Color colour)
+        {
+            DrawRevealLabel(area, value, style, reveal, MenuPresentation.DisplayColor(colour));
         }
 
         void DrawRevealLabel(Rect area, string value, GUIStyle style, float reveal, Color colour)

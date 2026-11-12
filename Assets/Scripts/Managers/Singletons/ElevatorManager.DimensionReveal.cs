@@ -173,7 +173,7 @@ namespace CrazyElevator.Managers
             if (dimensionLineupCamera == null) return;
             // Transparent, but tinted like the reveal row in case alpha is dropped.
             Color accent = DimensionIntroAccent(world);
-            Color row = Color.Lerp(Ink, accent, .22f);
+            Color row = Color.Lerp(MenuPresentation.Wall, accent, .22f);
             dimensionLineupCamera.backgroundColor = new Color(row.r, row.g, row.b, 0f);
             dimensionLineupCamera.enabled = any;
         }
@@ -216,7 +216,7 @@ namespace CrazyElevator.Managers
         void EnsureDimensionLineup()
         {
             if (dimensionLineupStage != null) return;
-            // Shares the encounter stage's preview layer and key light.
+            // Uses the same preview layer with its own local lighting.
             EnsureEncounterPreview();
             var stageObject = new GameObject("Dimension passenger lineup") { hideFlags = HideFlags.HideAndDontSave };
             dimensionLineupStage = stageObject.transform;
@@ -252,6 +252,7 @@ namespace CrazyElevator.Managers
             dimensionLineupCamera.allowHDR = false;
             dimensionLineupCamera.targetTexture = dimensionLineupTexture;
             dimensionLineupCamera.enabled = false;
+            MenuPresentation.LightPreview(dimensionLineupStage, Vector3.zero, EncounterPreviewLayer);
         }
 
         void ClearDimensionLineup()
@@ -294,77 +295,85 @@ namespace CrazyElevator.Managers
             Rect square = new Rect(area.center.x - size * .5f, area.center.y - size * .5f, size, size);
             Color old = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, alpha);
-            GUI.DrawTextureWithTexCoords(square, dimensionLineupTexture,
+            MenuPresentation.DrawTextureUV(square, dimensionLineupTexture,
                 new Rect((float)slot / LineupSlots, 0f, 1f / LineupSlots, 1f));
             GUI.color = old;
         }
 
-        void DrawDimensionRevealOverlay(Rect view)
+        public void DrawDimensionRevealOverlay(Rect view, float elapsed)
         {
-            Styles();
-            float contentAlpha = DimensionRevealAlpha(dimensionRevealTime);
-            Panel(view, new Color(0f, 0f, 0f, .96f));
-            if (contentAlpha <= .001f) return;
+            MenuPresentation.Backdrop(view);
+            float alpha = DimensionRevealAlpha(elapsed);
+            if (alpha <= .001f) return;
+
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColor = GUI.color;
+            GUI.matrix = previousMatrix * MenuPresentation.Fit(view, 1200f, 640f);
+            GUI.color = previousColor * new Color(1f, 1f, 1f, alpha);
 
             WorldBand world = DimensionWorld(dimensionRevealIndex);
             Color accent = DimensionIntroAccent(world);
-            float width = Mathf.Min(view.width - 52f, 980f);
-            float height = Mathf.Min(view.height - 120f, 620f);
-            Rect card = new Rect(view.x + (view.width - width) * .5f,
-                view.y + (view.height - height) * .5f, width, height);
-            Panel(new Rect(card.x + 10f, card.y + 12f, card.width, card.height),
-                new Color(0f, 0f, 0f, .38f * contentAlpha));
-            FramedPanel(card, new Color(accent.r, accent.g, accent.b, contentAlpha), 5f);
+            Color accentEdge = Color.Lerp(accent, MenuPresentation.Ink, .48f);
+            Color recess = Color.Lerp(MenuPresentation.Wall, accent, .22f);
+            Color paper = MenuPresentation.Paper;
+            Color ink = MenuPresentation.Ink;
+            Rect postcard = new Rect(42f, 44f, 430f, 544f);
+            MenuPresentation.Plaque(postcard, paper, accentEdge, 10f);
+            MenuPresentation.Fasteners(postcard, accentEdge);
 
-            if (DimensionRevealTexture != null)
+            Rect badge = new Rect(postcard.center.x - 92f, 64f, 184f, 42f);
+            MenuPresentation.Plaque(badge, accent, accentEdge, 4f);
+            var heading = new GUIStyle(GUI.skin.label)
             {
-                Rect image = new Rect(card.x + 22f, card.y + 18f,
-                    card.width - 44f, card.height * .26f);
-                Color old = GUI.color;
-                GUI.color = new Color(1f, 1f, 1f, contentAlpha);
-                GUI.DrawTexture(image, DimensionRevealTexture, ScaleMode.ScaleToFit, true);
-                GUI.color = old;
-            }
+                fontSize = 19, alignment = TextAnchor.MiddleCenter, wordWrap = false
+            };
+            GameTypography.Apply(heading, true);
+            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
+            var progress = GameManager.Instance;
+            GUI.Label(badge, "ROUND " + (progress != null ? progress.RoundNumber : 1), heading);
 
-            Color oldText = title.normal.textColor;
-            int oldSize = title.fontSize;
-            TextAnchor oldAlign = title.alignment;
-            title.alignment = TextAnchor.MiddleCenter;
-            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .015f, 14f, 20f));
-            title.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .30f, card.width - 48f, 26f),
-                "ROUND " + (session != null ? session.RoundNumber : 1), title);
-            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .04f, 30f, 54f));
-            title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .35f,
-                card.width - 48f, 52f), DimensionIntroTitle(world), title);
-            title.fontSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .014f, 13f, 18f));
-            GUI.Label(new Rect(card.x + 24f, card.y + card.height * .435f,
-                card.width - 48f, 28f), DimensionIntroSummary(world), title);
+            Rect picture = new Rect(62f, 126f, 390f, 224f);
+            MenuPresentation.Plaque(picture, recess, accentEdge, 5f);
+            if (DimensionRevealTexture != null)
+                MenuPresentation.DrawTexture(new Rect(66f, 130f, 382f, 216f), DimensionRevealTexture, ScaleMode.ScaleToFit);
+
+            heading.fontSize = 34;
+            GUI.Label(new Rect(60f, 372f, 394f, 63f), DimensionIntroTitle(world), heading);
+            var description = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 19, alignment = TextAnchor.UpperCenter, wordWrap = true
+            };
+            GameTypography.Apply(description);
+            description.normal.textColor = MenuPresentation.DisplayColor(ink);
+            GUI.Label(new Rect(80f, 450f, 354f, 105f), DimensionIntroSummary(world), description);
 
             string[] names = DimensionIntroNames(world);
             string[] lines = DimensionIntroLines(world);
-
-            float rowTop = card.y + card.height * .50f;
-            float rowWidth = (card.width - 72f) / 3f;
-            int nameSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .02f, 16f, 26f));
-            int lineSize = Mathf.RoundToInt(Mathf.Clamp(view.width * .014f, 13f, 18f));
-            for (int i = 0; i < 3; i++)
+            heading.fontSize = 24;
+            heading.alignment = TextAnchor.MiddleLeft;
+            description.fontSize = 17;
+            description.alignment = TextAnchor.UpperLeft;
+            for (int i = 0; i < LineupSlots; i++)
             {
-                Rect row = new Rect(card.x + 24f + i * (rowWidth + 12f), rowTop, rowWidth, card.height * .36f);
-                Panel(row, new Color(accent.r, accent.g, accent.b, .22f * contentAlpha));
-                title.fontSize = nameSize;
-                title.normal.textColor = new Color(UiWhite.r, UiWhite.g, UiWhite.b, contentAlpha);
-                GUI.Label(new Rect(row.x + 8f, row.y + 10f, row.width - 16f, 32f), names[i], title);
-                title.fontSize = lineSize;
-                title.normal.textColor = new Color(accent.r, accent.g, accent.b, contentAlpha);
-                GUI.Label(new Rect(row.x + 10f, row.y + 42f, row.width - 20f, 66f), lines[i], title);
-                DrawDimensionPassenger(new Rect(row.x, row.y + 104f, row.width, row.height - 108f), i, contentAlpha);
+                Rect ticket = new Rect(496f, 44f + i * 188f, 662f, 168f);
+                MenuPresentation.Plaque(ticket, paper, accentEdge, 8f);
+                MenuPresentation.Paint(new Rect(ticket.x, ticket.y, 9f, ticket.height), accent);
+                MenuPresentation.Fasteners(ticket, accentEdge);
+                float copyX = ticket.x + 30f;
+                if (dimensionLineupFilled[i])
+                {
+                    Rect portrait = new Rect(ticket.x + 24f, ticket.y + 15f, 138f, 138f);
+                    MenuPresentation.Plaque(portrait, recess, accentEdge, 3f);
+                    DrawDimensionPassenger(new Rect(portrait.x + 4f, portrait.y + 4f, 130f, 130f), i, alpha);
+                    copyX = portrait.xMax + 25f;
+                }
+                float copyWidth = ticket.xMax - copyX - 28f;
+                GUI.Label(new Rect(copyX, ticket.y + 27f, copyWidth, 44f), names[i], heading);
+                GUI.Label(new Rect(copyX, ticket.y + 78f, copyWidth, 73f), lines[i], description);
             }
 
-            title.fontSize = oldSize;
-            title.normal.textColor = oldText;
-            title.alignment = oldAlign;
+            GUI.matrix = previousMatrix;
+            GUI.color = previousColor;
         }
     }
 }

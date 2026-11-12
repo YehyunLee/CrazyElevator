@@ -730,32 +730,17 @@ namespace CrazyElevator.Managers
             FinishTutorial();
         }
 
-        string TutorialKey(int step, int seat)
+        static string TutorialKeyboardKey(int step, int seat)
         {
-            if (step == 6) return "AUTO";
-            if (!KeyboardHintsEnabled)
-            {
-                switch (step)
-                {
-                    case 0: case 1: return "STICK";
-                    case 2: return "A";
-                    case 3: case LateralTravelStep: return "STICK";
-                    case 4: return "LB";
-                    case 5: return "A";
-                    case 7: return "B";
-                    case 8: return "LB";
-                    default: return "A";
-                }
-            }
             if (seat == 1)
             {
                 switch (step)
                 {
-                    case 0: case 1: return "ARROWS";
+                    case 0: case 1: return "←/↑/→";
                     case 2: return ".";
                     case 3: return "↑/↓";
                     case LateralTravelStep: return "←/→";
-                    case 4: return "RSHIFT";
+                    case 4: return "R SHIFT";
                     case 5: return ".";
                     case 7: return ",";
                     case 8: return "↑";
@@ -764,7 +749,7 @@ namespace CrazyElevator.Managers
             }
             switch (step)
             {
-                case 0: case 1: return "W/A/D";
+                case 0: case 1: return "A/W/D";
                 case 2: return "C";
                 case 3: return "W/S";
                 case LateralTravelStep: return "A/D";
@@ -795,8 +780,9 @@ namespace CrazyElevator.Managers
             }
         }
 
-        string TutorialBody(int step, int seat)
+        string TutorialBody(int step, int index)
         {
+            int seat = tutorialActors[index].Seat;
             switch (step)
             {
                 case -1: return "TUTORIAL";
@@ -812,20 +798,20 @@ namespace CrazyElevator.Managers
                     ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
                     : "HOLD UP + LB.";
                 case 5:
-                    int targetFloor = tutorialTargetFloor[Mathf.Clamp(seat, 0, 1)];
+                    int targetFloor = tutorialTargetFloor[index];
                     return targetFloor >= 0
                         ? "STOP AT FLOOR " + ElevatorRound.FloorNumber(targetFloor) + "."
                         : "STOP AT PASSENGER FLOOR.";
                 case 6: return "AUTOMATIC!";
                 case 7: return "KICK HIGHLIGHTED RIDER.";
                 case LateralTravelStep:
-                    if (tutorialSteeredLeft[seat] && tutorialSteeredRight[seat])
+                    if (tutorialSteeredLeft[index] && tutorialSteeredRight[index])
                     {
                         string vertical = KeyboardHintsEnabled ? (seat == 1 ? "↑/↓" : "W/S") : "UP/DOWN";
                         return "STEER TOWARD CENTER AND HOLD " + vertical + " TO REJOIN THE SHAFT.";
                     }
-                    if (tutorialSteeredLeft[seat]) return "STEER RIGHT ALONG THE RAIL.";
-                    if (tutorialSteeredRight[seat]) return "STEER LEFT ALONG THE RAIL.";
+                    if (tutorialSteeredLeft[index]) return "STEER RIGHT ALONG THE RAIL.";
+                    if (tutorialSteeredRight[index]) return "STEER LEFT ALONG THE RAIL.";
                     return "TAP LEFT OR RIGHT UNTIL YOU TURN ONTO A FLOOR RAIL.";
                 case 8:
                     if (tutorialCollisionHitConfirmed) return "YOU MADE AN OPENING!";
@@ -933,9 +919,9 @@ namespace CrazyElevator.Managers
             int previousBodySize = body.fontSize;
             TextAnchor previousBodyAlignment = body.alignment;
             bool previousBodyWrap = body.wordWrap;
-            cardTitle.normal.textColor = Cream;
-            body.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, .9f);
-            caption.normal.textColor = accent;
+            cardTitle.normal.textColor = MenuColor(Cream);
+            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .9f));
+            caption.normal.textColor = MenuColor(accent);
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .06f), 34, 48);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .034f), 19, 28);
             body.alignment = TextAnchor.MiddleLeft;
@@ -948,12 +934,18 @@ namespace CrazyElevator.Managers
             float rowY = card.y + 106f;
             if (step >= 0)
             {
-                float hintWidth = KeyboardHintsEnabled || step == 6 ? 68f : Mathf.Min(220f, card.width * .35f);
+                float hintWidth;
                 if (!KeyboardHintsEnabled && step != 6)
+                {
+                    hintWidth = Mathf.Min(220f, card.width * .35f);
                     DrawTutorialController(new Rect(card.x + 24f, rowY - 15f, hintWidth, 145f), step, accent);
+                }
                 else
-                    DrawTutorialKeyHint(new Rect(card.x + 30f, rowY, hintWidth, 68f),
-                        TutorialKey(step, inputSeat));
+                {
+                    string key = step == 6 ? "AUTO" : TutorialKeyboardKey(step, inputSeat);
+                    hintWidth = key.Length > 4 ? 82f : 68f;
+                    DrawKeyHint(new Rect(card.x + 30f, rowY, hintWidth, 68f), key);
+                }
                 float textX = card.x + 48f + hintWidth;
                 GUI.Label(new Rect(textX, rowY - 4f, card.xMax - textX - 24f, 78f),
                     TutorialBody(step, index), body);
@@ -969,7 +961,7 @@ namespace CrazyElevator.Managers
             {
                 int previousFooterSize = caption.fontSize;
                 caption.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .022f), 13, 18);
-                caption.normal.textColor = Cream;
+                caption.normal.textColor = MenuColor(Cream);
                 GUI.Label(new Rect(card.x + 30f, card.yMax - 38f, card.width - 60f, 24f), footer, caption);
                 caption.fontSize = previousFooterSize;
             }
@@ -1001,7 +993,7 @@ namespace CrazyElevator.Managers
             Color previousTextColor = cardTitle.normal.textColor;
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .075f), 52, 90);
             cardTitle.alignment = TextAnchor.MiddleCenter;
-            cardTitle.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+            cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
             GUI.Label(new Rect(30f, (view.height - 120f) * .5f, view.width - 60f, 120f),
                 "TUTORIAL", cardTitle);
             cardTitle.fontSize = previousFontSize;
@@ -1029,9 +1021,9 @@ namespace CrazyElevator.Managers
             TextAnchor previousTitleAlignment = cardTitle.alignment;
             TextAnchor previousBodyAlignment = body.alignment;
             bool previousTitleWrap = cardTitle.wordWrap;
-            cardTitle.normal.textColor = Cream;
-            body.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, .92f);
-            caption.normal.textColor = accent;
+            cardTitle.normal.textColor = MenuColor(Cream);
+            body.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, .92f));
+            caption.normal.textColor = MenuColor(accent);
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .045f), 24, 36);
             body.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .027f), 18, 25);
             cardTitle.alignment = TextAnchor.MiddleCenter;
@@ -1080,7 +1072,7 @@ namespace CrazyElevator.Managers
             Color previousCountdownTextColor = title.normal.textColor;
             title.fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.width * .12f), 100, 190);
             title.alignment = TextAnchor.MiddleCenter;
-            title.normal.textColor = Cream;
+            title.normal.textColor = MenuColor(Cream);
             GUI.Label(new Rect(0f, Screen.height * .34f, Screen.width, Screen.height * .26f),
                 countdown, title);
             title.fontSize = previousCountdownFontSize;
@@ -1090,24 +1082,47 @@ namespace CrazyElevator.Managers
 
         void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText)
         {
-            Panel(new Rect(0, 0, Screen.width, Screen.height), Ink);
-            float scale = Mathf.Min(Screen.width / 1280f, Screen.height / 720f);
+            Rect view = new Rect(0f, 0f, Screen.width, Screen.height);
+            MenuPresentation.Backdrop(view);
             Matrix4x4 previousMatrix = GUI.matrix;
-            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1280f * scale) * .5f,
-                (Screen.height - 720f * scale) * .5f, 0), Quaternion.identity, new Vector3(scale, scale, 1));
-            GUIStyle heading = new GUIStyle(cardTitle)
-                { fontSize = 40, alignment = TextAnchor.MiddleCenter, wordWrap = true };
-            GUIStyle small = new GUIStyle(caption)
-                { fontSize = 18, alignment = TextAnchor.MiddleCenter };
-            heading.normal.textColor = Cream;
-            small.normal.textColor = Teal;
-            GUI.Label(new Rect(80, 24, 1120, 32), kicker, small);
-            GUI.Label(new Rect(80, 64, 1120, 62), headingText, heading);
-            Texture preview = actor != null ? actor.DimensionRevealTexture : null;
+            GUI.matrix = previousMatrix * MenuPresentation.Fit(view, 1200f, 640f);
+            Color brass = MenuPresentation.Brass;
+            Color ink = MenuPresentation.Ink;
+            Color brassEdge = new Color32(130, 82, 48, 255);
+            var heading = new GUIStyle(cardTitle)
+                { fontSize = 34, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            var label = new GUIStyle(caption)
+                { fontSize = 17, alignment = TextAnchor.MiddleCenter };
+            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
+            label.normal.textColor = MenuPresentation.DisplayColor(ink);
+
+            Rect display = new Rect(254f, 108f, 692f, 416f);
+            MenuPresentation.Plaque(display, brass, brassEdge, 10f);
+            MenuPresentation.Fasteners(display, brassEdge);
+            Rect opening = new Rect(274f, 128f, 652f, 376f);
+            MenuPresentation.Plaque(opening, MenuPresentation.Wall, brassEdge, 4f);
+            Texture preview = actor.DimensionRevealTexture;
             if (preview != null)
-                GUI.DrawTexture(new Rect(240, 136, 800, 390), preview, ScaleMode.ScaleToFit);
+                MenuPresentation.DrawTexture(new Rect(282f, 135f, 636f, 362f), preview, ScaleMode.ScaleToFit);
+
+            Rect counter = new Rect(449f, 31f, 302f, 39f);
+            MenuPresentation.Plaque(counter, MenuPresentation.Teal, ink, 5f);
+            GUI.Label(counter, kicker, label);
+
+            Rect nameplate = new Rect(330f, 482f, 540f, 62f);
+            MenuPresentation.Plaque(nameplate, MenuPresentation.Paper, brassEdge, 7f);
+            MenuPresentation.Fasteners(nameplate, brassEdge);
+            GUI.Label(new Rect(nameplate.x + 22f, nameplate.y, nameplate.width - 44f, nameplate.height),
+                headingText, heading);
+
             if (roundPassengerTimer >= RoundPassengerSkipDelay)
-                GUI.Label(new Rect(80, 568, 1120, 30), "CONFIRM TO SKIP", small);
+            {
+                Rect confirm = new Rect(481f, 573f, 238f, 48f);
+                Color face = confirm.Contains(Event.current.mousePosition) ? MenuPresentation.Paper : MenuPresentation.Teal;
+                MenuPresentation.Plaque(confirm, face, ink, 5f);
+                GUI.Label(confirm, "CONFIRM TO SKIP", label);
+                if (GUI.Button(confirm, GUIContent.none, GUIStyle.none)) AdvanceRoundPassenger();
+            }
             GUI.matrix = previousMatrix;
         }
 
@@ -1129,7 +1144,7 @@ namespace CrazyElevator.Managers
             cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .072f), 26, 58);
             cardTitle.alignment = TextAnchor.MiddleCenter;
             cardTitle.wordWrap = true;
-            cardTitle.normal.textColor = new Color(Cream.r, Cream.g, Cream.b, alpha);
+            cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
             float slideIn = Mathf.Lerp(30f, 0f, fadeIn);
             float slideOut = Mathf.Lerp(-30f, 0f, fadeOut);
             GUI.Label(new Rect(24f, view.height * .34f + slideIn + slideOut,
@@ -1200,7 +1215,7 @@ namespace CrazyElevator.Managers
         {
             TutorialControllerOval(rect, pressed ? accent : Ink);
             GUIStyle style = new GUIStyle(caption) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = pressed ? Ink : Cream;
+            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
             GUI.Label(rect, label, style);
         }
 
@@ -1210,7 +1225,7 @@ namespace CrazyElevator.Managers
             Panel(new Rect(rect.x, rect.y + (pressed ? 2f : 0f), rect.width, rect.height),
                 pressed ? accent : Ink);
             GUIStyle style = new GUIStyle(caption) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = pressed ? Ink : Cream;
+            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
             GUI.Label(rect, label, style);
         }
 
@@ -1226,9 +1241,5 @@ namespace CrazyElevator.Managers
             }
         }
 
-        void DrawTutorialKeyHint(Rect rect, string key)
-        {
-            DrawKeyHint(rect, key);
-        }
     }
 }
