@@ -40,8 +40,10 @@ Shader "CrazyElevator/Menu Texture"
             }
             half4 Frag(Output input) : SV_Target
             {
-                // Keep the sampled image in the framebuffer's colour space.
-                half4 color = tex2D(_MainTex, input.uv) * input.color;
+                half4 color = tex2D(_MainTex, input.uv);
+                // The IMGUI overlay draws display colors directly.
+                if (!IsGammaSpace()) color.rgb = LinearToGammaSpace(color.rgb);
+                color *= input.color;
                 color.a *= tex2D(_GUIClipTexture, input.clipUV).a;
                 return color;
             }

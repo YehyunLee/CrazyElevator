@@ -49,15 +49,10 @@ namespace CrazyElevator.Shared
             Graphics.DrawTexture(rect, texture, uv, 0, 0, 0, 0, GUI.color, textureMaterial);
         }
 
-        // Palette values are authored as screen colours. IMGUI tints need linear
-        // values when drawing into the project's linear framebuffer.
-        public static Color DisplayColor(Color color)
-            => QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color;
-
         public static void Paint(Rect rect, Color color)
         {
             Color previous = GUI.color;
-            GUI.color = previous * DisplayColor(color);
+            GUI.color = previous * color;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previous;
         }

@@ -194,14 +194,10 @@ namespace CrazyElevator.Managers
         {
             bool wasEnabled = GUI.enabled;
             GUI.enabled = wasEnabled && enabled;
-            Color outline = menuColours ? MenuPresentation.DisplayColor(MenuPresentation.Paper) : UiWhite;
+            Color outline = menuColours ? MenuPresentation.Paper : UiWhite;
             Color face = GUI.enabled ? color : new Color(.2f, .25f, .3f);
             Color label = GUI.enabled ? Ink : Color.gray;
-            if (menuColours)
-            {
-                face = MenuPresentation.DisplayColor(face);
-                label = MenuPresentation.DisplayColor(MenuPresentation.Ink);
-            }
+            if (menuColours) label = MenuPresentation.Ink;
             if (selected) Panel(new Rect(r.x - 4, r.y - 4, r.width + 8, r.height + 8), outline);
             Panel(r, face);
             Color old = buttonStyle.normal.textColor;
@@ -830,7 +826,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(badge, accent, edge, 4f);
             var centered = new GUIStyle(title)
                 { fontSize = 19, alignment = TextAnchor.MiddleCenter, wordWrap = false };
-            centered.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
+            centered.normal.textColor = MenuPresentation.Ink;
             GUI.Label(badge, roundLabel, centered);
             centered.fontSize = 35;
             GUI.Label(new Rect(380f, 176f, 440f, 70f), worldName, centered);
@@ -839,7 +835,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(display, MenuPresentation.Wall, edge, 6f);
             MenuPresentation.Fasteners(display, MenuPresentation.Brass);
             centered.fontSize = 144;
-            centered.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            centered.normal.textColor = MenuPresentation.Paper;
             GUI.Label(display, countdown, centered);
 
             GUI.matrix = previousMatrix;
@@ -1942,8 +1938,8 @@ namespace CrazyElevator.Managers
             string heading = paused ? "TAKE A BREATHER" : "ROUND COMPLETE";
             var overlayTitle = new GUIStyle(title);
             var overlayBody = new GUIStyle(body);
-            overlayTitle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
-            overlayBody.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            overlayTitle.normal.textColor = MenuPresentation.Paper;
+            overlayBody.normal.textColor = MenuPresentation.Paper;
             GUI.Label(new Rect(354, 196, 700, 52), heading, overlayTitle);
             string copy = paused
                 ? "The clock is paused.\n\nResume the shift, return to the lobby, or go back to the main menu."

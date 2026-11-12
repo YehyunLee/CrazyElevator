@@ -23,7 +23,7 @@ namespace CrazyElevator.Managers
         static readonly Color DoorwayGold = new Color32(255, 198, 103, 255);
         static readonly Color DoorwayEdge = new Color32(139, 72, 49, 255);
         static readonly Color DoorwayShade = new Color32(47, 33, 41, 255);
-        GUIStyle titleWordmark, titleActionText, titleIndicator;
+        [System.NonSerialized] GUIStyle titleWordmark, titleActionText, titleIndicator;
 
         void DrawModeSelect()
         {
@@ -51,9 +51,14 @@ namespace CrazyElevator.Managers
 
             if (titleWordmark == null)
             {
-                titleWordmark = new GUIStyle(menuLabelText) { alignment = TextAnchor.MiddleLeft };
-                titleActionText = new GUIStyle(menuLabelText) { fontSize = 33 };
-                titleIndicator = new GUIStyle(menuLabelText) { fontSize = 55 };
+                titleActionText = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 33
+                };
+                GameTypography.Apply(titleActionText, true);
+                titleWordmark = new GUIStyle(titleActionText) { alignment = TextAnchor.MiddleLeft };
+                titleIndicator = new GUIStyle(titleActionText) { fontSize = 55 };
             }
 
             DrawTitleWord(new Rect(122, 161, 826, 173), "CRAZY", 157, MenuPresentation.Teal);
