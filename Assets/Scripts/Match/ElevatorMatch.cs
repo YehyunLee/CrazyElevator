@@ -415,12 +415,13 @@ namespace CrazyElevator.Match
             Rival?.BeginDimensionReveal(dimensionRevealIndex);
         }
 
-        // The shared world preview hands off automatically to the passenger cards.
+        // Either human can confirm the shared world preview.
         void UpdateDimensionReveal(float dt)
         {
             if (Paused || MenuManager.IsOpen) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
-            if (dimensionRevealTime < Game.DimensionRevealSeconds) return;
+            if (dimensionRevealTime < Game.DimensionRevealConfirmDelay
+                || !(player.DimensionRevealConfirmed || Rival != null && Rival.DimensionRevealConfirmed)) return;
             player.FinishDimensionReveal();
             Rival?.FinishDimensionReveal();
             dimensionRevealActive = false;

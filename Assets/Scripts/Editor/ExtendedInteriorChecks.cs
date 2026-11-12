@@ -1451,7 +1451,10 @@ public static class ExtendedInteriorChecks
             Require((float)Get(game, "dimensionRevealTime") == introTime,
                 "The solo introduction advanced while paused.");
             game.SetPausedPublic(false);
-            Call(game, "TickDimensionReveal", Game.DimensionRevealSeconds);
+            Call(game, "TickDimensionReveal", 10f);
+            Require(game.DimensionRevealActive, "The solo world preview closed without confirmation.");
+            Set(game, "dimensionRevealConfirmClicked", true);
+            Call(game, "TickDimensionReveal", Game.DimensionRevealConfirmDelay);
             FinishRoundPassengerGallery(game, null);
             FinishRoundCountdown(game);
             if (index < enabledDimensions - 1) Call(game, "StartOrContinue");
@@ -1585,9 +1588,10 @@ public static class ExtendedInteriorChecks
         Require(match.DimensionRevealActive && match.player.DimensionRevealActive && match.Rival.DimensionRevealActive
             && match.player.CountdownPlaying && match.Rival.CountdownPlaying,
             "A fresh match round must show the dimension before its passenger gallery and countdown.");
-        type.GetMethod("UpdateDimensionReveal", Flags).Invoke(match, new object[] { Game.DimensionRevealSeconds });
+        Set(match.player, "dimensionRevealConfirmClicked", true);
+        type.GetMethod("UpdateDimensionReveal", Flags).Invoke(match, new object[] { Game.DimensionRevealConfirmDelay });
         Require(!match.DimensionRevealActive && !match.player.DimensionRevealActive && !match.Rival.DimensionRevealActive,
-            "The dimension introduction did not finish automatically for both players.");
+            "The dimension introduction did not finish after confirmation for both players.");
         FinishRoundPassengerGallery(match.player, match.Rival);
         FinishRoundCountdown(match.player);
         FinishRoundCountdown(match.Rival);
@@ -1633,7 +1637,10 @@ public static class ExtendedInteriorChecks
             "A paused introduction advanced its ready or fade clock.");
         match.TogglePause();
 
-        tick.Invoke(match, new object[] { Game.DimensionRevealSeconds });
+        tick.Invoke(match, new object[] { 10f });
+        Require(match.DimensionRevealActive, "The shared world preview closed without confirmation.");
+        Set(player, "dimensionRevealConfirmClicked", true);
+        tick.Invoke(match, new object[] { Game.DimensionRevealConfirmDelay });
         Require(!match.DimensionRevealActive && !player.DimensionRevealActive && !rival.DimensionRevealActive
             && player.CountdownPlaying && rival.CountdownPlaying
             && CrazyElevator.Managers.MenuManager.RoundPassengerIntroductionActive
@@ -1873,7 +1880,7 @@ public static class ExtendedInteriorChecks
                 && match.DimensionRevealActive && player.DimensionRevealActive && rival.DimensionRevealActive,
                 "Play Again must reset the series and introduce its new shuffled dimension.");
             CheckMatchRoundIntroduction(match, rematchDimension);
-            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; shuffled dimensions without repeats until the enabled pool is exhausted; automatic dimension preview and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; randomized rematch introduction.");
+            File.WriteAllText(Work + "/result.txt", "PASS: authored Main managers; two human elevators without CPU drivers; independent keyboard/gamepad controls and reconnect; 90-second round clocks; local floor signs and LED digits start at 1; local passenger destination badges; shared fresh same-world passengers; shuffled dimensions without repeats until the enabled pool is exhausted; confirmed dimension preview and countdown; frozen timers, patience and boarding during introductions; paused introduction clocks; travel bounds and teleport limits; tied rounds; one result per round; best-of-three champion; randomized rematch introduction.");
             Debug.Log(File.ReadAllText(Work + "/result.txt"));
         }
         finally

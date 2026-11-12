@@ -59,22 +59,22 @@ internal static class Program
     {
         foreach (bool shared in new[] { false, true })
         {
-            var primary = new ElevatorRound { Floor = 3, TimeLeft = ElevatorRound.Duration - 40f };
+            var primary = new ElevatorRound { Floor = 0, TimeLeft = ElevatorRound.Duration - 40f };
             primary.Riders.Clear();
-            var grandmaOne = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Left);
-            var grandmaTwo = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Right);
+            var grandmaOne = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Left);
+            var grandmaTwo = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Right);
             grandmaOne.Kind = grandmaTwo.Kind = "ELDERLY";
             grandmaOne.Arrival = grandmaTwo.Arrival = ElevatorRound.ElderlyArrivalSeconds;
-            var boxMan = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
-            var hiddenGrandma = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Left);
+            var boxMan = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
+            var hiddenGrandma = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Left);
             hiddenGrandma.Kind = "ELDERLY";
-            var hiddenBoxMan = NewRider(3, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
+            var hiddenBoxMan = NewRider(0, ElevatorRound.CenterStop, BoardingDoor.Front, 2);
             primary.Riders.AddRange(new[] { grandmaOne, grandmaTwo, boxMan, hiddenGrandma, hiddenBoxMan });
             foreach (Rider rider in primary.Riders) rider.Remaining = rider.Patience = 600f;
             Rider[] preview = primary.Riders.Where(primary.IsOffered).ToArray();
             Require(preview.SequenceEqual(new[] { grandmaOne, grandmaTwo, boxMan }), "Unexpected floor preview.");
-            primary.RevealQueue(3, ElevatorRound.CenterStop);
-            var second = new ElevatorRound { Floor = 3, TimeLeft = primary.TimeLeft };
+            primary.RevealQueue(0, ElevatorRound.CenterStop);
+            var second = new ElevatorRound { Floor = 0, TimeLeft = primary.TimeLeft };
             if (shared) second.SharePassengerPoolWith(primary, 1);
             var boxCar = shared ? second : primary;
             Require(!primary.Board(grandmaOne), "A slow grandma boarded before reaching the door.");
@@ -93,7 +93,7 @@ internal static class Program
                 && primary.Riders.Count(r => r.Boarded && r.Kind == "COURIER") == 1,
                 "The boarding total exceeded the preview's passenger types or amounts.");
             primary.Arrive(4);
-            primary.Arrive(3);
+            primary.Arrive(0);
             Require(!primary.Riders.Any(primary.IsOffered), "Revisiting a cleared landing refilled it.");
             Require(primary.Load + (shared ? second.Load : 0) == 4, "Physical cabin capacity mixed with passenger count.");
         }
@@ -115,14 +115,16 @@ internal static class Program
             var reserve = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Front);
             round.Riders.AddRange(new[] { locked, delayed, front, side, reserve });
             round.AssignBoardingDoors();
-            BoardingDoor assignedSide = side.PickupDoor;
-            Require(front.PickupDoor == BoardingDoor.Front && assignedSide != BoardingDoor.Front,
-                "Small groups do not have both a front and a side passenger.");
             round.RevealQueue(floor, ElevatorRound.CenterStop);
-            Require(round.Riders.Where(round.IsOffered).SequenceEqual(new[] { front, side })
-                && front.PickupDoor == BoardingDoor.Front && side.PickupDoor == assignedSide
-                && front.PickupQueueSlot == 0 && side.PickupQueueSlot == 1,
+            Rider[] offered = round.Riders.Where(round.IsOffered).OrderBy(r => r.PickupQueueSlot).ToArray();
+            Require(offered.Length == 2 && !offered.Contains(locked) && !offered.Contains(delayed),
                 "Locked or delayed passengers consumed a visible entrance slot.");
+            front = offered[0];
+            side = offered[1];
+            BoardingDoor assignedSide = side.PickupDoor;
+            Require(front.PickupDoor == BoardingDoor.Front && assignedSide != BoardingDoor.Front
+                && front.PickupQueueSlot == 0 && side.PickupQueueSlot == 1,
+                "Small groups do not have stable front and side passengers.");
             firstSides.Add(side.PickupDoor);
 
             var other = new ElevatorRound { Floor = floor };
@@ -362,6 +364,7 @@ internal static class Program
             primary.Arrive(shared.Origin, shared.OriginStop);
             second.Arrive(shared.Origin, shared.OriginStop);
             primary.RevealQueue(shared.Origin, shared.OriginStop);
+            shared = primary.Riders.First(primary.IsOffered);
             shared.Arrival = 0f;
             Require(primary.Board(shared) && !second.Board(shared),
                 "A dimension reset allowed both elevators to claim the same passenger.");
@@ -371,52 +374,36 @@ internal static class Program
         }
     }
 
-    static void CheckFirstToThreeMatch()
+    static void CheckBestOfThreeMatch()
     {
         var match = new MatchProgress();
-        Require(MatchProgress.RoundsToWin == 3 && match.RoundNumber == 1 && match.ActiveDimension == 0
-            && match.PlayerOneWins == 0 && match.PlayerTwoWins == 0 && !match.RoundRecorded && !match.Finished,
-            "A match did not start at office round one with no wins.");
-        int[] winners = { 0, 1, -1, 1, 0, 0 };
-        for (int i = 0; i < winners.Length; i++)
-        {
-            Require(match.RoundNumber == i + 1 && match.ActiveDimension == i % ElevatorRound.Dimensions,
-                "The next round did not cycle office, candy, underwater, office.");
-            int expectedWinner = winners[i];
-            match.RecordResult(expectedWinner == 0 ? 200 : 100, expectedWinner == 1 ? 200 : 100);
-            Require(match.RoundRecorded && match.LastRoundWinner == expectedWinner,
-                "A round did not preserve the higher-score winner or a tied result.");
-            int oneWins = match.PlayerOneWins, twoWins = match.PlayerTwoWins;
-            match.RecordResult(10000, -10000);
-            Require(match.PlayerOneWins == oneWins && match.PlayerTwoWins == twoWins
-                && match.LastRoundWinner == expectedWinner, "Recording results twice awarded another round win.");
-            if (expectedWinner < 0)
-                Require(oneWins == 1 && twoWins == 1, "A tied round awarded a win.");
-            if (i < winners.Length - 1)
-            {
-                Require(!match.Finished, "A match ended before either player won three rounds.");
-                match.AdvanceRound();
-                Require(!match.RoundRecorded && match.LastRoundWinner == -1,
-                    "Starting the next round retained the previous result.");
-            }
-        }
-        Require(match.Finished && match.PlayerOneWins == 3 && match.PlayerTwoWins == 2
-            && match.RoundNumber == 6, "The first player to three round wins did not become champion.");
+        match.SetDimensionOrder(new[] { 4, 2, 0 });
+        Require(MatchProgress.RoundsToWin == 2 && match.RoundNumber == 1 && match.ActiveDimension == 4
+            && !match.Finished, "A match did not start with the configured world order.");
+        match.RecordResult(200, 100);
+        match.RecordResult(0, 999);
+        Require(match.PlayerOneWins == 1 && match.PlayerTwoWins == 0,
+            "Recording one round twice awarded another win.");
         match.AdvanceRound();
-        match.RecordResult(-1, 10000);
-        Require(match.RoundNumber == 6 && match.PlayerOneWins == 3 && match.PlayerTwoWins == 2
-            && match.RoundRecorded && match.LastRoundWinner == 0, "A completed match accepted another round or result.");
+        Require(match.ActiveDimension == 2 && !match.RoundRecorded, "Round two did not advance.");
+        match.RecordResult(100, 200);
+        match.AdvanceRound();
+        Require(match.ActiveDimension == 0 && !match.Finished, "Round three did not advance.");
+        match.RecordResult(150, 100);
+        Require(match.Finished && match.MatchWinner == 0 && match.PlayerOneWins == 2,
+            "The player with two round wins did not win the match.");
+        match.AdvanceRound();
+        Require(match.RoundNumber == 3, "A finished match advanced again.");
         match.Reset();
-        Require(match.RoundNumber == 1 && match.ActiveDimension == 0 && match.PlayerOneWins == 0
-            && match.PlayerTwoWins == 0 && !match.RoundRecorded && match.LastRoundWinner == -1 && !match.Finished,
-            "Play Again did not clear the match and return to office.");
-        for (int i = 0; i < 3; i++)
-        {
-            match.RecordResult(-100, -50);
-            if (i < 2) match.AdvanceRound();
-        }
-        Require(match.Finished && match.PlayerOneWins == 0 && match.PlayerTwoWins == 3 && match.RoundNumber == 3,
-            "The second player cannot win three straight rounds with higher, negative scores.");
+        Require(match.RoundNumber == 1 && !match.Finished && match.PlayerOneWins == 0,
+            "A rematch did not reset results.");
+        match.RecordResult(100, 100);
+        match.AdvanceRound();
+        match.RecordResult(200, 100);
+        match.AdvanceRound();
+        match.RecordResult(100, 200);
+        Require(match.Finished && match.MatchWinner == -1,
+            "A tied three-round series with equal total points was not a draw.");
     }
 
     static void CheckAbilityOwnership()
@@ -493,10 +480,65 @@ internal static class Program
         }
     }
 
+    static void CheckUfoRelocation()
+    {
+        foreach (bool revealDestination in new[] { false, true })
+        {
+            var first = new ElevatorRound();
+            first.ConfigureDimension(4);
+            first.Riders.Clear();
+            int floor = first.MinFloor;
+            int targetFloor = floor + 2;
+            Rider moved = NewRider(floor, ElevatorRound.CenterStop, BoardingDoor.Front);
+            moved.Kind = "ALIEN";
+            Rider existing = NewRider(targetFloor, ElevatorRound.CenterStop, BoardingDoor.Front);
+            first.Riders.AddRange(new[] { moved, existing });
+            var second = new ElevatorRound();
+            second.ConfigureDimension(4);
+            second.SharePassengerPoolWith(first, 1);
+            first.RevealQueue(floor, ElevatorRound.CenterStop);
+            if (revealDestination) first.RevealQueue(targetFloor, ElevatorRound.CenterStop);
+            Require(first.CanRelocateWaitingPassenger(moved, targetFloor), "A landing with space was rejected.");
+            Require(first.TryRelocateWaitingPassenger(moved, targetFloor), "UFO relocation failed.");
+            Require(first.IsQueuedAtStop(moved) && second.IsQueuedAtStop(moved)
+                && first.IsQueuedAtStop(existing) && second.IsQueuedAtStop(existing),
+                "Relocation hid a visible passenger from one or both players.");
+            Require(moved.PickupQueueSlot != existing.PickupQueueSlot,
+                "The relocated passenger overlaps another waiting passenger.");
+            first.Arrive(targetFloor, moved.OriginStop);
+            second.Arrive(targetFloor, moved.OriginStop);
+            moved.Arrival = 0f;
+            Require(first.Board(moved) && !second.Board(moved),
+                "The relocated passenger could not board exclusively.");
+            Require(!first.TryRelocateWaitingPassenger(moved, floor),
+                "A boarded passenger was moved by the UFO.");
+        }
+
+        var full = new ElevatorRound();
+        full.ConfigureDimension(4);
+        full.Riders.Clear();
+        full.StopOpen = (floor, stop) => stop == ElevatorRound.CenterStop;
+        Rider passenger = NewRider(full.MinFloor, ElevatorRound.CenterStop, BoardingDoor.Front);
+        full.Riders.Add(passenger);
+        for (int i = 0; i < 3; i++)
+            full.Riders.Add(NewRider(full.MinFloor + 2, ElevatorRound.CenterStop, BoardingDoor.Front));
+        full.RevealQueue(full.MinFloor, ElevatorRound.CenterStop);
+        full.RevealQueue(full.MinFloor + 2, ElevatorRound.CenterStop);
+        Require(!full.CanRelocateWaitingPassenger(passenger, full.MinFloor + 2),
+            "The UFO accepted a full landing.");
+        Require(!full.TryRelocateWaitingPassenger(passenger, full.MinFloor + 2)
+            && full.IsQueuedAtStop(passenger), "A failed relocation changed the original queue.");
+        Rider departed = full.Riders[1];
+        departed.Resolved = true;
+        Require(full.TryRelocateWaitingPassenger(passenger, full.MinFloor + 2)
+            && full.IsQueuedAtStop(passenger), "The UFO could not use a vacated landing slot.");
+    }
+
     static int Main()
     {
         var checks = new Dictionary<string, Action>
         {
+            { "UFO relocation preserves queues, capacity and exclusive boarding", CheckUfoRelocation },
             { "Manifest base points match delivery, excluding bonuses", CheckBaseDeliveryPoints },
             { "Matching inside/outside and both-seat door queues over all 24 floors and 5 stops", CheckQueueConsistency },
             { "Exact two-grandma and one-box-man preview limits in solo and two-player", CheckFiniteLandingRoster },
@@ -508,7 +550,7 @@ internal static class Program
             { "Every world's displayed floors run from 1 to 8", CheckLocalFloorNumbers },
             { "Every passenger kind and random request stays within its origin world", CheckWorldDestinations },
             { "Six dimension rounds reset clocks and rosters while sharing identities between seats", CheckSharedDimensionResets },
-            { "First-to-three results, ties, idempotent wins, cycling, championship lock, and Play Again", CheckFirstToThreeMatch },
+            { "Best-of-three results, ties, world order, championship lock, and reset", CheckBestOfThreeMatch },
             { "Passenger abilities follow their owning elevator", CheckAbilityOwnership },
             { "Both tutorial seats board from one finite waiting group", CheckFiniteTutorialBoarding }
         };

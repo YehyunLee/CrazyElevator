@@ -60,12 +60,16 @@ public static class NewWorldsChecks
                 if (solo == null || solo.sceneView == null) return;
                 CheckExistingWorlds(solo);
                 PlayerPrefs.SetInt(MaskKey, 1 << 3);
+                GameManager.Instance.ResetMatchProgress();
                 solo.StartMatchShift();
                 CheckWorld(solo, 3);
+                CheckWorldEvent(solo, 3);
                 CaptureIfRequested(solo, "forest");
                 PlayerPrefs.SetInt(MaskKey, 1 << 4);
+                GameManager.Instance.ResetMatchProgress();
                 solo.StartMatchShift();
                 CheckWorld(solo, 4);
+                CheckWorldEvent(solo, 4);
                 CaptureIfRequested(solo, "space");
 
                 PlayerPrefs.SetInt(MaskKey, 1 << 3);
@@ -87,12 +91,14 @@ public static class NewWorldsChecks
             CheckWorld(match.player, 3);
             CheckWorld(match.Rival, 3);
             CheckSharedPool(match);
+            CheckDuelWorldEvent(match, 3);
             PlayerPrefs.SetInt(MaskKey, 1 << 4);
             match.StartMatch();
             CheckWorld(match.player, 4);
             CheckWorld(match.Rival, 4);
             CheckSharedPool(match);
-            Finish(true, "Solo and two-player Main: both worlds, event prefabs, five passenger abilities and models, same-world destinations, UFO passenger relocation, shared queues, boarding and scoring.");
+            CheckDuelWorldEvent(match, 4);
+            Finish(true, "Solo and two-player Main: both worlds, event prefabs, all five world events and passenger protections, UFO beam relocation, passenger models, shared queues, boarding and scoring.");
         }
         catch (Exception error) { Finish(false, error.ToString()); }
     }
@@ -113,11 +119,14 @@ public static class NewWorldsChecks
         for (int dimension = 0; dimension < 3; dimension++)
         {
             PlayerPrefs.SetInt(MaskKey, 1 << dimension);
+            GameManager.Instance.ResetMatchProgress();
             game.StartMatchShift();
             ElevatorRound round = Round(game);
             Require(round.ActiveDimension == dimension && round.Floor == dimension * 8
                 && round.Riders.Exists(rider => rider.Kind == kinds[dimension]),
                 "An existing world lost its expected starting floor or passengers.");
+            CheckWorldEvent(game, dimension);
+            if (dimension == 0 || dimension == 2) CheckShaftHazard(game, dimension);
             bool inWater = (bool)typeof(ElevatorManager).GetProperty("InWater", PrivateInstance).GetValue(game);
             Require(inWater == (dimension == 2), "Rust applies in the wrong world.");
         }
@@ -173,6 +182,143 @@ public static class NewWorldsChecks
                 "Missing a playable landing, sign or rail on floor " + floor);
         }
         if (dimension == 4) CheckUfoPassengerRelocation();
+    }
+
+    static object Get(ElevatorManager game, string name)
+        => typeof(ElevatorManager).GetField(name, PrivateInstance).GetValue(game);
+
+    static void Set(ElevatorManager game, string name, object value)
+        => typeof(ElevatorManager).GetField(name, PrivateInstance).SetValue(game, value);
+
+    static void Call(ElevatorManager game, string name, params object[] args)
+        => typeof(ElevatorManager).GetMethod(name, PrivateInstance).Invoke(game, args);
+
+    static void CheckWorldEvent(ElevatorManager game, int dimension)
+    {
+        ElevatorRound round = Round(game);
+        var phase = typeof(ElevatorManager).GetField("phase", PrivateInstance);
+        phase.SetValue(game, Enum.Parse(phase.FieldType, "Moving"));
+        Set(game, "travelFloor", (float)(round.MinFloor + 1));
+        Set(game, "travelVelocity", 0f);
+        round.TimeLeft = ElevatorRound.Duration - 20f;
+        Call(game, "UpdateShaftHazards", .1f);
+        var eventView = (GameObject)Get(game, "worldEventView");
+        Require(eventView != null && eventView.activeSelf, "World event failed to spawn in dimension " + dimension);
+        int eventId = (int)Get(game, "worldEventId");
+        Require(eventId > 0, "World event did not start.");
+
+        // Advance through the warning and target the event's actual collision position.
+        float start = (float)Get(game, "worldEventStart");
+        round.TimeLeft = ElevatorRound.Duration - start - 5f;
+        Call(game, "UpdateShaftHazards", .1f);
+        if (dimension == 4)
+        {
+            var moved = (SharedRider)Get(game, "worldEventPassenger");
+            Require(moved != null && (bool)Get(game, "worldEventPassengerMoved")
+                && round.IsQueuedAtStop(moved), "UFO beam did not move a waiting passenger.");
+        }
+
+        Set(game, "travelFloor", (float)Get(game, "worldEventFloor"));
+        Set(game, "routeLateralReady", true);
+        Set(game, "routeLateralX", (float)Get(game, "worldEventX"));
+        Set(game, "worldEventSeen", 0);
+        Set(game, "railRiding", false);
+        Call(game, "CheckWorldEventHit");
+        Require((int)Get(game, "worldEventSeen") == eventId,
+            "The world event did not detect contact in dimension " + dimension);
+        if (dimension == 0) Require((float)Get(game, "worldScanTime") > 0f, "Scanner did not slow the car.");
+        if (dimension == 1) Require((float)Get(game, "worldSyrupTime") > 0f, "Syrup did not slow the car.");
+        if (dimension >= 2) Require((bool)Get(game, "railRiding"), "World event did not push the car.");
+
+        string[] protections = dimension == 2 ? new[] { "DIVER" }
+            : dimension == 3 ? new[] { "MUSHROOM", "GOBLIN" }
+            : dimension == 4 ? new[] { "ASTRONAUT", "ALIEN" } : Array.Empty<string>();
+        foreach (string kind in protections)
+        {
+            SharedRider rider = round.Riders.Find(r => r.Kind == kind && !r.Resolved);
+            Require(rider != null, "Missing " + kind + " for world event check.");
+            rider.Boarded = true;
+            rider.BoardedBySeat = game.Seat;
+            Set(game, "worldEventSeen", 0);
+            Set(game, "railRiding", false);
+            Call(game, "CheckWorldEventHit");
+            Require((int)Get(game, "worldEventSeen") == eventId, kind + " failed to detect the world event.");
+            bool shouldRide = kind == "GOBLIN" || kind == "ALIEN";
+            Require((bool)Get(game, "railRiding") == shouldRide,
+                kind + " did not apply its protection or shortcut.");
+            rider.Boarded = false;
+            rider.BoardedBySeat = -1;
+        }
+    }
+
+    static void CheckShaftHazard(ElevatorManager game, int dimension)
+    {
+        var hazards = (System.Collections.IEnumerable)Get(game, "hazards");
+        object chosen = null;
+        string kind = dimension == 0 ? "Monster" : "Tornado";
+        foreach (object hazard in hazards)
+        {
+            Type type = hazard.GetType();
+            type.GetField("Live").SetValue(hazard, false);
+            object spec = type.GetField("Spec").GetValue(hazard);
+            float hazardFloor = (float)spec.GetType().GetField("Floor").GetValue(spec);
+            if (chosen == null && spec.GetType().GetField("Kind").GetValue(spec).ToString() == kind
+                && hazardFloor >= Round(game).MinFloor && hazardFloor <= Round(game).MaxFloor)
+                chosen = hazard;
+        }
+        Require(chosen != null, kind + " prefab did not spawn.");
+        Type hazardType = chosen.GetType();
+        object selectedSpec = hazardType.GetField("Spec").GetValue(chosen);
+        float floor = (float)selectedSpec.GetType().GetField("Floor").GetValue(selectedSpec);
+        float previousFloor = (float)Get(game, "travelFloor");
+        hazardType.GetField("Live").SetValue(chosen, true);
+        hazardType.GetField("Stunned").SetValue(chosen, 0f);
+        hazardType.GetField("X").SetValue(chosen, 0f);
+        Set(game, "travelFloor", floor);
+        Set(game, "routeLateralReady", true);
+        Set(game, "routeLateralX", 0f);
+        Vector3 collisionOffset = (Vector3)Get(game, "exteriorCollisionCenterOffset");
+        Set(game, "exteriorCollisionCenterOffset", Vector3.zero);
+        Set(game, "hazardCooldown", 0f);
+        Set(game, "carSpin", 0f);
+        Call(game, "CheckHazardHits");
+        Require((float)Get(game, "hazardCooldown") > 0f, kind + " did not detect the elevator.");
+        if (dimension == 2) Require((float)Get(game, "carSpin") > 0f, "Tornado did not spin the elevator.");
+
+        SharedRider protector = Round(game).Riders.Find(r => r.Kind == (dimension == 0 ? "HUNTER" : "DIVER"));
+        Require(protector != null, "Missing passenger protection for " + kind);
+        protector.Boarded = true;
+        protector.BoardedBySeat = game.Seat;
+        Set(game, "hazardCooldown", 0f);
+        Set(game, "carSpin", 0f);
+        Call(game, "CheckHazardHits");
+        if (dimension == 0)
+            Require((float)hazardType.GetField("Stunned").GetValue(chosen) > 0f, "Hunter did not stun the monster.");
+        else
+            Require((float)Get(game, "hazardCooldown") > 0f && (float)Get(game, "carSpin") == 0f,
+                "Diver did not block the tornado.");
+        protector.Boarded = false;
+        protector.BoardedBySeat = -1;
+        Set(game, "travelFloor", previousFloor);
+        Set(game, "exteriorCollisionCenterOffset", collisionOffset);
+    }
+
+    static void CheckDuelWorldEvent(ElevatorMatch match, int dimension)
+    {
+        CheckWorldEvent(match.player, dimension);
+        ElevatorManager owner = match.player, rival = match.Rival;
+        var phase = typeof(ElevatorManager).GetField("phase", PrivateInstance);
+        phase.SetValue(rival, Enum.Parse(phase.FieldType, "Moving"));
+        Round(rival).TimeLeft = Round(owner).TimeLeft;
+        Set(rival, "travelFloor", (float)Get(owner, "worldEventFloor"));
+        Set(rival, "routeLateralReady", true);
+        Set(rival, "routeLateralX", (float)Get(owner, "worldEventX"));
+        Set(rival, "worldEventSeen", 0);
+        Set(rival, "railRiding", false);
+        Call(rival, "CheckWorldEventHit");
+        Require((int)Get(rival, "worldEventSeen") == (int)Get(owner, "worldEventId")
+            && (bool)Get(rival, "railRiding"),
+            "The rival did not react independently to the shared world event in dimension " + dimension);
     }
 
     static void CheckUfoPassengerRelocation()

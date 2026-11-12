@@ -48,7 +48,7 @@ namespace CrazyElevator.Managers
             new HazardSpec(HazardKind.Tornado, 22f, -27f, 27f, 6f),
         };
         // The office stays calm for the first few seconds of a shift.
-        const float OfficeHazardDelay = 12f;
+        const float OfficeHazardDelay = 8f;
         const float HazardHitCooldown = 1.4f;
         const float HazardPatienceCost = 3f;
         const float TornadoSpinSeconds = .9f;
@@ -67,7 +67,7 @@ namespace CrazyElevator.Managers
         Vector3 abilityFeedbackOrigin;
 
         // One shared event per world, with independent hit tracking per car.
-        const float WorldEventFirst = 18f, WorldEventInterval = 22f;
+        const float WorldEventFirst = 8f, WorldEventInterval = 14f;
         const float WorldEventWarning = 2f, WorldEventDuration = 9f;
         const float WorldEventApproachDistance = 1.5f, WorldEventSweepDistance = 10f;
         GameObject worldEventView;
@@ -86,6 +86,7 @@ namespace CrazyElevator.Managers
         float worldLeakTime;
         GameObject worldStatusEffect;
         float worldScanTime, worldSyrupTime, worldVineTime;
+        float worldForcedRailTime, worldImpactVisualTime;
         float WorldHazardSpeedMultiplier => (worldScanTime > 0f ? .18f : worldSyrupTime > 0f ? .42f
             : worldVineTime > 0f ? .72f : 1f)
             * (forestScoutBoostTime > 0f ? 1.18f : 1f);
@@ -117,8 +118,10 @@ namespace CrazyElevator.Managers
             worldSyrupTime = Mathf.Max(0f, worldSyrupTime - dt);
             worldVineTime = Mathf.Max(0f, worldVineTime - dt);
             forestScoutBoostTime = Mathf.Max(0f, forestScoutBoostTime - dt);
+            worldForcedRailTime = Mathf.Max(0f, worldForcedRailTime - dt);
+            worldImpactVisualTime = Mathf.Max(0f, worldImpactVisualTime - dt);
             if (worldStatusEffect != null)
-                worldStatusEffect.SetActive(worldScanTime > 0f || worldSyrupTime > 0f);
+                worldStatusEffect.SetActive(worldScanTime > 0f || worldSyrupTime > 0f || worldImpactVisualTime > 0f);
             if (worldLeakEffect != null)
                 worldLeakEffect.SetActive(worldLeakTime > 0f && !HasHandyman && repairedFor <= 0f);
             TickWorldEventFeedback();
@@ -261,6 +264,7 @@ namespace CrazyElevator.Managers
             worldEventSeen = worldEventAnnounced = worldEventNearby = worldEventResult = 0;
             worldLeakTime = 0f;
             worldScanTime = worldSyrupTime = worldVineTime = 0f;
+            worldForcedRailTime = worldImpactVisualTime = 0f;
             if (worldStatusEffect != null) Destroy(worldStatusEffect);
             worldStatusEffect = null;
             if (worldLeakEffect != null) worldLeakEffect.SetActive(false);
@@ -373,7 +377,8 @@ namespace CrazyElevator.Managers
             {
                 if (rider == null || rider.Boarded || rider.Resolved || !round.IsQueuedAtStop(rider)) continue;
                 int distance = Mathf.Abs(rider.Origin - Mathf.RoundToInt(worldEventFloor));
-                if (distance > 1 || distance >= bestDistance) continue;
+                if (distance > 1 || distance >= bestDistance
+                    || FindSpacePassengerDestination(rider) < 0) continue;
                 best = rider;
                 bestDistance = distance;
             }
@@ -382,8 +387,7 @@ namespace CrazyElevator.Managers
             worldEventPassenger = best;
             worldEventFloor = best.Origin;
             worldEventPassengerOldFloor = best.Origin;
-            worldEventPassengerNewFloor = best.Origin <= round.MaxFloor - 2
-                ? best.Origin + 2 : best.Origin - 2;
+            worldEventPassengerNewFloor = FindSpacePassengerDestination(best);
             PassengerView view = WaitingPassengerView(best);
             if (view != null)
             {
@@ -396,6 +400,19 @@ namespace CrazyElevator.Managers
                 worldEventTravelDistance = Mathf.Clamp(Mathf.Abs(towardCar) + 3f,
                     WorldEventSweepDistance, 55f);
             }
+        }
+
+        int FindSpacePassengerDestination(Rider rider)
+        {
+            if (rider == null) return -1;
+            // Prefer a visible two-floor lift, but use a nearby landing if full.
+            int[] offsets = { 2, -2, 1, -1, 3, -3 };
+            foreach (int offset in offsets)
+            {
+                int floor = rider.Origin + offset;
+                if (round.CanRelocateWaitingPassenger(rider, floor)) return floor;
+            }
+            return -1;
         }
 
         void AnimateForestVines(float age, float warning)
@@ -451,9 +468,21 @@ namespace CrazyElevator.Managers
         {
             if (worldEventPassenger == null || worldEventPassengerMoved
                 || age < warning + .55f) return;
+            // The rival can board this rider or fill the landing while the beam charges.
+            if (!round.IsQueuedAtStop(worldEventPassenger))
+            {
+                worldEventPassenger = null;
+                return;
+            }
+            if (!round.CanRelocateWaitingPassenger(worldEventPassenger, worldEventPassengerNewFloor))
+                worldEventPassengerNewFloor = FindSpacePassengerDestination(worldEventPassenger);
+            if (worldEventPassengerNewFloor < 0)
+            {
+                worldEventPassenger = null;
+                return;
+            }
             PassengerView view = WaitingPassengerView(worldEventPassenger);
-            if (view == null || !round.TryRelocateWaitingPassenger(worldEventPassenger,
-                worldEventPassengerNewFloor))
+            if (view == null || !round.TryRelocateWaitingPassenger(worldEventPassenger, worldEventPassengerNewFloor))
             {
                 worldEventPassenger = null;
                 return;
@@ -519,30 +548,44 @@ namespace CrazyElevator.Managers
                 }
                 StartRailRide(floor, owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
                 worldVineTime = 1.5f;
-                ShowActionFeedback("VINES SHOVE THE CAR!", false);
+                worldForcedRailTime = .35f;
+                ShowRailHazardImpact(sceneView.forestVineSweep, "Vines", .48f);
+                ShowActionFeedback("CAUGHT BY VINES!", false);
                 Play(buzz);
                 return;
             }
 
             if (owner.worldEventDimension == 4)
             {
-                if (round.HasOnboardFeature(PassengerFeature.GravityAnchor))
+                bool alien = round.HasOnboardFeature(PassengerFeature.UfoLink);
+                if (!alien && round.HasOnboardFeature(PassengerFeature.GravityAnchor))
                 {
                     ShowPassengerAbility("TETHER!", eventPoint);
                     ShowActionFeedback("ASTRONAUT ANCHORS THE CAR!", true);
                     Play(chime);
                     return;
                 }
-                bool alien = round.HasOnboardFeature(PassengerFeature.UfoLink);
-                float speed = alien ? Mathf.Max(CruiseSpeed * 1.5f, Mathf.Abs(travelVelocity))
-                    : Mathf.Max(CruiseSpeed, Mathf.Abs(travelVelocity) * .7f);
-                StartRailRide(floor, owner.worldEventDirection, speed);
+                float towardHole = owner.worldEventX - RouteLateralX;
+                int direction = Mathf.Abs(towardHole) > .5f ? (towardHole > 0f ? 1 : -1)
+                    : owner.worldEventDirection;
+                if (alien)
+                {
+                    direction = owner.worldEventDirection;
+                    float roomAhead = direction > 0 ? GroundRightX - RouteLateralX : RouteLateralX - GroundLeftX;
+                    if (roomAhead < 5f) direction = -direction;
+                }
+
+                float speed = alien ? SpeedLimit : Mathf.Max(CruiseSpeed * 1.6f, Mathf.Abs(travelVelocity));
+                StartRailRide(floor, direction, speed);
+                worldForcedRailTime = .55f;
+                collisionImpact = alien ? .35f : 1f;
+                ShowRailHazardImpact(sceneView.spaceGravitySweep, alien ? "UFO" : "Orbit", 1f);
                 if (alien)
                 {
                     ShowPassengerAbility("UFO LINK!", eventPoint);
-                    ShowActionFeedback("ALIEN RIDES THE BEAM!", true);
+                    ShowActionFeedback("ALIEN SHORTCUT!", true);
                 }
-                else ShowActionFeedback("GRAVITY PULL · TRACK SHIFT", false);
+                else ShowActionFeedback("PULLED BY BLACK HOLE!", false);
                 Play(alien ? kickWhoosh : buzz);
                 return;
             }
@@ -569,6 +612,19 @@ namespace CrazyElevator.Managers
             ShowWorldStatus(scanner ? sceneView.securitySweep : sceneView.syrupSurge, scanner);
             ShowActionFeedback(scanner ? "SCANNER HIT · SLOWED" : "SYRUP HIT · SLOWED", false);
             Play(buzz);
+        }
+
+        void ShowRailHazardImpact(GameObject prefab, string visiblePart, float scale)
+        {
+            if (prefab == null || exteriorCar == null) return;
+            if (worldStatusEffect != null) Destroy(worldStatusEffect);
+            worldStatusEffect = Instantiate(prefab, exteriorCar, false);
+            worldStatusEffect.name = visiblePart + " impact";
+            foreach (Transform part in worldStatusEffect.transform)
+                part.gameObject.SetActive(part.name == visiblePart);
+            worldStatusEffect.transform.localPosition = new Vector3(0f, 1.1f, -1.6f);
+            worldStatusEffect.transform.localScale = Vector3.one * scale;
+            worldImpactVisualTime = .85f;
         }
 
         void ShowWorldStatus(GameObject prefab, bool scanner)
@@ -637,7 +693,7 @@ namespace CrazyElevator.Managers
             if (owner.worldEventPassenger != null && owner.worldEventPassengerNewFloor >= 0)
                 return "UFO F" + ElevatorRound.FloorNumber(owner.worldEventPassengerOldFloor)
                     + " → F" + ElevatorRound.FloorNumber(owner.worldEventPassengerNewFloor);
-            return "GRAVITY WAKE";
+            return "BLACK HOLE";
         }
 
         void DrawWorldEventCue()

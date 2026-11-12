@@ -567,40 +567,51 @@ namespace CrazyElevator.Shared
 
         // UFO beams may move one waiting rider to a nearby landing. Keep both
         // shared queue snapshots in sync so neither player sees a duplicate.
-        public bool TryRelocateWaitingPassenger(Rider rider, int newFloor)
-        {
-            if (rider == null || rider.Boarded || rider.Resolved || rider.SpawnDelay > 0
-                || !ContainsFloor(rider.Origin) || !ContainsFloor(newFloor) || rider.Origin == newFloor)
-                return false;
+        public bool CanRelocateWaitingPassenger(Rider rider, int newFloor)
+            => TryGetRelocationStop(rider, newFloor, out _);
 
-            int oldKey = rider.Origin * Stops + rider.OriginStop;
-            int targetStop = -1;
-            int targetCount = int.MaxValue;
+        bool TryGetRelocationStop(Rider rider, int newFloor, out int targetStop)
+        {
+            targetStop = -1;
+            if (rider == null || !Riders.Contains(rider) || !IsQueuedAtStop(rider)
+                || !ContainsFloor(newFloor) || rider.Origin == newFloor) return false;
+
             int preferredStop = rider.OriginStop;
-            if (StopIsOpen(newFloor, preferredStop))
+            if (HasRoomForRelocatedPassenger(newFloor, preferredStop))
             {
-                int preferredKey = newFloor * Stops + preferredStop;
-                int preferredCount = revealedQueues.TryGetValue(preferredKey, out HashSet<Rider> preferredQueue)
-                    ? preferredQueue.Count : QueueCandidatesAt(newFloor, preferredStop).Count;
-                if (preferredCount < OfferLimitAt(newFloor))
-                {
-                    targetStop = preferredStop;
-                    targetCount = preferredCount;
-                }
+                targetStop = preferredStop;
+                return true;
             }
             for (int stop = 0; stop < Stops; stop++)
-            {
-                if (targetStop >= 0) break;
-                if (!StopIsOpen(newFloor, stop)) continue;
-                int key = newFloor * Stops + stop;
-                bool captured = revealedQueues.TryGetValue(key, out HashSet<Rider> queue);
-                int count = captured ? queue.Count : QueueCandidatesAt(newFloor, stop).Count;
-                if (count >= OfferLimitAt(newFloor) || count >= targetCount) continue;
-                targetStop = stop;
-                targetCount = count;
-            }
-            if (targetStop < 0) return false;
+                if (HasRoomForRelocatedPassenger(newFloor, stop))
+                {
+                    targetStop = stop;
+                    return true;
+                }
+            return false;
+        }
 
+        bool HasRoomForRelocatedPassenger(int floor, int stop)
+        {
+            if (!StopIsOpen(floor, stop)) return false;
+            int key = floor * Stops + stop;
+            if (!revealedQueues.TryGetValue(key, out HashSet<Rider> queue))
+                return QueueCandidatesAt(floor, stop).Count < OfferLimitAt(floor);
+            int waiting = 0;
+            foreach (Rider queued in queue)
+                if (queued != null && !queued.Boarded && !queued.Resolved && queued.SpawnDelay <= 0)
+                    waiting++;
+            return waiting < OfferLimitAt(floor);
+        }
+
+        public bool TryRelocateWaitingPassenger(Rider rider, int newFloor)
+        {
+            if (!TryGetRelocationStop(rider, newFloor, out int targetStop)) return false;
+            int oldKey = rider.Origin * Stops + rider.OriginStop;
+
+            // Freeze the visible destination group before adding the passenger.
+            // Both elevators share this snapshot, including newly revealed stops.
+            RevealQueue(newFloor, targetStop);
             if (revealedQueues.TryGetValue(oldKey, out HashSet<Rider> oldQueue)) oldQueue.Remove(rider);
             rider.Origin = newFloor;
             rider.OriginStop = targetStop;
@@ -613,9 +624,13 @@ namespace CrazyElevator.Shared
             if (revealedQueues.TryGetValue(newKey, out HashSet<Rider> newQueue))
                 newQueue.Add(rider);
 
-            List<Rider> candidates = QueueCandidatesAt(newFloor, targetStop);
-            int slot = candidates.IndexOf(rider);
-            rider.PickupQueueSlot = Math.Max(0, slot);
+            var occupiedSlots = new HashSet<int>();
+            foreach (Rider waiting in revealedQueues[newKey])
+                if (waiting != rider && !waiting.Boarded && !waiting.Resolved && waiting.SpawnDelay <= 0)
+                    occupiedSlots.Add(waiting.PickupQueueSlot);
+            int slot = 0;
+            while (occupiedSlots.Contains(slot)) slot++;
+            rider.PickupQueueSlot = slot;
             rider.PickupDoor = QueueDoor(newFloor, targetStop, rider.PickupQueueSlot);
             return true;
         }

@@ -545,10 +545,6 @@ namespace CrazyElevator.Managers
                 GameManager.Instance?.RequestAbilityIntro(this, "GOBLIN");
             if (rider.HasFeature(PassengerFeature.ForestSporeGuard))
                 GameManager.Instance?.RequestAbilityIntro(this, "MUSHROOM");
-            if (rider.HasFeature(PassengerFeature.GravityAnchor))
-                GameManager.Instance?.RequestAbilityIntro(this, "ASTRONAUT");
-            if (rider.HasFeature(PassengerFeature.UfoLink))
-                GameManager.Instance?.RequestAbilityIntro(this, "ALIEN");
         }
 
         public void FinishAbilityIntro()

@@ -195,6 +195,7 @@ namespace CrazyElevator.Managers
             if (h == 0) laneSwitchHeld = false;
             if (railRiding)
             {
+                if (worldForcedRailTime > 0f) return;
                 if (v != 0) pendingTrackDirection = v;
                 return;
             }
@@ -229,6 +230,7 @@ namespace CrazyElevator.Managers
         // Momentum carries through the corner: the new axis starts at the old speed.
         void StartRailRide(int floor, int direction, float carriedSpeed)
         {
+            worldForcedRailTime = 0f;
             railRiding = true;
             railFloor = floor;
             railDirection = direction >= 0 ? 1 : -1;
@@ -256,6 +258,7 @@ namespace CrazyElevator.Managers
         // Same cruise / boost / instant-reverse rules as vertical travel (AdvanceTravelStep).
         void SteerRail(float dt)
         {
+            if (worldForcedRailTime > 0f) return;
             if (strongCollisionRecoil && collisionRecoilTimer > 0f) return;
             railVelocity = Mathf.Clamp(railVelocity, -SpeedLimit, SpeedLimit);
             int steer = AxisSign(routeSteer);

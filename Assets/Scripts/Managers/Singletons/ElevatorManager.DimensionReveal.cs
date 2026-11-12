@@ -5,8 +5,8 @@ namespace CrazyElevator.Managers
 {
     public sealed partial class ElevatorManager
     {
-        public const float DimensionRevealSeconds = 3f;
-        const float DimensionRevealFadeSeconds = .6f;
+        public const float DimensionRevealConfirmDelay = .85f;
+        bool dimensionRevealConfirmClicked;
         const float DimensionDoorCloseSeconds = .85f;
         bool dimensionRevealActive;
         float dimensionRevealTime;
@@ -28,6 +28,7 @@ namespace CrazyElevator.Managers
             if (dimensionRevealActive) return;
             dimensionRevealIndex = index;
             dimensionRevealTime = 0f;
+            dimensionRevealConfirmClicked = false;
             dimensionResumePhase = phase;
             dimensionResumePhaseTime = phaseTime;
             dimensionResumeDoors = doors;
@@ -62,6 +63,7 @@ namespace CrazyElevator.Managers
             ClearDimensionLineup();
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
+            dimensionRevealConfirmClicked = false;
             if (Match == null && !MenuManager.BeginRoundPassengerIntroduction(this, null))
                 BeginRoundCountdown();
         }
@@ -71,6 +73,7 @@ namespace CrazyElevator.Managers
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
+            dimensionRevealConfirmClicked = false;
             ClearEncounterPreviewModel();
             ClearDimensionLineup();
         }
@@ -82,22 +85,12 @@ namespace CrazyElevator.Managers
             float close = Mathf.Clamp01(dimensionRevealTime / DimensionDoorCloseSeconds);
             SetDoors(Mathf.Lerp(dimensionResumeDoors, 0f, close));
             // ElevatorMatch ends the shared preview for both cars together.
-            if (Match == null && dimensionRevealTime >= DimensionRevealSeconds) FinishDimensionReveal();
+            if (Match == null && dimensionRevealTime >= DimensionRevealConfirmDelay
+                && DimensionRevealConfirmed) FinishDimensionReveal();
         }
 
-        // Shared by the solo and 1v1 reveal screens.
-        public static float DimensionRevealAlpha(float time)
-        {
-            float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(time / .85f));
-            float fadeOut = Mathf.SmoothStep(0f, 1f,
-                Mathf.Clamp01((DimensionRevealSeconds - time) / DimensionRevealFadeSeconds));
-            return Mathf.Min(fadeIn, fadeOut);
-        }
-
-        // ---------- Passenger models for the reveal rows ----------
-        // The authored passenger prefabs render side by side into one texture;
-        // each reveal row draws its own third of it. Riders are authored facing the
-        // cabin doors (-Z), which is toward the lineup camera, so they show their front.
+        public bool DimensionRevealConfirmed => dimensionRevealConfirmClicked
+            || (!IsNpc && SeatControls.ConfirmPressed);
 
         const int LineupSlots = 3;
         const float LineupSlotWidth = 3f;
@@ -107,14 +100,6 @@ namespace CrazyElevator.Managers
         RenderTexture dimensionLineupTexture;
         readonly Transform[] dimensionLineupSlots = new Transform[LineupSlots];
         readonly bool[] dimensionLineupFilled = new bool[LineupSlots];
-
-        // Same order as the reveal rows.
-        static string[] DimensionPassengerKinds(WorldBand world) => world == WorldBand.Office
-            ? new[] { "COURIER", "INTERVIEW", "ELDERLY" }
-            : world == WorldBand.Candy ? new[] { "PREGNANT", "BOSS", "GROUP" }
-            : world == WorldBand.Forest ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
-            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "" }
-            : new[] { "HANDYMAN", "RUST", "REPAIR" };
 
         public static string DimensionIntroTitle(WorldBand world) => world == WorldBand.Office ? "OFFICE"
             : world == WorldBand.Candy ? "COTTON CANDY" : world == WorldBand.Water ? "UNDERWATER"
@@ -126,72 +111,69 @@ namespace CrazyElevator.Managers
                 ? new Color32(48, 196, 210, 255) : world == WorldBand.Forest
                 ? new Color32(145, 204, 144, 255) : new Color32(174, 143, 242, 255);
 
-        public static string DimensionIntroSummary(WorldBand world) => world == WorldBand.Office
-            ? "Plan your route. Keep your passengers happy."
-            : world == WorldBand.Candy ? "Bigger groups. Louder passengers. Faster rides."
-            : world == WorldBand.Water ? "Watch the rust. Keep your elevator moving."
-            : world == WorldBand.Forest ? "Vines sweep the tracks. Scout, cut through, or guard."
-            : "A UFO beam moves passengers. Gravity can pull your car sideways.";
+        (string Name, string Description, GameObject Prefab)[] DimensionHazards(WorldBand world)
+        {
+            switch (world)
+            {
+                case WorldBand.Office:
+                    return new[] { ("SECURITY SCAN", "Slows the elevator.", sceneView.securitySweep),
+                        ("MONSTER", "Bounces the elevator back.", sceneView.monster),
+                        ("TORNADO", "Spins and flings the elevator.", sceneView.tornado) };
+                case WorldBand.Candy:
+                    return new[] { ("SYRUP", "Slows the elevator.", sceneView.syrupSurge),
+                        ("MONSTER", "Bounces the elevator back.", sceneView.monster),
+                        ("TORNADO", "Spins and flings the elevator.", sceneView.tornado) };
+                case WorldBand.Water:
+                    return new[] { ("CURRENT", "Pushes the elevator sideways and adds rust.", sceneView.oceanCurrent),
+                        ("RUST", "Builds up underwater and slows the elevator.", (GameObject)null),
+                        ("TORNADO", "Spins and flings the elevator.", sceneView.tornado) };
+                case WorldBand.Forest:
+                    return new[] { ("VINES", "Catch the elevator and shove it sideways.", sceneView.forestVineSweep) };
+                default:
+                    return new[] { ("BLACK HOLE", "Pulls the elevator sideways.", sceneView.spaceGravitySweep),
+                        ("UFO", "Beams a waiting passenger to another floor.", sceneView.spaceGravitySweep) };
+            }
+        }
 
-        public static string[] DimensionIntroNames(WorldBand world) => world == WorldBand.Office
-            ? new[] { "COURIER", "INTERVIEW", "GRANDMA" }
-            : world == WorldBand.Candy ? new[] { "MOM + BABY", "THE BOSS", "THE TRIO" }
-            : world == WorldBand.Forest ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
-            : world == WorldBand.Space ? new[] { "ASTRONAUT", "ALIEN", "UFO EVENT" }
-            : new[] { "HANDYMAN", "RUST", "REPAIR" };
-
-        public static string[] DimensionIntroLines(WorldBand world) => world == WorldBand.Office
-            ? new[] { "Takes two spaces. Leave room for the box.", "Short patience. Make this stop a priority.",
-                "Wait for her to board. Slows the elevator." }
-            : world == WorldBand.Candy
-                ? new[] { "Crying drains patience. Grandma calms the baby.", "On-time delivery pays a bonus.",
-                    "Three spaces. Speeds the elevator up." }
-                : world == WorldBand.Forest
-                ? new[] { "Fireflies point out a clear route.", "Cuts a vine shortcut.", "Spores block a vine hit." }
-                : world == WorldBand.Space
-                ? new[] { "Tethers the car against the pull.", "Rides the UFO beam onto another track.", "The beam moves a waiting passenger." }
-                : new[] { "Fixes damaged gears while aboard.", "Cracked gears slow the elevator over time.", "Hold repair to patch the gears." };
+        (string Name, string Description, GameObject Prefab)[] dimensionHazards;
 
         void PrepareDimensionLineup(WorldBand world)
         {
             ClearDimensionLineup();
-            // The shared round preview also uses this car in CPU matchups.
-            if (sceneView == null || sceneView.passengers == null) return;
-            string[] kinds = DimensionPassengerKinds(world);
-            bool any = false;
+            if (sceneView == null) return;
+            dimensionHazards = DimensionHazards(world);
             EnsureDimensionLineup();
-            for (int i = 0; i < LineupSlots; i++)
+            for (int i = 0; i < dimensionHazards.Length; i++)
             {
-                GameObject model = InstantiateLineupModel(kinds[i], dimensionLineupSlots[i]);
-                if (model == null) continue;
-                model.name = kinds[i] + " reveal preview";
+                var hazard = dimensionHazards[i];
+                Transform slot = dimensionLineupSlots[i];
+                GameObject model;
+                if (hazard.Prefab != null)
+                    model = Instantiate(hazard.Prefab, slot, false);
+                else if (hazard.Name == "RUST" && impairmentGaugePrefab != null)
+                {
+                    var gauge = Instantiate(impairmentGaugePrefab, slot, false);
+                    gauge.SetSeverity(3);
+                    gauge.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                    model = gauge.gameObject;
+                }
+                else continue;
+
+                if (world == WorldBand.Space)
+                    foreach (Transform part in model.transform)
+                        part.gameObject.SetActive((part.name == "UFO") == (hazard.Name == "UFO"));
+                if (world == WorldBand.Forest)
+                {
+                    Transform safeRoute = model.transform.Find("Fairy safe route");
+                    if (safeRoute != null) safeRoute.gameObject.SetActive(false);
+                }
                 model.SetActive(true);
                 MakeStillPreviewModel(model, Palette[(i + 2) % Palette.Length]);
-                dimensionLineupFilled[i] = FitLineupModel(model, dimensionLineupSlots[i]);
-                any |= dimensionLineupFilled[i];
+                dimensionLineupFilled[i] = FitLineupModel(model, slot);
             }
-            if (dimensionLineupCamera == null) return;
-            // Transparent, but tinted like the reveal row in case alpha is dropped.
-            Color accent = DimensionIntroAccent(world);
-            Color row = Color.Lerp(MenuPresentation.Wall, accent, .22f);
+            Color row = Color.Lerp(MenuPresentation.Wall, DimensionIntroAccent(world), .22f);
             dimensionLineupCamera.backgroundColor = new Color(row.r, row.g, row.b, 0f);
-            dimensionLineupCamera.enabled = any;
-        }
-
-        // Rust and repair show the same authored gears as the live impairment meter.
-        GameObject InstantiateLineupModel(string kind, Transform slot)
-        {
-            if (kind == "RUST" || kind == "REPAIR")
-            {
-                if (impairmentGaugePrefab == null) return null;
-                StarfishImpairmentView gauge = Instantiate(impairmentGaugePrefab, slot, false);
-                gauge.SetSeverity(kind == "RUST" ? 3 : 0);
-                // Gears face +Z toward the cabin camera; the lineup camera looks from -Z.
-                gauge.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                return gauge.gameObject;
-            }
-            GameObject source = FindPassengerTemplate(kind);
-            return source != null ? Instantiate(source, slot, false) : null;
+            dimensionLineupCamera.enabled = true;
         }
 
         GameObject FindPassengerTemplate(string kind)
@@ -218,7 +200,7 @@ namespace CrazyElevator.Managers
             if (dimensionLineupStage != null) return;
             // Uses the same preview layer with its own local lighting.
             EnsureEncounterPreview();
-            var stageObject = new GameObject("Dimension passenger lineup") { hideFlags = HideFlags.HideAndDontSave };
+            var stageObject = new GameObject("Dimension hazard lineup") { hideFlags = HideFlags.HideAndDontSave };
             dimensionLineupStage = stageObject.transform;
             dimensionLineupStage.position = new Vector3(-10000f - Seat * 100f, -10000f, 10000f);
             for (int i = 0; i < LineupSlots; i++)
@@ -231,7 +213,7 @@ namespace CrazyElevator.Managers
 
             dimensionLineupTexture = new RenderTexture(320 * LineupSlots, 320, 24, RenderTextureFormat.ARGB32)
             {
-                name = "Dimension passenger lineup",
+                name = "Dimension hazard lineup",
                 antiAliasing = 2,
                 hideFlags = HideFlags.HideAndDontSave
             };
@@ -285,8 +267,7 @@ namespace CrazyElevator.Managers
             dimensionLineupTexture = null;
         }
 
-        // Draws one passenger as a square inside a reveal row (both solo and 1v1 screens).
-        public void DrawDimensionPassenger(Rect area, int slot, float alpha)
+        void DrawDimensionHazard(Rect area, int slot, float alpha)
         {
             if (dimensionLineupTexture == null || slot < 0 || slot >= LineupSlots
                 || !dimensionLineupFilled[slot]) return;
@@ -303,7 +284,7 @@ namespace CrazyElevator.Managers
         public void DrawDimensionRevealOverlay(Rect view, float elapsed)
         {
             MenuPresentation.Backdrop(view);
-            float alpha = DimensionRevealAlpha(elapsed);
+            float alpha = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / DimensionRevealConfirmDelay));
             if (alpha <= .001f) return;
 
             Matrix4x4 previousMatrix = GUI.matrix;
@@ -317,7 +298,7 @@ namespace CrazyElevator.Managers
             Color recess = Color.Lerp(MenuPresentation.Wall, accent, .22f);
             Color paper = MenuPresentation.Paper;
             Color ink = MenuPresentation.Ink;
-            Rect postcard = new Rect(42f, 44f, 430f, 544f);
+            Rect postcard = new Rect(42f, 44f, 430f, 510f);
             MenuPresentation.Plaque(postcard, paper, accentEdge, 10f);
             MenuPresentation.Fasteners(postcard, accentEdge);
 
@@ -332,30 +313,26 @@ namespace CrazyElevator.Managers
             var progress = GameManager.Instance;
             GUI.Label(badge, "ROUND " + (progress != null ? progress.RoundNumber : 1), heading);
 
-            Rect picture = new Rect(62f, 126f, 390f, 224f);
+            Rect picture = new Rect(62f, 126f, 390f, 278f);
             MenuPresentation.Plaque(picture, recess, accentEdge, 5f);
             if (DimensionRevealTexture != null)
-                MenuPresentation.DrawTexture(new Rect(66f, 130f, 382f, 216f), DimensionRevealTexture, ScaleMode.ScaleToFit);
+                MenuPresentation.DrawTexture(new Rect(66f, 130f, 382f, 270f), DimensionRevealTexture, ScaleMode.ScaleToFit);
 
             heading.fontSize = 34;
-            GUI.Label(new Rect(60f, 372f, 394f, 63f), DimensionIntroTitle(world), heading);
+            GUI.Label(new Rect(60f, 426f, 394f, 63f), DimensionIntroTitle(world), heading);
             var description = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 19, alignment = TextAnchor.UpperCenter, wordWrap = true
             };
             GameTypography.Apply(description);
             description.normal.textColor = MenuPresentation.DisplayColor(ink);
-            GUI.Label(new Rect(80f, 450f, 354f, 105f), DimensionIntroSummary(world), description);
-
-            string[] names = DimensionIntroNames(world);
-            string[] lines = DimensionIntroLines(world);
             heading.fontSize = 24;
             heading.alignment = TextAnchor.MiddleLeft;
             description.fontSize = 17;
             description.alignment = TextAnchor.UpperLeft;
-            for (int i = 0; i < LineupSlots; i++)
+            for (int i = 0; dimensionHazards != null && i < dimensionHazards.Length; i++)
             {
-                Rect ticket = new Rect(496f, 44f + i * 188f, 662f, 168f);
+                Rect ticket = new Rect(496f, 44f + i * 174f, 662f, 158f);
                 MenuPresentation.Plaque(ticket, paper, accentEdge, 8f);
                 MenuPresentation.Paint(new Rect(ticket.x, ticket.y, 9f, ticket.height), accent);
                 MenuPresentation.Fasteners(ticket, accentEdge);
@@ -364,12 +341,25 @@ namespace CrazyElevator.Managers
                 {
                     Rect portrait = new Rect(ticket.x + 24f, ticket.y + 15f, 138f, 138f);
                     MenuPresentation.Plaque(portrait, recess, accentEdge, 3f);
-                    DrawDimensionPassenger(new Rect(portrait.x + 4f, portrait.y + 4f, 130f, 130f), i, alpha);
+                    DrawDimensionHazard(new Rect(portrait.x + 4f, portrait.y + 4f, 130f, 130f), i, alpha);
                     copyX = portrait.xMax + 25f;
                 }
                 float copyWidth = ticket.xMax - copyX - 28f;
-                GUI.Label(new Rect(copyX, ticket.y + 27f, copyWidth, 44f), names[i], heading);
-                GUI.Label(new Rect(copyX, ticket.y + 78f, copyWidth, 73f), lines[i], description);
+                GUI.Label(new Rect(copyX, ticket.y + 27f, copyWidth, 44f), dimensionHazards[i].Name, heading);
+                GUI.Label(new Rect(copyX, ticket.y + 78f, copyWidth, 73f), dimensionHazards[i].Description, description);
+            }
+
+            if (elapsed >= DimensionRevealConfirmDelay)
+            {
+                Rect confirm = new Rect(450f, 572f, 300f, 50f);
+                Color face = confirm.Contains(Event.current.mousePosition) ? paper : MenuPresentation.Teal;
+                MenuPresentation.Plaque(confirm, face, ink, 5f);
+                heading.alignment = TextAnchor.MiddleCenter;
+                heading.fontSize = 19;
+                GUI.Label(confirm, "CONTINUE", heading);
+                DrawGameplayKeyHint(new Rect(confirm.xMax + 12f, confirm.y, 50f, 50f), GameplayConfirmKey);
+                if (GUI.Button(confirm, GUIContent.none, GUIStyle.none))
+                    dimensionRevealConfirmClicked = true;
             }
 
             GUI.matrix = previousMatrix;

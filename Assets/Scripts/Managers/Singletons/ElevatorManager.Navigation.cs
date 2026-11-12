@@ -159,7 +159,8 @@ namespace CrazyElevator.Managers
 
         bool AutoStopAtDestination()
         {
-            if (!autoStopAtDestinations || phase != Phase.Moving || MenuManager.TutorialActive) return false;
+            if (!autoStopAtDestinations || phase != Phase.Moving || MenuManager.TutorialActive
+                || worldForcedRailTime > 0f) return false;
             int floor = NearbyFloor;
             if (Mathf.Abs(travelFloor - floor) > stopWindow) return false;
             int stop = StopOnTrack(RouteLateralX);
