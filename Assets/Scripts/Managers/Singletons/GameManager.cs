@@ -414,8 +414,9 @@ namespace CrazyElevator.Managers
 
         void DrawFinalCountdown(Rect view)
         {
-            if (Player == null || Player.ShiftFinished || Player.IntroPlaying || Player.CountdownPlaying
-                || MenuManager.IsOpen || MenuManager.TutorialActive || IsPaused) return;
+            if (Event.current.type != EventType.Repaint || Player == null || Player.ShiftFinished
+                || Player.IntroPlaying || Player.CountdownPlaying || MenuManager.IsOpen
+                || MenuManager.TutorialActive || IsPaused) return;
             var match = Player.Match;
             if (match != null && (!match.Running || match.Paused || match.DimensionRevealActive)) return;
 
@@ -443,18 +444,22 @@ namespace CrazyElevator.Managers
             float beat = FinalCountdownBeat(remaining);
             float size = Mathf.Min(view.height * .115f, view.width * .21f);
             finalCountdownStyle.fontSize = Mathf.RoundToInt(size * (1f + .16f * beat));
-            string number = seconds.ToString();
+            GUIContent number = new GUIContent(seconds.ToString());
             var label = new Rect(view.x, view.center.y - size, view.width, size * 2f);
             float shadow = Mathf.Max(2f, size * .032f);
-            finalCountdownStyle.normal.textColor = new Color(.08f, .04f, .10f, .84f);
-            GUI.Label(new Rect(label.x - shadow, label.y, label.width, label.height), number, finalCountdownStyle);
-            GUI.Label(new Rect(label.x + shadow, label.y, label.width, label.height), number, finalCountdownStyle);
-            GUI.Label(new Rect(label.x, label.y + shadow, label.width, label.height), number, finalCountdownStyle);
-            GUI.Label(new Rect(label.x, label.y - shadow, label.width, label.height), number, finalCountdownStyle);
-            finalCountdownStyle.normal.textColor = seconds <= 3
+            var outline = new Color(.08f, .04f, .10f, .84f);
+            MenuPresentation.Label(new Rect(label.x - shadow, label.y, label.width, label.height),
+                number, finalCountdownStyle, outline);
+            MenuPresentation.Label(new Rect(label.x + shadow, label.y, label.width, label.height),
+                number, finalCountdownStyle, outline);
+            MenuPresentation.Label(new Rect(label.x, label.y + shadow, label.width, label.height),
+                number, finalCountdownStyle, outline);
+            MenuPresentation.Label(new Rect(label.x, label.y - shadow, label.width, label.height),
+                number, finalCountdownStyle, outline);
+            Color numberColour = seconds <= 3
                 ? Color.Lerp(MenuPresentation.Coral, MenuPresentation.Paper, .36f)
                 : MenuPresentation.Paper;
-            GUI.Label(label, number, finalCountdownStyle);
+            MenuPresentation.Label(label, number, finalCountdownStyle, numberColour);
 
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
