@@ -69,11 +69,15 @@ namespace CrazyElevator.Managers
         // One shared event per world, with independent hit tracking per car.
         const float WorldEventFirst = 8f, WorldEventInterval = 14f;
         const float WorldEventWarning = 2f, WorldEventDuration = 9f;
+        const float WorldEventFade = .6f;
+        const float WorldEventFloorReach = .34f;
+        const float WorldEventLaneReach = 3.6f;
         const float WorldEventApproachDistance = 1.5f, WorldEventSweepDistance = 10f;
         GameObject worldEventView;
         int worldEventId, worldEventSeen, worldEventAnnounced, worldEventNearby, worldEventResult, worldEventDimension = -1;
         float worldEventStart = -1f, worldEventFloor, worldEventX, worldEventStartX;
         float worldEventTravelDistance = WorldEventSweepDistance;
+        float worldEventSweepStart;
         int worldEventDirection;
         Rider worldEventPassenger;
         int worldEventPassengerOldFloor = -1;
@@ -87,6 +91,8 @@ namespace CrazyElevator.Managers
         GameObject worldStatusEffect;
         float worldScanTime, worldSyrupTime, worldVineTime;
         float worldForcedRailTime, worldImpactVisualTime;
+        float hazardFlashTime;
+        Color hazardFlashColor;
         float WorldHazardSpeedMultiplier => (worldScanTime > 0f ? .18f : worldSyrupTime > 0f ? .42f
             : worldVineTime > 0f ? .72f : 1f)
             * (forestScoutBoostTime > 0f ? 1.18f : 1f);
@@ -112,6 +118,10 @@ namespace CrazyElevator.Managers
         {
             hazardCooldown = Mathf.Max(0f, hazardCooldown - dt);
             carSpin = Mathf.Max(0f, carSpin - dt / TornadoSpinSeconds);
+            underwaterFloodTime = Mathf.Max(0f, underwaterFloodTime - dt);
+            float floodTarget = InWater && !HasHandyman && repairedFor <= 0f
+                ? .075f + .025f * Mathf.Clamp(ImpairmentLevel - 1, 0, 2) : 0f;
+            underwaterFloodLevel = Mathf.MoveTowards(underwaterFloodLevel, floodTarget, dt * .055f);
             abilityFeedbackTime = Mathf.Max(0f, abilityFeedbackTime - dt);
             worldLeakTime = Mathf.Max(0f, worldLeakTime - dt);
             worldScanTime = Mathf.Max(0f, worldScanTime - dt);
@@ -120,8 +130,23 @@ namespace CrazyElevator.Managers
             forestScoutBoostTime = Mathf.Max(0f, forestScoutBoostTime - dt);
             worldForcedRailTime = Mathf.Max(0f, worldForcedRailTime - dt);
             worldImpactVisualTime = Mathf.Max(0f, worldImpactVisualTime - dt);
+            hazardFlashTime = Mathf.Max(0f, hazardFlashTime - dt);
             if (worldStatusEffect != null)
-                worldStatusEffect.SetActive(worldScanTime > 0f || worldSyrupTime > 0f || worldImpactVisualTime > 0f);
+            {
+                bool scanner = worldScanTime > 0f;
+                bool syrup = worldSyrupTime > 0f;
+                worldStatusEffect.SetActive(scanner || syrup || worldImpactVisualTime > 0f);
+                if (scanner)
+                    PoseScanner(worldStatusEffect.transform, (2.5f - worldScanTime) * 10f, 1f);
+                else if (syrup)
+                {
+                    float stretch = Mathf.Sin(worldSyrupTime * 9f) * .06f * Mathf.Clamp01(worldSyrupTime);
+                    float shrink = Mathf.SmoothStep(.35f, 1f, worldSyrupTime / .65f);
+                    worldStatusEffect.transform.localScale = new Vector3(.48f + stretch, .25f - stretch, .45f) * shrink;
+                }
+                else if (worldImpactVisualTime > 0f && worldVineTime <= 0f)
+                    worldStatusEffect.transform.Rotate(0f, 0f, dt * 95f, Space.Self);
+            }
             if (worldLeakEffect != null)
                 worldLeakEffect.SetActive(worldLeakTime > 0f && !HasHandyman && repairedFor <= 0f);
             TickWorldEventFeedback();
@@ -265,6 +290,7 @@ namespace CrazyElevator.Managers
             worldLeakTime = 0f;
             worldScanTime = worldSyrupTime = worldVineTime = 0f;
             worldForcedRailTime = worldImpactVisualTime = 0f;
+            hazardFlashTime = 0f;
             if (worldStatusEffect != null) Destroy(worldStatusEffect);
             worldStatusEffect = null;
             if (worldLeakEffect != null) worldLeakEffect.SetActive(false);
@@ -323,6 +349,8 @@ namespace CrazyElevator.Managers
                 worldEventStartX = travellingCar.RouteLateralX - worldEventDirection * WorldEventApproachDistance;
                 worldEventTravelDistance = WorldEventSweepDistance;
                 if (dimension == 4) PrepareSpacePassengerTarget(travellingCar);
+                worldEventSweepStart = dimension == 4 && worldEventPassenger != null
+                    ? introWarning + 1.7f : introWarning;
                 GameObject prefab = WorldEventPrefab(dimension);
                 if (worldEventView != null) Destroy(worldEventView);
                 worldEventView = prefab != null ? Instantiate(prefab, hazardRoot, false) : null;
@@ -333,16 +361,29 @@ namespace CrazyElevator.Managers
             if (worldEventView.activeSelf != active) worldEventView.SetActive(active);
             if (!active) return;
             float warning = worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
-            float sweepStart = dimension == 4 && worldEventPassenger != null
-                ? warning + .55f + 1.15f : warning;
-            float progress = Mathf.Clamp01((age - sweepStart) / (WorldEventDuration - sweepStart));
+            float progress = Mathf.Clamp01((age - worldEventSweepStart)
+                / (WorldEventDuration - WorldEventFade - worldEventSweepStart));
+            progress = Mathf.Lerp(progress, Mathf.SmoothStep(0f, 1f, progress), .35f);
             worldEventX = worldEventStartX + worldEventDirection * worldEventTravelDistance * progress;
-            worldEventView.transform.localPosition = new Vector3(worldEventX, worldEventFloor * ShaftFloorHeight + 2f, HazardDepth);
-            float pulse = age < warning ? .7f + .3f * Mathf.Abs(Mathf.Sin(age * 9f))
-                : 1f + .06f * Mathf.Sin(age * 5f);
-            worldEventView.transform.localScale = new Vector3(pulse * worldEventDirection, pulse, pulse);
+            Transform model = worldEventView.transform;
+            model.localPosition = new Vector3(worldEventX, worldEventFloor * ShaftFloorHeight + 2f, HazardDepth);
+            float arrival = Mathf.SmoothStep(0f, 1f, age / .28f);
+            float departure = Mathf.SmoothStep(0f, 1f, (WorldEventDuration - age) / WorldEventFade);
+            float charge = Mathf.SmoothStep(0f, 1f, age / Mathf.Max(.01f, warning));
+            float wave = Mathf.Sin(age * (dimension == 0 ? 16f : 7f));
+            float activity = age < worldEventSweepStart ? .45f + .3f * charge : 1f;
+            if (dimension == 4 && worldEventPassenger != null && age >= warning) activity = 1f;
+            float scale = arrival * departure * activity;
+            float stretch = dimension == 0 ? 0f : wave * .09f;
+            model.localScale = new Vector3((1f + stretch) * worldEventDirection,
+                1f - stretch, 1f) * scale;
+            if (dimension == 0) PoseScanner(model, age * 12f, activity);
+            else if (dimension == 1) model.localRotation = Quaternion.Euler(0f, 0f, wave * 7f * worldEventDirection);
             if (dimension == 2)
             {
+                PoseCurrentStream(model, "Current upper", 0f, 1.1f, age, 0f);
+                PoseCurrentStream(model, "Current middle", -.9f, .15f, age, 1.9f);
+                PoseCurrentStream(model, "Current lower", -.6f, -.8f, age, 3.8f);
                 AnimateCurrentBubble("Bubble one", .2f, age);
                 AnimateCurrentBubble("Bubble two", .45f, age + 1f);
                 AnimateCurrentBubble("Bubble three", -.2f, age + 2f);
@@ -353,6 +394,28 @@ namespace CrazyElevator.Managers
                 AnimateGravityWake(age, warning);
                 UpdateSpacePassengerBeam(age, warning);
             }
+        }
+
+        static void PoseScanner(Transform model, float time, float activity)
+        {
+            Transform beam = model.Find("Scan beam");
+            if (beam != null)
+            {
+                beam.localPosition = new Vector3(Mathf.Sin(time) * .8f, 0f, 0f);
+                beam.localScale = new Vector3(Mathf.Lerp(.1f, .42f, activity), 5.4f, .18f);
+            }
+            Transform lamp = model.Find("Scanner lamp");
+            if (lamp != null)
+                lamp.localScale = new Vector3(.75f + .2f * Mathf.Sin(time * 1.5f), .26f, .16f);
+        }
+
+        static void PoseCurrentStream(Transform model, string name, float x, float y, float time, float offset)
+        {
+            Transform stream = model.Find(name);
+            if (stream == null) return;
+            float wave = Mathf.Sin(time * 7f + offset);
+            stream.localPosition = new Vector3(x + wave * .45f, y + wave * .2f, stream.localPosition.z);
+            stream.localRotation = Quaternion.Euler(0f, 0f, wave * 6f);
         }
 
         GameObject WorldEventPrefab(int dimension)
@@ -428,9 +491,9 @@ namespace CrazyElevator.Managers
                 safeRoute.gameObject.SetActive(hasScout);
                 safeRoute.localScale = Vector3.one * (1f + .08f * Mathf.Sin(age * 7f));
             }
-            float warningPulse = age < warning ? .06f * Mathf.Sin(age * 12f) : 0f;
-            vines.localRotation = Quaternion.Euler(0f, 0f, warningPulse);
-            float sway = Mathf.Sin(age * 3.6f) * .055f;
+            float reach = Mathf.SmoothStep(0f, 1f, (age - warning) / .35f);
+            vines.localScale = new Vector3(Mathf.Lerp(.65f, 1f, reach), 1f, 1f);
+            float sway = Mathf.Lerp(3f, 9f, reach) * Mathf.Sin(age * 5f);
             for (int i = 0; i < vines.childCount; i++)
             {
                 Transform strand = vines.GetChild(i);
@@ -441,10 +504,16 @@ namespace CrazyElevator.Managers
         void AnimateGravityWake(float age, float warning)
         {
             Transform orbit = worldEventView.transform.Find("Orbit");
-            if (orbit != null) orbit.localRotation = Quaternion.Euler(0f, 0f, age * 84f);
+            bool beaming = worldEventPassenger != null && age < worldEventSweepStart;
+            if (orbit != null)
+            {
+                orbit.gameObject.SetActive(!beaming);
+                orbit.localRotation = Quaternion.Euler(0f, 0f, age * 115f);
+            }
             Transform saucer = worldEventView.transform.Find("UFO");
             if (saucer != null)
             {
+                saucer.gameObject.SetActive(beaming);
                 saucer.localPosition = new Vector3(.18f * Mathf.Sin(age * 2.7f),
                     .4f + .2f * Mathf.Sin(age * 3.3f), -.2f);
                 saucer.localRotation = Quaternion.Euler(0f, 0f, 7f * Mathf.Sin(age * 2.2f));
@@ -459,6 +528,7 @@ namespace CrazyElevator.Managers
             Transform singularity = worldEventView.transform.Find("Singularity");
             if (singularity != null)
             {
+                singularity.gameObject.SetActive(!beaming);
                 float pulse = 1f + .07f * Mathf.Sin(age * 4.4f);
                 singularity.localScale = new Vector3(1.48f * pulse, 1.48f * pulse, .25f);
             }
@@ -499,7 +569,8 @@ namespace CrazyElevator.Managers
             Transform bubble = worldEventView.transform.Find(name);
             if (bubble == null) return;
             Vector3 position = bubble.localPosition;
-            position.y = height + .3f * Mathf.Sin(time * 3f);
+            float lift = Mathf.Repeat(time * .72f, 1f);
+            position.y = height + Mathf.SmoothStep(-.3f, 1.45f, lift);
             bubble.localPosition = position;
         }
 
@@ -510,15 +581,15 @@ namespace CrazyElevator.Managers
                 || owner.worldEventView == null || !owner.worldEventView.activeSelf
                 || owner.worldEventId == worldEventSeen || round.ActiveDimension != owner.worldEventDimension) return;
             float age = owner.round.Elapsed - owner.worldEventStart;
-            float warning = owner.worldEventId == 1 ? WorldEventWarning + 1f : WorldEventWarning;
-            if (age < warning || age >= WorldEventDuration) return;
-            if (Mathf.Abs(travelFloor - owner.worldEventFloor) < 1.35f
-                && Mathf.Abs(RouteLateralX - owner.worldEventX) < 10f) worldEventNearby = owner.worldEventId;
-            if (Mathf.Abs(travelFloor - owner.worldEventFloor) > 1f
-                || Mathf.Abs(RouteLateralX - owner.worldEventX) > 5.5f) return;
+            if (age < owner.worldEventSweepStart || age >= WorldEventDuration - WorldEventFade) return;
+            float floorGap = Mathf.Abs(travelFloor - owner.worldEventFloor);
+            float laneGap = Mathf.Abs(RouteLateralX - owner.worldEventX);
+            if (floorGap < .8f && laneGap < WorldEventLaneReach + 4f) worldEventNearby = owner.worldEventId;
+            if (floorGap > WorldEventFloorReach || laneGap > WorldEventLaneReach) return;
             worldEventSeen = owner.worldEventId;
             if (owner.worldEventDimension == 2 && round.HasOnboardFeature(PassengerFeature.BlocksTornado))
             {
+                FlashHazardImpact(true);
                 ShowActionFeedback("CURRENT BLOCKED!", true);
                 Play(chime);
                 return;
@@ -530,6 +601,7 @@ namespace CrazyElevator.Managers
             {
                 if (round.HasOnboardFeature(PassengerFeature.ForestSporeGuard))
                 {
+                    FlashHazardImpact(true);
                     collisionImpact = .35f;
                     ShowPassengerAbility("SPORES!", eventPoint);
                     ShowActionFeedback("SPORES BLOCK VINES!", true);
@@ -539,6 +611,7 @@ namespace CrazyElevator.Managers
                 collisionImpact = .85f;
                 if (round.HasOnboardFeature(PassengerFeature.ForestShortcut))
                 {
+                    FlashHazardImpact(true);
                     StartRailRide(floor, owner.worldEventDirection,
                         Mathf.Max(CruiseSpeed * 1.5f, Mathf.Abs(travelVelocity)));
                     ShowPassengerAbility("CUT THROUGH!", eventPoint);
@@ -546,10 +619,12 @@ namespace CrazyElevator.Managers
                     Play(kickWhoosh);
                     return;
                 }
-                StartRailRide(floor, owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
+                FlashHazardImpact(false);
+                StartRailRide(floor, HazardRailDirection(owner.worldEventDirection), Mathf.Max(CruiseSpeed, .6f));
                 worldVineTime = 1.5f;
-                worldForcedRailTime = .35f;
+                worldForcedRailTime = .65f;
                 ShowRailHazardImpact(sceneView.forestVineSweep, "Vines", .48f);
+                worldImpactVisualTime = worldVineTime;
                 ShowActionFeedback("CAUGHT BY VINES!", false);
                 Play(buzz);
                 return;
@@ -560,6 +635,7 @@ namespace CrazyElevator.Managers
                 bool alien = round.HasOnboardFeature(PassengerFeature.UfoLink);
                 if (!alien && round.HasOnboardFeature(PassengerFeature.GravityAnchor))
                 {
+                    FlashHazardImpact(true);
                     ShowPassengerAbility("TETHER!", eventPoint);
                     ShowActionFeedback("ASTRONAUT ANCHORS THE CAR!", true);
                     Play(chime);
@@ -576,7 +652,8 @@ namespace CrazyElevator.Managers
                 }
 
                 float speed = alien ? SpeedLimit : Mathf.Max(CruiseSpeed * 1.6f, Mathf.Abs(travelVelocity));
-                StartRailRide(floor, direction, speed);
+                FlashHazardImpact(alien);
+                StartRailRide(floor, HazardRailDirection(direction), speed);
                 worldForcedRailTime = .55f;
                 collisionImpact = alien ? .35f : 1f;
                 ShowRailHazardImpact(sceneView.spaceGravitySweep, alien ? "UFO" : "Orbit", 1f);
@@ -590,16 +667,19 @@ namespace CrazyElevator.Managers
                 return;
             }
 
+            FlashHazardImpact(false);
             collisionImpact = 1f;
             if (owner.worldEventDimension == 2)
             {
-                StartRailRide(floor, owner.worldEventDirection, Mathf.Max(CruiseSpeed, .6f));
+                StartRailRide(floor, HazardRailDirection(owner.worldEventDirection), Mathf.Max(CruiseSpeed * 1.8f, .65f));
+                worldForcedRailTime = .65f;
                 if (!HasHandyman && repairedFor <= 0f)
                 {
                     rustExposure = Mathf.Min(secondsPerRustLevel * 2f, rustExposure + secondsPerRustLevel * .45f);
+                    ShowUnderwaterFlood();
                     ShowCurrentLeak();
                 }
-                ShowActionFeedback("PUSHED BY CURRENT", false);
+                ShowActionFeedback("CURRENT PUSH!", false);
                 Play(kickWhoosh);
                 return;
             }
@@ -610,8 +690,14 @@ namespace CrazyElevator.Managers
             travelVelocity *= scanner ? .2f : .42f;
             railVelocity *= scanner ? .2f : .42f;
             ShowWorldStatus(scanner ? sceneView.securitySweep : sceneView.syrupSurge, scanner);
-            ShowActionFeedback(scanner ? "SCANNER HIT · SLOWED" : "SYRUP HIT · SLOWED", false);
+            ShowActionFeedback(scanner ? "SCAN · SPEED LIMITED" : "SYRUP · SLOWED", false);
             Play(buzz);
+        }
+
+        int HazardRailDirection(int direction)
+        {
+            float room = direction > 0 ? GroundRightX - RouteLateralX : RouteLateralX - GroundLeftX;
+            return room < 3f ? -direction : direction;
         }
 
         void ShowRailHazardImpact(GameObject prefab, string visiblePart, float scale)
@@ -633,7 +719,7 @@ namespace CrazyElevator.Managers
             if (prefab == null || exteriorCar == null) return;
             worldStatusEffect = Instantiate(prefab, exteriorCar, false);
             worldStatusEffect.name = scanner ? "Security scan impact" : "Syrup stuck to elevator";
-            worldStatusEffect.transform.localPosition = new Vector3(0f, scanner ? 2.7f : .65f, -1.5f);
+            worldStatusEffect.transform.localPosition = new Vector3(0f, scanner ? 1.6f : .5f, -1.5f);
             worldStatusEffect.transform.localScale = Vector3.one * (scanner ? .35f : .55f);
         }
 
@@ -663,10 +749,8 @@ namespace CrazyElevator.Managers
                 && DisplayBuildingView && Mathf.Abs(CurrentFloor - owner.worldEventFloor) < 3f)
             {
                 worldEventAnnounced = owner.worldEventId;
-                string label = WorldEventLabel(owner);
                 if (owner.worldEventDimension == 3 && round.HasOnboardFeature(PassengerFeature.ForestScout))
-                    label = "FIREFLY ROUTE · " + (owner.worldEventDirection > 0 ? "←" : "→");
-                ShowActionFeedback(label, true);
+                    ShowActionFeedback("FAIRY · TAKE THE " + (owner.worldEventDirection > 0 ? "LEFT" : "RIGHT") + " TRACK", true);
                 Play(chime);
             }
             if (age >= WorldEventDuration && worldEventNearby == owner.worldEventId
@@ -684,47 +768,48 @@ namespace CrazyElevator.Managers
             }
         }
 
-        static string WorldEventLabel(ElevatorManager owner)
-        {
-            if (owner.worldEventDimension == 0) return "SCAN";
-            if (owner.worldEventDimension == 1) return "SYRUP";
-            if (owner.worldEventDimension == 2) return "CURRENT";
-            if (owner.worldEventDimension == 3) return "VINES";
-            if (owner.worldEventPassenger != null && owner.worldEventPassengerNewFloor >= 0)
-                return "UFO F" + ElevatorRound.FloorNumber(owner.worldEventPassengerOldFloor)
-                    + " → F" + ElevatorRound.FloorNumber(owner.worldEventPassengerNewFloor);
-            return "BLACK HOLE";
-        }
-
         void DrawWorldEventCue()
         {
             ElevatorManager owner = WorldOwner;
-            if (owner.worldEventView == null || !owner.worldEventView.activeSelf || exteriorCamera == null) return;
-            Vector3 screen = exteriorCamera.WorldToScreenPoint(owner.worldEventView.transform.position);
+            if (owner.worldEventView == null || !owner.worldEventView.activeSelf || exteriorCamera == null
+                || owner.round == null) return;
+            float age = owner.round.Elapsed - owner.worldEventStart;
+            if (age >= WorldEventDuration - WorldEventFade) return;
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
-            float y = Screen.height - screen.y;
-            if (screen.z <= 0f || screen.x < view.x || screen.x > view.xMax || y < view.y || y > view.yMax) return;
-            string label = WorldEventLabel(owner);
-            if (owner.worldEventDimension == 3 && round.HasOnboardFeature(PassengerFeature.ForestScout))
-                label = "FIREFLY ROUTE · " + (owner.worldEventDirection > 0 ? "←" : "→");
-            if (owner.worldEventDimension < 3) label += owner.worldEventDirection > 0 ? "  →" : "  ←";
-            GUIStyle style = new GUIStyle(body) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Mathf.Clamp(view.height / 35f, 16f, 26f)), fontStyle = FontStyle.Bold };
-            if (view.width <= 24f || view.height < 44f) return;
-            style.wordWrap = false;
-            float width = FitFeedbackText(style, new GUIContent(label), view.width - 24f) + 16f;
-            float x = Mathf.Clamp(screen.x - width * .5f, view.x + 4f, view.xMax - width - 4f);
-            float safeTop = Mathf.Min(view.yMax - 40f, view.y + Mathf.Max(90f, view.height * .11f));
-            float top = Mathf.Clamp(y - 65f, safeTop, view.yMax - 40f);
-            if (showPassengerList && BuildingView && cameraViewBlend >= .99f)
+            bool warning = age < owner.worldEventSweepStart;
+            Color accent = warning ? MenuPresentation.Brass : MenuPresentation.Coral;
+            float floorY = owner.worldEventFloor * ShaftFloorHeight + .25f;
+            Vector2 left = GuiPoint(new Vector3(owner.worldEventX - WorldEventLaneReach, floorY, HazardDepth), out bool leftInFront);
+            Vector2 right = GuiPoint(new Vector3(owner.worldEventX + WorldEventLaneReach, floorY, HazardDepth), out bool rightInFront);
+            if (leftInFront && rightInFront)
             {
-                Rect passengerList = PassengerListRect();
-                if (passengerList.Overlaps(new Rect(x, top, width, 36f)))
-                {
-                    if (passengerList.xMin - view.x >= width + 8f) x = passengerList.xMin - width - 8f;
-                    else top = Mathf.Min(view.yMax - 40f, passengerList.yMax + 8f);
-                }
+                float laneWidth = Mathf.Abs(right.x - left.x);
+                float thickness = Mathf.Clamp(view.height * .005f, 3f, 12f);
+                float laneY = Mathf.Min(left.y, right.y);
+                float laneX = Mathf.Min(left.x, right.x);
+                float pulse = .55f + .35f * Mathf.Sin(age * (warning ? 8f : 13f));
+                ClippedPanel(new Rect(laneX, laneY, laneWidth, thickness), view, new Color(accent.r, accent.g, accent.b, pulse));
+                ClippedPanel(new Rect(laneX, laneY - thickness * 2f, thickness, thickness * 2f), view, accent);
+                ClippedPanel(new Rect(laneX + laneWidth - thickness, laneY - thickness * 2f, thickness, thickness * 2f), view, accent);
             }
-            OutlinedLabel(new Rect(x, top, width, 36f), label, style, Gold);
+        }
+
+        void FlashHazardImpact(bool protectedByPassenger)
+        {
+            hazardFlashColor = protectedByPassenger ? MenuPresentation.Teal : MenuPresentation.Coral;
+            hazardFlashTime = .48f;
+        }
+
+        void DrawHazardImpactFlash(Rect view)
+        {
+            if (hazardFlashTime <= 0f) return;
+            Color color = hazardFlashColor;
+            color.a = Mathf.Clamp01(hazardFlashTime / .48f) * .8f;
+            float edge = Mathf.Clamp(view.height * .009f, 4f, 18f);
+            Panel(new Rect(view.x, view.y, view.width, edge), color);
+            Panel(new Rect(view.x, view.yMax - edge, view.width, edge), color);
+            Panel(new Rect(view.x, view.y + edge, edge, view.height - 2f * edge), color);
+            Panel(new Rect(view.xMax - edge, view.y + edge, edge, view.height - 2f * edge), color);
         }
 
         // Briefly draw attention to the first warning without stopping either car.
@@ -746,10 +831,12 @@ namespace CrazyElevator.Managers
             if (hazard.Spec.Kind == HazardKind.Tornado
                 && round.HasOnboardFeature(PassengerFeature.BlocksTornado))
             {
+                FlashHazardImpact(true);
                 ShowPassengerAbility("BLOCK!", exteriorCar.position + Vector3.up * 3f);
                 Play(chime);
                 return;
             }
+            FlashHazardImpact(false);
             collisionImpact = 1f;
             boostAxis = 0f;
             boostHeld = false;
@@ -776,6 +863,7 @@ namespace CrazyElevator.Managers
                 collisionRecoilTimer = .5f;
             }
             notice = "MONSTER! Bounced back. Go around it.";
+            ShowActionFeedback("MONSTER BOUNCE!", false);
             Play(buzz);
         }
 
@@ -795,6 +883,7 @@ namespace CrazyElevator.Managers
                 collisionRecoilTimer = .6f;
             }
             notice = "TORNADO! Spun around and flung away.";
+            ShowActionFeedback("TORNADO SPIN!", false);
             Play(kickWhoosh);
         }
 

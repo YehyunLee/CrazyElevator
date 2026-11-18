@@ -665,6 +665,9 @@ namespace CrazyElevator.Managers
         {
             travelFloor = round.Floor; travelDirection = 1; destination = -1; passedFloors.Clear();
             travelVelocity = boostAxis = rustExposure = 0; boostHeld = false;
+            underwaterFloodTime = 0f;
+            underwaterFloodLevel = 0f;
+            observedRustStage = 0;
             routeBoostPulse = 0f;
             collisionSlowTimer = collisionRecoilTimer = collisionImpact = bouncerImpact = 0;
             strongCollisionRecoil = false;
@@ -1228,43 +1231,34 @@ namespace CrazyElevator.Managers
             WorldBand band = BandForFloor(round.Floor);
             persona.SetWorld(band, repairedFor > 0 || HasHandyman);
             UpdateImpairmentIndicators();
-            SetFloorDisplayColor(band == WorldBand.Office
-                ? new Color32(140, 196, 255, 255)
-                : band == WorldBand.Candy
-                    ? new Color32(255, 179, 222, 255)
-                    : new Color32(93, 240, 230, 255));
+            SetFloorDisplayColor(MenuPresentation.Paper);
             int world = (int)band;
             if (appliedWorld != world)
             {
                 appliedWorld = world;
                 var tint = new MaterialPropertyBlock();
-                Color wall = band == WorldBand.Forest ? new Color(.40f, .38f, .48f)
-                    : band == WorldBand.Space ? new Color(.25f, .24f, .40f)
-                    : band == WorldBand.Office ? new Color(.82f, .79f, .72f)
-                    : band == WorldBand.Candy ? new Color(.90f, .72f, .84f)
-                    : new Color(.18f, .34f, .36f);
-                // Lobby + cabin floors follow the world theme (navy carpet / pastel / deep sand).
-                Color floorTint = band == WorldBand.Forest ? new Color(.30f, .38f, .30f)
-                    : band == WorldBand.Space ? new Color(.17f, .15f, .32f)
-                    : band == WorldBand.Office ? new Color(.14f, .20f, .38f)
-                    : band == WorldBand.Candy ? new Color(.93f, .78f, .88f)
-                    : new Color(.10f, .30f, .34f);
-                Color ceilingTint = band == WorldBand.Forest ? new Color(.52f, .49f, .58f)
-                    : band == WorldBand.Space ? new Color(.35f, .30f, .51f)
-                    : band == WorldBand.Office ? new Color(.92f, .90f, .84f)
-                    : band == WorldBand.Candy ? new Color(.95f, .88f, .96f)
-                    : new Color(.12f, .40f, .48f);
+                Material finish = Resources.Load<Material>("TransitFinishes/" + band + "Floor");
+                Color wall = CabinEnamel(band);
+                Color floorTint = finish != null ? finish.color : MenuPresentation.Wall;
+                Color ceilingTint = Color.Lerp(wall, MenuPresentation.Paper, .45f);
+                Color fittings = Color.Lerp(MenuPresentation.Brass, wall, .32f);
                 foreach (var surface in stage.GetComponentsInChildren<Renderer>(true))
                 {
                     string part = surface.name;
+                    if (part == "Cabin floor" && finish != null)
+                    {
+                        surface.sharedMaterial = finish;
+                        continue;
+                    }
                     Color color = wall;
                     if (part == "Cabin floor" || part == "Hall floor"
-                        || part.StartsWith("Floor seam") || part.StartsWith("Hall tile")
-                        || part.StartsWith("Threshold")) color = floorTint;
+                        || part.StartsWith("Floor seam") || part.StartsWith("Hall tile")) color = floorTint;
+                    else if (part.StartsWith("Handrail") || part.StartsWith("Threshold")
+                        || part.StartsWith("Back metal")) color = fittings;
                     else if (part == "Hall ceiling" || part == "Hall upper band"
                         || part.StartsWith("Ceiling")) color = ceilingTint;
                     else if (part != "Right wall" && part != "Left wall" && !part.StartsWith("Sliding door")
-                        && part != "Back wall" && !part.StartsWith("Back metal")) continue;
+                        && part != "Back wall") continue;
                     if (part.StartsWith("Sliding door")) color.a = .5f;
                     surface.GetPropertyBlock(tint);
                     tint.SetColor("_BaseColor", color); tint.SetColor("_Color", color);
@@ -1282,6 +1276,18 @@ namespace CrazyElevator.Managers
                 }
             }
             persona.Tick(dt, phase == Phase.Moving, PersonaBusy);
+        }
+
+        static Color CabinEnamel(WorldBand band)
+        {
+            switch (band)
+            {
+                case WorldBand.Candy: return new Color32(243, 194, 192, 255);
+                case WorldBand.Water: return new Color32(100, 155, 151, 255);
+                case WorldBand.Forest: return new Color32(152, 159, 112, 255);
+                case WorldBand.Space: return new Color32(142, 138, 181, 255);
+                default: return new Color32(230, 213, 184, 255);
+            }
         }
 
         void HandleInteriorController(float dt)
@@ -1557,6 +1563,9 @@ namespace CrazyElevator.Managers
         [Range(.7f, 1f)] public float extraGrandmaSpeedMultiplier = .85f;
         [Range(.2f, .5f)] public float minimumGrandmaSpeedMultiplier = .3f;
         float rustExposure;
+        float underwaterFloodTime;
+        float underwaterFloodLevel;
+        int observedRustStage;
         StarfishImpairmentView interiorImpairment, exteriorImpairment;
         float MovementFloor => BuildingView ? travelFloor : round.Floor;
         bool InWater => BandForFloor(MovementFloor) == WorldBand.Water;
@@ -1721,6 +1730,16 @@ namespace CrazyElevator.Managers
         {
             if (!InWater) rustExposure = Mathf.Max(0, rustExposure - dt * 2);
             else if (!HasHandyman && repairedFor <= 0) rustExposure = Mathf.Min(secondsPerRustLevel * 2, rustExposure + dt);
+
+            int currentStage = Mathf.FloorToInt(rustExposure / secondsPerRustLevel);
+            if (currentStage > observedRustStage && InWater && !HasHandyman)
+                ShowUnderwaterFlood();
+            observedRustStage = currentStage;
+        }
+
+        void ShowUnderwaterFlood()
+        {
+            if (InWater) underwaterFloodTime = 2.6f;
         }
         void UpdateImpairmentIndicators()
         {
@@ -1944,8 +1963,9 @@ namespace CrazyElevator.Managers
         float AdvanceCameraView(bool travelView, float dt)
         {
             float target = travelView ? 1f : 0f;
+            float transitionSeconds = MenuManager.TutorialActive ? .8f : CameraSwitchSeconds;
             cameraViewBlend = cameraViewReady
-                ? Mathf.MoveTowards(cameraViewBlend, target, Mathf.Max(0f, dt) / CameraSwitchSeconds) : target;
+                ? Mathf.MoveTowards(cameraViewBlend, target, Mathf.Max(0f, dt) / transitionSeconds) : target;
             cameraViewReady = true;
             return Mathf.SmoothStep(0f, 1f, cameraViewBlend);
         }
@@ -1974,35 +1994,13 @@ namespace CrazyElevator.Managers
         void DrawTravelView()
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
+            bool practicingShaftReturn = MenuManager.TutorialSidewaysPractice(this);
+            bool practicingTargetStop = MenuManager.TryGetTutorialStopFloor(this, out _);
             DrawSpeedLines();
-            DrawDestinationBeacons();
-            DrawPassengerList();
-            DrawCrazyJunctionGuide();
-            DrawPassengerAbilityFeedback();
             DrawWorldEventCue();
-            // While moving, the marker shows the stop a stop press would glide into.
-            bool moving = phase == Phase.Moving;
-            int floor = moving ? GlideStopFloor() : NearbyFloor;
-            string side = moving ? StopSide(NearestStop(RouteLateralX)) : "";
-            Vector3 markerLocal = CrazyTravelLocalPosition(RouteLateralX, floor);
-            Vector3 point = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(markerLocal));
-            if (point.z <= 0) return;
-            float size = Mathf.Max(1, Screen.height / 900f);
-            float x = point.x, y = Screen.height - point.y;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
-            if (!view.Contains(new Vector2(x, y))) return;
-            float width = Mathf.Min(196f * size, view.width - 16f);
-            float left = Mathf.Clamp(x - width * .5f, view.x + 8f, view.xMax - width - 8f);
-            Rect stopPlate = new Rect(left, y + 46f * size, width, 28f * size);
-            MenuPresentation.HudPlate(stopPlate, moving ? MenuPresentation.Brass : MenuPresentation.Teal);
-            var markerStyle = new GUIStyle(buttonStyle)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = Mathf.RoundToInt(14f * size),
-                wordWrap = false
-            };
-            string marker = "F" + ElevatorRound.FloorNumber(floor) + (moving ? side + "  ·  STOP" : "  ·  " + WorldName(floor));
-            MenuPresentation.Label(stopPlate, new GUIContent(marker), markerStyle, MenuPresentation.Paper);
+            if (!practicingShaftReturn && !practicingTargetStop) DrawDestinationBeacons();
+            DrawPassengerList();
+            DrawPassengerAbilityFeedback();
         }
 
         void ReleaseCabinPreview() { if (eye) eye.targetTexture = null; }
@@ -2359,6 +2357,7 @@ namespace CrazyElevator.Managers
             ReleaseAbilityIntro();
             ReleaseCabinPreview();
             ReleaseEncounterPreview();
+            foreach (var finish in passengerFinishes.Values) Destroy(finish);
             foreach (var m in materials.Values) Destroy(m);
             foreach (var m in transparentDoorMaterials.Values) Destroy(m);
             if (chime) Destroy(chime); if (ding) Destroy(ding); if (click) Destroy(click); if (buzz) Destroy(buzz);

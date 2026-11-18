@@ -1224,20 +1224,8 @@ namespace CrazyElevator.Match
                 }
             }
             if (MenuManager.TutorialActive || Finished || actor.IntroPlaying || actor.CountdownPlaying) return;
-            Game rival = seat == 0 ? Rival : player;
-            var label = new GUIStyle(centred) { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };
-            float delta = rival.CurrentFloor - actor.CurrentFloor;
-            if (Mathf.Abs(delta) <= 3f)
-            {
-                string arrow = delta > .45f ? "↑" : delta < -.45f ? "↓" : "↔";
-                Rect marker = new Rect(view.xMax - 154f, hintTop, 146f, markerHeight);
-                Color accent = seat == 0 ? MenuPresentation.Teal : MenuPresentation.Coral;
-                MenuPresentation.HudPlate(marker, accent);
-                MenuPresentation.Label(marker, new GUIContent(arrow + " RIVAL F"
-                    + ElevatorRound.FloorNumber(Mathf.Clamp(Mathf.RoundToInt(rival.CurrentFloor),
-                        rival.ActiveMinFloor, rival.ActiveMaxFloor))), label, MenuPresentation.Paper);
-                hintTop = marker.yMax + hudGap;
-            }
+            var label = new GUIStyle(centred)
+                { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };
             if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
             {
                 float messageY = Mathf.Max(hintTop, view.y + view.height * .18f);
@@ -1249,7 +1237,7 @@ namespace CrazyElevator.Match
             Camera camera = actor.Traveling
                 ? (actor.sceneView != null ? actor.sceneView.exteriorCamera : null)
                 : actor.CabinCamera;
-            DrawVipNavigator(actor, view, camera);
+            if (actor.Traveling) DrawVipNavigator(actor, view, camera);
             if (camera == null || !camera.enabled) return;
             foreach (CandyTrail trail in candyTrails)
             {
@@ -1311,7 +1299,7 @@ namespace CrazyElevator.Match
                 float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f;
                 GUI.Label(new Rect(marker.x - size * .5f, marker.y - size + bob,
                     size, size), "▼", arrow);
-                DrawVipTag(new Vector2(marker.x, marker.y - size * 1.25f + bob), view.width);
+                DrawVipTag(new Vector2(marker.x, marker.y - size * 1.25f + bob), view);
                 return;
             }
 
@@ -1321,7 +1309,7 @@ namespace CrazyElevator.Match
             arrow.normal.textColor = Ink;
             GUI.Label(new Rect(marker.x - size * .5f, marker.y - size * .5f,
                 size, size), NavigationArrow(direction), arrow);
-            DrawVipTag(marker - direction * size * .95f, view.width);
+            DrawVipTag(marker - direction * size * .95f, view);
         }
 
         static string NavigationArrow(Vector2 direction)
@@ -1331,11 +1319,12 @@ namespace CrazyElevator.Match
             return VipNavigationArrows[index];
         }
 
-        void DrawVipTag(Vector2 center, float viewWidth)
+        void DrawVipTag(Vector2 center, Rect view)
         {
-            float width = Mathf.Clamp(viewWidth * .12f, 58f, 78f);
+            float width = Mathf.Min(view.width, Mathf.Clamp(view.width * .09f, 54f, 78f));
             const float height = 24f;
-            Rect tag = new Rect(center.x - width * .5f, center.y - height * .5f, width, height);
+            Rect tag = new Rect(Mathf.Clamp(center.x - width * .5f, view.xMin, view.xMax - width),
+                Mathf.Clamp(center.y - height * .5f, view.yMin, view.yMax - height), width, height);
             Fill(tag, Gold);
             Fill(new Rect(tag.x + 2f, tag.y + 2f, tag.width - 4f, tag.height - 4f), Ink);
             var style = new GUIStyle(centred)
