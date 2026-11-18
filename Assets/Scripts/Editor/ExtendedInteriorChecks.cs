@@ -2462,6 +2462,11 @@ public static class ExtendedInteriorChecks
                 }
                 Require(actor.TutorialReadyToRejoin && !Finished(seat),
                     "Reaching the shaft on a floor rail must not finish the lesson.");
+                float shaftX = actor.RouteLateralX;
+                for (int frame = 0; frame < 120; frame++)
+                    Tick(actor, frame < 60 ? 1f : -1f);
+                Require(actor.OnFloorRail && actor.RouteLateralX == shaftX && !Finished(seat),
+                    "Continuing to hold sideways must not move the elevator past the shaft.");
                 for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++)
                     Tick(actor, actor.TutorialShaftDirection, actor.TutorialRejoinVerticalDirection);
                 Require(actor.OnMainVerticalTrack && Finished(seat),
@@ -2469,8 +2474,29 @@ public static class ExtendedInteriorChecks
                 Require(actor.SecondsLeft == clock, "Sideways practice consumed the live round timer.");
                 enter.Invoke(menu, new object[] { seat, 9, true });
                 Require(goals[seat] == 0 && !Finished(seat), "Repeating the lesson retained completed side-stop goals.");
+
+                int targetFloor = actor.ActiveMinFloor + 3;
+                int directionToFloor = seat == 0 ? 1 : -1;
+                Require(actor.StageTutorialCollision(targetFloor - directionToFloor),
+                    "Could not stage the stop lesson for seat " + seat);
+                var targets = (int[])type.GetField("tutorialTargetFloor", Flags).GetValue(menu);
+                targets[seat] = targetFloor;
+                enter.Invoke(menu, new object[] { seat, 5, true });
+                steps[seat] = 5;
+                for (int frame = 0; frame < 240; frame++)
+                    Tick(actor, 0f, directionToFloor);
+                Require(actor.MovingInShaft && actor.CurrentFloor == targetFloor && actor.TravelVelocity == 0f
+                    && actor.TutorialStopNavigation(targetFloor) == 0,
+                    "Holding the travel input must park the elevator at the tutorial floor without docking.");
+                int stopsBefore = actor.FloorStopCount;
+                Call(actor, "RequestFloorStop");
+                Require(actor.TutorialStopInProgress && actor.FloorStopCount == stopsBefore + 1,
+                    "The normal Stop action must dock the car after the floor hold.");
+                Call(actor, "AdvanceBuildingTravel", 1f);
+                Require(actor.DiscreteFloor == targetFloor && actor.SecondsLeft == clock,
+                    "Confirming Stop must dock at the tutorial target without consuming the round timer.");
             }
-            File.WriteAllText(output + "/result.txt", "PASS: both seats enter a floor rail on the first sideways press, reach right, far right, left, and far left through actual rail motion, and rejoin a main vertical track; tiny reversals cannot skip goals; far-right holding cannot count left goals; a vertical turn is required; guidance stays tutorial-only; entry resets progress; round clocks unchanged.\n");
+            File.WriteAllText(output + "/result.txt", "PASS: both seats reach the four side stops, wait at the shaft despite held sideways input, and rejoin only on a vertical turn. Arrivals from above and below hold at the target floor until the player presses Stop. Guidance stays tutorial-only; lesson entry resets progress; round clocks unchanged.\n");
             Debug.Log(File.ReadAllText(output + "/result.txt"));
         }
         catch (Exception error)

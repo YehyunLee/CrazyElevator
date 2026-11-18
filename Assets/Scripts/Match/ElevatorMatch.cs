@@ -631,6 +631,8 @@ namespace CrazyElevator.Match
         public float ConstrainTravel(Game actor, float before, float candidate, ref float velocity)
         {
             if (!Running || actor == null) return candidate;
+            // Both learners can practice at the same stop without blocking each other.
+            if (MenuManager.TryGetTutorialStopFloor(actor, out _)) return candidate;
             if (IsTutorialCollisionParticipant(actor) && actor == tutorialCollisionAttacker
                 && !tutorialCollisionCompleted && candidate < tutorialCollisionStartFloor)
             {
