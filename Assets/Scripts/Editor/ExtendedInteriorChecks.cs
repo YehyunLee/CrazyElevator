@@ -2336,6 +2336,11 @@ public static class ExtendedInteriorChecks
             {
                 Game attacker = actors[seat], target = actors[1 - seat];
                 Require(match.BeginTutorialCollisionPractice(seat), "Could not stage collision for seat " + seat);
+                // Staging separates the cars. Run the normal update that clears
+                // the previous contact before simulating another collision.
+                match.enabled = true;
+                typeof(CrazyElevator.Match.ElevatorMatch).GetMethod("Update", Flags).Invoke(match, null);
+                match.enabled = false;
                 input.UnlockTutorialInput(seat);
                 input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Collision);
                 input.LockTutorialInput(1 - seat);
@@ -2389,12 +2394,18 @@ public static class ExtendedInteriorChecks
         var type = menu.GetType();
         var goals = (int[])type.GetField("tutorialLateralGoalsReached", Flags).GetValue(menu);
         var steps = (int[])type.GetField("tutorialSteps", Flags).GetValue(menu);
-        var complete = type.GetMethod("TutorialLateralStepCompleted", Flags);
+        var track = type.GetMethod("TrackTutorialShaftReturn", Flags);
+        var complete = type.GetMethod("TutorialStepCompletedForActor", Flags);
         var enter = type.GetMethod("BeginTutorialCardTransition", Flags);
-        bool Finished(int seat) => (bool)complete.Invoke(menu, new object[] { seat });
+        bool Finished(int seat)
+        {
+            track.Invoke(menu, new object[] { seat });
+            return (bool)complete.Invoke(menu, new object[] { seat, 9 });
+        }
         void Tick(Game actor, float horizontal, float vertical = 0f, float seconds = 1f / 60f)
         {
             Call(actor, "ReadRouteInput", horizontal, vertical, false);
+            actor.SetTravelInput(actor.OnFloorRail ? 0f : vertical, false);
             Call(actor, "AdvanceBuildingTravel", seconds);
         }
         try
@@ -2407,13 +2418,15 @@ public static class ExtendedInteriorChecks
                 Require(actor.StageTutorialCollision(floor), "Could not stage side-stop practice for seat " + seat);
                 enter.Invoke(menu, new object[] { seat, 9, true });
                 steps[seat] = 9;
-                Require(goals[seat] == 0 && !Finished(seat), "Entering lateral practice must reset its goals.");
-                Call(actor, "StartRailRide", floor, 1, 0f);
+                Require(goals[seat] == 0 && !Finished(seat), "Entering sideways practice must reset its goals.");
+                Require(CrazyElevator.Managers.MenuManager.TutorialSidewaysPractice(actor),
+                    "Sideways input guidance must be active for the practicing elevator.");
                 Tick(actor, 1f, seconds: .02f);
+                Require(actor.OnFloorRail, "The first sideways press must enter a floor rail rather than only switching lanes.");
                 Finished(seat);
                 Tick(actor, -1f, seconds: .02f);
                 Require(!Finished(seat) && goals[seat] == 0,
-                    "Tiny left/right reversals or central lane changes must not complete a side-stop goal.");
+                    "Tiny left/right reversals inside the central shafts must not complete a side-stop goal.");
 
                 int[] stops = { 3, 4, 1, 0 };
                 for (int goal = 0; goal < stops.Length; goal++)
@@ -2437,19 +2450,27 @@ public static class ExtendedInteriorChecks
                 Require(actor.OnFloorRail && !Finished(seat),
                     "Reaching far left must still require a real return to the main shaft.");
                 type.GetField("tutorialActive", Flags).SetValue(menu, false);
-                Require(!Finished(seat), "Lateral lesson progress must be disabled outside the tutorial.");
+                Require(!CrazyElevator.Managers.MenuManager.TutorialSidewaysPractice(actor),
+                    "Sideways input guidance must be disabled outside the tutorial.");
+                track.Invoke(menu, new object[] { seat });
+                Require(goals[seat] == stops.Length, "Progress must remain unchanged outside the tutorial.");
                 type.GetField("tutorialActive", Flags).SetValue(menu, true);
-                // Pass the side columns before requesting vertical travel, then catch a centre shaft.
-                for (int frame = 0; frame < 700 && actor.RouteLateralX < CrazyElevator.Match.ElevatorMatch.ShaftCenterX - 7f; frame++)
-                { Tick(actor, 1f); Require(!Finished(seat), "Returning along a rail must not finish the lesson."); }
-                for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++) Tick(actor, 1f, 1f);
+                for (int frame = 0; frame < 700 && !actor.TutorialReadyToRejoin; frame++)
+                {
+                    Tick(actor, actor.TutorialShaftDirection);
+                    Require(!Finished(seat), "Returning along a floor rail must still require a vertical turn.");
+                }
+                Require(actor.TutorialReadyToRejoin && !Finished(seat),
+                    "Reaching the shaft on a floor rail must not finish the lesson.");
+                for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++)
+                    Tick(actor, actor.TutorialShaftDirection, actor.TutorialRejoinVerticalDirection);
                 Require(actor.OnMainVerticalTrack && Finished(seat),
                     "All four side stops plus a real main-shaft return must complete lateral practice.");
-                Require(actor.SecondsLeft == clock, "Lateral practice consumed the live round timer.");
+                Require(actor.SecondsLeft == clock, "Sideways practice consumed the live round timer.");
                 enter.Invoke(menu, new object[] { seat, 9, true });
                 Require(goals[seat] == 0 && !Finished(seat), "Repeating the lesson retained completed side-stop goals.");
             }
-            File.WriteAllText(output + "/result.txt", "PASS: both seats reach right, far right, left, and far left through actual rail motion; tiny reversals cannot skip goals; far-right holding cannot count left goals; main-shaft return required; tutorial-only progress; entry resets progress; round clocks unchanged.\n");
+            File.WriteAllText(output + "/result.txt", "PASS: both seats enter a floor rail on the first sideways press, reach right, far right, left, and far left through actual rail motion, and rejoin a main vertical track; tiny reversals cannot skip goals; far-right holding cannot count left goals; a vertical turn is required; guidance stays tutorial-only; entry resets progress; round clocks unchanged.\n");
             Debug.Log(File.ReadAllText(output + "/result.txt"));
         }
         catch (Exception error)
