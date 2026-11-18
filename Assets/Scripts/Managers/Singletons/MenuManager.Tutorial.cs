@@ -1396,7 +1396,12 @@ namespace CrazyElevator.Managers
             TextAnchor previousAlignment = cardTitle.alignment;
             Color previousTextColor = cardTitle.normal.textColor;
             float scale = MenuPresentation.GameplayHudScale(view.width, view.height);
+            float maxTitleWidth = view.width * .82f;
             cardTitle.fontSize = Mathf.Max(1, Mathf.RoundToInt(70f * scale));
+            float measuredWidth = cardTitle.CalcSize(new GUIContent("TUTORIAL")).x;
+            if (measuredWidth > maxTitleWidth)
+                cardTitle.fontSize = Mathf.Max(1,
+                    Mathf.FloorToInt(cardTitle.fontSize * maxTitleWidth / measuredWidth));
             cardTitle.alignment = TextAnchor.MiddleCenter;
             cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
             GUI.Label(new Rect(30f * scale, (view.height - 120f * scale) * .5f,
