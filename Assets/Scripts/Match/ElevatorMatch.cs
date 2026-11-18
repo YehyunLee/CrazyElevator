@@ -1609,6 +1609,7 @@ namespace CrazyElevator.Match
             float pulse = actor.HudScorePulse;
             Color accent = SeatAccent(seat);
             MenuPresentation.HudPlate(plate, Color.Lerp(accent, MenuPresentation.Brass, pulse));
+            DrawScoreLeadGlow(plate, seat, accent);
             DrawHudLabel(new Rect(plate.x, plate.y + 5f * scale, plate.width, 16f * scale),
                 actor.IsNpc ? "CPU SCORE" : "P" + (seat + 1) + " SCORE", tileCaption, accent);
 
@@ -1629,6 +1630,28 @@ namespace CrazyElevator.Match
                 DrawVipIcon(new Vector2(plate.xMax - 18f * scale, plate.y + 16f * scale), size);
                 GUI.color = previous;
             }
+        }
+
+        void DrawScoreLeadGlow(Rect plate, int seat, Color accent)
+        {
+            if (Event.current.type != EventType.Repaint || !Running || Paused || Finished
+                || MenuManager.TutorialActive || player.ShiftFinished || leadGlow[seat] <= .001f) return;
+            if (leadEdgeTexture == null) leadEdgeTexture = CreateLeadEdgeTexture();
+            float musicPulse = MusicManager.Instance != null ? MusicManager.Instance.BassPulse : 0f;
+            var session = GameManager.Instance;
+            float remaining = session != null ? session.MainTimer : player.SecondsLeft;
+            float urgency = remaining > 0f && remaining <= GameManager.FinalCountdownSeconds
+                ? GameManager.FinalCountdownBeat(remaining) : 0f;
+            float width = plate.width * (.22f + .1f * musicPulse + .05f * urgency);
+            Color tint = accent;
+            tint.a = leadGlow[seat] * (.48f + .22f * musicPulse + .16f * urgency);
+            Color previous = GUI.color;
+            GUI.color = MenuPresentation.DisplayColor(tint);
+            GUI.DrawTextureWithTexCoords(new Rect(plate.x, plate.y, width, plate.height),
+                leadEdgeTexture, new Rect(0f, 0f, 1f, 1f));
+            GUI.DrawTextureWithTexCoords(new Rect(plate.xMax - width, plate.y, width, plate.height),
+                leadEdgeTexture, new Rect(1f, 0f, -1f, 1f));
+            GUI.color = previous;
         }
 
         void DrawHudLabel(Rect area, string value, GUIStyle style, Color colour)
