@@ -42,10 +42,14 @@ namespace CrazyElevator.Match
         ElevatorScene rivalView;
         Transform rivalShaft;
         readonly Transform[] soloRails = new Transform[2];
+        readonly float[] leadGlow = new float[2];
         readonly int[] targetTrack = { 0, 1 };
         readonly float[] trackPosition = { 0f, 1f };
         float collisionCooldown;
         float collisionFlash;
+        const float CollisionFlashSeconds = .52f;
+        Vector3 collisionPoint;
+        Color collisionAccent;
         bool collisionContactActive;
         bool bouncerCollision;
         const int BumpRewardPoints = 50;
@@ -53,6 +57,10 @@ namespace CrazyElevator.Match
         const float DisplacedPickupSeconds = 6f;
         readonly (int floor, int stop, float until)[] displacedPickups = new (int, int, float)[2];
         SharedRider matchVip;
+        Texture2D vipBadge;
+        int vipClaimSeat = -1;
+        const float VipClaimSeconds = 1.1f;
+        float vipClaimTime;
         bool hazardEventStarted;
         bool vipRevealStarted;
         float eventMessageTime;
@@ -75,7 +83,8 @@ namespace CrazyElevator.Match
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
         readonly float[] expressFlash = { 0f, 0f };
-        const float ResultRevealInputAt = 5.7f;
+        const float ResultRevealInputAt = 4.9f;
+        const float WinnerSpotlightAt = 3.5f;
         float resultRevealStartedAt = -1f;
         int resultActionSelection;
         bool resultActionMoveHeld;
@@ -245,6 +254,9 @@ namespace CrazyElevator.Match
             if (Running && !Finished && !MenuManager.TutorialActive)
             {
                 UpdateRivalInteractions(Time.deltaTime);
+                int lead = player.Points.CompareTo(Rival.Points);
+                leadGlow[0] = Mathf.MoveTowards(leadGlow[0], lead > 0 ? 1f : 0f, dt * 5f);
+                leadGlow[1] = Mathf.MoveTowards(leadGlow[1], lead < 0 ? 1f : 0f, dt * 5f);
             }
             var input = InputManager.Instance;
             if (input == null) return;
@@ -316,6 +328,7 @@ namespace CrazyElevator.Match
             targetTrack[0] = 0; targetTrack[1] = 1;
             trackPosition[0] = 0; trackPosition[1] = 1;
             collisionCooldown = collisionFlash = 0;
+            leadGlow[0] = leadGlow[1] = 0f;
             collisionContactActive = false;
             bouncerCollision = false;
             collisionCount = 0;
@@ -330,6 +343,8 @@ namespace CrazyElevator.Match
             Rival.StartMatchShift(player, countdown: !practice);
             // Promote one waiting passenger to VIP halfway through the live shift.
             matchVip = null;
+            vipClaimSeat = -1;
+            vipClaimTime = 0f;
             vipRevealStarted = false;
             hazardEventStarted = false;
             eventMessageTime = 0f;
@@ -348,18 +363,15 @@ namespace CrazyElevator.Match
         // Boarding is reported only after the shared rider was claimed successfully.
         public void PassengerBoarded(Game actor, SharedRider rider)
         {
-            if (!Running || MenuManager.TutorialActive || actor == null || rider == null) return;
-            // Regular boarding already has immediate per-car feedback. Reserve
-            // the shared rivalry banner for VIPs to avoid repeating "ON BOARD!".
-            if (!rider.IsVip) return;
-            int winner = SeatOf(actor), loser = 1 - winner;
-            contestMessages[winner] = "VIP ON BOARD!";
-            contestMessages[loser] = "RIVAL GOT THE VIP!";
-            contestMessageTimes[winner] = contestMessageTimes[loser] = 2.5f;
+            if (!Running || MenuManager.TutorialActive || actor == null || rider == null
+                || rider != matchVip || rider.BoardedBySeat != actor.Seat) return;
+            vipClaimSeat = actor.Seat;
+            vipClaimTime = VipClaimSeconds;
         }
 
         void UpdateRivalInteractions(float dt)
         {
+            vipClaimTime = Mathf.Max(0f, vipClaimTime - dt);
             eventMessageTime = Mathf.Max(0f, eventMessageTime - dt);
             for (int seat = 0; seat < 2; seat++)
             {
@@ -394,7 +406,7 @@ namespace CrazyElevator.Match
             }
             if (!vipRevealStarted && player.SecondsLeft <= ElevatorRound.Duration * .5f)
             {
-                SharedRider arrivingVip = player.ChooseMatchVip();
+                SharedRider arrivingVip = player.ChooseMatchVip(Rival);
                 if (arrivingVip != null)
                 {
                     matchVip = arrivingVip;
@@ -408,6 +420,28 @@ namespace CrazyElevator.Match
                 eventMessage = player.StartSharedHazardEvent();
                 if (!string.IsNullOrEmpty(eventMessage)) eventMessageTime = 3.5f;
             }
+        }
+
+        bool VipWaiting => matchVip != null && !matchVip.Boarded && !matchVip.Resolved;
+
+        internal bool TryFrameRival(Game actor, out Vector2 rivalPosition, out float blend)
+        {
+            rivalPosition = default;
+            blend = 0f;
+            Game other = Other(actor);
+            if (!Running || Paused || Finished || other == null || actor.ShiftFinished || other.ShiftFinished)
+                return false;
+
+            rivalPosition = other.ShaftRoutePosition;
+            Vector2 separation = rivalPosition - actor.ShaftRoutePosition;
+            float proximity = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(5f, 22f, separation.magnitude));
+            float closingSpeed = Vector2.Dot(actor.ShaftRouteVelocity - other.ShaftRouteVelocity,
+                separation.normalized);
+            float closing = Mathf.InverseLerp(1f, 6f, closingSpeed);
+            bool racing = VipWaiting && actor.NearingVipPickup(matchVip) && other.NearingVipPickup(matchVip);
+            blend = proximity * Mathf.Max(racing ? 1f : closing, collisionFlash / CollisionFlashSeconds);
+            return blend > 0f;
         }
 
         void BeginRoundIntroduction()
@@ -727,10 +761,12 @@ namespace CrazyElevator.Match
             var displaced = displacedPickups[actor.Seat];
             bool claimedAfterBump = displaced.until > 0f && actor.SecondsLeft >= displaced.until
                 && rider.Origin == displaced.floor && rider.OriginStop == displaced.stop;
-            if (other == null || (!claimedAfterBump && !other.ApproachingPickup(rider))) return;
+            if (other == null || (!claimedAfterBump && !other.ApproachingPickup(rider)
+                && !(rider == matchVip && other.NearingVipPickup(rider)))) return;
 
             if (claimedAfterBump) displacedPickups[actor.Seat] = default;
             rider.ContestedPickupBonus = ContestedDeliveryBonus;
+            if (rider == matchVip) return;
             actor.ShowActionFeedback("STOLEN!", true, true);
             other.ShowActionFeedback("TOO LATE!", false, true);
         }
@@ -758,7 +794,7 @@ namespace CrazyElevator.Match
                 if (practiceHit) tutorialCollisionCompleted = true;
             }
             collisionCooldown = .48f;
-            collisionFlash = .72f;
+            collisionFlash = CollisionFlashSeconds;
             collisionCount++;
             bool firstBoost = (practicePair || !MenuManager.TutorialActive) && first != null && first.HasBouncer;
             bool secondBoost = (practicePair || !MenuManager.TutorialActive) && second != null && second.HasBouncer;
@@ -774,8 +810,6 @@ namespace CrazyElevator.Match
                     ApplyCollisionResponse(first, -verticalDirection * rebound * (secondBoost ? 1.5f : 1f), secondBoost);
                 if (second != tutorialTarget && (practicePair || !TutorialInputLocked(second)))
                     ApplyCollisionResponse(second, verticalDirection * rebound * (firstBoost ? 1.5f : 1f), firstBoost);
-                if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
-                if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
             }
             else
             {
@@ -794,45 +828,32 @@ namespace CrazyElevator.Match
                     if (firstBoost) second?.ApplyMatchLateralBounce(collisionSlowSeconds, direction);
                     else second?.ApplyMatchCollision(collisionSlowSeconds, collisionBounceStrength);
                 }
-                if (firstBoost) first.ShowPassengerAbility("BUMP!", first.ShaftWorldPosition + Vector3.up * 3f);
-                if (secondBoost) second.ShowPassengerAbility("BUMP!", second.ShaftWorldPosition + Vector3.up * 3f);
             }
             if (first != null && second != null)
-                EmitCollisionSparks((first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f);
+            {
+                collisionPoint = (first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f;
+                collisionAccent = bumpWinner != null ? SeatAccent(bumpWinner.Seat) : Gold;
+                EmitCollisionSparks(collisionPoint);
+                if (!MenuManager.TutorialActive)
+                {
+                    Vector2 recoil = verticalDirection != 0f ? Vector2.down * verticalDirection
+                        : first.ShaftRoutePosition - second.ShaftRoutePosition;
+                    if (recoil.sqrMagnitude < .01f) recoil = Vector2.left;
+                    first.KickShaftCamera(recoil);
+                    second.KickShaftCamera(-recoil);
+                }
+            }
             SfxManager.Instance?.PlaySfx(collisionClip, 1f);
             if (bouncerCollision)
             {
                 first?.PulseMatchImpact(true);
                 second?.PulseMatchImpact(true);
-                if (firstBoost && secondBoost)
-                {
-                    first.ShowActionFeedback("BOUNCER CLASH!", true, true);
-                    second.ShowActionFeedback("BOUNCER CLASH!", true, true);
-                }
-                else if (firstBoost)
-                {
-                    first.ShowActionFeedback("BOUNCER HIT!", true, true);
-                    second?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
-                }
-                else
-                {
-                    second.ShowActionFeedback("BOUNCER HIT!", true, true);
-                    first?.ShowActionFeedback("HIT BY BOUNCER!", false, true);
-                }
             }
 
-            if (bumpWinner != null)
-            {
-                Vector3 impactPoint = (first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f;
-                if (bumpWinner.AwardBumpPoints(BumpRewardPoints, impactPoint))
-                {
-                    if (wasPickingUp && !bumped.TryGetPickupStop(out _, out _))
-                        displacedPickups[bumpWinner.Seat] = (pickupFloor, pickupStop,
-                            Mathf.Max(.001f, bumpWinner.SecondsLeft - DisplacedPickupSeconds));
-                    bumpWinner.ShowActionFeedback("BUMP WON", true, true);
-                    bumped?.ShowActionFeedback("BUMPED!", false);
-                }
-            }
+            if (bumpWinner != null && bumpWinner.AwardBumpPoints(BumpRewardPoints, collisionPoint)
+                && wasPickingUp && !bumped.TryGetPickupStop(out _, out _))
+                displacedPickups[bumpWinner.Seat] = (pickupFloor, pickupStop,
+                    Mathf.Max(.001f, bumpWinner.SecondsLeft - DisplacedPickupSeconds));
         }
 
         static Game ResolveBumpWinner(Game first, Game second, float verticalDirection,
@@ -978,7 +999,9 @@ namespace CrazyElevator.Match
             if (collisionClip != null) Destroy(collisionClip);
             if (collisionParticles != null) Destroy(collisionParticles.gameObject);
             if (collisionParticleMaterial != null) Destroy(collisionParticleMaterial);
-            if (resultGlowTexture != null) Destroy(resultGlowTexture);
+            if (vipBadge != null) Destroy(vipBadge);
+            if (leadEdgeTexture != null) Destroy(leadEdgeTexture);
+            if (resultTheaterMaterial != null) Destroy(resultTheaterMaterial);
             if (Rival != null) Destroy(Rival.gameObject);
             if (rivalView != null && rivalView.exteriorCar != null) Destroy(rivalView.exteriorCar.gameObject);
             if (rivalShaft != null) Destroy(rivalShaft.gameObject);
@@ -1018,10 +1041,11 @@ namespace CrazyElevator.Match
         static readonly Color Gold = new Color32(255, 205, 82, 255);
         static readonly Color Ink = new Color32(25, 31, 46, 255);
         static readonly string[] VipNavigationArrows = { "←", "↖", "↑", "↗", "→", "↘", "↓", "↙" };
-        [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue, collisionWord,
+        [System.NonSerialized] GUIStyle heading, text, score, centred, tileCaption, tileValue,
             resultTitle, resultName, resultPoints, resultWinner, roundStatus, sharedClock,
             resultSmall, resultWorld, resultAction, resultKey, resultWinBadge;
-        [System.NonSerialized] Texture2D resultGlowTexture;
+        [System.NonSerialized] Material resultTheaterMaterial;
+        Texture2D leadEdgeTexture;
 
         void OnGUI()
         {
@@ -1054,6 +1078,7 @@ namespace CrazyElevator.Match
                 GUI.contentColor = previousContent;
                 return;
             }
+            DrawLeadEdges();
             if (IsVisibleSeat(0)) DrawSeat(player, 0, MenuPresentation.Coral);
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, MenuPresentation.Teal);
             if (SplitScreen) DrawSplitDivider();
@@ -1062,13 +1087,62 @@ namespace CrazyElevator.Match
                 DrawSharedRoundHUD();
                 if (IsVisibleSeat(0)) DrawSeatScoreFlights(player, 0);
                 if (IsVisibleSeat(1)) DrawSeatScoreFlights(Rival, 1);
-                DrawCollisionFeedback();
             }
             if (Finished) DrawResultReveal();
             DrawSessionFade(player.SessionFadeAlpha);
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;
+        }
+
+        void DrawLeadEdges()
+        {
+            if (!Running || Paused || Finished || MenuManager.TutorialActive || player.ShiftFinished) return;
+            var session = GameManager.Instance;
+            int introSeat = AbilityIntroPaneSeat;
+            if (session != null && session.AbilityIntroActive && introSeat < 0) return;
+
+            float remaining = session != null ? session.MainTimer : player.SecondsLeft;
+            float urgency = remaining > 0f && remaining <= GameManager.FinalCountdownSeconds
+                ? .14f + .18f * GameManager.FinalCountdownBeat(remaining)
+                : 0f;
+            for (int seat = 0; seat < leadGlow.Length; seat++)
+            {
+                if (leadGlow[seat] <= .001f || seat == introSeat) continue;
+                if (leadEdgeTexture == null)
+                    leadEdgeTexture = CreateLeadEdgeTexture();
+
+                Rect view = ViewRect(seat);
+                float width = Mathf.Min(view.width * .1f, view.height * (.065f + urgency * .05f));
+                var edge = new Rect(seat == 0 ? view.xMin : view.xMax - width, view.y, width, view.height);
+                var uv = seat == 0 ? new Rect(0f, 0f, 1f, 1f) : new Rect(1f, 0f, -1f, 1f);
+                Color tint = SeatAccent(seat);
+                tint.a = leadGlow[seat] * (.34f + urgency);
+                GUI.color = MenuPresentation.DisplayColor(tint);
+                GUI.DrawTextureWithTexCoords(edge, leadEdgeTexture, uv);
+            }
+            GUI.color = Color.white;
+        }
+
+        static Texture2D CreateLeadEdgeTexture()
+        {
+            const int width = 64;
+            var texture = new Texture2D(width, 1, TextureFormat.RGBA32, false)
+            {
+                name = "Score leader glow",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var pixels = new Color32[width];
+            for (int x = 0; x < width; x++)
+            {
+                float opacity = 1f - (float)x / (width - 1);
+                pixels[x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(255f * opacity * opacity));
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         void DrawSessionFade(float alpha)
@@ -1103,9 +1177,6 @@ namespace CrazyElevator.Match
             GameTypography.Apply(tileValue, true);
             tileValue.normal.textColor = Color.white;
             sharedClock = new GUIStyle(tileValue) { fontSize = 32, alignment = TextAnchor.MiddleCenter };
-            collisionWord = new GUIStyle(centred) { fontSize = 24, clipping = TextClipping.Overflow };
-            GameTypography.Apply(collisionWord, true);
-            collisionWord.normal.textColor = Color.white;
             resultTitle = new GUIStyle(centred) { fontSize = 18 };
             GameTypography.Apply(resultTitle, true);
             resultTitle.normal.textColor = Color.white;
@@ -1224,6 +1295,8 @@ namespace CrazyElevator.Match
             DrawSeatTile(floorTile, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(
                 Mathf.RoundToInt(actor.CurrentFloor), actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString(),
                 MenuPresentation.Paper);
+            if (seat == vipClaimSeat && vipClaimTime > 0f && !Finished)
+                DrawVipClaim(new Vector2(badge.center.x, bar.yMax + 22f * scale), colour, scale);
         }
 
         void DrawRivalInteractions(Game actor, int seat, Rect view)
@@ -1263,11 +1336,13 @@ namespace CrazyElevator.Match
                 label.normal.textColor = contestMessageTimes[seat] > 0f ? Gold : Coral;
                 GUI.Label(message, contestMessageTimes[seat] > 0f ? contestMessages[seat] : eventMessage, label);
             }
-            Camera camera = actor.Traveling
-                ? (actor.sceneView != null ? actor.sceneView.exteriorCamera : null)
-                : actor.CabinCamera;
-            if (actor.Traveling) DrawVipNavigator(actor, view, camera);
+            Camera camera = actor.Traveling ? actor.ShaftCamera : actor.CabinCamera;
             if (camera == null || !camera.enabled) return;
+            if (actor.Traveling)
+            {
+                DrawVipNavigator(actor, view, camera);
+                DrawCollisionFeedback(view, camera);
+            }
             foreach (CandyTrail trail in candyTrails)
             {
                 Vector3 point = camera.WorldToScreenPoint(trail.Position);
@@ -1286,11 +1361,11 @@ namespace CrazyElevator.Match
 
         void DrawVipNavigator(Game actor, Rect view, Camera camera)
         {
-            if (matchVip == null || matchVip.Boarded || matchVip.Resolved || camera == null
+            if (!VipWaiting || Event.current.type != EventType.Repaint
                 || player == null || !player.TryGetWaitingPassengerWorldPosition(matchVip, out Vector3 worldPosition)) return;
 
-            Vector3 projected = camera.WorldToScreenPoint(worldPosition + Vector3.up * 2.65f);
-            Vector2 target = new Vector2(projected.x, Screen.height - projected.y);
+            Vector3 projected = camera.WorldToScreenPoint(worldPosition + Vector3.up * 3.1f);
+            Vector2 target = GuiPoint(projected);
             Vector2 direction = target - view.center;
             if (projected.z < 0f) direction = -direction;
 
@@ -1316,30 +1391,34 @@ namespace CrazyElevator.Match
             }
 
             float size = 44f * scale;
-            var arrow = new GUIStyle(centred)
-            {
-                fontSize = Mathf.RoundToInt(size),
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                wordWrap = false
-            };
-            arrow.normal.textColor = Gold;
             if (targetVisible)
             {
-                float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f * scale;
-                GUI.Label(new Rect(marker.x - size * .5f, marker.y - size + bob,
-                    size, size), "▼", arrow);
-                DrawVipTag(new Vector2(marker.x, marker.y - size * 1.25f + bob), view);
+                float clock = Time.unscaledTime;
+                float bob = Mathf.Sin(clock * 6f) * 4f * scale;
+                DrawVipIcon(marker + Vector2.up * (bob - 16f * scale), size);
+                Vector3 landing = camera.WorldToScreenPoint(worldPosition);
+                float wave = Mathf.Repeat(clock * .75f, 1f);
+                if (landing.z > 0f && safeView.Contains(GuiPoint(landing)))
+                    DrawRivalPulse(GuiPoint(landing), new Vector2(1f, .36f)
+                        * (28f + 50f * wave) * scale, Gold, (1f - wave) * .9f, 3f * scale);
+                if (player.NearingVipPickup(matchVip) && Rival.NearingVipPickup(matchVip))
+                {
+                    DrawVipApproach(camera, view, marker, player, -1f, clock, scale);
+                    DrawVipApproach(camera, view, marker, Rival, 1f, clock, scale);
+                }
                 return;
             }
 
-            GUI.Label(new Rect(marker.x - size * .5f, marker.y - size * .5f,
-                size, size), "●", arrow);
-            arrow.fontSize = Mathf.RoundToInt(size * .48f);
-            arrow.normal.textColor = Ink;
-            GUI.Label(new Rect(marker.x - size * .5f, marker.y - size * .5f,
-                size, size), NavigationArrow(direction), arrow);
-            DrawVipTag(marker - direction * size * .95f, view);
+            DrawVipIcon(marker - direction * 42f * scale, size);
+            Rect arrowBounds = new Rect(marker.x - size * .5f, marker.y - size * .5f, size, size);
+            Fill(arrowBounds, Ink);
+            var arrow = new GUIStyle(centred)
+            {
+                fontSize = Mathf.Max(1, Mathf.RoundToInt(size * .72f)),
+                wordWrap = false
+            };
+            arrow.normal.textColor = Gold;
+            GUI.Label(arrowBounds, NavigationArrow(direction), arrow);
         }
 
         static string NavigationArrow(Vector2 direction)
@@ -1349,24 +1428,50 @@ namespace CrazyElevator.Match
             return VipNavigationArrows[index];
         }
 
-        void DrawVipTag(Vector2 center, Rect view)
+        static Color SeatAccent(int seat) => seat == 0 ? MenuPresentation.Coral : MenuPresentation.Teal;
+        static Vector2 GuiPoint(Vector3 projected) => new Vector2(projected.x, Screen.height - projected.y);
+
+        void DrawVipIcon(Vector2 center, float size)
         {
-            float scale = MatchHudScale;
-            float width = 65f * scale;
-            float height = 24f * scale;
-            Rect tag = new Rect(Mathf.Clamp(center.x - width * .5f, view.xMin, view.xMax - width),
-                Mathf.Clamp(center.y - height * .5f, view.yMin, view.yMax - height), width, height);
-            Fill(tag, Gold);
-            Fill(new Rect(tag.x + 2f, tag.y + 2f, tag.width - 4f, tag.height - 4f), Ink);
-            var style = new GUIStyle(centred)
-            {
-                fontSize = Mathf.Max(1, Mathf.RoundToInt(14f * scale)),
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                wordWrap = false
-            };
-            style.normal.textColor = Gold;
-            GUI.Label(tag, "VIP", style);
+            if (vipBadge == null) vipBadge = PassengerIconLibrary.CreatePassengerBadge("VIP", Gold, Ink, Gold);
+            GUI.DrawTexture(new Rect(center.x - size * .5f, center.y - size * .5f, size, size), vipBadge);
+        }
+
+        void DrawVipApproach(Camera camera, Rect view, Vector2 target, Game actor, float side, float clock, float scale)
+        {
+            Vector2 start = GuiPoint(camera.WorldToScreenPoint(actor.ShaftWorldPosition));
+            Vector2 fromTarget = (start - target).normalized;
+            if ((start - target).sqrMagnitude < 16f * scale * scale) fromTarget = Vector2.right * side;
+            // Keep the two colors readable when both cars are on one shaft.
+            Vector2 across = new Vector2(-fromTarget.y, fromTarget.x);
+            float beat = Mathf.Repeat(clock * 1.35f, 1f);
+            Vector2 tip = target + fromTarget * ((65f - 31f * beat) * scale) + across * (side * 8f * scale);
+            Rect arrowBounds = new Rect(tip.x - 18f * scale, tip.y - 18f * scale, 36f * scale, 36f * scale);
+            if (!view.Contains(arrowBounds.min) || !view.Contains(arrowBounds.max)) return;
+            var arrow = new GUIStyle(centred) { fontSize = Mathf.Max(1, Mathf.RoundToInt(34f * scale)) };
+            arrow.normal.textColor = SeatAccent(actor.Seat);
+            GUI.Label(arrowBounds, NavigationArrow(-fromTarget), arrow);
+        }
+
+        void DrawVipClaim(Vector2 centre, Color accent, float scale)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            float progress = 1f - vipClaimTime / VipClaimSeconds;
+            float pop = Mathf.Sin(Mathf.Clamp01(progress * 2.5f) * Mathf.PI);
+            DrawRivalPulse(centre, Vector2.one * (36f + 30f * progress) * scale,
+                accent, 1f - progress, 3f * scale);
+            Color saved = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01((1f - progress) * 4f));
+            DrawVipIcon(centre, (33f + 12f * pop) * scale);
+            GUI.color = saved;
+        }
+
+        static void DrawRivalPulse(Vector2 centre, Vector2 size, Color colour, float alpha, float thickness)
+        {
+            Rect bounds = new Rect(centre - size * .5f, size);
+            colour.a = alpha;
+            GUI.DrawTexture(bounds, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                colour, Mathf.Max(1f, thickness), size.y * .5f);
         }
 
         // Both seats read GameManager's round clock; draw it once across the split.
@@ -1378,7 +1483,7 @@ namespace CrazyElevator.Match
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
             float scale = MatchHudScale;
             Rect timer = SharedClockRect;
-            Color clockFace = seconds <= 10 ? MenuPresentation.Coral : MenuPresentation.Paper;
+            Color clockFace = seconds <= GameManager.FinalCountdownSeconds ? MenuPresentation.Coral : MenuPresentation.Paper;
             MenuPresentation.Plaque(timer, clockFace, MenuPresentation.Metal, 3f * scale);
             DrawHudLabel(new Rect(timer.x, timer.y + 4f * scale, timer.width, 15f * scale),
                 "TIME", tileCaption, MenuPresentation.Ink);
@@ -1436,131 +1541,218 @@ namespace CrazyElevator.Match
                 value, tileValue, valueColour);
         }
 
-        void DrawCollisionFeedback()
+        void DrawCollisionFeedback(Rect view, Camera camera)
         {
-            if (collisionFlash <= 0f) return;
-            for (int seat = 0; seat < 2; seat++)
-            {
-                if (!IsVisibleSeat(seat)) continue;
-                Rect view = ViewRect(seat);
-                float alpha = Mathf.Clamp01(collisionFlash / .62f);
-                Color flash = new Color(1f, .35f, .18f, alpha * .9f);
-                const float edge = 7f;
-                Fill(new Rect(view.x, view.y, view.width, edge), flash);
-                Fill(new Rect(view.x, view.yMax - edge, view.width, edge), flash);
-                Fill(new Rect(view.x, view.y, edge, view.height), flash);
-                Fill(new Rect(view.xMax - edge, view.y, edge, view.height), flash);
-                float width = Mathf.Min(330f, view.width - 24f);
-                Rect banner = new Rect(view.center.x - width * .5f, view.y + 112f, width, 40f);
-                Fill(banner, new Color(.04f, .05f, .08f, alpha * .96f));
-                Fill(new Rect(banner.x, banner.yMax - 5f, banner.width, 5f), flash);
-                GUI.Label(banner, bouncerCollision ? "BOUNCER IMPACT!" : "BOUNCE!  SWITCH TRACKS", collisionWord);
-            }
+            if (collisionFlash <= 0f || Event.current.type != EventType.Repaint) return;
+            Vector3 projected = camera.WorldToScreenPoint(collisionPoint);
+            Vector2 point = GuiPoint(projected);
+            if (projected.z <= 0f || !view.Contains(point)) return;
+            float alpha = collisionFlash / CollisionFlashSeconds;
+            float scale = MatchHudScale;
+            float size = Mathf.Lerp(20f, bouncerCollision ? 160f : 108f, 1f - alpha) * scale;
+            GUI.BeginGroup(view);
+            point -= view.position;
+            DrawRivalPulse(point, Vector2.one * size, collisionAccent, alpha, 4f * scale);
+            DrawRivalPulse(point, Vector2.one * (size * .68f), Gold, alpha * .85f, 2f * scale);
+            GUI.EndGroup();
         }
+
+        static readonly Color TheaterBack = new Color32(28, 19, 32, 255);
+        static readonly Vector2 PlayerOneStageLight = new Vector2(464f, 411f);
+        static readonly Vector2 PlayerTwoStageLight = new Vector2(976f, 411f);
 
         void DrawResultReveal()
         {
             float time = ResultRevealTime;
-            float curtain = Reveal01(time / .85f);
-            float panelWidth = Screen.width * .5f * curtain;
-            MenuPresentation.Paint(new Rect(0, 0, panelWidth, Screen.height), Color.black);
-            MenuPresentation.Paint(new Rect(Screen.width - panelWidth, 0, panelWidth, Screen.height), Color.black);
-            if (time < .85f) return;
+            Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);
+            const float blackoutEnd = .38f;
+            if (time < blackoutEnd)
+            {
+                MenuPresentation.Paint(screen, new Color(0f, 0f, 0f, Reveal01(time / blackoutEnd)));
+                return;
+            }
 
-            MenuPresentation.Paint(new Rect(0, 0, Screen.width, Screen.height), MenuPresentation.Wall);
-            var session = GameManager.Instance;
+            GameManager session = GameManager.Instance;
             bool matchFinished = session != null && session.MatchFinished;
-            bool seriesDraw = matchFinished && session.MatchWinner < 0;
-            bool draw = seriesDraw || !matchFinished && player.Points == Rival.Points;
-            bool playerWon = matchFinished ? session.MatchWinner == 0
-                : player.Points > Rival.Points;
-            Color winnerColour = draw ? MenuPresentation.Brass : playerWon ? MenuPresentation.Coral : MenuPresentation.Teal;
+            int winner = matchFinished ? session.MatchWinner
+                : player.Points == Rival.Points ? -1 : player.Points > Rival.Points ? 0 : 1;
+            Color winnerColour = winner < 0 ? MenuPresentation.Brass : SeatAccent(winner);
+            float scoresIn = Reveal01((time - 4.02f) / .68f);
+            float winnerIn = Reveal01((time - WinnerSpotlightAt) / .34f);
+            float open = Reveal01((time - .58f) / 1.04f);
+            float lamp = Reveal01((time - 1.06f) / .34f) * Mathf.Lerp(1f, .46f, scoresIn);
 
-            // Scale the whole composition, including typography and mouse hitboxes.
             Matrix4x4 previousMatrix = GUI.matrix;
             Color previousColour = GUI.color;
-            float uiScale = Mathf.Min(Screen.width / 1440f, Screen.height / 900f);
-            GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1440f * uiScale) * .5f,
-                (Screen.height - 900f * uiScale) * .5f, 0f), Quaternion.identity,
-                new Vector3(uiScale, uiScale, 1f));
+            Matrix4x4 stageMatrix = previousMatrix * MenuPresentation.Fit(screen, 1440f, 900f);
             try
             {
-                EnsureResultGlow();
-                float light = Reveal01((time - 1.35f) / .8f);
-                GUI.color = MenuPresentation.DisplayColor(new Color(winnerColour.r, winnerColour.g, winnerColour.b, .17f * light));
-                GUI.DrawTexture(new Rect(160, 0, 1120, 820), resultGlowTexture, ScaleMode.StretchToFill, true);
-                GUI.color = Color.white;
+                MenuPresentation.Paint(screen, TheaterBack);
+                GUI.matrix = stageMatrix;
+                DrawStageCandidates(time, winner, winnerIn, 1f - scoresIn);
 
-                float titleIn = Reveal01((time - 2.05f) / .45f);
-                int dimension = session != null ? session.ActiveDimension : 0;
-                Color worldColour = ResultWorldColour(dimension);
-                MenuPresentation.Paint(new Rect(530, 78, 140, 36), new Color(worldColour.r, worldColour.g, worldColour.b, .16f * titleIn));
-                DrawResultLabel(new Rect(530, 78, 140, 36),
-                    "ROUND " + (session != null ? session.RoundNumber : 1), resultTitle, titleIn, worldColour);
-                DrawResultLabel(new Rect(694, 78, 260, 36),
-                    session != null ? session.ActiveDimensionName : "OFFICE", resultName, titleIn, MenuPresentation.Paper);
+                Vector2 target = SpotlightPosition(time, winner);
+                Vector2 glowingCenter = stageMatrix.MultiplyPoint3x4(target);
+                Vector2 radii = stageMatrix.MultiplyVector(new Vector3(
+                    Mathf.Lerp(winner < 0 ? 370f : 227f, 310f, scoresIn), 203f, 0f));
+                GUI.matrix = previousMatrix;
+                DrawTheaterLighting(screen, glowingCenter, radii, open, lamp,
+                    Mathf.Lerp(.94f, .19f, scoresIn), winnerColour);
 
-                string playerName = "PLAYER 1";
-                string rivalName = "PLAYER 2";
-                string winnerName = playerWon ? playerName : rivalName;
-                string headline = seriesDraw ? "MATCH TIED" : matchFinished ? winnerName + " WINS THE MATCH"
-                    : draw ? "IT'S A DRAW" : winnerName + " WINS";
-                float winnerIn = Reveal01((time - 4.55f) / .6f);
-                DrawResultLabel(new Rect(180, 152, 1080, 84), headline, resultWinner, winnerIn, winnerColour);
-                DrawResultLabel(new Rect(180, 232, 1080, 30),
-                    matchFinished ? seriesDraw ? "SERIES TIED" : "BEST OF THREE CHAMPION"
-                        : draw ? "NO ROUND AWARDED" : "ROUND VICTORY",
-                    resultTitle, winnerIn, new Color32(210, 191, 178, 255));
+                GUI.matrix = stageMatrix;
+                float suspense = Reveal01((time - 1.70f) / .38f)
+                    * (1f - Reveal01((time - 3.08f) / .32f));
+                DrawResultLabel(new Rect(220, 139, 1000, 55), "AND THE WINNER IS…", resultTitle,
+                    suspense, MenuPresentation.Brass);
 
-                DrawRevealScoreCard(new Rect(220, 300, 488, 256), playerName, player.Points,
-                    session != null ? session.PlayerOneWins : 0, MenuPresentation.Coral, !draw && playerWon,
-                    Reveal01((time - 2.65f) / .75f));
-                DrawRevealScoreCard(new Rect(732, 300, 488, 256), rivalName, Rival.Points,
-                    session != null ? session.PlayerTwoWins : 0, MenuPresentation.Teal, !draw && !playerWon,
-                    Reveal01((time - 3.55f) / .75f));
+                string headline = winner < 0 ? matchFinished ? "MATCH TIED" : "IT’S A DRAW"
+                    : "PLAYER " + (winner + 1) + (matchFinished ? " WINS THE MATCH" : " WINS");
+                DrawResultLabel(new Rect(150, 156, 1140, 91), headline, resultWinner,
+                    winnerIn, winnerColour);
+                if (scoresIn > 0f)
+                    DrawResultSummary(session, matchFinished, winner, time, scoresIn);
 
-                if (time < ResultRevealInputAt) return;
-                int nextDimension = matchFinished && session != null ? session.FirstEnabledDimension
-                    : (dimension + 1) % ElevatorRound.Dimensions;
-                Color nextColour = ResultWorldColour(nextDimension);
-                MenuPresentation.Paint(new Rect(220, 596, 1000, 112), new Color32(62, 46, 65, 255));
-                MenuPresentation.Paint(new Rect(220, 596, 4, 112), nextColour);
-                DrawResultLabel(new Rect(248, 614, 500, 24),
-                    matchFinished ? "REMATCH STARTS IN" : "NEXT WORLD", resultSmall, 1f, MenuPresentation.Paper);
-                DrawResultLabel(new Rect(248, 642, 500, 44),
-                    matchFinished ? GameManager.DimensionDisplayName(nextDimension)
-                        : session != null ? session.NextDimensionName : "CANDY",
-                    resultWorld, 1f, nextColour);
-
-                if (matchFinished)
-                {
-                    DrawFinalResultActionButton(new Rect(220, 746, 306, 64),
-                        "PLAY AGAIN", MenuPresentation.Teal, 0);
-                    DrawFinalResultActionButton(new Rect(557, 746, 306, 64),
-                        "RETURN TO LOBBY", MenuPresentation.Coral, 1);
-                    DrawFinalResultActionButton(new Rect(894, 746, 306, 64),
-                        "RETURN TO MAIN MENU", MenuPresentation.Brass, 2);
-                }
-                else
-                {
-                    Rect button = new Rect(832, 620, 364, 64);
-                    bool hovered = button.Contains(Event.current.mousePosition);
-                    MenuPresentation.Paint(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
-                    MenuPresentation.Paint(button, hovered ? Color.Lerp(MenuPresentation.Teal, MenuPresentation.Paper, .2f) : MenuPresentation.Teal);
-                    GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height),
-                        "NEXT ROUND", resultAction);
-                    var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
-                    MenuPresentation.Paint(key, new Color(0, 0, 0, .2f));
-                    MenuPresentation.Paint(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
-                    GUI.Label(key, ResultConfirmHint, resultKey);
-                    if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
-                }
+                GUI.matrix = previousMatrix;
+                float stageFade = 1f - Reveal01((time - blackoutEnd) / .24f);
+                if (stageFade > 0f)
+                    MenuPresentation.Paint(screen, new Color(0f, 0f, 0f, stageFade));
             }
             finally
             {
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
             }
+        }
+
+        static Vector2 SpotlightPosition(float time, int winner)
+        {
+            Vector2 start = new Vector2(720f, 407f);
+            Vector2 left = PlayerOneStageLight;
+            Vector2 right = PlayerTwoStageLight;
+            Vector2 mid = new Vector2(690f, 454f);
+            Vector2 target = winner < 0 ? start : winner == 0 ? left : right;
+            if (time < 1.60f) return Vector2.Lerp(start, left, Reveal01((time - 1.05f) / .55f));
+            if (time < 2.42f) return Vector2.Lerp(left, right, Reveal01((time - 1.60f) / .82f));
+            if (time < 2.92f) return Vector2.Lerp(right, mid, Reveal01((time - 2.42f) / .50f));
+            return Vector2.Lerp(mid, target, Reveal01((time - 2.92f) / (WinnerSpotlightAt - 2.92f)));
+        }
+
+        void DrawStageCandidates(float time, int winner, float winnerIn, float alpha)
+        {
+            if (alpha <= 0f) return;
+            StageFill(new Rect(134, 543, 1172, 48), new Color32(67, 31, 47, 255), alpha);
+            StageFill(new Rect(134, 543, 1172, 2), new Color32(151, 89, 58, 255), alpha);
+            StageFill(new Rect(160, 592, 1120, 14), new Color32(41, 21, 36, 255), alpha);
+            DrawStageElevator(PlayerOneStageLight.x, 0, winner == 0 ? winnerIn : 0f, alpha, time);
+            DrawStageElevator(PlayerTwoStageLight.x, 1, winner == 1 ? winnerIn : 0f, alpha, time);
+        }
+
+        void DrawStageElevator(float x, int seat, float opening, float alpha, float time)
+        {
+            Color trim = SeatAccent(seat);
+            Rect car = new Rect(x - 83, 323, 166, 163);
+            StageFill(new Rect(car.x - 11, car.y - 9, car.width + 22, car.height + 17),
+                new Color32(32, 25, 42, 255), alpha);
+            StageFill(car, trim, alpha);
+            Rect cabin = new Rect(car.x + 8, car.y + 14, car.width - 16, car.height - 21);
+            StageFill(cabin, Color.Lerp(new Color32(73, 61, 84, 255), MenuPresentation.Brass, opening), alpha);
+            float doorWidth = Mathf.Lerp(cabin.width * .5f - 1f, cabin.width * .17f, opening);
+            Color door = Color.Lerp(MenuPresentation.Wall, trim, .28f);
+            StageFill(new Rect(cabin.x, cabin.y, doorWidth, cabin.height), door, alpha);
+            StageFill(new Rect(cabin.xMax - doorWidth, cabin.y, doorWidth, cabin.height), door, alpha);
+            StageFill(new Rect(x - 29, car.y - 20, 58, 23), TheaterBack, alpha);
+            StageFill(new Rect(x - 6, car.y - 11, 12, 5), trim, alpha);
+            DrawResultLabel(new Rect(x - 155f, 494f, 310f, 38f), "PLAYER " + (seat + 1),
+                resultTitle, alpha, trim);
+            if (opening <= 0f) return;
+            DrawStageSparkle(new Vector2(x, cabin.center.y), time, opening * alpha);
+        }
+
+        static void DrawStageSparkle(Vector2 center, float time, float alpha)
+        {
+            float length = 18f + 7f * Mathf.Sin(Mathf.PI * Reveal01((time - WinnerSpotlightAt) / .55f));
+            StageFill(new Rect(center.x - length, center.y - 2f, length * 2f, 4f),
+                MenuPresentation.Paper, alpha);
+            StageFill(new Rect(center.x - 2f, center.y - length, 4f, length * 2f),
+                MenuPresentation.Paper, alpha);
+        }
+
+        static void StageFill(Rect area, Color colour, float alpha)
+        {
+            colour.a *= alpha;
+            MenuPresentation.Paint(area, colour);
+        }
+
+        void DrawTheaterLighting(Rect screen, Vector2 center, Vector2 radii,
+            float open, float lamp, float darkness, Color accent)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            if (resultTheaterMaterial == null)
+            {
+                Shader shader = Resources.Load<Shader>("ResultTheater");
+                if (shader != null && shader.isSupported)
+                    resultTheaterMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            }
+            if (resultTheaterMaterial == null)
+            {
+                // Keep the stage usable on a graphics backend without the theater shader.
+                float curtain = screen.width * Mathf.Lerp(.5f, .084f, open);
+                Color red = new Color32(109, 25, 49, 255);
+                MenuPresentation.Paint(new Rect(0f, 0f, curtain, screen.height), red);
+                MenuPresentation.Paint(new Rect(screen.xMax - curtain, 0f, curtain, screen.height), red);
+                return;
+            }
+
+            resultTheaterMaterial.SetVector("_Theater", new Vector4(open, lamp, darkness, 1f));
+            resultTheaterMaterial.SetVector("_Focus", new Vector4(center.x / screen.width, center.y / screen.height,
+                radii.x / screen.width, radii.y / screen.height));
+            resultTheaterMaterial.SetColor("_Accent", accent);
+            Graphics.DrawTexture(screen, Texture2D.whiteTexture, resultTheaterMaterial);
+        }
+
+        void DrawResultSummary(GameManager session, bool matchFinished, int winner, float time, float reveal)
+        {
+            int dimension = session != null ? session.ActiveDimension : 0;
+            Color worldColour = ResultWorldColour(dimension);
+            StageFill(new Rect(528, 104, 144, 34), worldColour, .25f * reveal);
+            DrawResultLabel(new Rect(528, 104, 144, 34),
+                "ROUND " + (session != null ? session.RoundNumber : 1), resultTitle, reveal, worldColour);
+            DrawResultLabel(new Rect(688, 104, 255, 34),
+                session != null ? session.ActiveDimensionName : "OFFICE", resultName, reveal, MenuPresentation.Paper);
+            DrawRevealScoreCard(new Rect(220, 285, 488, 256), "PLAYER 1", player.Points,
+                session != null ? session.PlayerOneWins : 0, MenuPresentation.Coral, winner == 0, reveal);
+            DrawRevealScoreCard(new Rect(732, 285, 488, 256), "PLAYER 2", Rival.Points,
+                session != null ? session.PlayerTwoWins : 0, MenuPresentation.Teal, winner == 1, reveal);
+
+            if (time < ResultRevealInputAt) return;
+            int nextDimension = session == null ? (dimension + 1) % ElevatorRound.Dimensions
+                : matchFinished ? session.FirstEnabledDimension : session.NextDimensionIndex;
+            Color nextColour = ResultWorldColour(nextDimension);
+            MenuPresentation.Paint(new Rect(220, 581, 1000, 112), new Color32(62, 46, 65, 255));
+            MenuPresentation.Paint(new Rect(220, 581, 4, 112), nextColour);
+            DrawResultLabel(new Rect(248, 599, 500, 24),
+                matchFinished ? "REMATCH STARTS IN" : "NEXT WORLD", resultSmall, 1f, MenuPresentation.Paper);
+            DrawResultLabel(new Rect(248, 627, 500, 44),
+                GameManager.DimensionDisplayName(nextDimension), resultWorld, 1f, nextColour);
+
+            if (matchFinished)
+            {
+                DrawFinalResultActionButton(new Rect(220, 731, 306, 64), "PLAY AGAIN", MenuPresentation.Teal, 0);
+                DrawFinalResultActionButton(new Rect(557, 731, 306, 64), "RETURN TO LOBBY", MenuPresentation.Coral, 1);
+                DrawFinalResultActionButton(new Rect(894, 731, 306, 64), "RETURN TO MAIN MENU", MenuPresentation.Brass, 2);
+                return;
+            }
+
+            Rect button = new Rect(832, 605, 364, 64);
+            bool hovered = button.Contains(Event.current.mousePosition);
+            MenuPresentation.Paint(new Rect(button.x, button.y + 4, button.width, button.height), new Color(0, 0, 0, .4f));
+            MenuPresentation.Paint(button, hovered ? Color.Lerp(MenuPresentation.Teal, MenuPresentation.Paper, .2f) : MenuPresentation.Teal);
+            GUI.Label(new Rect(button.x + 24, button.y, button.width - 116, button.height), "NEXT ROUND", resultAction);
+            var key = new Rect(button.xMax - 76, button.y + 15, 56, 34);
+            MenuPresentation.Paint(key, new Color(0, 0, 0, .2f));
+            MenuPresentation.Paint(new Rect(key.x + 1, key.y + 1, key.width - 2, key.height - 2), new Color(1, 1, 1, .2f));
+            GUI.Label(key, ResultConfirmHint, resultKey);
+            if (GUI.Button(button, GUIContent.none, GUIStyle.none)) ContinueMatch();
         }
 
         void UpdateResultActionNavigation(float horizontal)
@@ -1690,30 +1882,6 @@ namespace CrazyElevator.Match
 
         static float Reveal01(float value)
             => Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(value));
-
-        void EnsureResultGlow()
-        {
-            if (resultGlowTexture != null) return;
-            const int size = 128;
-            resultGlowTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Result spotlight glow",
-                hideFlags = HideFlags.HideAndDontSave,
-                wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear
-            };
-            var pixels = new Color[size * size];
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float dx = (x + .5f) / size * 2f - 1f;
-                float dy = (y + .5f) / size * 2f - 1f;
-                float alpha = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy)), 1.7f);
-                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
-            }
-            resultGlowTexture.SetPixels(pixels);
-            resultGlowTexture.Apply(false, true);
-        }
 
         void DrawPauseOverlay()
         {

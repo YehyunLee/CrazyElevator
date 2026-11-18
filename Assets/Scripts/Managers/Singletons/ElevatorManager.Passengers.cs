@@ -2188,6 +2188,8 @@ namespace CrazyElevator.Managers
             if (!patienceBars.TryGetValue(rider, out PassengerPatienceBar bar) || bar == null) return;
             bool show = round.Owns(rider) && !isExiting
                 && !boardingTransfers.ContainsKey(rider);
+            if (extendedInterior)
+                show &= !BuildingView && rider.Remaining > 0f && rider.Remaining <= rider.Patience * .25f;
             bar.gameObject.SetActive(show);
             if (!show) return;
 

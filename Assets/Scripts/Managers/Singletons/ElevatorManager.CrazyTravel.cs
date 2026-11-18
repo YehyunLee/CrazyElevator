@@ -80,6 +80,11 @@ namespace CrazyElevator.Managers
         float teleportCooldown;
         float cameraFollowBlend;
         Vector2 cameraFraming;
+        Vector2 cameraLookAhead;
+        Vector2 cameraRivalOffset;
+        float cameraPullback;
+        Vector2 cameraImpactDirection;
+        float cameraImpactTime;
         int cameraFramingFrame = -10;
         const float CameraFollowRate = 9f;
         const float CameraSnapDistance = 80f;
@@ -435,12 +440,23 @@ namespace CrazyElevator.Managers
                 ? LeftShaftX : RightShaftX;
         }
 
-        void UpdateCrazyTravelCamera(Vector3 carLocal)
+        internal Vector2 ShaftRoutePosition => new Vector2(RouteLateralX,
+            CollisionFloor * ShaftFloorHeight + 1.4f);
+
+        internal Vector2 ShaftRouteVelocity => !MovingInShaft ? Vector2.zero
+            : (OnFloorRail ? Vector2.right * railVelocity : Vector2.up * travelVelocity) * ShaftFloorHeight;
+
+        internal void KickShaftCamera(Vector2 direction)
+        {
+            cameraImpactDirection = direction.normalized;
+            cameraImpactTime = .26f;
+        }
+
+        void UpdateCrazyTravelCamera(Vector3 carLocal, float dt)
         {
             Transform world = exteriorCar.parent;
             // Follow the car across the building on rails and side tracks;
             // stay framed on the centre shafts otherwise.
-            float dt = Time.unscaledDeltaTime;
             bool followCar = railRiding || !OnMainShaft(carLocal.x);
             cameraFollowBlend = Mathf.MoveTowards(cameraFollowBlend, followCar ? 1f : 0f, dt * 1.6f);
             float cameraX = Mathf.Lerp(ElevatorMatchType.ShaftCenterX, carLocal.x,
@@ -449,18 +465,26 @@ namespace CrazyElevator.Managers
             Vector2 framing = new Vector2(cameraX, carLocal.y);
             bool snap = cameraFramingFrame < 0
                 || (framing - cameraFraming).sqrMagnitude > CameraSnapDistance * CameraSnapDistance;
+            if (snap)
+            {
+                cameraLookAhead = cameraRivalOffset = Vector2.zero;
+                cameraPullback = cameraImpactTime = 0f;
+            }
             cameraFraming = snap ? framing
                 : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));
             cameraFramingFrame = Time.frameCount;
-            cameraX = cameraFraming.x;
-            // Match main's wider shaft framing so the next floors and side
-            // routes are visible while retaining the smooth follow camera.
-            Vector3 cameraLocal = new Vector3(
-                cameraX,
-                cameraFraming.y + 5.2f,
-                -34f + Mathf.Max(0f, carLocal.z + .8f) * .18f);
+            Vector2 focus = FrameShaftAction(carLocal, dt);
+            Vector3 cameraLocal = new Vector3(focus.x, focus.y + 5.2f,
+                -34f - cameraPullback + Mathf.Max(0f, carLocal.z + .8f) * .18f);
+            if (cameraImpactTime > 0f)
+            {
+                float impact = cameraImpactTime / .26f;
+                Vector2 kick = cameraImpactDirection * (.68f * Mathf.Sin((1f - impact) * Mathf.PI) * impact);
+                cameraLocal += (Vector3)kick;
+                cameraImpactTime = Mathf.Max(0f, cameraImpactTime - dt);
+            }
 
-            routeBoostPulse = Mathf.MoveTowards(routeBoostPulse, 0f, Time.unscaledDeltaTime * 1.55f);
+            routeBoostPulse = Mathf.MoveTowards(routeBoostPulse, 0f, dt * 1.55f);
             if (phase == Phase.Moving)
             {
                 float clock = Time.unscaledTime;
@@ -469,7 +493,7 @@ namespace CrazyElevator.Managers
                     * strength;
             }
 
-            Vector3 targetLocal = new Vector3(cameraX, cameraFraming.y + .9f, carLocal.z);
+            Vector3 targetLocal = new Vector3(focus.x, focus.y + .9f, carLocal.z);
             exteriorCamera.transform.position = world.TransformPoint(cameraLocal);
             Vector3 targetWorld = world.TransformPoint(targetLocal);
             exteriorCamera.transform.rotation = Quaternion.LookRotation(
@@ -479,6 +503,35 @@ namespace CrazyElevator.Managers
             // The view widens as the car speeds up, so going fast reads at a glance.
             exteriorCamera.fieldOfView = Mathf.Lerp(61f + SpeedFovWiden * speedFx, 55f, routeBoostPulse);
         }
+
+        Vector2 FrameShaftAction(Vector2 car, float dt)
+        {
+            // Follow momentum for less than half a second and keep the car in the foreground.
+            bool liveTravel = ShowingLiveShaftAction;
+            Vector2 ahead = liveTravel ? Vector2.ClampMagnitude(ShaftRouteVelocity * .32f, 5.5f) : Vector2.zero;
+            float ease = 1f - Mathf.Exp(-5.5f * dt);
+            cameraLookAhead = Vector2.Lerp(cameraLookAhead, ahead, ease);
+
+            Vector2 offset = Vector2.zero;
+            float pullback = 0f;
+            if (liveTravel && Match != null && Match.TryFrameRival(this, out Vector2 rival, out float blend))
+            {
+                offset = Vector2.ClampMagnitude((car + rival) * .5f - cameraFraming, 11f) * blend;
+                Vector2 centre = cameraFraming + offset;
+                float halfWidth = Mathf.Max(Mathf.Abs(car.x - centre.x), Mathf.Abs(rival.x - centre.x)) + 4f;
+                float halfHeight = Mathf.Max(Mathf.Abs(car.y - centre.y), Mathf.Abs(rival.y - centre.y)) + 4f;
+                // Allow for two narrow split screen views and the temporary warp FOV.
+                float halfView = Mathf.Max(halfHeight, halfWidth / exteriorCamera.aspect);
+                float extraDistance = (halfView / Mathf.Tan(27.5f * Mathf.Deg2Rad)) - 33f;
+                pullback = Mathf.Clamp(extraDistance, 4f, 15f) * blend;
+            }
+            cameraRivalOffset = Vector2.Lerp(cameraRivalOffset, offset, ease);
+            cameraPullback = Mathf.Lerp(cameraPullback, pullback, ease);
+            return cameraFraming + cameraRivalOffset + cameraLookAhead * (1f - .8f * cameraPullback / 15f);
+        }
+
+        bool ShowingLiveShaftAction => showingTravelView && !MenuManager.TutorialActive
+            && (phase == Phase.Moving || phase == Phase.Docking);
 
         // ---------- Speed feedback ----------
         // 0 at cruising speed, 1 at the speed limit. Drives the FOV, speed lines and car trail.

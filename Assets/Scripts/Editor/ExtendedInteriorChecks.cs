@@ -376,6 +376,9 @@ public static class ExtendedInteriorChecks
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
             return;
         }
+        if (action == "interaction-run"
+            && UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>()?.Rival == null)
+            return; // The match scene reloads at the end of the frame.
         if (Get(game, "round") == null) return;
         try { File.Delete(request); }
         catch (IOException) { return; }
@@ -2156,9 +2159,11 @@ public static class ExtendedInteriorChecks
     {
         var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
         Require(match != null && match.Rival != null, "Interaction checks need both elevators.");
+        CrazyElevator.Managers.MenuManager.Close();
         var type = match.GetType();
         var roundField = typeof(Game).GetField("round", Flags);
         var phase = typeof(Game).GetField("phase", Flags);
+        var tick = type.GetMethod("UpdateRivalInteractions", Flags);
         for (int seat = 0; seat < 2; seat++)
         {
             match.StartMatch();
@@ -2167,34 +2172,45 @@ public static class ExtendedInteriorChecks
             Game rival = seat == 0 ? match.Rival : match.player;
             var round = (Round)roundField.GetValue(actor);
             var other = (Round)roundField.GetValue(rival);
-            var vip = (SharedRider)type.GetField("matchVip", Flags).GetValue(match);
+            var hostRound = (Round)roundField.GetValue(match.player);
+            var vipField = type.GetField("matchVip", Flags);
+            hostRound.TimeLeft = Round.Duration * .5f + 1f;
+            tick.Invoke(match, new object[] { .1f });
+            Require(vipField.GetValue(match) == null, "The VIP appeared before halfway.");
+            hostRound.TimeLeft = Round.Duration * .5f;
+            tick.Invoke(match, new object[] { .1f });
+            var vip = (SharedRider)vipField.GetValue(match);
             Require(vip != null && vip.IsVip && round.Riders.Contains(vip) && other.Riders.Contains(vip)
                 && round.IsQueuedAtStop(vip), "VIP must be a real rider shared by both queues.");
+            var session = CrazyElevator.Managers.GameManager.Instance;
+            session.GetType().GetMethod("StopAbilityIntro", Flags).Invoke(session, null);
+            CheckRivalCamera(actor, rival);
             round.Floor = other.Floor = vip.Origin;
             round.Stop = other.Stop = vip.OriginStop;
             vip.Arrival = 0f;
             Require(round.Board(vip) && !other.Board(vip), "Only one elevator can claim the VIP.");
             match.PassengerBoarded(actor, vip);
-            var messages = (string[])type.GetField("contestMessages", Flags).GetValue(match);
-            Require(messages[seat] == "VIP ON BOARD!" && messages[1 - seat] == "RIVAL GOT THE VIP!",
-                "Both players should see who claimed the VIP.");
+            Require((int)type.GetField("vipClaimSeat", Flags).GetValue(match) == seat
+                && (float)type.GetField("vipClaimTime", Flags).GetValue(match) > 0f,
+                "The VIP claim marker must appear on the winning seat.");
             round.Floor = vip.Destination; round.Stop = vip.DestinationStop;
             vip.Remaining = vip.Patience;
             int before = round.Score;
             Require(round.Offboard(vip) == CrazyElevator.Shared.OffboardResult.Happy
                 && round.Score - before >= 400, "An on-time VIP delivery must award the bonus.");
-            ((Round)roundField.GetValue(match.player)).TimeLeft = 39f;
-            type.GetMethod("UpdateRivalInteractions", Flags).Invoke(match, new object[] { .1f });
-            Require((bool)type.GetField("hazardEventStarted", Flags).GetValue(match)
-                && !string.IsNullOrEmpty((string)type.GetField("eventMessage", Flags).GetValue(match)),
-                "The timed shared hazard event did not start.");
+            hostRound.TimeLeft = 39f;
+            tick.Invoke(match, new object[] { .1f });
+            Require((bool)type.GetField("hazardEventStarted", Flags).GetValue(match),
+                "The match missed its timed attempt to start a shared hazard.");
+            if (Get(match.player, "eventHazard") != null)
+                Require((float)Get(match.player, "eventHazardTime") > 0f,
+                    "The active shared hazard did not receive a lifetime.");
             round.Riders.Add(new SharedRider { Kind = "GROUP", Space = 3, Boarded = true,
                 BoardedBySeat = seat, Remaining = 30f });
             phase.SetValue(actor, Enum.Parse(phase.FieldType, "Moving"));
             phase.SetValue(rival, Enum.Parse(phase.FieldType, "Moving"));
             actor.sceneView.exteriorCar.position = Vector3.zero;
             rival.sceneView.exteriorCar.position = new Vector3(30f, 0f, 0f);
-            var tick = type.GetMethod("UpdateRivalInteractions", Flags);
             for (int i = 0; i < 52; i++) tick.Invoke(match, new object[] { .1f });
             var trails = (IList)type.GetField("candyTrails", Flags).GetValue(match);
             Require(trails.Count == 1, "The Trio did not leave candy behind.");
@@ -2203,7 +2219,49 @@ public static class ExtendedInteriorChecks
             Require((float)Get(rival, "collisionSlowTimer") > 0f && trails.Count == 0,
                 "The rival did not consume the trail and slow down.");
         }
-        Debug.Log("PASS: Shared VIP, exclusive claim, bonus, hazard event, and candy trail for both seats.");
+        Debug.Log("PASS: Both seats look ahead, widen for an approaching rival and settle back. Mid-round shared VIP, exclusive claim marker, delivery bonus, hazard event and candy trail.");
+    }
+
+    static void CheckRivalCamera(Game actor, Game rival)
+    {
+        float floor = actor.ActiveMinFloor + 3f;
+        Phase(actor, "Moving");
+        Phase(rival, "Moving");
+        Set(actor, "travelFloor", floor);
+        Set(rival, "travelFloor", floor + .65f);
+        Set(actor, "travelVelocity", 1f);
+        Set(rival, "travelVelocity", -1f);
+        Set(actor, "showingTravelView", true);
+        Set(actor, "cameraFramingFrame", -1);
+        actor.ShaftCamera.aspect = .9f;
+        Vector3 car = new Vector3(actor.RouteLateralX, floor * Game.ShaftFloorHeight + 1.4f, -.8f);
+        Call(actor, "UpdateCrazyTravelCamera", car, .2f);
+        float zoomedOut = (float)Get(actor, "cameraPullback");
+        Require(zoomedOut > 1f && ((Vector2)Get(actor, "cameraLookAhead")).y > 1f,
+            "The shaft camera should lead upward and pull back for a closing rival.");
+        var world = actor.sceneView.exteriorCar.parent;
+        Vector3 otherCar = new Vector3(rival.RouteLateralX, (floor + .65f) * Game.ShaftFloorHeight + 1.4f, -.8f);
+        foreach (Vector3 position in new[] { car, otherCar })
+        {
+            Vector3 point = actor.ShaftCamera.WorldToViewportPoint(world.TransformPoint(position));
+            Require(point.z > 0f && point.x > .1f && point.x < .9f && point.y > .1f && point.y < .9f,
+                "Both cars should be comfortably inside the widened shaft view.");
+        }
+        Set(actor, "travelVelocity", 0f);
+        Set(rival, "travelVelocity", 0f);
+        Call(actor, "UpdateCrazyTravelCamera", car, .5f);
+        Require((float)Get(actor, "cameraPullback") < zoomedOut * .2f
+            && ((Vector2)Get(actor, "cameraLookAhead")).magnitude < .5f,
+            "The camera should settle when both cars stop.");
+        Set(actor, "railRiding", true);
+        Set(actor, "railVelocity", -1f);
+        Call(actor, "UpdateCrazyTravelCamera", car, .2f);
+        Require(((Vector2)Get(actor, "cameraLookAhead")).x < -1f,
+            "The camera should lead in the direction of sideways travel.");
+        Set(actor, "railRiding", false);
+        Set(actor, "railVelocity", 0f);
+        Phase(actor, "Boarding");
+        Phase(rival, "Boarding");
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Tutorial Practice")]
@@ -2428,10 +2486,10 @@ public static class ExtendedInteriorChecks
                 Require(!Finished(seat) && goals[seat] == 0,
                     "Tiny left/right reversals inside the central shafts must not complete a side-stop goal.");
 
-                int[] stops = { 3, 4, 1, 0 };
+                int[] stops = { 3, 1 };
                 for (int goal = 0; goal < stops.Length; goal++)
                 {
-                    int direction = goal < 2 ? 1 : -1;
+                    int direction = goal == 0 ? 1 : -1;
                     for (int frame = 0; frame < 700 && goals[seat] == goal; frame++)
                     {
                         Tick(actor, direction);
@@ -2441,14 +2499,14 @@ public static class ExtendedInteriorChecks
                         "Actual rail travel did not reach lateral goal " + goal + " for seat " + seat);
                     Require(Mathf.Abs(actor.RouteLateralX - Game.StopWorldX(stops[goal])) <= 2f,
                         "Lateral goal counted before the elevator reached its actual side-stop position.");
-                    if (goal == 1)
+                    if (goal == 0)
                     {
                         for (int frame = 0; frame < 10; frame++) { Tick(actor, 1f); Finished(seat); }
-                        Require(goals[seat] == 2, "Holding right at far right must not count leftward goals.");
+                        Require(goals[seat] == 1, "Holding right must not count the leftward goal.");
                     }
                 }
                 Require(actor.OnFloorRail && !Finished(seat),
-                    "Reaching far left must still require a real return to the main shaft.");
+                    "Reaching the left stop must still require a real return to the main shaft.");
                 type.GetField("tutorialActive", Flags).SetValue(menu, false);
                 Require(!CrazyElevator.Managers.MenuManager.TutorialSidewaysPractice(actor),
                     "Sideways input guidance must be disabled outside the tutorial.");
@@ -2470,7 +2528,7 @@ public static class ExtendedInteriorChecks
                 for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++)
                     Tick(actor, actor.TutorialShaftDirection, actor.TutorialRejoinVerticalDirection);
                 Require(actor.OnMainVerticalTrack && Finished(seat),
-                    "All four side stops plus a real main-shaft return must complete lateral practice.");
+                    "The right and left stops plus a real main-shaft return must complete lateral practice.");
                 Require(actor.SecondsLeft == clock, "Sideways practice consumed the live round timer.");
                 enter.Invoke(menu, new object[] { seat, 9, true });
                 Require(goals[seat] == 0 && !Finished(seat), "Repeating the lesson retained completed side-stop goals.");
@@ -2496,7 +2554,7 @@ public static class ExtendedInteriorChecks
                 Require(actor.DiscreteFloor == targetFloor && actor.SecondsLeft == clock,
                     "Confirming Stop must dock at the tutorial target without consuming the round timer.");
             }
-            File.WriteAllText(output + "/result.txt", "PASS: both seats reach the four side stops, wait at the shaft despite held sideways input, and rejoin only on a vertical turn. Arrivals from above and below hold at the target floor until the player presses Stop. Guidance stays tutorial-only; lesson entry resets progress; round clocks unchanged.\n");
+            File.WriteAllText(output + "/result.txt", "PASS: both seats reach the right and left stops, wait at the shaft despite held sideways input, and rejoin only on a vertical turn. Arrivals from above and below hold at the target floor until the player presses Stop. Guidance stays tutorial-only; lesson entry resets progress; round clocks unchanged.\n");
             Debug.Log(File.ReadAllText(output + "/result.txt"));
         }
         catch (Exception error)

@@ -310,6 +310,7 @@ namespace CrazyElevator.Managers
             arrivalImpact = 0; ResetCameraMotion(); selectedFloor = -1; destination = -1;
             ClearActionFeedback();
             ResetBuildingTravel();
+            cameraFramingFrame = -1;
             SyncRoundWorldVisibility();
             cabinFramingReady = cameraViewReady = false;
             ResetDimensionReveal();
@@ -1811,7 +1812,7 @@ namespace CrazyElevator.Managers
         Vector2 exteriorCollisionHalfSize = new Vector2(1.325f, 1.325f);
         Vector3 exteriorCollisionCenterOffset;
         bool showingTravelView;
-        const float CameraSwitchSeconds = .45f;
+        const float CameraSwitchSeconds = .55f;
         float cameraViewBlend;
         bool cameraViewReady;
 
@@ -1933,6 +1934,7 @@ namespace CrazyElevator.Managers
             eye.targetTexture = null;
             exteriorCamera.targetTexture = null;
             exteriorCamera.rect = cameraRect;
+            exteriorCamera.aspect = PixelAspect(cameraRect);
             eye.rect = BlendCameraRect(cameraRect, CabinTransitionRect(cameraRect), viewBlend);
             eye.depth = exteriorCamera.enabled ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
@@ -1971,7 +1973,7 @@ namespace CrazyElevator.Managers
             EnsureCrazyRouteMap();
             if (!cameraPaused || initializeView)
             {
-                UpdateCrazyTravelCamera(carLocal);
+                UpdateCrazyTravelCamera(carLocal, dt);
                 ApplyWorldEventCameraAccent();
             }
             exteriorCamera.backgroundColor = WorldSky(travelFloor);
@@ -2299,7 +2301,6 @@ namespace CrazyElevator.Managers
                 if (calm)
                 {
                     Play(chime, .72f);
-                    ElevatorSays("GRANDMA CALMED THE BABY!\nPassenger patience drains at half speed.", 2.8f);
                     babyCryTimer = 4.5f;
                 }
                 else babyCryTimer = 0f;
@@ -2311,7 +2312,6 @@ namespace CrazyElevator.Managers
                 if (babyCryTimer <= 0f)
                 {
                     Play(babyCrySfx != null ? babyCrySfx : generatedBabyCry, .62f);
-                    ElevatorSays("THE BABY IS CRYING!\nPassenger patience drains 1.6x faster.", 2.4f);
                     babyCryTimer = 4.5f;
                 }
             }

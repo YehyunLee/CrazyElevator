@@ -9,7 +9,7 @@ namespace CrazyElevator.Managers
     {
         const int TutorialWaitingStep = 8;
         const int LateralTravelStep = 9;
-        static readonly int[] TutorialLateralStops = { 3, 4, 1, 0 };
+        static readonly int[] TutorialLateralStops = { 3, 1 };
         const int OppositeMovementStep = 10;
         const float TutorialCardTravelSeconds = .18f;
         const float TutorialPracticeSeconds = 1.25f;
@@ -448,15 +448,12 @@ namespace CrazyElevator.Managers
             tutorialLastLateralX[index] = currentX;
             // Reach each real side-stop column in order; a small reversal or
             // a central lane change cannot stand in for travelling left/right.
-            int direction = goal < 2 ? 1 : -1;
-            if (actor.OnFloorRail && (currentX - previousX) * direction > .001f)
+            if (actor.OnFloorRail && goal < TutorialLateralStops.Length)
             {
-                while (goal < TutorialLateralStops.Length && (goal < 2 ? 1 : -1) == direction)
-                {
-                    float target = ElevatorManager.StopWorldX(TutorialLateralStops[goal]);
-                    if ((currentX - target) * direction < -1.5f) break;
-                    tutorialLateralGoalsReached[index] = ++goal;
-                }
+                int direction = TutorialLateralDirection(index);
+                float target = ElevatorManager.StopWorldX(TutorialLateralStops[goal]);
+                if ((currentX - previousX) * direction > .001f && (currentX - target) * direction >= -1.5f)
+                    tutorialLateralGoalsReached[index]++;
             }
             if (!TutorialLateralStopsReached(index) || tutorialRejoinedShaft[index] || !actor.OnMainVerticalTrack) return;
             tutorialRejoinedShaft[index] = true;
@@ -468,15 +465,13 @@ namespace CrazyElevator.Managers
 
         int TutorialLateralDirection(int index)
             => TutorialLateralStopsReached(index) ? tutorialActors[index].TutorialShaftDirection
-                : tutorialLateralGoalsReached[index] < 2 ? 1 : -1;
+                : TutorialLateralStops[tutorialLateralGoalsReached[index]] > ElevatorRound.CenterStop ? 1 : -1;
 
         string TutorialLateralInstruction(int index)
         {
             if (TutorialLateralStopsReached(index))
                 return tutorialActors[index].TutorialReadyToRejoin ? "REJOIN THE SHAFT" : "GO TO THE SHAFT";
-            int goal = tutorialLateralGoalsReached[index];
-            return "MOVE " + (goal == 1 || goal == 3 ? "FAR " : "")
-                + (TutorialLateralDirection(index) > 0 ? "RIGHT" : "LEFT");
+            return TutorialLateralDirection(index) > 0 ? "MOVE RIGHT" : "MOVE LEFT";
         }
 
         void CompleteTutorialStep(int index)
@@ -806,7 +801,7 @@ namespace CrazyElevator.Managers
         void UpdateRoundPassengerIntroduction()
         {
             roundPassengerTimer += Time.unscaledDeltaTime;
-            roundPassengerPreviewActor?.AnimateTutorialCharacter(roundPassengerTimer);
+            roundPassengerPreviewActor?.AnimateRoundPassengerDemo(roundPassengerTimer);
             if (PassengerGalleryNextPressed()) AdvanceRoundPassenger();
         }
 
@@ -814,9 +809,9 @@ namespace CrazyElevator.Managers
         {
             roundPassengerTimer = 0f;
             while (++roundPassengerIndex < roundPassengerKinds.Count)
-                if (roundPassengerPreviewActor.PrepareTutorialCharacter(roundPassengerKinds[roundPassengerIndex]))
+                if (roundPassengerPreviewActor.PrepareRoundPassengerDemo(roundPassengerKinds[roundPassengerIndex]))
                     return;
-            roundPassengerPreviewActor.FinishTutorialCharacter();
+            roundPassengerPreviewActor.FinishRoundPassengerDemo();
             roundPassengerActors[0]?.BeginRoundCountdown();
             roundPassengerActors[1]?.BeginRoundCountdown();
             roundPassengerIntroductionActive = false;
@@ -832,7 +827,7 @@ namespace CrazyElevator.Managers
             string name = knownIndex >= 0 ? TutorialCharacterNames[knownIndex] : RoundPassengerName(kind);
             DrawPassengerGalleryCard(roundPassengerPreviewActor,
                 "ROUND PASSENGERS  " + (roundPassengerIndex + 1) + " / " + roundPassengerKinds.Count,
-                name);
+                name, roundPassengerPreviewActor.RoundPassengerDemoCaption(kind));
         }
 
         string RoundPassengerName(string kind)
@@ -1310,9 +1305,7 @@ namespace CrazyElevator.Managers
 
         void DrawTutorialLateralGuide(Rect view, int index, float cardTop)
         {
-            int goal = tutorialLateralGoalsReached[index];
-            if (goal >= TutorialLateralStops.Length) return;
-            bool far = goal == 1 || goal == 3;
+            if (TutorialLateralStopsReached(index)) return;
             int direction = TutorialLateralDirection(index);
             float width = Mathf.Min(400f, view.width - 36f);
             float scale = width / 600f;
@@ -1322,17 +1315,10 @@ namespace CrazyElevator.Managers
                 new Vector3((view.width - width) * .5f, top, 0f), Quaternion.identity,
                 new Vector3(scale, scale, 1f));
 
-            Color fill = MenuPresentation.Paper;
-            int arrows = far ? 2 : 1;
-            float arrowWidth = 132f;
-            float total = arrows * arrowWidth + (arrows - 1) * 24f;
-            for (int arrow = 0; arrow < arrows; arrow++)
-            {
-                float march = Mathf.Sin(Time.unscaledTime * 5.5f - arrow * .65f) * 8f * direction;
-                Rect rect = new Rect((600f - total) * .5f + arrow * (arrowWidth + 24f) + march,
-                    0f, arrowWidth, 78f);
-                DrawTutorialDirectionArrow(rect, direction, fill);
-            }
+            const float arrowWidth = 132f;
+            float march = Mathf.Sin(Time.unscaledTime * 5.5f) * 8f * direction;
+            Rect rect = new Rect((600f - arrowWidth) * .5f + march, 0f, arrowWidth, 78f);
+            DrawTutorialDirectionArrow(rect, direction, MenuPresentation.Paper);
             GUI.matrix = previous;
         }
 
@@ -1484,7 +1470,7 @@ namespace CrazyElevator.Managers
             title.normal.textColor = previousCountdownTextColor;
         }
 
-        void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText)
+        void DrawPassengerGalleryCard(ElevatorManager actor, string kicker, string headingText, string summary)
         {
             Rect view = new Rect(0f, 0f, Screen.width, Screen.height);
             MenuPresentation.Backdrop(view);
@@ -1503,9 +1489,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Fasteners(display, brassEdge);
             Rect opening = new Rect(274f, 128f, 652f, 376f);
             MenuPresentation.Plaque(opening, MenuPresentation.Wall, brassEdge, 4f);
-            Texture preview = actor.DimensionRevealTexture;
-            if (preview != null)
-                MenuPresentation.DrawTexture(new Rect(282f, 135f, 636f, 362f), preview, ScaleMode.ScaleToFit);
+            actor.DrawRoundPassengerDemo(new Rect(282f, 135f, 636f, 357.75f), roundPassengerTimer);
 
             Rect counter = new Rect(449f, 31f, 302f, 39f);
             MenuPresentation.Plaque(counter, MenuPresentation.Teal, ink, 5f);
@@ -1514,15 +1498,20 @@ namespace CrazyElevator.Managers
             Rect nameplate = new Rect(330f, 482f, 540f, 62f);
             MenuPresentation.Plaque(nameplate, MenuPresentation.Paper, brassEdge, 7f);
             MenuPresentation.Fasteners(nameplate, brassEdge);
-            DrawLabel(new Rect(nameplate.x + 22f, nameplate.y, nameplate.width - 44f, nameplate.height),
+            heading.fontSize = 29;
+            DrawLabel(new Rect(nameplate.x + 22f, nameplate.y + 3f, nameplate.width - 44f, 32f),
                 headingText, heading, ink);
+            DrawLabel(new Rect(nameplate.x + 22f, nameplate.y + 33f, nameplate.width - 44f, 22f),
+                summary, label, ink);
 
             if (roundPassengerTimer >= RoundPassengerSkipDelay)
             {
                 Rect confirm = new Rect(481f, 573f, 238f, 48f);
                 Color face = confirm.Contains(Event.current.mousePosition) ? MenuPresentation.Paper : MenuPresentation.Teal;
                 MenuPresentation.Plaque(confirm, face, ink, 5f);
-                DrawLabel(confirm, "CONFIRM TO SKIP", label, ink);
+                DrawLabel(confirm, "NEXT", label, ink);
+                string key = TutorialUsesKeyboard(actor.Seat) ? (actor.Seat == 1 ? "." : "C") : "A";
+                DrawKeyHint(new Rect(confirm.xMax + 12f, confirm.y, 48f, 48f), key);
                 if (GUI.Button(confirm, GUIContent.none, GUIStyle.none)) AdvanceRoundPassenger();
             }
             GUI.matrix = previousMatrix;

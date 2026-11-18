@@ -13,9 +13,9 @@ namespace CrazyElevator.Managers
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
-            rewardPoints, rewardCaption, scoreFlightStyle, actionWord, calloutNumber, calloutText, selectionArrow,
+            rewardPoints, rewardCaption, scoreFlightStyle, actionWord, calloutNumber, selectionArrow,
             encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge,
-            manifestTitle, manifestDetail;
+            manifestTitle;
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
         const float ActionFeedbackSeconds = 1.2f;
@@ -83,11 +83,10 @@ namespace CrazyElevator.Managers
             small = new GUIStyle(body) { fontSize = 12 };
             title = new GUIStyle(body) { fontSize = 36, fontStyle = FontStyle.Bold };
             GameTypography.Apply(title, true);
-            manifestDetail = new GUIStyle(small)
+            manifestTitle = new GUIStyle(small)
             {
                 padding = new RectOffset(), wordWrap = false, clipping = TextClipping.Clip
             };
-            manifestTitle = new GUIStyle(manifestDetail);
             GameTypography.Apply(manifestTitle, true);
             large = new GUIStyle(body) { fontSize = 24, fontStyle = FontStyle.Bold };
             GameTypography.Apply(large, true);
@@ -114,9 +113,6 @@ namespace CrazyElevator.Managers
             calloutNumber = new GUIStyle(buttonStyle) { fontSize = 25, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(calloutNumber, true);
             calloutNumber.normal.textColor = UiWhite;
-            calloutText = new GUIStyle(buttonStyle) { fontSize = 13, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Clip };
-            GameTypography.Apply(calloutText, true);
-            calloutText.normal.textColor = UiWhite;
             selectionArrow = new GUIStyle(buttonStyle) { fontSize = 32, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             GameTypography.Apply(selectionArrow, true);
             selectionArrow.normal.textColor = Gold;
@@ -138,10 +134,6 @@ namespace CrazyElevator.Managers
         void AngularPanel(Rect r, Color accent)
         {
             FramedPanel(r, accent, 3f);
-        }
-        void SpeechBubblePanel(Rect r, Color accent)
-        {
-            FramedPanel(r, accent, 2f);
         }
         void FramedPanel(Rect r, Color accent, float border)
         {
@@ -502,6 +494,8 @@ namespace CrazyElevator.Managers
                 collider.enabled = false;
             foreach (AudioSource source in model.GetComponentsInChildren<AudioSource>(true))
                 source.enabled = false;
+            foreach (AudioListener listener in model.GetComponentsInChildren<AudioListener>(true))
+                listener.enabled = false;
             foreach (Camera nestedCamera in model.GetComponentsInChildren<Camera>(true))
                 nestedCamera.enabled = false;
             foreach (Light nestedLight in model.GetComponentsInChildren<Light>(true))
@@ -1189,143 +1183,92 @@ namespace CrazyElevator.Managers
 
         readonly List<Rect> passengerBadgeObstacles = new List<Rect>();
 
-        // Draw pickup information in screen space, inside the owning camera pane.
+        // Each waiting passenger gets one destination plate. Boarded passengers
+        // already have a floor marker, so their only extra cue is an angry face.
         void DrawPassengerCallouts()
         {
-            if (BuildingView) return;
+            if (BuildingView || Event.current.type != EventType.Repaint) return;
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
-            float viewWidth = view.width;
-            float viewHeight = view.height;
-            var visible = new List<Rider>();
-            foreach (Rider rider in round.Riders)
-                if (IsVisibleSpeaker(rider)) visible.Add(rider);
-            if (visible.Count == 0) return;
-
+            float uiScale = MenuPresentation.GameplayHudScale(view.width, view.height);
+            Rect badgeArea = Rect.MinMaxRect(0f, 88f * uiScale, view.width, view.height - 68f * uiScale);
             passengerBadgeObstacles.Clear();
             if (ShowBoardingDoorHints)
                 for (int slot = 0; slot < 3; slot++)
-                    passengerBadgeObstacles.Add(BoardingDoorHintRect(BoardingDoorAtScreenSlot(slot), slot));
-            Rect badgeArea = new Rect(0f, 64f, viewWidth, viewHeight - 64f);
+                {
+                    BoardingDoor door = BoardingDoorAtScreenSlot(slot);
+                    if (ShowDoorHint(door)) passengerBadgeObstacles.Add(BoardingDoorHintRect(door, slot));
+                }
 
-            Rider speaker = null;
-            foreach (Rider rider in visible)
-                if (rider.Boarded && (rider.HasFeature(PassengerFeature.CryingBaby)
-                    || rider.Remaining <= rider.Patience * .25f
-                    || round.AtDestination(rider) || !string.IsNullOrEmpty(rider.Status)))
-                { speaker = rider; break; }
-            if (speaker == null && selectedRider != null && visible.Contains(selectedRider)) speaker = selectedRider;
-
-            foreach (Rider rider in visible)
+            foreach (Rider rider in round.Riders)
             {
-                if (!figures.TryGetValue(rider, out Transform figure)) continue;
-                Vector3 headPoint = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
-                Vector3 footPoint = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
-                if (headPoint.z <= 0 || footPoint.z <= 0) continue;
-                float projectedHeadX = headPoint.x - view.x;
-                if (projectedHeadX < -24f || projectedHeadX > viewWidth + 24f) continue;
-                float localX = footPoint.x - view.x;
-                float footY = view.y + view.height - footPoint.y;
-                float headY = view.y + view.height - headPoint.y;
-                float x = Mathf.Round(Mathf.Clamp(localX, 30f, viewWidth - 30f));
-                float headX = Mathf.Round(Mathf.Clamp(projectedHeadX, 30f, viewWidth - 30f));
-                footY = Mathf.Round(Mathf.Clamp(footY, 96f, viewHeight - 38f));
-                headY = Mathf.Round(Mathf.Clamp(headY, 72f, viewHeight - 116f));
-                Color accent = Palette[rider.Color % Palette.Length];
+                if (!IsVisibleSpeaker(rider)) continue;
+                Transform figure = figures[rider];
+                Vector3 head = eye.WorldToScreenPoint(figure.position + Vector3.up * 2.08f);
+                Vector2 anchor = new Vector2(head.x - view.x, Screen.height - head.y - view.y);
+                if (head.z <= 0f || anchor.x < -20f * uiScale || anchor.x > view.width + 20f * uiScale)
+                    continue;
+
                 bool selected = rider == selectedRider || rider == draggedRider;
-
-                // Keep the waiting destination beside the passenger's feet,
-                // leaving the selection arrow and ability cue near the head.
-                if (!rider.Boarded && !rider.Resolved && round.IsOffered(rider))
-                    DrawPickupDestination(rider, headX, footY, badgeArea, selected);
-
-                // The selection arrow belongs above the passenger, not above
-                // the lower-left floor marker—especially for multi-cell boxes.
-                Rect arrow = new Rect(headX - 24f, headY - 26f, 48f, 40f);
                 if (selected)
                 {
-                    Color arrowColor = selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid;
-                    OutlinedLabel(arrow, "↓", selectionArrow, arrowColor);
+                    // The arrow indicates selection. The prompt to kick stays in the action stack.
+                    float size = 42f * uiScale;
+                    Rect arrow = new Rect(anchor.x - size * .5f, anchor.y - size * .78f, size, size);
+                    arrow = ClampInto(badgeArea, arrow);
+                    int oldSize = selectionArrow.fontSize;
+                    selectionArrow.fontSize = Mathf.Max(1, Mathf.RoundToInt(30f * uiScale));
+                    OutlinedLabel(arrow, "↓", selectionArrow,
+                        selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid);
+                    selectionArrow.fontSize = oldSize;
+                    passengerBadgeObstacles.Add(arrow);
+                }
 
-                    // Keep the kick action beside the selected passenger so
-                    // it remains visible even when the lower HUD is covered by
-                    // the travel/door controls.
-                    if (rider == selectedRider && rider.Boarded && draggedRider == null && phase == Phase.Boarding)
+                if (!rider.Boarded)
+                {
+                    Vector3 foot = eye.WorldToScreenPoint(PassengerDestinationAnchor(rider, figure));
+                    if (foot.z > 0f)
+                        DrawPickupDestination(rider, anchor.x, Screen.height - foot.y - view.y,
+                            badgeArea, uiScale, selected);
+                }
+                else if (rider.Remaining <= 0f)
+                {
+                    float size = 34f * uiScale;
+                    Rect icon = new Rect(anchor.x - size * .5f, anchor.y - size, size, size);
+                    if (TryPlacePassengerBadge(badgeArea, ref icon))
                     {
-                        float hintX = Mathf.Clamp(x + 24f, 8f, viewWidth - 120f);
-                        float hintY = Mathf.Clamp(footY - 48f, 72f, viewHeight - 54f);
-                        Rect hint = new Rect(hintX, hintY, 42f, 42f);
-                        DrawGameplayKeyHint(hint, GameplayKickoutKey);
-                        Color previousHintText = calloutText.normal.textColor;
-                        calloutText.normal.textColor = UiWhite;
-                        GUI.Label(new Rect(hint.x + 50f, hint.y + 6f, 62f, 30f),
-                            "KICK", calloutText);
-                        calloutText.normal.textColor = previousHintText;
+                        DrawPassengerAngryIcon(icon);
+                        passengerBadgeObstacles.Add(icon);
                     }
-                }
-
-                string cue = PassengerVisualCue(rider, selected);
-                if (!string.IsNullOrEmpty(cue))
-                {
-                    float cueWidth = Mathf.Clamp(small.CalcSize(new GUIContent(cue)).x + 18f, 76f, 166f);
-                    float cueX = headX + 12f + cueWidth <= viewWidth - 8f
-                        ? headX + 12f : headX - cueWidth - 12f;
-                    Rect cueRect = new Rect(Mathf.Clamp(cueX, 8f, viewWidth - cueWidth - 8f),
-                        headY + 2f, cueWidth, 22f);
-                    MenuPresentation.HudPlate(cueRect, PassengerAbilityAccent(rider));
-                    Label(new Rect(cueRect.x + 8f, cueRect.y + 2f, cueRect.width - 12f, 18f), cue, small);
-                }
-
-                if (rider != speaker) continue;
-                bool mad = rider.Boarded && rider.Remaining <= 0;
-                string message = PassengerCalloutText(rider);
-                if (!mad && string.IsNullOrEmpty(message)) continue;
-                float width = mad ? 64f
-                    : Mathf.Clamp(calloutText.CalcSize(new GUIContent(message)).x + 22f, 112f, 220f);
-                float quoteHeight = mad ? 64f : 28f;
-                float quoteX = headX;
-                Rect quote = new Rect(Mathf.Clamp(quoteX - width * .5f, 12f, viewWidth - width - 12f),
-                    (selected ? arrow.y : headY - 4f) - quoteHeight - 3f, width, quoteHeight);
-                if (mad)
-                {
-                    // MAD uses the simple standalone angry face. It should
-                    // read as a passenger mood icon, not as a boxed message.
-                    DrawPassengerAngryIcon(quote);
-                }
-                else
-                {
-                    SpeechBubblePanel(quote, accent);
-                    GUI.Label(new Rect(quote.x + 6f, quote.y, quote.width - 12f, quote.height - 2f),
-                        message, calloutText);
                 }
             }
         }
 
-        void DrawPickupDestination(Rider rider, float headX, float footY, Rect view, bool selected)
+        void DrawPickupDestination(Rider rider, float headX, float footY, Rect view, float uiScale, bool selected)
         {
-            string abilityIcon = PassengerAbilityIconKind(rider);
-            bool showAbility = !string.IsNullOrEmpty(abilityIcon);
-            const float badgeHeight = 42f;
-            float iconWidth = showAbility ? 36f : 0f;
-            float vipHeight = rider.IsVip ? 24f : 0f;
-            string destination = PassengerFloorLabel(rider);
-            float badgeWidth = Mathf.Max(52f,
-                Mathf.Ceil(calloutNumber.CalcSize(new GUIContent(destination)).x) + iconWidth + 12f);
-            Rect area = PlacePassengerBadge(view, new Rect(headX - badgeWidth * .5f,
-                footY - badgeHeight - vipHeight, badgeWidth, badgeHeight + vipHeight));
-            passengerBadgeObstacles.Add(area);
-            Rect badge = new Rect(area.x, area.y + vipHeight, area.width, badgeHeight);
-            Color abilityAccent = PassengerAbilityAccent(rider);
-            Color accent = selected ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
-                : rider.IsVip ? MenuPresentation.Brass : MenuPresentation.Teal;
-            DrawDestinationPlate(badge, accent, rider.IsVip);
-            if (showAbility)
-                DrawPassengerBadgeIcon(new Rect(badge.x + 6f, badge.y + 6f, 30f, 30f),
-                    abilityIcon, abilityAccent);
-            MenuPresentation.Label(new Rect(badge.x + iconWidth + 6f, badge.y, badge.width - iconWidth - 12f,
-                badge.height), new GUIContent(destination), calloutNumber,
-                rider.IsVip ? MenuPresentation.Ink : MenuPresentation.Paper);
-            if (rider.IsVip)
-                OutlinedLabel(new Rect(area.x, area.y, area.width, vipHeight), "VIP", calloutText, MenuPresentation.Brass);
+            string abilityIcon = rider.IsVip ? "VIP" : PassengerAbilityIconKind(rider);
+            float badgeHeight = 37f * uiScale;
+            float iconWidth = string.IsNullOrEmpty(abilityIcon) ? 0f : 30f * uiScale;
+            int previousSize = calloutNumber.fontSize;
+            calloutNumber.fontSize = Mathf.Max(1, Mathf.RoundToInt(23f * uiScale));
+            var destination = new GUIContent(PassengerFloorLabel(rider));
+            float badgeWidth = Mathf.Max(46f * uiScale,
+                Mathf.Ceil(calloutNumber.CalcSize(destination).x) + iconWidth + 12f * uiScale);
+            Rect badge = new Rect(headX - badgeWidth * .5f, footY - badgeHeight, badgeWidth, badgeHeight);
+            if (TryPlacePassengerBadge(view, ref badge))
+            {
+                passengerBadgeObstacles.Add(badge);
+                Color accent = selected ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
+                    : rider.IsVip ? MenuPresentation.Brass : MenuPresentation.Teal;
+                DrawDestinationPlate(badge, accent, rider.IsVip);
+                if (iconWidth > 0f)
+                    DrawPassengerBadgeIcon(new Rect(badge.x + 4f * uiScale, badge.y + 6f * uiScale,
+                        25f * uiScale, 25f * uiScale), abilityIcon,
+                        rider.IsVip ? MenuPresentation.Brass : PassengerAbilityAccent(rider));
+                MenuPresentation.Label(new Rect(badge.x + iconWidth + 4f * uiScale, badge.y,
+                    badge.width - iconWidth - 8f * uiScale, badge.height), destination, calloutNumber,
+                    rider.IsVip ? MenuPresentation.Ink : MenuPresentation.Paper);
+            }
+            calloutNumber.fontSize = previousSize;
         }
 
         static void DrawDestinationPlate(Rect rect, Color accent, bool vip)
@@ -1336,27 +1279,29 @@ namespace CrazyElevator.Managers
             MenuPresentation.Paint(new Rect(rect.x, rect.y, rect.width, 2f), accent);
         }
 
-        Rect PlacePassengerBadge(Rect view, Rect badge)
+        bool TryPlacePassengerBadge(Rect view, ref Rect badge)
         {
-            badge = ClampInto(view, badge);
-            if (!PassengerBadgeOverlaps(badge)) return badge;
+            Rect desired = ClampInto(view, badge);
+            badge = desired;
+            if (!PassengerBadgeOverlaps(desired)) return true;
 
             const float gap = 4f;
-            Rect best = badge;
             float bestDistance = float.PositiveInfinity;
+            Rect best = desired;
             foreach (Rect obstacle in passengerBadgeObstacles)
             {
-                ConsiderPosition(obstacle.yMin - badge.height - gap);
+                ConsiderPosition(obstacle.yMin - desired.height - gap);
                 ConsiderPosition(obstacle.yMax + gap);
             }
-            return best;
+            badge = best;
+            return bestDistance < float.PositiveInfinity;
 
             void ConsiderPosition(float y)
             {
-                float distance = Mathf.Abs(badge.y - y);
-                if (distance >= bestDistance || y < view.yMin + 6f
-                    || y + badge.height > view.yMax - 6f) return;
-                Rect candidate = new Rect(badge.x, y, badge.width, badge.height);
+                float distance = Mathf.Abs(desired.y - y);
+                if (distance >= bestDistance || distance > desired.height * 1.5f
+                    || y < view.yMin || y + desired.height > view.yMax) return;
+                Rect candidate = new Rect(desired.x, y, desired.width, desired.height);
                 if (PassengerBadgeOverlaps(candidate)) return;
                 best = candidate;
                 bestDistance = distance;
@@ -1368,38 +1313,6 @@ namespace CrazyElevator.Managers
             foreach (Rect obstacle in passengerBadgeObstacles)
                 if (badge.Overlaps(obstacle)) return true;
             return false;
-        }
-
-        string PassengerVisualCue(Rider rider, bool selected)
-        {
-            if (rider.Kind == "HUNTER") return "MONSTER STUN";
-            if (rider.Kind == "DIVER") return "TORNADO SHIELD";
-            if (rider.Kind == "BOUNCER") return "STRONG BUMP";
-            if (rider.Kind == "FAIRY") return "FIREFLY SCOUT";
-            if (rider.Kind == "GOBLIN") return "VINE SHORTCUT";
-            if (rider.Kind == "MUSHROOM") return "SPORE GUARD";
-            if (rider.Kind == "ASTRONAUT") return "GRAVITY TETHER";
-            if (rider.Kind == "ALIEN") return "UFO LINK";
-            if (!rider.Boarded)
-            {
-                if (rider.HasFeature(PassengerFeature.SpeedSlow)) return "SPEED DOWN";
-                if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED UP";
-                if (rider.HasFeature(PassengerFeature.CryingBaby)) return "PATIENCE DRAIN";
-                if (rider.HasFeature(PassengerFeature.ClearsRust)) return "CLEARS RUST";
-                if (rider.HasFeature(PassengerFeature.UrgencySpeech)) return "SHORT PATIENCE";
-                if (rider.Kind == "BOSS") return "DELIVERY BONUS";
-                return selected && rider.Space > 1 ? rider.Space + " SPACES" : null;
-            }
-            if (!round.Owns(rider)) return null;
-            if (rider.HasFeature(PassengerFeature.SpeedSlow))
-                return round.BabyCalmedByGrandma ? "SPEED DOWN + CALM" : "SPEED DOWN";
-            if (rider.HasFeature(PassengerFeature.SpeedBoost)) return "SPEED UP";
-            if (rider.HasFeature(PassengerFeature.CryingBaby))
-                return round.BabyCalmedByGrandma ? "BABY CALM" : "PATIENCE DRAIN";
-            if (rider.HasFeature(PassengerFeature.ClearsRust)) return "CLEARS RUST";
-            if (rider.HasFeature(PassengerFeature.UrgencySpeech)) return "SHORT PATIENCE";
-            if (rider.Kind == "BOSS") return "DELIVERY BONUS";
-            return null;
         }
 
         static string PassengerAbilityIconKind(Rider rider)
@@ -1460,14 +1373,12 @@ namespace CrazyElevator.Managers
 
         readonly List<Rider> manifestRiders = new List<Rider>();
         readonly Dictionary<Rider, RenderTexture> manifestRiderPortraits = new Dictionary<Rider, RenderTexture>();
-        Vector2 manifestScroll;
-        const float ManifestHeaderHeight = 35f;
-        const float ManifestRowHeight = 60f;
-        const float ManifestRowGap = 4f;
-        const float ManifestInset = 6f;
+        const float ManifestHeaderHeight = 28f;
+        const float ManifestRowHeight = 39f;
+        const float ManifestRowGap = 2f;
+        const float ManifestInset = 4f;
         const float ManifestShadow = 3f;
         static readonly Color ManifestPortraitBacking = new Color32(166, 152, 197, 255);
-        static readonly Color ManifestUrgentText = new Color32(148, 44, 55, 255);
 
         void UpdateManifestPortraits()
         {
@@ -1490,18 +1401,17 @@ namespace CrazyElevator.Managers
 
         Rect ManifestBoardRect(Rect view, float uiScale, int riderCount)
         {
-            float width = Mathf.Clamp(view.width * passengerListWidth, 200f * uiScale, 240f * uiScale);
-            float contentHeight = riderCount == 0 ? 26f : riderCount * ManifestRowHeight - ManifestRowGap;
-            // Keep clear of the rival marker above and the travel controls below.
-            float top = Mathf.Min(view.height * .4f, Mathf.Max((Match != null ? 124f : 96f) * uiScale, view.height * .14f));
-            float availableHeight = Mathf.Max(76f * uiScale, view.height - top - 177f * uiScale);
-            float height = Mathf.Min(Mathf.Min(view.height * .52f, availableHeight),
-                (ManifestHeaderHeight + contentHeight + ManifestInset + ManifestShadow) * uiScale);
-            return new Rect(view.xMax - width - 14f * uiScale, view.y + top, width, height);
+            if (riderCount == 0) return Rect.zero;
+            float width = Mathf.Clamp(view.width * passengerListWidth, 112f * uiScale, 138f * uiScale);
+            float top = (Match != null ? 118f : 86f) * uiScale;
+            float height = (ManifestHeaderHeight + riderCount * ManifestRowHeight
+                - ManifestRowGap + ManifestInset + ManifestShadow) * uiScale;
+            return new Rect(view.xMax - width - 12f * uiScale, view.y + top, width, height);
         }
 
         Rect PassengerListRect()
         {
+            if (!showPassengerList || cameraViewBlend < .99f) return Rect.zero;
             Rect view = ManifestView;
             int count = 0;
             foreach (Rider rider in round.Riders) if (round.Owns(rider)) count++;
@@ -1514,7 +1424,9 @@ namespace CrazyElevator.Managers
             manifestRiders.Clear();
             foreach (Rider rider in round.Riders)
                 if (round.Owns(rider)) manifestRiders.Add(rider);
-            // Stable insertion sort preserves boarding order when urgency ties.
+            if (manifestRiders.Count == 0) return;
+
+            // The riders with the least time left stay at the top of the board.
             for (int i = 1; i < manifestRiders.Count; i++)
             {
                 Rider rider = manifestRiders[i];
@@ -1523,132 +1435,60 @@ namespace CrazyElevator.Managers
                 { manifestRiders[j + 1] = manifestRiders[j]; j--; }
                 manifestRiders[j + 1] = rider;
             }
+
             Rect view = ManifestView;
             float uiScale = ManifestScale(view);
-            int count = manifestRiders.Count;
-            Rect board = ManifestBoardRect(view, uiScale, count);
+            Rect board = ManifestBoardRect(view, uiScale, manifestRiders.Count);
             int stopFloor = phase == Phase.Moving ? GlideStopFloor()
                 : phase == Phase.Docking ? destination : round.Floor;
             int stopSide = phase == Phase.Moving ? NearestStop(RouteLateralX)
                 : phase == Phase.Docking ? dockingStop : round.Stop;
-            int dropOffCount = 0;
-            foreach (Rider rider in manifestRiders)
-                if (rider.Destination == stopFloor && rider.DestinationStop == stopSide) dropOffCount++;
-            DrawManifestHeader(board, count, dropOffCount, uiScale);
 
-            float inset = ManifestInset * uiScale;
-            float headerHeight = ManifestHeaderHeight * uiScale;
-            Rect scroll = new Rect(board.x + inset, board.y + headerHeight, board.width - 2f * inset,
-                board.height - headerHeight - inset - ManifestShadow * uiScale);
-            if (count == 0)
-            {
-                manifestScroll = Vector2.zero;
-                ManifestText(manifestDetail, scroll, "NO PASSENGERS YET", 13f * uiScale,
-                    MenuPresentation.Paper, TextAnchor.MiddleCenter);
-                return;
-            }
-
-            float rowHeight = ManifestRowHeight * uiScale;
-            float rowGap = ManifestRowGap * uiScale;
-            float contentHeight = count * rowHeight - rowGap;
-            bool overflow = contentHeight - scroll.height > .01f;
-            GUIStyle scrollbar = GUI.skin.verticalScrollbar;
-            float scrollbarWidth = Mathf.Max(17f, scrollbar.fixedWidth + scrollbar.margin.horizontal);
-            float rowWidth = scroll.width - (overflow ? scrollbarWidth : 0f);
-            manifestScroll.y = Mathf.Clamp(manifestScroll.y, 0f, Mathf.Max(0f, contentHeight - scroll.height));
-            manifestScroll = GUI.BeginScrollView(scroll, manifestScroll,
-                new Rect(0, 0, rowWidth, overflow ? contentHeight : scroll.height), false, overflow);
-            for (int i = 0; i < count; i++)
-            {
-                Rider rider = manifestRiders[i];
-                bool atStop = rider.Destination == stopFloor && rider.DestinationStop == stopSide;
-                DrawManifestRow(new Rect(0, i * rowHeight, rowWidth, rowHeight - rowGap), rider, uiScale, atStop);
-            }
-            GUI.EndScrollView();
-        }
-
-        void DrawManifestHeader(Rect board, int count, int dropOffCount, float uiScale)
-        {
             float shadow = ManifestShadow * uiScale;
-            float radius = 9f * uiScale;
+            float radius = 7f * uiScale;
             PaintManifestShape(new Rect(board.x, board.y + shadow, board.width, board.height - shadow),
                 MenuPresentation.Ink, radius);
             PaintManifestShape(new Rect(board.x, board.y, board.width, board.height - shadow),
                 MenuPresentation.Wall, radius);
 
             float inset = ManifestInset * uiScale;
-            Rect header = new Rect(board.x + inset, board.y + inset, board.width - 2f * inset, 24f * uiScale);
-            PaintManifestShape(header, MenuPresentation.Brass, 5f * uiScale);
-            Rect counter = new Rect(header.xMax - 27f * uiScale, header.y + 3f * uiScale, 24f * uiScale, 18f * uiScale);
-            PaintManifestShape(counter, MenuPresentation.Ink, 5f * uiScale);
-            ManifestText(manifestTitle, counter, count.ToString(), 14f * uiScale, MenuPresentation.Paper,
-                TextAnchor.MiddleCenter);
-            Rect title = Rect.MinMaxRect(header.x + 7f * uiScale, header.y,
-                counter.x - 4f * uiScale, header.yMax);
-            if (dropOffCount > 0)
+            Rect header = new Rect(board.x + 8f * uiScale, board.y, board.width - 16f * uiScale,
+                ManifestHeaderHeight * uiScale);
+            ManifestText(manifestTitle, header, "ON BOARD", 13f * uiScale, MenuPresentation.Paper);
+            ManifestText(manifestTitle, header, manifestRiders.Count.ToString(), 14f * uiScale,
+                MenuPresentation.Brass, TextAnchor.MiddleRight);
+            for (int i = 0; i < manifestRiders.Count; i++)
             {
-                Rect dropOff = new Rect(title.xMax - 70f * uiScale, title.y, 70f * uiScale, title.height);
-                title.xMax = dropOff.x - 4f * uiScale;
-                ManifestText(manifestDetail, dropOff, dropOffCount + (phase == Phase.Opening ? " AT STOP" : " NEXT STOP"),
-                    11f * uiScale, MenuPresentation.Ink, TextAnchor.MiddleRight);
+                Rider rider = manifestRiders[i];
+                bool atStop = rider.Destination == stopFloor && rider.DestinationStop == stopSide;
+                Rect row = new Rect(board.x + inset, board.y + (ManifestHeaderHeight + i * ManifestRowHeight) * uiScale,
+                    board.width - 2f * inset, (ManifestRowHeight - ManifestRowGap) * uiScale);
+                DrawManifestRow(row, rider, uiScale, atStop);
             }
-            ManifestText(manifestTitle, title, "ON BOARD", 16f * uiScale, MenuPresentation.Ink);
         }
 
         void DrawManifestRow(Rect row, Rider rider, float uiScale, bool atStop)
         {
-            float patience = Mathf.Clamp01(rider.Remaining / Mathf.Max(.001f, rider.Patience));
-            bool urgent = patience <= .25f;
-            PaintManifestShape(row, MenuPresentation.Paper, 6f * uiScale);
-
-            float frameSize = 48f * uiScale;
-            float thickness = 3f * uiScale;
-            Rect frame = new Rect(row.x + 5f * uiScale, row.center.y - frameSize * .5f, frameSize, frameSize);
-            Color patienceColour = urgent ? MenuPresentation.Coral
-                : patience <= .5f ? MenuPresentation.Brass : MenuPresentation.Teal;
-            DrawManifestPatienceFrame(frame, thickness, patience, patienceColour);
-            Rect portrait = Rect.MinMaxRect(frame.x + thickness, frame.y + thickness,
-                frame.xMax - thickness, frame.yMax - thickness);
+            PaintManifestShape(row, atStop ? MenuPresentation.Brass : MenuPresentation.Paper, 4f * uiScale);
+            float size = 29f * uiScale;
+            Rect portrait = new Rect(row.x + 4f * uiScale, row.center.y - size * .5f, size, size);
             MenuPresentation.Paint(portrait, ManifestPortraitBacking);
             DrawManifestPortrait(portrait, rider);
 
-            float textX = frame.xMax + 7f * uiScale;
-            float textRight = row.xMax - 6f * uiScale;
-            ManifestText(manifestTitle, new Rect(textX, row.y + 7f * uiScale, textRight - textX, 20f * uiScale),
-                PassengerRoleName(rider.Kind), 16f * uiScale, MenuPresentation.Ink);
-
-            float badgeWidth = 42f * uiScale;
-            Rect destination = new Rect(textRight - badgeWidth, row.y + 29f * uiScale, badgeWidth, 19f * uiScale);
-            ManifestText(manifestDetail, Rect.MinMaxRect(textX, destination.y, destination.x - 4f * uiScale, destination.yMax),
-                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s · +" + round.DeliveryPoints(rider),
-                13f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
-            PaintManifestShape(destination, atStop ? MenuPresentation.Brass : MenuPresentation.Teal, 5f * uiScale);
-            string destinationText = PassengerFloorLabel(rider);
-            ManifestText(manifestTitle, destination, destinationText, 14f * uiScale,
+            Rect destination = Rect.MinMaxRect(portrait.xMax + 4f * uiScale, row.y,
+                row.xMax - 5f * uiScale, row.yMax);
+            if (rider.IsVip)
+            {
+                float iconSize = 16f * uiScale;
+                DrawPassengerBadgeIcon(new Rect(destination.x, row.center.y - iconSize * .5f, iconSize, iconSize),
+                    "VIP", MenuPresentation.Brass);
+                destination.xMin += iconSize + 1f * uiScale;
+            }
+            ManifestText(manifestTitle, destination, PassengerFloorLabel(rider), 21f * uiScale,
                 MenuPresentation.Ink, TextAnchor.MiddleCenter);
-        }
-
-        static void DrawManifestPatienceFrame(Rect frame, float thickness, float patience, Color colour)
-        {
-            MenuPresentation.Paint(frame, MenuPresentation.Wall);
-            // Fill clockwise from the top left, counting each corner as part of one edge.
-            float progress = patience * 4f;
-            float edge = frame.width - thickness;
-            if (progress > 0f)
-                MenuPresentation.Paint(new Rect(frame.x, frame.y, edge * Mathf.Clamp01(progress), thickness), colour);
-            if (progress > 1f)
-                MenuPresentation.Paint(new Rect(frame.xMax - thickness, frame.y, thickness,
-                    edge * Mathf.Clamp01(progress - 1f)), colour);
-            if (progress > 2f)
-            {
-                float length = edge * Mathf.Clamp01(progress - 2f);
-                MenuPresentation.Paint(new Rect(frame.xMax - length, frame.yMax - thickness, length, thickness), colour);
-            }
-            if (progress > 3f)
-            {
-                float length = edge * Mathf.Clamp01(progress - 3f);
-                MenuPresentation.Paint(new Rect(frame.x, frame.yMax - length, thickness, length), colour);
-            }
+            if (rider.Remaining <= rider.Patience * .25f)
+                MenuPresentation.Paint(new Rect(portrait.x, portrait.yMax - 3f * uiScale,
+                    portrait.width, 3f * uiScale), MenuPresentation.Coral);
         }
 
         static void PaintManifestShape(Rect rect, Color colour, float radius)
@@ -1666,49 +1506,12 @@ namespace CrazyElevator.Managers
             MenuPresentation.Label(rect, content, style, colour);
         }
 
-        static string PassengerRoleName(string kind)
-        {
-            switch (kind)
-            {
-                case "COURIER": return "COURIER";
-                case "INTERVIEW": return "INTERVIEWEE";
-                case "ELDERLY": return "GRANDMA";
-                case "PREGNANT": return "MOM + BABY";
-                case "GROUP": return "TRIO";
-                case "SPEEDBOOST": return "CLOWN";
-                case "HANDYMAN": return "HANDYMAN";
-                case "HUNTER": return "HUNTER";
-                case "DIVER": return "DIVER";
-                case "BOUNCER": return "BOUNCER";
-                case "BOSS": return "BOSS";
-                case "FAIRY": return "FAIRY";
-                case "GOBLIN": return "GOBLIN";
-                case "MUSHROOM": return "MUSHROOM";
-                case "ASTRONAUT": return "ASTRONAUT";
-                case "ALIEN": return "ALIEN";
-                default: return "WORKER";
-            }
-        }
-
         void DrawManifestPortrait(Rect rect, Rider rider)
         {
             if (manifestRiderPortraits.TryGetValue(rider, out RenderTexture portrait) && portrait != null)
                 MenuPresentation.DrawTexture(rect, portrait);
             else
                 DrawPassengerBadgeIcon(rect, rider.Kind, PassengerAbilityAccent(rider));
-        }
-
-        string PassengerCalloutText(Rider rider)
-        {
-            if (rider.Boarded && rider.Remaining <= 0) return "I'M MAD!";
-            if (rider.Boarded && !string.IsNullOrEmpty(rider.Status)
-                && rider.Status.IndexOf("passed my floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return "MISSED MY FLOOR!";
-            if (rider.Boarded && round.AtDestination(rider)) return "MY STOP!";
-            if (rider.Boarded && rider.HasFeature(PassengerFeature.CryingBaby))
-                return round.BabyCalmedByGrandma ? "CALM! PATIENCE x0.5" : "WAAAH! PATIENCE x1.6";
-            if (rider.Boarded && rider.Remaining <= rider.Patience * .25f) return "PLEASE HURRY!";
-            return null;
         }
 
         void DrawPassengerBadgeIcon(Rect rect, string kind, Color accent)
@@ -1790,6 +1593,16 @@ namespace CrazyElevator.Managers
             float x = ViewWidth - width - margin;
             if (phase == Phase.Moving)
             {
+                if (!MenuManager.TutorialActive)
+                {
+                    float stopWidth = 146f * scale;
+                    float moveWidth = 76f * scale;
+                    float bottom = ViewHeight - margin - height;
+                    stop = new Rect(ViewWidth - margin - stopWidth, bottom, stopWidth, height);
+                    down = new Rect(stop.x - gap - moveWidth, bottom, moveWidth, height);
+                    up = new Rect(down.x - gap - moveWidth, bottom, moveWidth, height);
+                    return;
+                }
                 float y = ViewHeight - margin - height * 3 - gap * 2;
                 up = new Rect(x, y, width, height);
                 down = new Rect(x, y + height + gap, width, height);
@@ -1818,11 +1631,17 @@ namespace CrazyElevator.Managers
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
-            DrawMouseControl(up, "HOLD UP", MenuPresentation.Teal, GameplayUpKey);
-            DrawMouseControl(down, "HOLD DOWN", MenuPresentation.Teal, GameplayDownKey);
-            DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP",
-                MenuPresentation.Brass, GameplayConfirmKey);
-            DrawMouseControl(close, "CLOSE & TRAVEL", MenuPresentation.Brass, GameplayCloseKey);
+            if (phase == Phase.Moving)
+            {
+                bool practice = MenuManager.TutorialActive;
+                DrawMouseControl(up, practice ? "HOLD UP" : "↑", MenuPresentation.Teal,
+                    practice || GameplayUpKey != "↑" ? GameplayUpKey : null);
+                DrawMouseControl(down, practice ? "HOLD DOWN" : "↓", MenuPresentation.Teal,
+                    practice || GameplayDownKey != "↓" ? GameplayDownKey : null);
+                DrawMouseControl(stop, (practice ? "STOP AT F" : "STOP F") + ElevatorRound.FloorNumber(GlideStopFloor()),
+                    MenuPresentation.Brass, GameplayConfirmKey);
+            }
+            DrawMouseControl(close, "CLOSE & GO", MenuPresentation.Brass, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", MenuPresentation.Coral, GameplayKickoutKey);
             DrawMouseControl(repair, "HOLD TO REPAIR", MenuPresentation.Teal, GameplayRepairKey);
         }
@@ -1841,6 +1660,7 @@ namespace CrazyElevator.Managers
             for (int slot = 0; slot < 3; slot++)
             {
                 BoardingDoor door = BoardingDoorAtScreenSlot(slot);
+                if (!ShowDoorHint(door)) continue;
                 string direction = GameplayUsesWasd
                     ? (slot == 0 ? "A" : slot == 1 ? "W" : "D")
                     : (slot == 0 ? "←" : slot == 1 ? "↑" : "→");
@@ -1851,6 +1671,15 @@ namespace CrazyElevator.Managers
 
         bool ShowBoardingDoorHints => !IsNpc && phase == Phase.Boarding
             && !round.Finished && !paused && selectedRider == null;
+
+        bool ShowDoorHint(BoardingDoor door)
+        {
+            if (MenuManager.TutorialActive) return true;
+            if (boardingDoorOpen[(int)door]) return false;
+            foreach (Rider rider in round.Riders)
+                if (round.IsOffered(rider) && CanBoardThroughDoor(rider, door)) return true;
+            return false;
+        }
 
         // Screen-relative left / up / right open the corresponding door,
         // even when the cabin is viewed from the opposite side.

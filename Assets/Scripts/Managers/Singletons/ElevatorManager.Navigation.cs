@@ -303,6 +303,7 @@ namespace CrazyElevator.Managers
         {
             if (!showPassengerList) return Vector2.zero;
             Rect cabin = PassengerListRect();
+            if (cabin.width <= 0f) return Vector2.zero;
             cabin = new Rect(cabin.x - pad, cabin.y - pad, cabin.width + pad * 2, cabin.height + pad * 2);
             if (!cabin.Overlaps(area)) return Vector2.zero;
             float left = area.xMax - cabin.xMin, up = area.yMax - cabin.yMin;
@@ -447,9 +448,13 @@ namespace CrazyElevator.Managers
             PassengerView view = figure.Root.GetComponent<PassengerView>();
             if (view.destination != null)
             {
-                view.destination.gameObject.SetActive(true);
+                ElevatorManager rival = Match != null ? Match.Rival : null;
+                bool cabinBadge = ShowsWaitingCabinBadge(rider)
+                    || (rival != null && rival.ShowsWaitingCabinBadge(rider));
+                view.destination.gameObject.SetActive(!cabinBadge);
+                if (cabinBadge) return;
                 string destination = PassengerFloorLabel(rider);
-                view.destination.text = rider.IsVip ? "VIP " + destination : destination;
+                view.destination.text = destination;
                 view.destination.transform.position = figure.Root.TransformPoint(new Vector3(0f, 2.65f, 0f));
                 Camera camera = exteriorCamera;
                 if (InPassengerStop && round.IsOffered(rider)) camera = eye;
@@ -460,6 +465,9 @@ namespace CrazyElevator.Managers
                         view.destination.transform.position - camera.transform.position);
             }
         }
+
+        bool ShowsWaitingCabinBadge(Rider rider)
+            => extendedInterior && InPassengerStop && !BuildingView && round != null && round.IsOffered(rider);
 
         void UpdateShaftCrowd(float dt)
         {

@@ -43,6 +43,7 @@ namespace CrazyElevator.Shared
                     DrawSpeedBoost(pixels, size, center, cream);
                     break;
                 case "BOSS":
+                case "VIP":
                     DrawCrown(pixels, size, center, cream);
                     break;
                 case "ELDERLY":

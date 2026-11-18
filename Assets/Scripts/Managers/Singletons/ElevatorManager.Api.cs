@@ -127,21 +127,42 @@ namespace CrazyElevator.Managers
         }
 
         // Select from the real, shared landing queues; do not spawn a duplicate passenger.
-        public Rider ChooseMatchVip()
+        internal Rider ChooseMatchVip(ElevatorManager rival)
         {
-            if (round == null) return null;
+            if (round == null || rival == null) return null;
             Rider best = null;
             float bestCost = float.MaxValue;
             foreach (var rider in round.Riders)
             {
                 if (!round.IsQueuedAtStop(rider) || rider.Space > 2) continue;
-                float cost = Mathf.Abs(rider.Origin - (round.MinFloor + 3))
-                    + Mathf.Abs(rider.OriginStop - ElevatorRound.CenterStop) * 1.5f;
+                float playerDistance = PickupRouteDistance(rider);
+                float rivalDistance = rival.PickupRouteDistance(rider);
+                // Keep the longer approach short and give both drivers a reason to turn.
+                float cost = Mathf.Max(playerDistance, rivalDistance)
+                    + Mathf.Abs(playerDistance - rivalDistance) * .75f
+                    + Mathf.Abs(rider.Origin - (round.MinFloor + 3.5f)) * .2f;
+                if (rider.OriginStop != ElevatorRound.CenterStop) cost += 2.5f;
+                if (Mathf.Min(playerDistance, rivalDistance) < .85f) cost += 8f;
                 if (cost >= bestCost) continue;
                 best = rider; bestCost = cost;
             }
             if (best != null) { best.IsVip = true; best.Bonus += 250; }
             return best;
+        }
+
+        float PickupRouteDistance(Rider rider)
+            => Mathf.Abs(CollisionFloor - rider.Origin)
+                + Mathf.Abs(RouteLateralX - StopX(rider.OriginStop)) / ShaftFloorHeight;
+
+        internal bool NearingVipPickup(Rider rider)
+        {
+            if (rider == null || round == null || !round.HasCapacityFor(rider)) return false;
+            if (TryGetPickupStop(out int floor, out int stop))
+                return floor == rider.Origin && stop == rider.OriginStop;
+            Vector2 towardsPickup = new Vector2(StopX(rider.OriginStop), rider.Origin * ShaftFloorHeight + 1.4f)
+                - ShaftRoutePosition;
+            return MovingInShaft && PickupRouteDistance(rider) < 2f
+                && Vector2.Dot(ShaftRouteVelocity, towardsPickup.normalized) > 1f;
         }
 
         public bool HasCandyTrail => round != null && round.HasOnboardFeature(PassengerFeature.GroupParty);

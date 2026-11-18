@@ -43,6 +43,8 @@ namespace CrazyElevator.Managers
         readonly MatchProgress matchProgress = new MatchProgress();
         const float AbilityIntroSeconds = 3.5f;
         const float GameplayStartCueSeconds = .9f;
+        internal const int FinalCountdownSeconds = 10;
+        GUIStyle finalCountdownStyle;
         readonly HashSet<string> introducedAbilities = new HashSet<string>();
         readonly Queue<(ElevatorManager actor, string kind, SharedRider rider)> pendingAbilityIntros =
             new Queue<(ElevatorManager actor, string kind, SharedRider rider)>();
@@ -391,17 +393,83 @@ namespace CrazyElevator.Managers
 
         void OnGUI()
         {
+            int introSeat = AbilityIntroPaneSeat;
             if (AbilityIntroActive && abilityIntroActor != null)
             {
                 var match = abilityIntroActor.Match;
-                bool shared = AbilityIntroPaneSeat < 0;
+                bool shared = introSeat < 0;
                 abilityIntroActor.DrawAbilityIntro(abilityIntroTime, AbilityIntroView(),
                     shared && match != null && abilityIntroKind != "VIP", !shared);
+                if (!shared) DrawFinalCountdown(match.ViewRect(1 - introSeat));
                 return;
             }
-            if (gameplayStartCueTime <= 0f || MenuManager.FullScreenOverlayActive
-                || MenuManager.IsOpen || IsPaused) return;
+            if (Player == null || MenuManager.IsOpen || IsPaused || Player.ShiftFinished
+                || MenuManager.FullScreenOverlayActive) return;
 
+            if (gameplayStartCueTime > 0f)
+                DrawGameplayStartCue();
+            else
+                DrawFinalCountdown(new Rect(0f, 0f, Screen.width, Screen.height));
+        }
+
+        void DrawFinalCountdown(Rect view)
+        {
+            if (Player == null || Player.ShiftFinished || Player.IntroPlaying || Player.CountdownPlaying
+                || MenuManager.IsOpen || MenuManager.TutorialActive || IsPaused) return;
+            var match = Player.Match;
+            if (match != null && (!match.Running || match.Paused || match.DimensionRevealActive)) return;
+
+            float remaining = MainTimer;
+            if (remaining <= 0f || remaining > FinalCountdownSeconds) return;
+
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColour = GUI.color;
+            Color previousContentColour = GUI.contentColor;
+            int previousDepth = GUI.depth;
+            GUI.matrix = Matrix4x4.identity;
+            GUI.color = Color.white;
+            GUI.contentColor = Color.white;
+            GUI.depth = -1000;
+            GameTypography.ApplyToSkin(GUI.skin);
+            finalCountdownStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                padding = new RectOffset(),
+                wordWrap = false
+            };
+
+            int seconds = Mathf.CeilToInt(remaining);
+            float beat = FinalCountdownBeat(remaining);
+            float size = Mathf.Min(view.height * .115f, view.width * .21f);
+            finalCountdownStyle.fontSize = Mathf.RoundToInt(size * (1f + .16f * beat));
+            string number = seconds.ToString();
+            var label = new Rect(view.x, view.center.y - size, view.width, size * 2f);
+            float shadow = Mathf.Max(2f, size * .032f);
+            finalCountdownStyle.normal.textColor = new Color(.08f, .04f, .10f, .84f);
+            GUI.Label(new Rect(label.x - shadow, label.y, label.width, label.height), number, finalCountdownStyle);
+            GUI.Label(new Rect(label.x + shadow, label.y, label.width, label.height), number, finalCountdownStyle);
+            GUI.Label(new Rect(label.x, label.y + shadow, label.width, label.height), number, finalCountdownStyle);
+            GUI.Label(new Rect(label.x, label.y - shadow, label.width, label.height), number, finalCountdownStyle);
+            finalCountdownStyle.normal.textColor = seconds <= 3
+                ? Color.Lerp(MenuPresentation.Coral, MenuPresentation.Paper, .36f)
+                : MenuPresentation.Paper;
+            GUI.Label(label, number, finalCountdownStyle);
+
+            GUI.matrix = previousMatrix;
+            GUI.color = previousColour;
+            GUI.contentColor = previousContentColour;
+            GUI.depth = previousDepth;
+        }
+
+        internal static float FinalCountdownBeat(float remaining)
+        {
+            float elapsed = Mathf.CeilToInt(remaining) - remaining;
+            return 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / .30f));
+        }
+
+        void DrawGameplayStartCue()
+        {
             float elapsed = GameplayStartCueSeconds - gameplayStartCueTime;
             float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / .12f));
             float fadeOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(gameplayStartCueTime / .32f));
