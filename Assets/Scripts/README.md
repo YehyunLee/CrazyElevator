@@ -13,6 +13,8 @@ Before each round, a three-second world preview shows its mechanics and hands of
 
 After the basic steps, each human practices a real collision in the shaft: hold up and boost into the staged rival. Contact and knockback complete the step; a timer or confirmation button cannot skip it. Only the practicing driver controls their car during that turn. Short prompts and the animated controller show the action; the Bouncer's character introduction explains its stronger hit. Both cars recoil, and passenger count adds no collision weight or stability. Kick practice highlights a real onboard rider, supplies one if automatic drop-off emptied the cabin, and requires an actual kick before advancing. All staging and passenger replenishment are tutorial-only; the real round starts with fresh cars and passengers.
 
+The tutorial's left/right lesson guides each player to right, far right, left, and far left, then back onto a central shaft. Large animated arrows in the upper part of each player's view pair one arrow with LEFT/RIGHT and two with FAR LEFT/FAR RIGHT. Light labels and matching arrows have thick dark outlines and float directly over the world above the elevator; the cue contains only the direction and arrows. Progress requires reaching the real side-stop columns; small reversals cannot skip the lesson. Tap a direction again if the first press only switches central lanes, then hold it to travel along a floor rail. These signs appear only during this tutorial lesson.
+
 ## Scene ownership (required)
 
 Put each global manager on its **own named GameObject** in `Main.unity` and attach the script in the Inspector. Do **not** recreate them with runtime `new GameObject` / `AddComponent`.

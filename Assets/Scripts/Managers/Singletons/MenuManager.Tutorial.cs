@@ -9,6 +9,7 @@ namespace CrazyElevator.Managers
     {
         const int TutorialWaitingStep = 8;
         const int LateralTravelStep = 9;
+        static readonly int[] TutorialLateralStops = { 3, 4, 1, 0 };
         const float TutorialCardTravelSeconds = .42f;
         const float TutorialPracticeSeconds = 1.7f;
         const float BoardingCardSeconds = 3f;
@@ -80,8 +81,8 @@ namespace CrazyElevator.Managers
         readonly int[] tutorialFloorStopBaseline = new int[2];
         readonly float[] tutorialMoveSeconds = new float[2];
         readonly float[] tutorialMoveDistance = new float[2];
-        readonly bool[] tutorialSteeredLeft = new bool[2];
-        readonly bool[] tutorialSteeredRight = new bool[2];
+        readonly int[] tutorialLateralGoalsReached = new int[2];
+        readonly float[] tutorialLastLateralX = new float[2];
         readonly float[] tutorialBoostSeconds = new float[2];
         readonly bool[] tutorialMoveCompleted = new bool[2];
         readonly bool[] tutorialBoostCompleted = new bool[2];
@@ -90,6 +91,7 @@ namespace CrazyElevator.Managers
         readonly float[] tutorialLastFloor = new float[2];
         readonly int[] tutorialTargetFloor = new int[2];
         ElevatorManager tutorialGame;
+        Texture2D tutorialDirectionArrowTexture;
 
         bool TutorialWaitingPanelActive
         {
@@ -190,8 +192,8 @@ namespace CrazyElevator.Managers
                 tutorialLastFloor[i] = actor != null ? actor.CurrentFloor : 0f;
                 tutorialTargetFloor[i] = -1;
                 tutorialMoveCompleted[i] = false;
-                tutorialSteeredLeft[i] = false;
-                tutorialSteeredRight[i] = false;
+                tutorialLateralGoalsReached[i] = 0;
+                tutorialLastLateralX[i] = actor != null ? actor.RouteLateralX : 0f;
                 tutorialBoostCompleted[i] = false;
                 tutorialStopCompleted[i] = false;
             }
@@ -368,13 +370,42 @@ namespace CrazyElevator.Managers
                     actor.PrepareTutorialKickPassenger();
                     return false;
                 case LateralTravelStep:
-                    tutorialSteeredLeft[index] |= actor.LateralTravelVelocity < 0f;
-                    tutorialSteeredRight[index] |= actor.LateralTravelVelocity > 0f;
-                    return tutorialSteeredLeft[index] && tutorialSteeredRight[index]
-                        && actor.OnMainVerticalTrack;
+                    return TutorialLateralStepCompleted(index);
                 default:
                     return false;
             }
+        }
+
+        bool TutorialLateralStepCompleted(int index)
+        {
+            if (!tutorialActive) return false;
+            ElevatorManager actor = tutorialActors[index];
+            int goal = tutorialLateralGoalsReached[index];
+            float currentX = actor.RouteLateralX;
+            float previousX = tutorialLastLateralX[index];
+            tutorialLastLateralX[index] = currentX;
+            if (goal >= TutorialLateralStops.Length) return actor.OnMainVerticalTrack;
+
+            // Reaching the actual columns teaches the destination arrows. A tiny
+            // reversal or a switch between the centre shafts cannot pass this lesson.
+            int direction = goal < 2 ? 1 : -1;
+            if (actor.OnFloorRail && (currentX - previousX) * direction > .001f)
+            {
+                while (goal < TutorialLateralStops.Length && (goal < 2 ? 1 : -1) == direction)
+                {
+                    float target = ElevatorManager.StopWorldX(TutorialLateralStops[goal]);
+                    if ((currentX - target) * direction < -1.5f) break;
+                    tutorialLateralGoalsReached[index] = ++goal;
+                }
+            }
+            return false;
+        }
+
+        int TutorialLateralDirection(int index)
+        {
+            int goal = tutorialLateralGoalsReached[index];
+            if (goal < 4) return goal < 2 ? 1 : -1;
+            return tutorialActors[index].RouteLateralX < CrazyElevator.Match.ElevatorMatch.ShaftCenterX ? 1 : -1;
         }
 
         void CompleteTutorialStep(int index)
@@ -382,7 +413,7 @@ namespace CrazyElevator.Managers
             ElevatorManager actor = tutorialActors[index];
             int step = tutorialSteps[index];
             int nextStep = step + 1;
-            if (step == 3 && actor.Match != null)
+            if (step == 3)
                 nextStep = LateralTravelStep;
             else if (step == LateralTravelStep)
                 nextStep = 4;
@@ -448,6 +479,11 @@ namespace CrazyElevator.Managers
             InputManager.TutorialInputMode inputMode = TutorialInputModeForStep(nextStep);
             InputManager.Instance?.SetTutorialInputMode(tutorialActors[index] != null
                 ? tutorialActors[index].Seat : index, inputMode);
+            if (nextStep == LateralTravelStep)
+            {
+                tutorialLateralGoalsReached[index] = 0;
+                tutorialLastLateralX[index] = tutorialActors[index].RouteLateralX;
+            }
             if (nextStep == TutorialWaitingStep)
             {
                 // The waiting state is a handoff, not another tutorial card.
@@ -805,14 +841,17 @@ namespace CrazyElevator.Managers
                 case 6: return "AUTOMATIC!";
                 case 7: return "KICK HIGHLIGHTED RIDER.";
                 case LateralTravelStep:
-                    if (tutorialSteeredLeft[index] && tutorialSteeredRight[index])
+                    if (tutorialLateralGoalsReached[index] >= TutorialLateralStops.Length)
                     {
                         string vertical = KeyboardHintsEnabled ? (seat == 1 ? "↑/↓" : "W/S") : "UP/DOWN";
-                        return "STEER TOWARD CENTER AND HOLD " + vertical + " TO REJOIN THE SHAFT.";
+                        return "STEER BACK TO CENTER, THEN HOLD " + vertical + " TO REJOIN THE SHAFT.";
                     }
-                    if (tutorialSteeredLeft[index]) return "STEER RIGHT ALONG THE RAIL.";
-                    if (tutorialSteeredRight[index]) return "STEER LEFT ALONG THE RAIL.";
-                    return "TAP LEFT OR RIGHT UNTIL YOU TURN ONTO A FLOOR RAIL.";
+                    if (tutorialActors[index].OnMainVerticalTrack)
+                        return "TAP " + (TutorialLateralDirection(index) > 0 ? "RIGHT" : "LEFT")
+                            + " AGAIN TO TAKE A FLOOR RAIL. THEN KEEP HOLDING.";
+                    return tutorialLateralGoalsReached[index] < 2
+                        ? "HOLD RIGHT. TWO ARROWS MEAN FAR RIGHT."
+                        : "HOLD LEFT. TWO ARROWS MEAN FAR LEFT.";
                 case 8:
                     if (tutorialCollisionHitConfirmed) return "YOU MADE AN OPENING!";
                     return KeyboardHintsEnabled ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
@@ -912,6 +951,8 @@ namespace CrazyElevator.Managers
             Rect card = new Rect(cardX, cardY, width, height);
             Color accent = step == 7 || collisionPractice ? MenuPresentation.Brass
                 : tutorialActors[index].Seat == 0 && split ? MenuPresentation.Coral : MenuPresentation.Teal;
+            if (step == LateralTravelStep && tutorialCardMotions[index] == TutorialCardMotion.Settled)
+                DrawTutorialLateralGuide(view, index, settledY);
             MenuPresentation.HudPlate(card, accent);
             Rect badge = new Rect(card.x + 15f, card.y + 10f, 102f, 22f);
             MenuPresentation.Plaque(badge, accent, MenuPresentation.Metal, 2f);
@@ -940,7 +981,7 @@ namespace CrazyElevator.Managers
             if (!KeyboardHintsEnabled && step != 6)
             {
                 hintWidth = Mathf.Min(162f, card.width * .32f);
-                DrawTutorialController(new Rect(card.x + 15f, rowY, hintWidth, 96f), step, accent);
+                DrawTutorialController(new Rect(card.x + 15f, rowY, hintWidth, 96f), step, accent, index);
             }
             else
             {
@@ -974,6 +1015,112 @@ namespace CrazyElevator.Managers
             GUI.matrix = previousMatrix;
             GUI.color = previousGuiColor;
             GUI.contentColor = previousContentColor;
+        }
+
+        void DrawTutorialLateralGuide(Rect view, int index, float cardTop)
+        {
+            int goal = tutorialLateralGoalsReached[index];
+            if (goal >= TutorialLateralStops.Length) return;
+            bool far = goal == 1 || goal == 3;
+            int direction = TutorialLateralDirection(index);
+            string side = direction > 0 ? "RIGHT" : "LEFT";
+            string heading = (far ? "FAR " : "") + side;
+            float width = Mathf.Min(660f, view.width - 36f);
+            float scale = Mathf.Min(width / 600f, view.height * .24f / 176f);
+            width = 600f * scale;
+            float height = 176f * scale;
+            float top = Mathf.Max(8f, Mathf.Min(view.height * .30f - height * .5f, cardTop - height - 18f));
+            Matrix4x4 previous = GUI.matrix;
+            GUI.matrix = previous * Matrix4x4.TRS(
+                new Vector3((view.width - width) * .5f, top, 0f), Quaternion.identity,
+                new Vector3(scale, scale, 1f));
+
+            Color fill = MenuPresentation.Paper;
+            var large = new GUIStyle(cardTitle)
+                { fontSize = 56, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            var text = new GUIContent(heading);
+            float bounce = Mathf.Sin(Time.unscaledTime * 5.5f) * 3f;
+            Rect label = new Rect(12f, bounce, 576f, 78f);
+            // Offset the glyphs in every direction to outline each letter.
+            for (int x = -1; x <= 1; x++)
+                for (int y = -1; y <= 1; y++)
+                    if (x != 0 || y != 0)
+                        MenuPresentation.Label(new Rect(label.x + x * 4f, label.y + y * 4f, label.width, label.height),
+                            text, large, MenuPresentation.Ink);
+            MenuPresentation.Label(label, text, large, fill);
+
+            int arrows = far ? 2 : 1;
+            float arrowWidth = 132f;
+            float total = arrows * arrowWidth + (arrows - 1) * 24f;
+            for (int arrow = 0; arrow < arrows; arrow++)
+            {
+                float march = Mathf.Sin(Time.unscaledTime * 5.5f - arrow * .65f) * 8f * direction;
+                Rect rect = new Rect((600f - total) * .5f + arrow * (arrowWidth + 24f) + march,
+                    90f, arrowWidth, 78f);
+                DrawTutorialDirectionArrow(rect, direction, fill);
+            }
+            GUI.matrix = previous;
+        }
+
+        void DrawTutorialDirectionArrow(Rect rect, int direction, Color fill)
+        {
+            if (tutorialDirectionArrowTexture == null)
+                tutorialDirectionArrowTexture = CreateTutorialDirectionArrow(fill);
+            // One continuous image avoids gaps between rows at fractional UI scales.
+            Rect uv = direction > 0 ? new Rect(0f, 0f, 1f, 1f) : new Rect(1f, 0f, -1f, 1f);
+            MenuPresentation.DrawTextureUV(rect, tutorialDirectionArrowTexture, uv);
+        }
+
+        static Texture2D CreateTutorialDirectionArrow(Color fill)
+        {
+            const int width = 132, height = 78;
+            const float stroke = 7f;
+            Vector2[] corners =
+            {
+                new Vector2(4f, 25f), new Vector2(72f, 25f), new Vector2(72f, 4f),
+                new Vector2(128f, 39f), new Vector2(72f, 74f),
+                new Vector2(72f, 53f), new Vector2(4f, 53f)
+            };
+            var pixels = new Color32[width * height];
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int covered = 0;
+                Color sum = Color.clear;
+                for (int sy = 0; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++)
+                {
+                    Vector2 point = new Vector2(x + (sx + .5f) * .5f, y + (sy + .5f) * .5f);
+                    bool inside = false;
+                    float edgeDistanceSquared = float.MaxValue;
+                    for (int edge = 0; edge < corners.Length; edge++)
+                    {
+                        Vector2 start = corners[edge], end = corners[(edge + 1) % corners.Length];
+                        if ((start.y > point.y) != (end.y > point.y)
+                            && point.x < start.x + (end.x - start.x) * (point.y - start.y) / (end.y - start.y))
+                            inside = !inside;
+                        Vector2 segment = end - start;
+                        float t = Mathf.Clamp01(Vector2.Dot(point - start, segment) / segment.sqrMagnitude);
+                        edgeDistanceSquared = Mathf.Min(edgeDistanceSquared,
+                            (point - start - segment * t).sqrMagnitude);
+                    }
+                    if (!inside) continue;
+                    covered++;
+                    sum += edgeDistanceSquared < stroke * stroke ? MenuPresentation.Ink : fill;
+                }
+                if (covered == 0) continue;
+                Color pixel = sum / covered;
+                pixel.a = covered / 4f;
+                pixels[y * width + x] = pixel;
+            }
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "Tutorial direction arrow", filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         void DrawPracticeMessage(Rect view, int index)
@@ -1137,7 +1284,7 @@ namespace CrazyElevator.Managers
 
         // Draw in a fixed local space so the same demonstration fits both player panes.
         // Unscaled time keeps the demonstration moving while tutorial gameplay is paused.
-        void DrawTutorialController(Rect rect, int step, Color accent)
+        void DrawTutorialController(Rect rect, int step, Color accent, int index)
         {
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y + rect.height * 24f / 135f, 0f),
@@ -1173,7 +1320,7 @@ namespace CrazyElevator.Managers
                 }
                 else if (step == 8) offset = Vector2.up;
                 else if (step == LateralTravelStep)
-                    offset = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 2 == 0 ? Vector2.left : Vector2.right;
+                    offset = new Vector2(TutorialLateralDirection(index), 0f);
                 else offset = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 2 == 0 ? Vector2.up : Vector2.down;
             }
             TutorialControllerOval(new Rect(33, 36, 38, 38), useStick ? accent : idle);

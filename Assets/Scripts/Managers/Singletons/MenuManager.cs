@@ -255,6 +255,7 @@ namespace CrazyElevator.Managers
             if (keyIconTexture != null) Destroy(keyIconTexture);
             if (leftChoiceArrowTexture != null) Destroy(leftChoiceArrowTexture);
             if (rightChoiceArrowTexture != null) Destroy(rightChoiceArrowTexture);
+            if (tutorialDirectionArrowTexture != null) Destroy(tutorialDirectionArrowTexture);
         }
 
         void Update()

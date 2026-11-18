@@ -347,11 +347,13 @@ public static class ExtendedInteriorChecks
             return;
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
-        if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare")
+        if (!game || game.gameObject.scene.path != Scene) return;
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare" || action == "tutorial-lateral-prepare")
         {
+            EditorApplication.isPaused = false;
             bool singleDimension = action != "match-prepare";
             File.WriteAllText(request, action == "tutorial-prepare" ? "tutorial-run"
+                : action == "tutorial-lateral-prepare" ? "tutorial-lateral-run"
                 : action == "interaction-prepare" ? "interaction-run"
                 : action == "bouncer-prepare" ? "bouncer-run"
                 : singleDimension ? "single-dimension-run" : "match-run");
@@ -374,6 +376,7 @@ public static class ExtendedInteriorChecks
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
             return;
         }
+        if (Get(game, "round") == null) return;
         try { File.Delete(request); }
         catch (IOException) { return; }
         int exitCode = 0;
@@ -387,6 +390,11 @@ public static class ExtendedInteriorChecks
             }
             else if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
+            else if (action == "tutorial-lateral-run")
+            {
+                tutorialCheckOutput = "Logs/TutorialLateralChecks";
+                tutorialChecks = RunTutorialPracticeChecks(lateralOnly: true);
+            }
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
@@ -2205,7 +2213,16 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/request.txt", "tutorial-prepare");
     }
 
-    static IEnumerator RunTutorialPracticeChecks()
+    [MenuItem("Tools/Crazy Elevator/Check Tutorial Side Stops")]
+    public static void RequestTutorialLateralChecks()
+    {
+        Directory.CreateDirectory(Work);
+        Directory.CreateDirectory("Logs/TutorialLateralChecks");
+        File.WriteAllText("Logs/TutorialLateralChecks/result.txt", "RUNNING: preparing tutorial side-stop practice.\n");
+        File.WriteAllText(Work + "/request.txt", "tutorial-lateral-prepare");
+    }
+
+    static IEnumerator RunTutorialPracticeChecks(bool lateralOnly = false)
     {
         const string output = "Temp/TutorialChecks";
         Directory.CreateDirectory(output);
@@ -2241,6 +2258,13 @@ public static class ExtendedInteriorChecks
             object settled = Enum.Parse(motions.GetType().GetElementType(), "Settled");
             menuType.GetField("tutorialFinalePhase", Flags).SetValue(menu,
                 Enum.Parse(menuType.GetField("tutorialFinalePhase", Flags).FieldType, "None"));
+            if (lateralOnly)
+            {
+                for (int seat = 0; seat < actors.Length; seat++) tutorialActors[seat] = actors[seat];
+                input.ClearTutorialInputLocks();
+                CheckTutorialLateralPractice(menu, actors);
+                yield break;
+            }
             for (int seat = 0; seat < actors.Length; seat++)
             {
                 Game actor = actors[seat];
@@ -2341,6 +2365,7 @@ public static class ExtendedInteriorChecks
             match.ConstrainTravel(actors[0], 2f, 3.2f, ref incoming);
             Require(actors[1].TravelVelocity == 0f && actors[1].CurrentFloor == 3f,
                 "Ordinary tutorial collisions stopped protecting the non-participating target.");
+            CheckTutorialLateralPractice(menu, actors);
             File.WriteAllText(output + "/result.txt", "PASS: both seats retain one highlighted kick target; repeated preparation does not duplicate; normal drop-off cannot complete kicking; actual kicks complete; live collision unlocks only learner; both seats cause real contact and displace locked target; no timeout completion; practice clock unchanged; staged exception clears; ordinary tutorial target protection remains.\n");
             Debug.Log(File.ReadAllText(output + "/result.txt"));
         }
@@ -2353,6 +2378,84 @@ public static class ExtendedInteriorChecks
             for (int seat = 0; seat < actors.Length; seat++) actors[seat].enabled = enabledBefore[seat];
             match.enabled = matchEnabled;
             menu.enabled = menuEnabled;
+        }
+    }
+
+    static void CheckTutorialLateralPractice(CrazyElevator.Managers.MenuManager menu, Game[] actors)
+    {
+        const string output = "Logs/TutorialLateralChecks";
+        Directory.CreateDirectory(output);
+        File.WriteAllText(output + "/result.txt", "RUNNING: checking tutorial side-stop practice.\n");
+        var type = menu.GetType();
+        var goals = (int[])type.GetField("tutorialLateralGoalsReached", Flags).GetValue(menu);
+        var steps = (int[])type.GetField("tutorialSteps", Flags).GetValue(menu);
+        var complete = type.GetMethod("TutorialLateralStepCompleted", Flags);
+        var enter = type.GetMethod("BeginTutorialCardTransition", Flags);
+        bool Finished(int seat) => (bool)complete.Invoke(menu, new object[] { seat });
+        void Tick(Game actor, float horizontal, float vertical = 0f, float seconds = 1f / 60f)
+        {
+            Call(actor, "ReadRouteInput", horizontal, vertical, false);
+            Call(actor, "AdvanceBuildingTravel", seconds);
+        }
+        try
+        {
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                float clock = actor.SecondsLeft;
+                int floor = actor.ActiveMinFloor + 2; // These rails have no teleport gate in any world.
+                Require(actor.StageTutorialCollision(floor), "Could not stage side-stop practice for seat " + seat);
+                enter.Invoke(menu, new object[] { seat, 9, true });
+                steps[seat] = 9;
+                Require(goals[seat] == 0 && !Finished(seat), "Entering lateral practice must reset its goals.");
+                Call(actor, "StartRailRide", floor, 1, 0f);
+                Tick(actor, 1f, seconds: .02f);
+                Finished(seat);
+                Tick(actor, -1f, seconds: .02f);
+                Require(!Finished(seat) && goals[seat] == 0,
+                    "Tiny left/right reversals or central lane changes must not complete a side-stop goal.");
+
+                int[] stops = { 3, 4, 1, 0 };
+                for (int goal = 0; goal < stops.Length; goal++)
+                {
+                    int direction = goal < 2 ? 1 : -1;
+                    for (int frame = 0; frame < 700 && goals[seat] == goal; frame++)
+                    {
+                        Tick(actor, direction);
+                        Require(!Finished(seat), "Side-stop practice completed before returning to the main shaft.");
+                    }
+                    Require(goals[seat] == goal + 1,
+                        "Actual rail travel did not reach lateral goal " + goal + " for seat " + seat);
+                    Require(Mathf.Abs(actor.RouteLateralX - Game.StopWorldX(stops[goal])) <= 2f,
+                        "Lateral goal counted before the elevator reached its actual side-stop position.");
+                    if (goal == 1)
+                    {
+                        for (int frame = 0; frame < 10; frame++) { Tick(actor, 1f); Finished(seat); }
+                        Require(goals[seat] == 2, "Holding right at far right must not count leftward goals.");
+                    }
+                }
+                Require(actor.OnFloorRail && !Finished(seat),
+                    "Reaching far left must still require a real return to the main shaft.");
+                type.GetField("tutorialActive", Flags).SetValue(menu, false);
+                Require(!Finished(seat), "Lateral lesson progress must be disabled outside the tutorial.");
+                type.GetField("tutorialActive", Flags).SetValue(menu, true);
+                // Pass the side columns before requesting vertical travel, then catch a centre shaft.
+                for (int frame = 0; frame < 700 && actor.RouteLateralX < CrazyElevator.Match.ElevatorMatch.ShaftCenterX - 7f; frame++)
+                { Tick(actor, 1f); Require(!Finished(seat), "Returning along a rail must not finish the lesson."); }
+                for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++) Tick(actor, 1f, 1f);
+                Require(actor.OnMainVerticalTrack && Finished(seat),
+                    "All four side stops plus a real main-shaft return must complete lateral practice.");
+                Require(actor.SecondsLeft == clock, "Lateral practice consumed the live round timer.");
+                enter.Invoke(menu, new object[] { seat, 9, true });
+                Require(goals[seat] == 0 && !Finished(seat), "Repeating the lesson retained completed side-stop goals.");
+            }
+            File.WriteAllText(output + "/result.txt", "PASS: both seats reach right, far right, left, and far left through actual rail motion; tiny reversals cannot skip goals; far-right holding cannot count left goals; main-shaft return required; tutorial-only progress; entry resets progress; round clocks unchanged.\n");
+            Debug.Log(File.ReadAllText(output + "/result.txt"));
+        }
+        catch (Exception error)
+        {
+            File.WriteAllText(output + "/result.txt", "FAIL: " + error);
+            throw;
         }
     }
 
