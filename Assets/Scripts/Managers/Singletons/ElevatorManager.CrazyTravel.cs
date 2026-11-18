@@ -39,7 +39,6 @@ namespace CrazyElevator.Managers
         public const float GroundTrackSpan = 29f;
         const float SoloShaftOffset = 2.5f;
         const float TeleportCooldownSeconds = .6f;
-        const float TeleportFlashSeconds = 1.4f;
 
         // Side track columns (offset from the shaft centre) and where their first
         // segment starts. Each segment is SideTrackLength floors, then a gap.
@@ -79,8 +78,6 @@ namespace CrazyElevator.Managers
         float routeSteer;
         bool railBoost;
         float teleportCooldown;
-        float teleportFlash;
-        int teleportFlashTarget;
         float cameraFollowBlend;
         Vector2 cameraFraming;
         int cameraFramingFrame = -10;
@@ -122,6 +119,31 @@ namespace CrazyElevator.Managers
         public bool OnFloorRail => phase == Phase.Moving && railRiding;
         public bool OnMainVerticalTrack => MovingInShaft && !railRiding && OnMainShaft(RouteLateralX);
 
+        public bool TutorialOffMainShaft => MovingInShaft && !OnMainShaft(RouteLateralX);
+        public int TutorialShaftDirection => NearestShaftX(RouteLateralX) < RouteLateralX ? -1 : 1;
+        public int TutorialRejoinVerticalDirection => railFloor >= MaxTravelFloor ? -1 : 1;
+        public bool TutorialReadyToRejoin
+        {
+            get
+            {
+                if (!OnFloorRail) return false;
+                float delta = NearestShaftX(RouteLateralX) - RouteLateralX;
+                return Mathf.Abs(delta) <= 4f
+                    && (Mathf.Abs(delta) <= TrackCatchGrace
+                        || Mathf.Abs(railVelocity) < .05f || railVelocity * delta > 0f);
+            }
+        }
+
+        public bool TryGetTutorialShaftScreenPosition(out Vector3 screen)
+        {
+            screen = default;
+            if (exteriorCamera == null || !exteriorCamera.enabled || exteriorCar == null
+                || exteriorCar.parent == null) return false;
+            Vector3 local = CrazyTravelLocalPosition(NearestShaftX(RouteLateralX), travelFloor);
+            screen = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(local));
+            return screen.z > 0f;
+        }
+
         // The two centre shafts plus the lane-change space between them.
         bool OnMainShaft(float x) => x >= LeftShaftX - ShaftAlignReach && x <= RightShaftX + ShaftAlignReach;
 
@@ -147,7 +169,7 @@ namespace CrazyElevator.Managers
             railRiding = false;
             railVelocity = 0f;
             ClearRouteTurns();
-            teleportCooldown = teleportFlash = 0f;
+            teleportCooldown = 0f;
         }
 
         void ClearRouteTurns()
@@ -199,8 +221,12 @@ namespace CrazyElevator.Managers
                 if (v != 0) pendingTrackDirection = v;
                 return;
             }
-            if (horizontalPressed) laneSwitchHeld = TrySwitchDuelLane(h);
-            if (h != 0 && !laneSwitchHeld) pendingRailDirection = h;
+            // The practice lesson demonstrates entering a floor rail; a lane
+            // change on the first press would hide that action from the learner.
+            bool sidewaysPractice = MenuManager.TutorialSidewaysPractice(this);
+            if (horizontalPressed && !sidewaysPractice)
+                laneSwitchHeld = TrySwitchDuelLane(h);
+            if (h != 0 && (!laneSwitchHeld || sidewaysPractice)) pendingRailDirection = h;
         }
 
         // In 1v1, A/D between the centre shafts still changes lane first.
@@ -217,7 +243,6 @@ namespace CrazyElevator.Managers
         {
             if (!routeLateralReady) ResetRouteLateral();
             teleportCooldown = Mathf.Max(0f, teleportCooldown - dt);
-            teleportFlash = Mathf.Max(0f, teleportFlash - dt);
         }
 
         void EndRouteFrame(float dt)
@@ -279,7 +304,9 @@ namespace CrazyElevator.Managers
             travelFloor = Mathf.MoveTowards(travelFloor, railFloor, RailSettleSpeed * dt);
             SteerRail(dt);
             float before = routeLateralX;
-            routeLateralX += railVelocity * ShaftFloorHeight * dt;
+            // Vines hold the car briefly, then release it into the shove.
+            float vineRelease = worldVineTime > 0f ? Mathf.SmoothStep(.18f, .75f, 1.5f - worldVineTime) : 1f;
+            routeLateralX += railVelocity * ShaftFloorHeight * vineRelease * dt;
             if (routeLateralX < GroundLeftX || routeLateralX > GroundRightX)
             {
                 routeLateralX = Mathf.Clamp(routeLateralX, GroundLeftX, GroundRightX);
@@ -366,7 +393,6 @@ namespace CrazyElevator.Managers
             railRiding = false;
             railVelocity = 0f;
             ClearRouteTurns();
-            teleportFlash = 0f;
             if (!TryGetVerticalTrack(RouteLateralX, travelFloor, out _, out _, out _))
                 StartRailRide(ClampRailFloor(travelFloor), TowardCentre, 0f);
         }
@@ -393,8 +419,6 @@ namespace CrazyElevator.Managers
             railFloor = gate.Target;
             travelFloor = gate.Target;
             teleportCooldown = TeleportCooldownSeconds;
-            teleportFlash = TeleportFlashSeconds;
-            teleportFlashTarget = gate.Target;
             routeBoostPulse = 1f;
             notice = "TELEPORT! Warped to floor " + ElevatorRound.FloorNumber(gate.Target) + ".";
             Play(chime, 1.05f);
@@ -645,75 +669,6 @@ namespace CrazyElevator.Managers
             line.sharedMaterial = Mat(colour);
             line.SetPosition(0, CrazyTravelLocalPosition(x, startFloor));
             line.SetPosition(1, CrazyTravelLocalPosition(x, endFloor));
-        }
-
-        void DrawCrazyJunctionGuide()
-        {
-            if (!phase.Equals(Phase.Moving)) return;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
-            if (teleportFlash > 0f)
-            {
-                DrawRouteGuide(view, "TELEPORT!  >>  FLOOR " + ElevatorRound.FloorNumber(teleportFlashTarget), Gold);
-                return;
-            }
-            if (railRiding)
-            {
-                DrawRouteGuide(view, pendingTrackDirection != 0
-                    ? "TURNING " + (pendingTrackDirection > 0 ? "UP" : "DOWN") + " AT NEXT TRACK"
-                    : "F" + ElevatorRound.FloorNumber(railFloor) + " RAIL  ·  "
-                        + GameplayVerticalKeys + " TURNS AT NEXT TRACK", Gold);
-                return;
-            }
-            if (pendingRailDirection != 0)
-            {
-                DrawRouteGuide(view, "TURNING " + (pendingRailDirection > 0 ? "RIGHT" : "LEFT")
-                    + " AT NEXT FLOOR", Gold);
-                return;
-            }
-            if (!OnMainShaft(routeLateralX)
-                && TryGetVerticalTrack(routeLateralX, travelFloor, out _, out float bottom, out float top))
-            {
-                DrawRouteGuide(view, "SIDE TRACK  F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(bottom))
-                    + "-F" + ElevatorRound.FloorNumber(Mathf.RoundToInt(top)) + "  ·  ENDS AT F"
-                    + ElevatorRound.FloorNumber(Mathf.RoundToInt(travelDirection > 0 ? top : bottom)), Teal);
-                return;
-            }
-
-            if (Match == null) return;
-            float flash = Match.ExpressFlash(this);
-            string message;
-            Color accent;
-            if (flash > 0f)
-            {
-                message = "EXPRESS!  SPEED BURST";
-                accent = Gold;
-            }
-            else
-            {
-                if (!Match.TryGetUpcomingJunction(this, out int junction, out float distance)) return;
-                string direction = Match.ExpressTrack(junction) == 0 ? "LEFT" : "RIGHT";
-                int exitFloor = Mathf.CeilToInt(Match.JunctionFloor(junction));
-                message = "EXPRESS GATE F" + ElevatorRound.FloorNumber(exitFloor) + "  /  " + direction
-                    + "  /  " + distance.ToString("0.0") + "F";
-                accent = Teal;
-            }
-            DrawRouteGuide(view, message, accent);
-        }
-
-        void DrawRouteGuide(Rect view, string message, Color accent)
-        {
-            float width = Mathf.Min(420f, view.width - 30f);
-            Rect banner = new Rect(view.x + (view.width - width) * .5f, view.y + 78f, width, 38f);
-            Panel(banner, new Color(Ink.r, Ink.g, Ink.b, .94f));
-            Panel(new Rect(banner.x, banner.yMax - 4f, banner.width, 4f), accent);
-            var guide = new GUIStyle(body)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                fontSize = Mathf.Max(12, Mathf.RoundToInt(14f * Mathf.Min(1f, view.width / 650f)))
-            };
-            guide.normal.textColor = Color.white;
-            Label(banner, message, guide);
         }
     }
 }

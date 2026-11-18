@@ -17,6 +17,24 @@ namespace CrazyElevator.Managers
         public float SessionFadeAlpha => sessionFadeAlpha;
         public float TravelVelocity => travelVelocity;
         public bool TravelInputActive => Mathf.Abs(boostAxis) > .25f;
+        public float TravelInputAxis => boostAxis;
+        public bool TutorialStopInProgress => phase == Phase.Docking || phase == Phase.Opening;
+        public bool TryGetTutorialFloorScreenPosition(int floor, out Vector3 point)
+        {
+            point = Vector3.zero;
+            if (exteriorCamera == null || !exteriorCamera.enabled) return false;
+            point = exteriorCamera.WorldToScreenPoint(new Vector3(StopWorldX(CenterStop),
+                floor * ShaftFloorHeight + 3f, BeaconDepth));
+            return point.z > 0f;
+        }
+        // 0 means stop now, +/-1 means move vertically, +/-2 means return to the shaft.
+        public int TutorialStopNavigation(int target)
+        {
+            if (NearestStop(RouteLateralX) != ElevatorRound.CenterStop)
+                return TutorialShaftDirection * 2;
+            if (phase == Phase.Moving && GlideStopFloor() == target) return 0;
+            return target >= CurrentFloor ? 1 : -1;
+        }
         public bool BoostActive => boostHeld && TravelInputActive;
         public int TravelStartCount => travelStartCount;
         public int FloorStopCount => floorStopCount;
@@ -52,6 +70,7 @@ namespace CrazyElevator.Managers
         public AudioClip DingClip => ding;
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;
+        public Camera ShaftCamera => exteriorCamera;
         public Camera CinemachineCamera => eye;
         public PassengerView[] PassengerPrefabs => sceneView != null ? sceneView.passengers : null;
         public PassengerManager Passengers => passengerManager;

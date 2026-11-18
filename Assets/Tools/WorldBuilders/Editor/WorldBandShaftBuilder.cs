@@ -485,9 +485,10 @@ namespace CrazyElevator.Tools.WorldBuilders
             var officeTrim = Mat("OfficeTrim");
             var officeWall = Mat("OfficeWall");
             var vanilla = CandyMat("Vanilla");
-            var pink = CandyMat("CandyFlossPink");
-            var deep = AssetDatabase.LoadAssetAtPath<Material>("Assets/Static/ElevatorPersonas/Materials/DeepSeaMetal.mat");
             var sand = Mat("WaterSand");
+            var shaftFinishes = new Material[ElevatorRound.Dimensions];
+            for (int i = 0; i < shaftFinishes.Length; i++)
+                shaftFinishes[i] = LoadMat("Assets/Prefabs/Resources/TransitFinishes/" + (WorldBand)i + "Floor.mat");
 
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -497,7 +498,7 @@ namespace CrazyElevator.Tools.WorldBuilders
                 else if (name.StartsWith("World landing ") && TryParseFloor(name, out int worldFloor))
                     mat = Pick(worldFloor, officeTrim, vanilla, sand);
                 else if (name.StartsWith("Shaft landing ") && TryParseFloor(name, out int shaftFloor))
-                    mat = Pick(shaftFloor, officeTrim, pink, deep);
+                    mat = shaftFinishes[shaftFloor / FloorsPerDimension];
                 if (mat != null) renderer.sharedMaterial = mat;
             }
         }

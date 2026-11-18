@@ -489,6 +489,7 @@ namespace CrazyElevator.Managers
             if (passenger != null && passenger.jackets != null)
                 foreach (Renderer jacket in passenger.jackets)
                     if (jacket != null) jacket.sharedMaterial = Mat(accent);
+            if (passenger != null) passenger.ApplyMatteFinish(passengerFinishes);
 
             foreach (Transform child in model.GetComponentsInChildren<Transform>(true))
             {
@@ -767,6 +768,8 @@ namespace CrazyElevator.Managers
             if (phase != Phase.Results && (!paused || MenuManager.TutorialActive))
             {
                 DrawTravelView();
+                DrawHazardImpactFlash(new Rect(0f, 0f, Screen.width, Screen.height));
+                DrawUnderwaterFlood(new Rect(0f, 0f, Screen.width, Screen.height));
                 float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;
                 GUI.matrix = Matrix4x4.Scale(Vector3.one * hudScale);
                 if (extendedInterior && compactTopHud) DrawCompactTopHUD();
@@ -792,6 +795,42 @@ namespace CrazyElevator.Managers
             GUI.color = new Color(0f, 0f, 0f, Mathf.Clamp01(alpha));
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        void DrawUnderwaterFlood(Rect view)
+        {
+            if (!extendedInterior || (underwaterFloodTime <= 0f && underwaterFloodLevel <= .001f) || view.width < 2f || view.height < 2f)
+                return;
+
+            float blendOut = 1f - Mathf.Clamp01(cameraViewBlend);
+            if (blendOut <= .01f) return;
+
+            const float duration = 2.6f;
+            float elapsed = duration - underwaterFloodTime;
+            float rise = Mathf.Clamp01(elapsed / .75f);
+            float settle = Mathf.Clamp01((elapsed - .75f) / .55f);
+            float drain = Mathf.Clamp01((elapsed - 1.3f) / 1.3f);
+            float surge = Mathf.Lerp(.035f, .235f, rise);
+            surge = Mathf.Lerp(surge, .18f, settle);
+            surge = Mathf.Lerp(surge, 0f, drain);
+            float height = Mathf.Max(underwaterFloodLevel, surge);
+            float fade = Mathf.Clamp01(height / .035f);
+            float wave = Mathf.Sin(Time.unscaledTime * 4.5f) * view.height * .008f;
+            float waterTop = view.height * (1f - height) + wave;
+            Color old = GUI.color;
+            GUI.color = new Color(.08f, .72f, .82f, .48f * fade * blendOut);
+            GUI.DrawTexture(new Rect(view.x, waterTop, view.width, view.yMax - waterTop), Texture2D.whiteTexture);
+
+            // Broken highlights make the moving waterline read as a wave rather than a flat HUD bar.
+            GUI.color = new Color(.62f, .95f, .91f, .72f * fade * blendOut);
+            float segmentWidth = view.width / 24f;
+            for (int i = 0; i < 24; i++)
+            {
+                float x = view.x + i * segmentWidth;
+                float crest = Mathf.Sin(i * .82f + Time.unscaledTime * 5f) * view.height * .006f;
+                GUI.DrawTexture(new Rect(x, waterTop + crest, segmentWidth * .72f, Mathf.Max(2f, view.height * .006f)), Texture2D.whiteTexture);
+            }
+            GUI.color = old;
         }
 
         void DrawNoTutorialCountdown()
@@ -843,8 +882,10 @@ namespace CrazyElevator.Managers
             if (IsNpc)
             {
                 Rect npcView = Match.ViewRect(Seat);
+                DrawHazardImpactFlash(npcView);
                 Matrix4x4 npcMatrix = GUI.matrix;
                 GUI.matrix = Matrix4x4.Translate(new Vector3(npcView.x, npcView.y, 0));
+                DrawUnderwaterFlood(new Rect(0f, 0f, npcView.width, npcView.height));
                 if (extendedInterior) DrawElevatorSpeech(npcView.height, npcView.width);
                 if (extendedInterior) DrawPassengerCallouts();
                 DrawDeliveryPopups(npcView.width, npcView.height);
@@ -854,8 +895,10 @@ namespace CrazyElevator.Managers
             }
             DrawTravelView();
             Rect view = Match.ViewRect(Seat);
+            DrawHazardImpactFlash(view);
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0));
+            DrawUnderwaterFlood(new Rect(0f, 0f, view.width, view.height));
             if (extendedInterior) DrawElevatorSpeech(view.height, view.width);
             if (extendedInterior) DrawPassengerCallouts();
             DrawMouseControls();
@@ -1223,7 +1266,7 @@ namespace CrazyElevator.Managers
                         ? headX + 12f : headX - cueWidth - 12f;
                     Rect cueRect = new Rect(Mathf.Clamp(cueX, 8f, viewWidth - cueWidth - 8f),
                         headY + 2f, cueWidth, 22f);
-                    FramedPanel(cueRect, PassengerAbilityAccent(rider), 2f);
+                    MenuPresentation.HudPlate(cueRect, PassengerAbilityAccent(rider));
                     Label(new Rect(cueRect.x + 8f, cueRect.y + 2f, cueRect.width - 12f, 18f), cue, small);
                 }
 
@@ -1259,7 +1302,7 @@ namespace CrazyElevator.Managers
             const float badgeHeight = 42f;
             float iconWidth = showAbility ? 36f : 0f;
             float vipHeight = rider.IsVip ? 24f : 0f;
-            string destination = DestinationTag(rider);
+            string destination = PassengerFloorLabel(rider);
             float badgeWidth = Mathf.Max(52f,
                 Mathf.Ceil(calloutNumber.CalcSize(new GUIContent(destination)).x) + iconWidth + 12f);
             Rect area = PlacePassengerBadge(view, new Rect(headX - badgeWidth * .5f,
@@ -1267,16 +1310,25 @@ namespace CrazyElevator.Managers
             passengerBadgeObstacles.Add(area);
             Rect badge = new Rect(area.x, area.y + vipHeight, area.width, badgeHeight);
             Color abilityAccent = PassengerAbilityAccent(rider);
-            Color border = rider.IsVip ? Gold : showAbility ? abilityAccent : selected
-                ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid : Teal;
-            FramedPanel(badge, border, 3f);
+            Color accent = selected ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
+                : rider.IsVip ? MenuPresentation.Brass : MenuPresentation.Teal;
+            DrawDestinationPlate(badge, accent, rider.IsVip);
             if (showAbility)
-                DrawPassengerBadgeIcon(new Rect(badge.x + 3f, badge.y + 3f, iconWidth, iconWidth),
+                DrawPassengerBadgeIcon(new Rect(badge.x + 6f, badge.y + 6f, 30f, 30f),
                     abilityIcon, abilityAccent);
-            OutlinedLabel(new Rect(badge.x + iconWidth + 6f, badge.y, badge.width - iconWidth - 12f,
-                badge.height), destination, calloutNumber);
+            MenuPresentation.Label(new Rect(badge.x + iconWidth + 6f, badge.y, badge.width - iconWidth - 12f,
+                badge.height), new GUIContent(destination), calloutNumber,
+                rider.IsVip ? MenuPresentation.Ink : MenuPresentation.Paper);
             if (rider.IsVip)
-                OutlinedLabel(new Rect(area.x, area.y, area.width, vipHeight), "VIP", calloutText, Gold);
+                OutlinedLabel(new Rect(area.x, area.y, area.width, vipHeight), "VIP", calloutText, MenuPresentation.Brass);
+        }
+
+        static void DrawDestinationPlate(Rect rect, Color accent, bool vip)
+        {
+            rect = new Rect(Mathf.Round(rect.x), Mathf.Round(rect.y), Mathf.Round(rect.width), Mathf.Round(rect.height));
+            MenuPresentation.Plaque(rect, vip ? MenuPresentation.Brass : MenuPresentation.Wall,
+                MenuPresentation.Ink, 2f);
+            MenuPresentation.Paint(new Rect(rect.x, rect.y, rect.width, 2f), accent);
         }
 
         Rect PlacePassengerBadge(Rect view, Rect badge)
@@ -1423,13 +1475,13 @@ namespace CrazyElevator.Managers
                 if (!round.Owns(rider)) continue;
                 PassengerView prefab = FindPassengerArt(rider);
                 if (prefab != null)
-                    manifestRiderPortraits[rider] = menu.GetManifestPortrait(prefab, PassengerJacket(rider));
+                    manifestRiderPortraits[rider] = menu.GetManifestPortrait(prefab, PassengerJacket(rider), passengerFinishes);
             }
         }
 
         Rect ManifestView => Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
 
-        static float ManifestScale(Rect view) => Mathf.Min(Mathf.Clamp(view.height / 900f, .8f, 1.4f),
+        static float ManifestScale(Rect view) => Mathf.Min(Mathf.Clamp(view.height / 900f, .8f, 3f),
             view.width / 650f);
 
         Rect ManifestBoardRect(Rect view, float uiScale, int riderCount)
@@ -1567,7 +1619,7 @@ namespace CrazyElevator.Managers
                 Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s · +" + round.BaseDeliveryPoints(rider),
                 13f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
             PaintManifestShape(destination, atStop ? MenuPresentation.Brass : MenuPresentation.Teal, 5f * uiScale);
-            string destinationText = (rider.DestinationStop == CenterStop ? "F" : "") + DestinationTag(rider);
+            string destinationText = PassengerFloorLabel(rider);
             ManifestText(manifestTitle, destination, destinationText, 14f * uiScale,
                 MenuPresentation.Ink, TextAnchor.MiddleCenter);
         }
@@ -1661,7 +1713,7 @@ namespace CrazyElevator.Managers
             string key = kind + ColorUtility.ToHtmlStringRGBA(accent);
             if (!passengerIconTextures.TryGetValue(key, out Texture2D texture) || texture == null)
             {
-                texture = PassengerIconLibrary.CreatePassengerBadge(kind, accent, UiBlack, UiWhite);
+                texture = PassengerIconLibrary.CreatePassengerBadge(kind, accent, MenuPresentation.Ink, MenuPresentation.Paper);
                 passengerIconTextures[key] = texture;
             }
 
@@ -1758,6 +1810,7 @@ namespace CrazyElevator.Managers
 
         void DrawMouseControls()
         {
+            if (MenuManager.TryGetTutorialStopFloor(this, out _)) return;
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
