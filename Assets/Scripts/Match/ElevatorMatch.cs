@@ -95,6 +95,9 @@ namespace CrazyElevator.Match
         bool dimensionRevealActive;
         int dimensionRevealIndex = -1;
         float dimensionRevealTime;
+        readonly List<int> dimensionRoulette = new List<int>();
+        readonly Texture2D[] rouletteArt = new Texture2D[5];
+        static readonly string[] RouletteArtNames = { "office", "candy", "underwater", "forest", "space" };
         public bool DimensionRevealActive => dimensionRevealActive;
 
         void Awake()
@@ -447,6 +450,15 @@ namespace CrazyElevator.Match
         void BeginRoundIntroduction()
         {
             dimensionRevealIndex = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
+            dimensionRoulette.Clear();
+            var session = GameManager.Instance;
+            if (session != null)
+                for (int dimension = 0; dimension < ElevatorRound.Dimensions; dimension++)
+                    if (session.IsDimensionEnabled(dimension)) dimensionRoulette.Add(dimension);
+            if (dimensionRoulette.Count == 0) dimensionRoulette.Add(dimensionRevealIndex);
+            ShuffleDimensionRoulette();
+            dimensionRoulette.Remove(dimensionRevealIndex);
+            dimensionRoulette.Add(dimensionRevealIndex);
             dimensionRevealTime = 0f;
             dimensionRevealActive = true;
             player.BeginDimensionReveal(dimensionRevealIndex);
@@ -458,18 +470,84 @@ namespace CrazyElevator.Match
         {
             if (Paused || MenuManager.IsOpen) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
-            if (dimensionRevealTime < Game.DimensionRevealConfirmDelay
+            if (dimensionRevealTime < DimensionRouletteSeconds + Game.DimensionRevealConfirmDelay
                 || !(player.DimensionRevealConfirmed || Rival != null && Rival.DimensionRevealConfirmed)) return;
             player.FinishDimensionReveal();
             Rival?.FinishDimensionReveal();
             dimensionRevealActive = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
+            dimensionRoulette.Clear();
             if (!MenuManager.BeginRoundPassengerIntroduction(player, Rival))
             {
                 player.BeginRoundCountdown();
                 Rival?.BeginRoundCountdown();
             }
+        }
+
+        const float DimensionRouletteSeconds = 3.6f;
+
+        void ShuffleDimensionRoulette()
+        {
+            for (int i = dimensionRoulette.Count - 1; i > 0; i--)
+            {
+                int swap = Random.Range(0, i + 1);
+                (dimensionRoulette[i], dimensionRoulette[swap]) =
+                    (dimensionRoulette[swap], dimensionRoulette[i]);
+            }
+        }
+
+        void DrawDimensionRoulette()
+        {
+            if (dimensionRoulette.Count == 0 || Event.current.type != EventType.Repaint) return;
+            float elapsed = Mathf.Min(dimensionRevealTime, DimensionRouletteSeconds);
+            float fade = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / .22f))
+                * (1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.Clamp01((elapsed - DimensionRouletteSeconds + .22f) / .22f)));
+            Color backdrop = new Color(MenuPresentation.Wall.r, MenuPresentation.Wall.g,
+                MenuPresentation.Wall.b, .94f * fade);
+            GUI.color = MenuPresentation.DisplayColor(backdrop);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            const float spinDuration = 2.9f;
+            int shownDimension = dimensionRevealIndex;
+            bool spinning = elapsed < spinDuration;
+            if (spinning)
+            {
+                float progress = Mathf.Clamp01(elapsed / (spinDuration - .2f));
+                float totalSteps = dimensionRoulette.Count * 3f - 1f;
+                float easedStops = (1f - Mathf.Pow(1f - progress, 3f)) * totalSteps;
+                int index = Mathf.FloorToInt(easedStops) % dimensionRoulette.Count;
+                shownDimension = dimensionRoulette[index];
+            }
+
+            float scale = MatchHudScale;
+            float width = Mathf.Min(Screen.width * .62f, 520f * scale);
+            float height = Mathf.Min(Screen.height * .7f, 320f * scale);
+            var plate = new Rect((Screen.width - width) * .5f,
+                (Screen.height - height) * .5f, width, height);
+            Color previousGuiColour = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            MenuPresentation.HudPlate(plate, spinning ? MenuPresentation.Brass : MenuPresentation.Teal);
+            DrawHudLabel(new Rect(plate.x + 8f * scale, plate.y + 3f * scale,
+                    plate.width - 16f * scale, 22f * scale),
+                "ROUND " + (GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1)
+                    + "  ·  " + (spinning ? "SELECTING WORLD" : "WORLD SELECTED"),
+                tileCaption, MenuPresentation.Paper);
+            if (shownDimension >= 0 && shownDimension < rouletteArt.Length)
+            {
+                if (rouletteArt[shownDimension] == null)
+                    rouletteArt[shownDimension] = Resources.Load<Texture2D>("WorldRoulette/" + RouletteArtNames[shownDimension]);
+                Texture2D art = rouletteArt[shownDimension];
+                if (art != null)
+                    GUI.DrawTexture(new Rect(plate.x + 12f * scale, plate.y + 29f * scale,
+                        plate.width - 24f * scale, height - 102f * scale), art, ScaleMode.ScaleToFit, true);
+            }
+            DrawHudLabel(new Rect(plate.x + 8f * scale, plate.yMax - 68f * scale,
+                    plate.width - 16f * scale, 60f * scale),
+                GameManager.DimensionDisplayName(shownDimension), sharedClock, MenuPresentation.Paper);
+            GUI.color = previousGuiColour;
         }
 
         float ResultRevealTime => resultRevealStartedAt < 0f
@@ -1071,8 +1149,11 @@ namespace CrazyElevator.Match
             }
             if (dimensionRevealActive)
             {
-                player.DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height),
-                    dimensionRevealTime);
+                if (dimensionRevealTime < DimensionRouletteSeconds)
+                    DrawDimensionRoulette();
+                else
+                    player.DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height),
+                        dimensionRevealTime - DimensionRouletteSeconds);
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColour;
                 GUI.contentColor = previousContent;
@@ -1539,6 +1620,15 @@ namespace CrazyElevator.Match
             sharedScore.fontSize = Mathf.Max(1, Mathf.FloorToInt(sharedScore.fontSize * available));
             MenuPresentation.Label(number, value, sharedScore,
                 Color.Lerp(MenuPresentation.Paper, MenuPresentation.Brass, pulse));
+            if (Running && !Finished && !MenuManager.TutorialActive && leadGlow[seat] > .01f)
+            {
+                float musicPulse = MusicManager.Instance != null ? MusicManager.Instance.BassPulse : 0f;
+                float size = (22f + 4f * musicPulse) * scale;
+                Color previous = GUI.color;
+                GUI.color = new Color(1f, 1f, 1f, leadGlow[seat]);
+                DrawVipIcon(new Vector2(plate.xMax - 18f * scale, plate.y + 16f * scale), size);
+                GUI.color = previous;
+            }
         }
 
         void DrawHudLabel(Rect area, string value, GUIStyle style, Color colour)
