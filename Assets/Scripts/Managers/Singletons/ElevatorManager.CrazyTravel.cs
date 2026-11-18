@@ -123,16 +123,7 @@ namespace CrazyElevator.Managers
         public int TutorialShaftDirection => NearestShaftX(RouteLateralX) < RouteLateralX ? -1 : 1;
         public int TutorialRejoinVerticalDirection => railFloor >= MaxTravelFloor ? -1 : 1;
         public bool TutorialReadyToRejoin
-        {
-            get
-            {
-                if (!OnFloorRail) return false;
-                float delta = NearestShaftX(RouteLateralX) - RouteLateralX;
-                return Mathf.Abs(delta) <= 4f
-                    && (Mathf.Abs(delta) <= TrackCatchGrace
-                        || Mathf.Abs(railVelocity) < .05f || railVelocity * delta > 0f);
-            }
-        }
+            => OnFloorRail && Mathf.Approximately(RouteLateralX, NearestShaftX(RouteLateralX));
 
         public bool TryGetTutorialShaftScreenPosition(out Vector3 screen)
         {
@@ -294,9 +285,7 @@ namespace CrazyElevator.Managers
             }
             if (railBoost && steer != 0)
                 railVelocity = Mathf.Clamp(railVelocity + steer * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
-            else if (railVelocity * railDirection < CruiseSpeed)
-                railVelocity = Mathf.MoveTowards(railVelocity, railDirection * CruiseSpeed,
-                    CurrentAcceleration * .7f * dt);
+            else railVelocity = EaseTowardCruise(railVelocity, railDirection, dt);
         }
 
         void AdvanceRailStep(float dt)
@@ -307,6 +296,9 @@ namespace CrazyElevator.Managers
             // Vines hold the car briefly, then release it into the shove.
             float vineRelease = worldVineTime > 0f ? Mathf.SmoothStep(.18f, .75f, 1.5f - worldVineTime) : 1f;
             routeLateralX += railVelocity * ShaftFloorHeight * vineRelease * dt;
+            bool tutorialReturn = MenuManager.TutorialHoldsAtShaft(this)
+                || MenuManager.TryGetTutorialStopFloor(this, out _);
+            if (tutorialReturn && HoldAtTutorialShaft(before)) return;
             if (routeLateralX < GroundLeftX || routeLateralX > GroundRightX)
             {
                 routeLateralX = Mathf.Clamp(routeLateralX, GroundLeftX, GroundRightX);
@@ -314,9 +306,22 @@ namespace CrazyElevator.Managers
                 notice = "End of the rail. Steer back, or use " + GameplayVerticalKeys + " to take a track.";
             }
             CheckTeleportGates(before, routeLateralX);
-            if (pendingTrackDirection != 0 && !(strongCollisionRecoil && collisionRecoilTimer > 0f))
+            if (!tutorialReturn && pendingTrackDirection != 0 && !(strongCollisionRecoil && collisionRecoilTimer > 0f))
                 TryTurnOntoTrack(before, routeLateralX);
             Match?.SyncTrackFromLateral(this, routeLateralX);
+        }
+
+        bool HoldAtTutorialShaft(float before)
+        {
+            float shaft = NearestShaftX(before);
+            if (!ReachedTutorialTarget(before, routeLateralX, shaft)) return false;
+            routeLateralX = shaft;
+            railVelocity = 0f;
+            Match?.SyncTrackFromLateral(this, shaft);
+            bool canTurn = pendingTrackDirection > 0 && railFloor < MaxTravelFloor
+                || pendingTrackDirection < 0 && railFloor > MinTravelFloor;
+            if (canTurn) LeaveRailOntoTrack();
+            return true;
         }
 
         void TryTurnOntoTrack(float fromX, float toX)

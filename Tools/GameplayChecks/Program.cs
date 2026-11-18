@@ -458,7 +458,7 @@ internal static class Program
             "Boarding or revisiting a practice queue should not reveal replacements.");
     }
 
-    static void CheckBaseDeliveryPoints()
+    static void CheckDeliveryPoints()
     {
         foreach (float remaining in new[] { 60f, 30f, 0f })
         foreach (int mood in new[] { 2, 1, 0 })
@@ -467,16 +467,18 @@ internal static class Program
             round.Riders.Clear();
             Rider rider = NewRider(0, 0, BoardingDoor.Front);
             rider.Remaining = remaining; rider.Mood = mood; rider.Bonus = 250;
+            rider.ContestedPickupBonus = 30;
             rider.Boarded = true; rider.BoardedBySeat = round.Seat;
             round.Riders.Add(rider);
             int expected = remaining > 0 ? 100 + (int)(50 * remaining / 60f)
                 : round.LateDeliveriesScore ? 25 : 0;
             if (mood == 1) expected /= 2;
-            Require(round.BaseDeliveryPoints(rider) == expected, "Manifest base points include bonuses or ignore patience/mood.");
+            Require(round.BaseDeliveryPoints(rider) == expected, "Base points include bonuses or ignore patience/mood.");
+            int expectedTotal = expected + (remaining > 0 && mood > 0 ? 280 : 0);
+            Require(round.DeliveryPoints(rider) == expectedTotal, "The displayed reward doesn't reflect eligible bonuses.");
             round.Arrive(rider.Destination, rider.DestinationStop);
             round.Offboard(rider);
-            Require(round.Score == expected + (remaining > 0 && mood > 0 ? 250 : 0),
-                "Displayed base points disagree with the delivery scoring calculation.");
+            Require(round.Score == expectedTotal, "The delivery score doesn't match its displayed reward.");
         }
     }
 
@@ -539,7 +541,7 @@ internal static class Program
         var checks = new Dictionary<string, Action>
         {
             { "UFO relocation preserves queues, capacity and exclusive boarding", CheckUfoRelocation },
-            { "Manifest base points match delivery, excluding bonuses", CheckBaseDeliveryPoints },
+            { "Manifest points match delivery, including eligible bonuses", CheckDeliveryPoints },
             { "Matching inside/outside and both-seat door queues over all 24 floors and 5 stops", CheckQueueConsistency },
             { "Exact two-grandma and one-box-man preview limits in solo and two-player", CheckFiniteLandingRoster },
             { "Visible groups use front and alternating sides without moving or refilling captured queues", CheckVisibleDoorDistribution },

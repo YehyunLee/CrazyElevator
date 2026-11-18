@@ -11,9 +11,8 @@ namespace CrazyElevator.Managers
         const int LateralTravelStep = 9;
         static readonly int[] TutorialLateralStops = { 3, 4, 1, 0 };
         const int OppositeMovementStep = 10;
-        const float TutorialCardTravelSeconds = .42f;
-        const float TutorialPracticeSeconds = 1.7f;
-        const float BoardingCardSeconds = 3f;
+        const float TutorialCardTravelSeconds = .18f;
+        const float TutorialPracticeSeconds = 1.25f;
         const float TutorialStoryLineSeconds = 2.8f;
         const float TutorialStoryFadeSeconds = .6f;
         const float TutorialHandoffFadeSeconds = .8f;
@@ -34,10 +33,8 @@ namespace CrazyElevator.Managers
             { "COURIER", "INTERVIEW CANDIDATE", "HUNTER", "MOM + BABY", "BOSS", "THE TRIO", "BOUNCER", "GRANDMA", "HANDYMAN", "DIVER" };
         static readonly string[] TutorialStoryLines =
         {
-            "YOU'RE A BELLHOP FIGHTING FOR A PROMOTION.",
-            "DROP OFF PASSENGERS FOR POINTS. AVOID HAZARDS.",
-            "BEST OF 3 ROUNDS. 1:30 PER ROUND.",
-            "WINNER GETS THE PROMOTION."
+            "DELIVER PASSENGERS FOR POINTS.",
+            "OUTSCORE YOUR RIVAL TO WIN THE ROUND."
         };
         enum TutorialCardMotion
         {
@@ -83,6 +80,15 @@ namespace CrazyElevator.Managers
             if (step != 5 || menu.tutorialTargetFloor[index] < 0) return false;
             floor = menu.tutorialTargetFloor[index];
             return true;
+        }
+
+        internal static bool TutorialHoldsAtShaft(ElevatorManager actor)
+        {
+            MenuManager menu = Current;
+            if (menu == null || !menu.tutorialActive || actor == null) return false;
+            int index = System.Array.IndexOf(menu.tutorialActors, actor);
+            return index >= 0 && menu.tutorialSteps[index] == LateralTravelStep
+                && menu.TutorialLateralStopsReached(index) && !menu.tutorialRejoinedShaft[index];
         }
 
         bool tutorialActive;
@@ -372,12 +378,10 @@ namespace CrazyElevator.Managers
             switch (step)
             {
                 case 0:
-                    return actor.HasChosenBoardingDoor
-                        && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
+                    return actor.HasChosenBoardingDoor;
                 case 1:
                     return actor.OpenBoardingDoorCount == 3
-                        && actor.CurrentPassengers.Count >= ElevatorRound.PracticePassengersPerSeat
-                        && tutorialStepSettledTimes[index] >= BoardingCardSeconds;
+                        && actor.CurrentPassengers.Count >= ElevatorRound.PracticePassengersPerSeat;
                 case 2:
                     return actor.TravelStartCount > tutorialTravelStartBaseline[index];
                 // Movement progress is gathered throughout the lesson transition.
@@ -895,62 +899,35 @@ namespace CrazyElevator.Managers
             }
         }
 
-        string TutorialBody(int step, int index)
+        bool TutorialUsesKeyboard(int seat)
         {
-            int seat = tutorialActors[index].Seat;
-            switch (step)
-            {
-                case -1: return "TUTORIAL";
-                case 0:
-                    return "TRY ANY DOOR";
-                case 1:
-                    if (tutorialActors[index].OpenBoardingDoorCount >= 3)
-                        return "PASSENGERS BOARDING";
-                    int slot = tutorialActors[index].TutorialSuggestedDoorSlot(0);
-                    string door = slot == 0 ? "LEFT" : slot == 1 ? "FRONT" : "RIGHT";
-                    return "TRY " + door + " · " + tutorialActors[index].OpenBoardingDoorCount + "/3 OPEN";
-                case 2: return "PRESS TO LEAVE";
-                case 3: case OppositeMovementStep:
-                    return TutorialMovementDirection(index, step) > 0 ? "HOLD UP" : "HOLD DOWN";
-                case 4: return KeyboardHintsEnabled
-                    ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
-                    : "HOLD UP + LB.";
-                case 5:
-                    if (tutorialActors[index].TutorialStopInProgress) return "STOPPING...";
-                    int stopDirection = TutorialStopDirection(index);
-                    if (Mathf.Abs(stopDirection) == 2) return "MOVE TOWARD THE SHAFT";
-                    if (stopDirection != 0) return "HOLD TO REACH THE FLOOR";
-                    return "PRESS TO STOP & OPEN DOORS";
-                case 6: return "PASSENGERS EXIT AUTOMATICALLY";
-                case 7: return "SELECT A RIDER, THEN KICK";
-                case LateralTravelStep:
-                    if (!TutorialLateralStopsReached(index))
-                        return TutorialLateralDirection(index) > 0
-                            ? "HOLD RIGHT. TWO ARROWS MEAN FAR RIGHT."
-                            : "HOLD LEFT. TWO ARROWS MEAN FAR LEFT.";
-                    if (tutorialActors[index].TutorialReadyToRejoin)
-                        return tutorialActors[index].TutorialRejoinVerticalDirection > 0
-                            ? "HOLD UP TO REJOIN" : "HOLD DOWN TO REJOIN";
-                    return tutorialActors[index].TutorialShaftDirection < 0
-                        ? "GO LEFT TO THE SHAFT" : "GO RIGHT TO THE SHAFT";
-                case 8:
-                    if (tutorialCollisionHitConfirmed) return "YOU MADE AN OPENING!";
-                    return KeyboardHintsEnabled ? seat == 1 ? "HOLD ↑ + RSHIFT." : "HOLD W + SHIFT."
-                        : "HOLD UP + LB.";
-                default: return "START YOUR SHIFT.";
-            }
+            InputManager input = InputManager.Instance;
+            return input == null ? KeyboardHintsEnabled
+                : !input.HasController(seat) && (input.CanUseSplitKeyboard || KeyboardHintsEnabled);
         }
 
-        // Draw in the gameplay HUD's own pass so its signs and arrows stay behind the cards.
-        internal static void DrawTutorialCardsAboveHud()
+        string TutorialActionLabel(int step, int index)
         {
-            MenuManager menu = Current;
-            if (menu == null || !menu.tutorialActive || menu.tutorialFinalePhase != TutorialFinalePhase.None
-                || Event.current.type != EventType.Repaint)
-                return;
-
-            menu.Styles();
-            menu.DrawTutorialOverlay();
+            ElevatorManager actor = tutorialActors[index];
+            switch (step)
+            {
+                case 0: return "Tap to open";
+                case 1: return "Passengers are boarding…";
+                case 2: return "Press to leave";
+                case 3: case OppositeMovementStep: return "Hold to move";
+                case 4: return "Hold both to boost";
+                case 5:
+                    if (actor.TutorialStopInProgress) return "Doors opening…";
+                    return TutorialStopDirection(index) == 0 ? "Press to stop here" : "Hold to steer";
+                case 6: return "Riders get off on their own";
+                case 7: return actor.HasSelectedBoardedPassenger ? "Press to kick" : "Select the highlighted rider";
+                case LateralTravelStep:
+                    if (TutorialLateralStopsReached(index) && actor.TutorialReadyToRejoin)
+                        return actor.TutorialRejoinVerticalDirection > 0 ? "Hold to go up" : "Hold to go down";
+                    return "Hold to steer";
+                case 8: return tutorialCollisionHitConfirmed ? "You knocked the rival back" : "Hold both to bump";
+                default: return string.Empty;
+            }
         }
 
         void DrawTutorialOverlay()
@@ -977,170 +954,182 @@ namespace CrazyElevator.Managers
             DrawTutorialOverlayForView(view, 0);
         }
 
-        void DrawTutorialOverlayForView(Rect view, int index)
+        void DrawTutorialOverlayForView(Rect pixelView, int index)
         {
-            if (index < 0 || index >= tutorialActors.Length
-                || tutorialActors[index] == null
-                || tutorialCardMotions[index] == TutorialCardMotion.Hidden)
-                return;
-            bool collisionPractice = tutorialFinalePhase == TutorialFinalePhase.Collision
-                && index == tutorialCollisionSeat;
-            int step = collisionPractice ? 8 : tutorialSteps[index];
-            int inputSeat = tutorialActors[index].Seat;
+            ElevatorManager actor = tutorialActors[index];
+            if (actor == null || tutorialCardMotions[index] == TutorialCardMotion.Hidden) return;
+
+            bool collision = tutorialFinalePhase == TutorialFinalePhase.Collision && index == tutorialCollisionSeat;
+            int step = collision ? 8 : tutorialSteps[index];
             Matrix4x4 previousMatrix = GUI.matrix;
-            Color previousGuiColor = GUI.color;
-            Color previousContentColor = GUI.contentColor;
-            GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0f));
-            GUI.color = Color.white;
-            GUI.contentColor = Color.white;
-
-            if (step < 0)
+            Color previousColor = GUI.color;
+            Color previousContent = GUI.contentColor;
+            GUI.BeginGroup(pixelView);
+            GUI.matrix = Matrix4x4.identity;
+            GUI.color = GUI.contentColor = Color.white;
+            try
             {
-                DrawPracticeMessage(view, index);
-                GUI.matrix = previousMatrix;
-                GUI.color = previousGuiColor;
-                GUI.contentColor = previousContentColor;
-                return;
-            }
-
-            if (step == TutorialWaitingStep && !collisionPractice)
-            {
-                DrawTutorialWaitingPanel(view, tutorialActors[0] != null && tutorialActors[1] != null);
-                GUI.matrix = previousMatrix;
-                GUI.color = previousGuiColor;
-                GUI.contentColor = previousContentColor;
-                return;
-            }
-
-            DrawTutorialElevatorSpotlight(view, index, step);
-            if (step == LateralTravelStep && TutorialLateralStopsReached(index) && !tutorialRejoinedShaft[index])
-                DrawTutorialShaftMarker(view, tutorialActors[index]);
-
-            // Layout in a consistent coordinate space so a 4K screen does not
-            // make the fixed-size tutorial card appear half as large.
-            Rect pixelView = view;
-            float tutorialScale = Mathf.Clamp(Mathf.Min(view.height / 900f, view.width / 620f), .7f, 3f);
-            GUI.matrix = Matrix4x4.TRS(new Vector3(view.x, view.y, 0f), Quaternion.identity,
-                new Vector3(tutorialScale, tutorialScale, 1f));
-            view = new Rect(0f, 0f, view.width / tutorialScale, view.height / tutorialScale);
-
-            const float margin = 14f;
-            bool split = tutorialGame.Match != null && tutorialGame.Match.SplitScreen;
-            float width = Mathf.Min(700f, view.width - margin * 2f);
-            float height = Mathf.Min(collisionPractice ? 200f : 184f, view.height * .31f);
-            float settledX = (view.width - width) * .5f;
-            float settledY = Mathf.Min(view.height - height - margin,
-                Mathf.Max(64f, view.height * (step == LateralTravelStep ? .62f : .12f)));
-            float motionT = Mathf.Clamp01(tutorialCardMotionTimes[index] / TutorialCardTravelSeconds);
-            float eased = 1f - Mathf.Pow(1f - motionT, 3f);
-            float cardX = settledX;
-            float cardY = settledY;
-            if (tutorialCardMotions[index] == TutorialCardMotion.Entering)
-                cardY = Mathf.Lerp(-height - 28f, settledY, eased);
-            else if (tutorialCardMotions[index] == TutorialCardMotion.Exiting)
-                cardY = Mathf.Lerp(settledY, view.height + 28f, eased);
-            Rect card = new Rect(cardX, cardY, width, height);
-            Color accent = step == 7 || collisionPractice ? MenuPresentation.Brass
-                : tutorialActors[index].Seat == 0 && split ? MenuPresentation.Coral : MenuPresentation.Teal;
-            if (step == LateralTravelStep && tutorialCardMotions[index] == TutorialCardMotion.Settled)
-                DrawTutorialLateralGuide(view, index, settledY);
-            MenuPresentation.HudPlate(card, accent);
-            Rect badge = new Rect(card.x + 15f, card.y + 10f, 102f, 22f);
-            MenuPresentation.Plaque(badge, accent, MenuPresentation.Metal, 2f);
-
-            Color previousTitle = cardTitle.normal.textColor;
-            Color previousBody = body.normal.textColor;
-            Color previousCaption = caption.normal.textColor;
-            int previousTitleSize = cardTitle.fontSize;
-            int previousBodySize = body.fontSize;
-            TextAnchor previousBodyAlignment = body.alignment;
-            bool previousBodyWrap = body.wordWrap;
-            TextAnchor previousTitleAlignment = cardTitle.alignment;
-            cardTitle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
-            body.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
-            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .065f), 24, 40);
-            cardTitle.alignment = TextAnchor.MiddleCenter;
-            body.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .043f), 19, 28);
-            body.alignment = TextAnchor.MiddleLeft;
-            body.wordWrap = true;
-            MenuPresentation.Label(badge, new GUIContent("TUTORIAL"), caption, MenuPresentation.Ink);
-            Rect titleRect = new Rect(card.x + 12f, card.y + 34f, card.width - 24f, 43f);
-            string instruction = step == 5 && tutorialTargetFloor[index] >= 0
-                ? TutorialStopInstruction(index)
-                : step == 3 || step == OppositeMovementStep
-                    ? (TutorialMovementDirection(index, step) > 0 ? "MOVE UP" : "MOVE DOWN")
-                : step == LateralTravelStep ? TutorialLateralInstruction(index)
-                    : TutorialTitle(step);
-            GUIContent titleContent = new GUIContent(instruction);
-            while (cardTitle.fontSize > 19 && cardTitle.CalcSize(titleContent).x > titleRect.width)
-                cardTitle.fontSize--;
-            GUI.Label(titleRect, titleContent, cardTitle);
-
-            float rowY = card.y + 78f;
-            float hintWidth;
-            int doorSlot = tutorialActors[index].TutorialSuggestedDoorSlot(0);
-            bool waitingForBoarding = step == 1 && tutorialActors[index].OpenBoardingDoorCount >= 3;
-            bool stopping = step == 5 && tutorialActors[index].TutorialStopInProgress;
-            if (!KeyboardHintsEnabled && step != 6 && !waitingForBoarding && !stopping)
-            {
-                hintWidth = Mathf.Min(164f, card.width * .32f);
-                DrawTutorialController(new Rect(card.x + 15f, rowY, hintWidth, Mathf.Min(88f, card.yMax - rowY - 8f)), step, accent, doorSlot, index);
-            }
-            else
-            {
-                string key = step == 6 || waitingForBoarding || stopping ? "AUTO" : TutorialExampleKey(step, inputSeat, index, doorSlot);
-                bool combined = step == 4 || step == 8;
-                hintWidth = combined ? 130f : key.Length > 4 ? 94f : 64f;
-                if (combined)
+                if (step < 0)
                 {
-                    DrawPulsingTutorialKey(new Rect(card.x + 15f, rowY + 5f, 48f, 56f),
-                        inputSeat == 1 ? "↑" : "W", accent);
-                    var plusStyle = new GUIStyle(body)
-                    {
-                        fontSize = 21,
-                        alignment = TextAnchor.MiddleCenter,
-                        padding = new RectOffset(0, 0, 0, 0),
-                        wordWrap = false
-                    };
-                    GUI.Label(new Rect(card.x + 63f, rowY + 5f, 21f, 56f), "+", plusStyle);
-                    DrawPulsingTutorialKey(new Rect(card.x + 84f, rowY + 5f, 62f, 56f),
-                        inputSeat == 1 ? "R SHIFT" : "SHIFT", accent);
+                    DrawPracticeMessage(pixelView, index);
+                    return;
                 }
-                else if (step == 6 || waitingForBoarding || stopping) DrawKeyHint(new Rect(card.x + 15f, rowY + 5f, hintWidth, 62f), key);
-                else DrawPulsingTutorialKey(new Rect(card.x + 15f, rowY + 5f, hintWidth, 62f), key, accent);
-            }
-            float textX = card.x + 26f + hintWidth;
-            GUI.Label(new Rect(textX, rowY, card.xMax - textX - 15f, card.yMax - rowY - 8f),
-                TutorialBody(step, index), body);
 
-            if (step == 5 && tutorialTargetFloor[index] >= 0 && !stopping)
+                if (step != TutorialWaitingStep || collision)
+                {
+                    DrawTutorialElevatorSpotlight(pixelView, index, step);
+                    if (step == LateralTravelStep && TutorialLateralStopsReached(index) && !tutorialRejoinedShaft[index])
+                        DrawTutorialShaftMarker(pixelView, actor);
+                }
+
+                float scale = MenuPresentation.GameplayHudScale(pixelView.width, pixelView.height);
+                GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
+                var view = new Rect(0f, 0f, pixelView.width / scale, pixelView.height / scale);
+                if (step == TutorialWaitingStep && !collision)
+                {
+                    bool twoPlayers = tutorialActors[0] != null && tutorialActors[1] != null;
+                    DrawTutorialWaitingPanel(view, twoPlayers, actor.Seat);
+                    return;
+                }
+
+                float width = Mathf.Min(570f, view.width - 32f);
+                float top = step == LateralTravelStep ? view.height - 193f : 24f;
+                float t = Mathf.Clamp01(tutorialCardMotionTimes[index] / TutorialCardTravelSeconds);
+                float entrance = Mathf.SmoothStep(0f, 1f, t);
+                TutorialCardMotion motion = tutorialCardMotions[index];
+                float offset = motion == TutorialCardMotion.Settled ? 0f
+                    : motion == TutorialCardMotion.Entering ? -12f * (1f - entrance) : -8f * entrance;
+                Rect card = new Rect((view.width - width) * .5f, top + offset, width, 136f);
+                Color accent = actor.Seat == 0 && tutorialGame.Match != null && tutorialGame.Match.SplitScreen
+                    ? MenuPresentation.Coral : MenuPresentation.Teal;
+                if (step == 5 && !actor.TutorialStopInProgress)
+                {
+                    if (tutorialTargetFloor[index] >= 0 && !DrawTutorialFloorMarker(pixelView, card, index, scale)
+                        && TutorialStopDirection(index) != 0)
+                        DrawTutorialStopGuide(view, card, index);
+                }
+                if (step == LateralTravelStep && motion == TutorialCardMotion.Settled)
+                    DrawTutorialLateralGuide(view, index, top);
+
+                DrawTutorialActionCard(card, step, index, collision, accent);
+            }
+            finally
             {
-                DrawTutorialFloorMarker(pixelView, card, index, tutorialScale);
-                DrawTutorialStopGuide(view, card, index);
+                GUI.matrix = previousMatrix;
+                GUI.color = previousColor;
+                GUI.contentColor = previousContent;
+                GUI.EndGroup();
             }
+        }
 
-            if (collisionPractice)
+        void DrawTutorialActionCard(Rect card, int step, int index, bool collision, Color accent)
+        {
+            ElevatorManager actor = tutorialActors[index];
+            MenuPresentation.HudPlate(card, accent);
+            bool split = tutorialGame.Match != null && tutorialGame.Match.SplitScreen;
+            string player = split ? "PLAYER " + (actor.Seat + 1) : "PRACTICE";
+            DrawTutorialText(new Rect(card.x + 14f, card.y + 8f, 116f, 21f),
+                player, caption, 15, accent, TextAnchor.MiddleLeft);
+            DrawTutorialProgress(card, step, collision, actor.Match != null, accent);
+
+            string heading = step == 5 && tutorialTargetFloor[index] >= 0 ? TutorialStopInstruction(index)
+                : step == 3 || step == OppositeMovementStep ? (TutorialMovementDirection(index, step) > 0 ? "MOVE UP" : "MOVE DOWN")
+                : step == LateralTravelStep ? TutorialLateralInstruction(index)
+                : TutorialTitle(step);
+            DrawTutorialText(new Rect(card.x + 14f, card.y + 33f, card.width - 28f, 42f),
+                heading, cardTitle, 34, MenuPresentation.Paper);
+
+            int doorSlot = actor.TutorialSuggestedDoorSlot(0);
+            bool passive = step == 6 || step == 1 && actor.OpenBoardingDoorCount == 3
+                || step == 5 && actor.TutorialStopInProgress || collision && tutorialCollisionHitConfirmed;
+            string label = TutorialActionLabel(step, index);
+            Rect row = new Rect(card.x + 14f, card.y + 79f, card.width - 28f, 43f);
+            if (passive)
             {
-                int previousFooterSize = caption.fontSize;
-                caption.fontSize = Mathf.Clamp(Mathf.RoundToInt(card.width * .032f), 12, 17);
-                caption.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Brass);
-                GUI.Label(new Rect(card.x + 15f, card.yMax - 30f, card.width - 30f, 22f),
-                    "BUMP THEM AWAY. BOARD FIRST.", caption);
-                caption.fontSize = previousFooterSize;
+                DrawTutorialText(row, label, body, 24, MenuPresentation.Paper);
+                return;
             }
 
-            cardTitle.alignment = previousTitleAlignment;
-            cardTitle.fontSize = previousTitleSize;
-            body.fontSize = previousBodySize;
-            body.alignment = previousBodyAlignment;
-            body.wordWrap = previousBodyWrap;
-            cardTitle.normal.textColor = previousTitle;
-            body.normal.textColor = previousBody;
-            caption.normal.textColor = previousCaption;
+            bool keyboard = TutorialUsesKeyboard(actor.Seat);
+            if (step == 1)
+            {
+                // Show the real open doors so the player can tell which door remains.
+                for (int slot = 0; slot < 3; slot++)
+                {
+                    bool open = actor.TutorialDoorOpen(slot);
+                    string doorKey = TutorialExampleKey(1, keyboard ? actor.Seat : 1, index, slot);
+                    Rect key = new Rect(row.center.x - 157f + slot * 106f, row.y, 98f, row.height);
+                    if (!keyboard) doorKey = "STICK " + doorKey;
+                    DrawTutorialInputCap(key, open ? "OPEN" : doorKey, accent, !open && slot == doorSlot, open);
+                }
+                return;
+            }
 
-            GUI.matrix = previousMatrix;
-            GUI.color = previousGuiColor;
-            GUI.contentColor = previousContentColor;
+            string keyText = TutorialActionKey(step, index, doorSlot, keyboard);
+            float keyWidth = keyText.Length > 9 ? 166f : keyText.Length > 2 ? 128f : 53f;
+            float labelWidth = Mathf.Min(270f, row.width - keyWidth - 14f);
+            float x = row.center.x - (keyWidth + 14f + labelWidth) * .5f;
+            Rect cap = new Rect(x, row.y, keyWidth, row.height);
+            DrawTutorialInputCap(cap, keyText, accent, true, false);
+            DrawTutorialText(new Rect(cap.xMax + 14f, row.y, labelWidth, row.height),
+                label, body, 23, MenuPresentation.Paper, TextAnchor.MiddleLeft);
+        }
+
+        string TutorialActionKey(int step, int index, int doorSlot, bool keyboard)
+        {
+            ElevatorManager actor = tutorialActors[index];
+            if (step == 7 && !actor.HasSelectedBoardedPassenger)
+                return keyboard ? "CLICK RIDER" : "STICK";
+            if (step == 4 || step == 8)
+                return !keyboard ? "STICK ↑ + LB" : actor.Seat == 0 ? "W + SHIFT" : "↑ + R SHIFT";
+            if (keyboard) return TutorialExampleKey(step, actor.Seat, index, doorSlot);
+            if (step == 2 || step == 5 && TutorialStopDirection(index) == 0) return "A";
+            if (step == 7) return "B";
+            return "STICK " + TutorialExampleKey(step, 1, index, doorSlot);
+        }
+
+        void DrawTutorialProgress(Rect card, int step, bool collision, bool hasRival, Color accent)
+        {
+            int total = hasRival ? 11 : 9;
+            int current = collision ? total : step == OppositeMovementStep ? 5
+                : step == LateralTravelStep ? 6 : step < 4 ? step + 1 : step + (hasRival ? 3 : 2);
+            float x = card.xMax - 14f - total * 12f + 4f;
+            for (int i = 1; i <= total; i++)
+            {
+                Color fill = i == current ? MenuPresentation.Paper : i < current ? accent : MenuPresentation.Ink;
+                MenuPresentation.Paint(new Rect(x + (i - 1) * 12f, card.y + 14f, 8f, 8f), fill);
+            }
+        }
+
+        void DrawTutorialInputCap(Rect rect, string key, Color accent, bool active, bool complete)
+        {
+            float pulse = .5f + .5f * Mathf.Sin(Time.unscaledTime * 5f);
+            if (active)
+            {
+                Color glow = accent;
+                glow.a = .25f + pulse * .35f;
+                MenuPresentation.Paint(Expand(rect, 2f + pulse * 3f), glow);
+            }
+            Color face = active || complete ? accent : MenuPresentation.Ink;
+            MenuPresentation.Plaque(rect, face, MenuPresentation.Ink, 2f);
+            DrawTutorialText(rect, key, cardTitle, 23, active || complete ? MenuPresentation.Ink : MenuPresentation.Paper);
+        }
+
+        static void DrawTutorialText(Rect rect, string text, GUIStyle template, int size, Color color,
+            TextAnchor alignment = TextAnchor.MiddleCenter)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            var style = new GUIStyle(template)
+            {
+                fontSize = size,
+                alignment = alignment,
+                wordWrap = false,
+                clipping = TextClipping.Clip,
+                padding = new RectOffset()
+            };
+            var content = new GUIContent(text);
+            while (style.fontSize > 1 && style.CalcSize(content).x > rect.width - 6f) style.fontSize--;
+            MenuPresentation.Label(rect, content, style, color);
         }
 
         string TutorialExampleKey(int step, int seat, int index, int doorSlot)
@@ -1189,29 +1178,21 @@ namespace CrazyElevator.Managers
         void DrawTutorialStopGuide(Rect view, Rect card, int index)
         {
             int direction = TutorialStopDirection(index);
-            string arrow = direction == 1 ? "↑" : direction == -1 ? "↓"
-                : direction == 2 ? "→" : direction == -2 ? "←" : "●";
-            string target = Mathf.Abs(direction) == 2 ? "SHAFT"
-                : direction == 0 ? "STOP HERE" : "FLOOR " + ElevatorRound.FloorNumber(tutorialTargetFloor[index]);
-            float width = Mathf.Min(220f, view.width - 28f);
-            Rect guide = new Rect((view.width - width) * .5f,
-                Mathf.Min(card.yMax + 9f, view.height - 53f), width, 44f);
+            string arrow = direction == 1 ? "↑" : direction == -1 ? "↓" : direction == 2 ? "→" : "←";
+            Rect guide = new Rect((view.width - 46f) * .5f, card.yMax + 9f, 46f, 40f);
             MenuPresentation.HudPlate(guide, MenuPresentation.Brass);
-            var style = new GUIStyle(cardTitle) { fontSize = 23, alignment = TextAnchor.MiddleCenter,
-                wordWrap = false, padding = new RectOffset(0, 0, 0, 0) };
-            style.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
-            GUI.Label(guide, arrow + "  " + target, style);
+            DrawTutorialText(guide, arrow, cardTitle, 27, MenuPresentation.Brass);
         }
 
-        void DrawTutorialFloorMarker(Rect view, Rect card, int index, float scale)
+        bool DrawTutorialFloorMarker(Rect view, Rect card, int index, float scale)
         {
-            if (Mathf.Abs(TutorialStopDirection(index)) == 2) return;
+            if (Mathf.Abs(TutorialStopDirection(index)) == 2) return false;
             ElevatorManager actor = tutorialActors[index];
-            if (!actor.TryGetTutorialFloorScreenPosition(tutorialTargetFloor[index], out Vector3 point)) return;
+            if (!actor.TryGetTutorialFloorScreenPosition(tutorialTargetFloor[index], out Vector3 point)) return false;
             float x = (point.x - view.x) / scale;
             float y = (Screen.height - point.y - view.y) / scale;
             // The guide below the card handles floors outside the visible area.
-            if (x < 60f || x > view.width / scale - 60f || y < card.yMax + 70f || y > view.height / scale - 45f) return;
+            if (x < 60f || x > view.width / scale - 60f || y < card.yMax + 70f || y > view.height / scale - 45f) return false;
             float bounce = Mathf.Abs(Mathf.Sin(Time.unscaledTime * 4f)) * 5f;
             Rect marker = new Rect(x - 55f, y - 62f - bounce, 110f, 42f);
             MenuPresentation.HudPlate(marker, MenuPresentation.Brass);
@@ -1222,15 +1203,7 @@ namespace CrazyElevator.Managers
             style.fontSize = 30;
             style.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Brass);
             GUI.Label(new Rect(x - 22f, marker.yMax - 1f, 44f, 34f), "↓", style);
-        }
-
-        void DrawPulsingTutorialKey(Rect rect, string key, Color accent)
-        {
-            float pulse = .5f + .5f * Mathf.Sin(Time.unscaledTime * 5f);
-            float spread = 3f + pulse * 3f;
-            Panel(new Rect(rect.x - spread, rect.y - spread, rect.width + spread * 2f,
-                rect.height + spread * 2f), new Color(accent.r, accent.g, accent.b, .25f + pulse * .45f));
-            DrawKeyHint(new Rect(rect.x, rect.y - pulse * 3f, rect.width, rect.height), key);
+            return true;
         }
 
         void DrawTutorialShaftMarker(Rect view, ElevatorManager actor)
@@ -1262,7 +1235,8 @@ namespace CrazyElevator.Managers
             if (step != 3 && step != OppositeMovementStep && step != 4 && step != 5 && step != LateralTravelStep && step != 8) return;
             if (tutorialCardMotions[index] != TutorialCardMotion.Settled) return;
             float age = tutorialStepSettledTimes[index];
-            if (age >= 2.5f) return;
+            const float spotlightSeconds = 1.5f;
+            if (age >= spotlightSeconds) return;
             ElevatorManager actor = tutorialActors[index];
             Camera camera = actor != null ? actor.ShaftCamera : null;
             if (camera == null || !camera.enabled) return;
@@ -1271,8 +1245,8 @@ namespace CrazyElevator.Managers
             float x = point.x - view.x;
             float y = Screen.height - point.y - view.y;
             if (x < 0f || x > view.width || y < 0f || y > view.height) return;
-            float radius = Mathf.Clamp(Mathf.Min(view.width * .14f, view.height * .12f), 55f, 110f);
-            float alpha = .42f * Mathf.Clamp01((2.5f - age) / .5f);
+            float radius = Mathf.Min(view.width * .14f, view.height * .12f);
+            float alpha = .28f * Mathf.Clamp01((spotlightSeconds - age) / .5f);
             Texture2D mask = TutorialSpotlightMask(index, view, x, y, radius);
             Color previous = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, alpha);
@@ -1340,32 +1314,15 @@ namespace CrazyElevator.Managers
             if (goal >= TutorialLateralStops.Length) return;
             bool far = goal == 1 || goal == 3;
             int direction = TutorialLateralDirection(index);
-            string side = direction > 0 ? "RIGHT" : "LEFT";
-            string heading = (far ? "FAR " : "") + side;
-            float width = Mathf.Min(660f, view.width - 36f);
-            float scale = Mathf.Min(width / 600f, view.height * .24f / 176f);
-            width = 600f * scale;
-            float height = 176f * scale;
-            float top = Mathf.Max(8f, Mathf.Min(view.height * .30f - height * .5f, cardTop - height - 18f));
+            float width = Mathf.Min(400f, view.width - 36f);
+            float scale = width / 600f;
+            float top = Mathf.Max(8f, Mathf.Min(view.height * .3f, cardTop - 92f * scale - 18f));
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = previous * Matrix4x4.TRS(
                 new Vector3((view.width - width) * .5f, top, 0f), Quaternion.identity,
                 new Vector3(scale, scale, 1f));
 
             Color fill = MenuPresentation.Paper;
-            var large = new GUIStyle(cardTitle)
-                { fontSize = 56, alignment = TextAnchor.MiddleCenter, wordWrap = false };
-            var text = new GUIContent(heading);
-            float bounce = Mathf.Sin(Time.unscaledTime * 5.5f) * 3f;
-            Rect label = new Rect(12f, bounce, 576f, 78f);
-            // Offset the glyphs in every direction to outline each letter.
-            for (int x = -1; x <= 1; x++)
-                for (int y = -1; y <= 1; y++)
-                    if (x != 0 || y != 0)
-                        MenuPresentation.Label(new Rect(label.x + x * 4f, label.y + y * 4f, label.width, label.height),
-                            text, large, MenuPresentation.Ink);
-            MenuPresentation.Label(label, text, large, fill);
-
             int arrows = far ? 2 : 1;
             float arrowWidth = 132f;
             float total = arrows * arrowWidth + (arrows - 1) * 24f;
@@ -1373,7 +1330,7 @@ namespace CrazyElevator.Managers
             {
                 float march = Mathf.Sin(Time.unscaledTime * 5.5f - arrow * .65f) * 8f * direction;
                 Rect rect = new Rect((600f - total) * .5f + arrow * (arrowWidth + 24f) + march,
-                    90f, arrowWidth, 78f);
+                    0f, arrowWidth, 78f);
                 DrawTutorialDirectionArrow(rect, direction, fill);
             }
             GUI.matrix = previous;
@@ -1452,27 +1409,29 @@ namespace CrazyElevator.Managers
             int previousFontSize = cardTitle.fontSize;
             TextAnchor previousAlignment = cardTitle.alignment;
             Color previousTextColor = cardTitle.normal.textColor;
-            cardTitle.fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .075f), 52, 90);
+            float scale = MenuPresentation.GameplayHudScale(view.width, view.height);
+            cardTitle.fontSize = Mathf.Max(1, Mathf.RoundToInt(70f * scale));
             cardTitle.alignment = TextAnchor.MiddleCenter;
             cardTitle.normal.textColor = MenuColor(new Color(Cream.r, Cream.g, Cream.b, alpha));
-            GUI.Label(new Rect(30f, (view.height - 120f) * .5f, view.width - 60f, 120f),
+            GUI.Label(new Rect(30f * scale, (view.height - 120f * scale) * .5f,
+                    view.width - 60f * scale, 120f * scale),
                 "TUTORIAL", cardTitle);
             cardTitle.fontSize = previousFontSize;
             cardTitle.alignment = previousAlignment;
             cardTitle.normal.textColor = previousTextColor;
         }
 
-        void DrawTutorialWaitingPanel(Rect view, bool waitingForOtherPlayer)
+        void DrawTutorialWaitingPanel(Rect view, bool waitingForOtherPlayer, int seat)
         {
             float width = Mathf.Min(view.width - 28f, 470f);
             const float height = 96f;
-            Rect card = new Rect((view.width - width) * .5f, view.height - height - 16f, width, height);
+            Rect card = new Rect((view.width - width) * .5f, 24f, width, height);
             Color accent = waitingForOtherPlayer ? MenuPresentation.Brass : MenuPresentation.Teal;
             MenuPresentation.HudPlate(card, accent);
             var label = new GUIStyle(caption);
             label.normal.textColor = MenuPresentation.DisplayColor(accent);
             GUI.Label(new Rect(card.x + 14f, card.y + 9f, card.width - 28f, 22f),
-                waitingForOtherPlayer ? "TUTORIAL COMPLETE" : "PRACTICE COMPLETE", label);
+                waitingForOtherPlayer ? "READY" : "PRACTICE COMPLETE", label);
 
             var heading = new GUIStyle(cardTitle)
             {
@@ -1481,7 +1440,7 @@ namespace CrazyElevator.Managers
                 wordWrap = false
             };
             heading.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
-            var message = new GUIContent(waitingForOtherPlayer ? "OTHER DRIVER’S TURN" : "GET READY");
+            var message = new GUIContent(waitingForOtherPlayer ? "WAITING FOR PLAYER " + (2 - seat) : "GET READY");
             Rect textArea = new Rect(card.x + 12f, card.y + 34f, card.width - 24f, 45f);
             while (heading.fontSize > 12 && heading.CalcSize(message).x > textArea.width)
                 heading.fontSize--;
@@ -1598,114 +1557,5 @@ namespace CrazyElevator.Managers
             cardTitle.normal.textColor = previousTextColor;
             GUI.matrix = previousMatrix;
         }
-
-        // Draw in a fixed local space so the same demonstration fits both player panes.
-        // Unscaled time keeps the demonstration moving while tutorial gameplay is paused.
-        void DrawTutorialController(Rect rect, int step, Color accent, int doorSlot, int index)
-        {
-            Matrix4x4 previous = GUI.matrix;
-            GUI.matrix = previous * Matrix4x4.TRS(new Vector3(rect.x, rect.y + rect.height * 24f / 135f, 0f),
-                Quaternion.identity, new Vector3(rect.width / 200f, rect.height / 135f, 1f));
-            bool boardingStep = step == 0 || step == 1;
-            float cycleSeconds = boardingStep ? 3.2f : 2.4f;
-            float cycle = Mathf.Repeat(Time.unscaledTime, cycleSeconds);
-            bool pressed = cycle < (boardingStep ? 2.2f : 1.65f);
-            Color shell = new Color32(104, 119, 136, 255);
-            Color idle = new Color32(38, 48, 63, 255);
-            Color active = Color.Lerp(accent, Cream, .15f + .2f * Mathf.Sin(Time.unscaledTime * 6f));
-
-            // Rounded shoulders, central body and angled grips form a gamepad silhouette.
-            TutorialControllerOval(new Rect(12, 23, 68, 81), shell);
-            TutorialControllerOval(new Rect(120, 23, 68, 81), shell);
-            TutorialControllerOval(new Rect(22, 19, 156, 65), shell);
-            Panel(new Rect(45, 28, 110, 49), shell);
-            bool boost = (step == 4 || step == 8) && pressed;
-            DrawTutorialShoulder(new Rect(18, 0, 56, 23), "LB", boost, active);
-            DrawTutorialShoulder(new Rect(126, 0, 56, 23), "RB", false, active);
-            GUI.Label(new Rect(77, 28, 46, 20), boost ? "HOLD" : "", new GUIStyle(caption)
-                { fontSize = 11, alignment = TextAnchor.MiddleCenter });
-
-            int stopDirection = step == 5 ? TutorialStopDirection(index) : 0;
-            bool useStick = boardingStep || step == 3 || step == OppositeMovementStep || step == 4 || step == 7 || step == 8
-                || step == 5 && stopDirection != 0
-                || step == LateralTravelStep;
-            Vector2 offset = Vector2.zero;
-            if (useStick && pressed)
-            {
-                if (boardingStep)
-                {
-                    offset = doorSlot == 0 ? Vector2.left : doorSlot == 1 ? Vector2.up : Vector2.right;
-                }
-                else if (step == 3 || step == OppositeMovementStep)
-                    offset = TutorialMovementDirection(index, step) > 0 ? Vector2.up : Vector2.down;
-                else if (step == 5)
-                    offset = stopDirection == 1 ? Vector2.up : stopDirection == -1 ? Vector2.down
-                        : stopDirection == 2 ? Vector2.right : Vector2.left;
-                else if (step == 8) offset = Vector2.up;
-                else if (step == LateralTravelStep)
-                {
-                    ElevatorManager actor = tutorialActors[index];
-                    if (TutorialLateralStopsReached(index) && actor.TutorialReadyToRejoin)
-                        offset = actor.TutorialRejoinVerticalDirection > 0 ? Vector2.up : Vector2.down;
-                    else offset = TutorialLateralDirection(index) < 0 ? Vector2.left : Vector2.right;
-                }
-                else offset = Mathf.FloorToInt(Time.unscaledTime / 2.4f) % 2 == 0 ? Vector2.up : Vector2.down;
-            }
-            if (useStick)
-            {
-                float glow = 4f + 3f * (.5f + .5f * Mathf.Sin(Time.unscaledTime * 5f));
-                TutorialControllerOval(new Rect(33 - glow, 36 - glow, 38 + glow * 2f, 38 + glow * 2f),
-                    new Color(accent.r, accent.g, accent.b, .45f));
-            }
-            TutorialControllerOval(new Rect(33, 36, 38, 38), useStick ? accent : idle);
-            TutorialControllerOval(new Rect(37 + offset.x * 9f, 40 - offset.y * 9f, 30, 30), idle);
-            TutorialControllerOval(new Rect(42 + offset.x * 9f, 45 - offset.y * 9f, 20, 20),
-                useStick && pressed ? active : shell);
-            Panel(new Rect(72, 70, 9, 25), idle);
-            Panel(new Rect(64, 78, 25, 9), idle);
-            TutorialControllerOval(new Rect(110, 70, 25, 25), idle);
-            TutorialControllerButton(new Rect(145, 61, 21, 21), "A", (step == 2 || step == 5 && stopDirection == 0) && pressed, active);
-            TutorialControllerButton(new Rect(166, 42, 21, 21), "B", step == 7 && pressed, active);
-            TutorialControllerButton(new Rect(124, 42, 21, 21), "X", false, active);
-            TutorialControllerButton(new Rect(145, 23, 21, 21), "Y", false, active);
-            GUI.matrix = previous;
-        }
-
-        void TutorialControllerButton(Rect rect, string label, bool pressed, Color accent)
-        {
-            if (pressed)
-            {
-                float glow = 2f + 2f * (.5f + .5f * Mathf.Sin(Time.unscaledTime * 6f));
-                TutorialControllerOval(new Rect(rect.x - glow, rect.y - glow,
-                    rect.width + glow * 2f, rect.height + glow * 2f), accent);
-            }
-            TutorialControllerOval(rect, pressed ? accent : Ink);
-            GUIStyle style = new GUIStyle(caption) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
-            GUI.Label(rect, label, style);
-        }
-
-        void DrawTutorialShoulder(Rect rect, string label, bool pressed, Color accent)
-        {
-            Panel(new Rect(rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4), Cream);
-            Panel(new Rect(rect.x, rect.y + (pressed ? 2f : 0f), rect.width, rect.height),
-                pressed ? accent : Ink);
-            GUIStyle style = new GUIStyle(caption) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            style.normal.textColor = MenuColor(pressed ? Ink : Cream);
-            GUI.Label(rect, label, style);
-        }
-
-        void TutorialControllerOval(Rect rect, Color color)
-        {
-            // Horizontal strips avoid allocating textures or meshes during GUI repaint.
-            for (float y = 0; y < rect.height; y += 2f)
-            {
-                float normalized = (y + 1f) / rect.height * 2f - 1f;
-                float halfWidth = rect.width * .5f * Mathf.Sqrt(Mathf.Max(0f, 1f - normalized * normalized));
-                Panel(new Rect(rect.center.x - halfWidth, rect.y + y, halfWidth * 2f,
-                    Mathf.Min(2f, rect.height - y)), color);
-            }
-        }
-
     }
 }

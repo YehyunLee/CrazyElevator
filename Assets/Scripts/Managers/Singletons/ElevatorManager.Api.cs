@@ -30,7 +30,7 @@ namespace CrazyElevator.Managers
         // 0 means stop now, +/-1 means move vertically, +/-2 means return to the shaft.
         public int TutorialStopNavigation(int target)
         {
-            if (NearestStop(RouteLateralX) != ElevatorRound.CenterStop)
+            if (!OnMainShaft(RouteLateralX))
                 return TutorialShaftDirection * 2;
             if (phase == Phase.Moving && GlideStopFloor() == target) return 0;
             return target >= CurrentFloor ? 1 : -1;
@@ -46,6 +46,13 @@ namespace CrazyElevator.Managers
         public int KickoutCount => kickoutCount;
         public bool HasSelectedBoardedPassenger => selectedRider != null && selectedRider.Boarded;
         public int SelectedPassengerDestination => selectedRider != null ? selectedRider.Destination : -1;
+        public bool TryGetPickupStop(out int floor, out int stop)
+        {
+            floor = phase == Phase.Docking ? destination : DiscreteFloor;
+            stop = phase == Phase.Docking ? dockingStop : DiscreteStop;
+            return round != null && (phase == Phase.Boarding || phase == Phase.Opening || phase == Phase.Docking);
+        }
+
         // Only show a steal when the rival can still claim this landing.
         public bool ApproachingPickup(Rider rider)
         {
@@ -53,10 +60,8 @@ namespace CrazyElevator.Managers
                 return false;
             // Both cars can already be at the same shared queue. This is the
             // most common steal, and it used to miss the arrival-only check.
-            if (phase == Phase.Boarding || phase == Phase.Opening)
-                return round.Floor == rider.Origin && round.Stop == rider.OriginStop;
-            if (phase == Phase.Docking)
-                return destination == rider.Origin && dockingStop == rider.OriginStop;
+            if (TryGetPickupStop(out int floor, out int stop))
+                return floor == rider.Origin && stop == rider.OriginStop;
 
             // The CPU picks a specific landing before travel. Catch its final
             // approach too: a car already boarding can collide with it before docking.

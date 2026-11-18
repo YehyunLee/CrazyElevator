@@ -2582,6 +2582,9 @@ public static class ExtendedInteriorChecks
         Require(playerRound.Board(rider) && !rivalRound.Board(rider),
             "Both elevators boarded the same floor-zero passenger.");
         match.NotifyPassengerBoarded(player, rider);
+        Require(rider.ContestedPickupBonus == 30
+            && playerRound.DeliveryPoints(rider) == playerRound.BaseDeliveryPoints(rider) + rider.Bonus + 30,
+            "A contested rider did not carry the bonus into the delivery preview.");
         Require((string)Get(player, "actionFeedbackText") == "STOLEN!"
             && (string)Get(rival, "actionFeedbackText") == "TOO LATE!",
             "A contested passenger did not show steal feedback in both cars.");
@@ -2702,15 +2705,15 @@ public static class ExtendedInteriorChecks
         Call(game, "Restart");
         int scoreBefore = game.Points;
         Call(game, "RegisterDeliveryPopup", new Vector3(-.75f, .2f, 2.1f),
-            CrazyElevator.Shared.OffboardResult.Happy, 145);
+            CrazyElevator.Shared.OffboardResult.Happy, 145, 0);
         Call(game, "RegisterDeliveryPopup", new Vector3(.7f, .05f, 2.2f),
-            CrazyElevator.Shared.OffboardResult.Happy, 110);
+            CrazyElevator.Shared.OffboardResult.Happy, 110, 0);
         Require(((ICollection)Get(game, "deliveryPopups")).Count == 2
             && (int)Get(game, "deliveryCombo") == 2,
             "The delivery preview did not create a two-drop combo.");
         Require(game.Points == scoreBefore, "The presentation-only combo changed the score.");
         Call(game, "RegisterDeliveryPopup", Vector3.zero,
-            CrazyElevator.Shared.OffboardResult.WrongFloor, -60);
+            CrazyElevator.Shared.OffboardResult.WrongFloor, -60, 0);
         Require((int)Get(game, "deliveryCombo") == 0
             && ((ICollection)Get(game, "deliveryPopups")).Count == 2,
             "A wrong-floor drop must reset the combo without creating a positive popup.");
@@ -2829,7 +2832,7 @@ public static class ExtendedInteriorChecks
                 && ((ICollection)Get(game, "deliveryPopups")).Count == 1
                 && (int)Get(game, "deliveryCombo") == 1,
                 "A correct unload must create one points popup and start its combo.");
-            Call(game, "RegisterDeliveryPopup", before, CrazyElevator.Shared.OffboardResult.Happy, 100);
+            Call(game, "RegisterDeliveryPopup", before, CrazyElevator.Shared.OffboardResult.Happy, 100, 0);
             Require(((ICollection)Get(game, "deliveryPopups")).Count == 2
                 && (int)Get(game, "deliveryCombo") == 2,
                 "A quick second delivery must advance the visible combo.");
@@ -3097,7 +3100,8 @@ public static class ExtendedInteriorChecks
             Require(Mathf.Abs((float)Get(game, "travelVelocity") - game.maximumTravelSpeed) < .002f, "Boost speed cap failed.");
             game.SetTravelInput(0f, false); float fast = (float)Get(game, "travelVelocity");
             Call(game, "AdvanceBuildingTravel", .15f);
-            Require(Mathf.Abs((float)Get(game, "travelVelocity") - fast) < .001f, "Boost momentum disappeared on release.");
+            float coasting = (float)Get(game, "travelVelocity");
+            Require(coasting < fast && coasting > cruise, "Releasing boost must ease the car back to cruising speed.");
             Set(game, "travelFloor", 3f); Set(game, "travelVelocity", 1.5f); Set(game, "travelDirection", 1);
             game.SetTravelInput(-1f, true);
             float reversed = (float)Get(game, "travelVelocity");
@@ -3167,7 +3171,7 @@ public static class ExtendedInteriorChecks
                 "Handyman protection remained after unloading.");
             Call(game, "Restart");
             CheckGrandmaSpeedStack(game, (Round)Get(game, "round"));
-            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; momentum retention; sharp opposite-direction reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
+            File.AppendAllText(Work + "/result.txt", "\nPASS: cumulative boost; speed cap; coast back to cruise; sharp opposite-direction reversal; horizontal/neutral boost ignored; Shift + keyboard boost; frame-rate independence; office/candy/underwater initial speeds; lower underwater speed and acceleration; matching 1/2/3 starfish meters; handyman spawned and visible; immunity only while aboard; underwater speed with full acceleration/cap restored; rust growth suppressed; unloading restores impairment; docking resets momentum; four-Grandma slowdown; seat isolation; clown combination.");
         }
         finally
         {

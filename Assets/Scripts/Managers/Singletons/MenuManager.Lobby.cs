@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using CrazyElevator.Shared;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace CrazyElevator.Managers
 {
@@ -103,8 +104,10 @@ namespace CrazyElevator.Managers
             RenderTexture previousTexture = directoryPreviewCamera.targetTexture;
             RenderTexture previousActive = RenderTexture.active;
             Color previousBackground = directoryPreviewCamera.backgroundColor;
+            bool previewWasVisible = directoryPreviewModel != null && directoryPreviewModel.activeSelf;
             try
             {
+                if (previewWasVisible) directoryPreviewModel.SetActive(false);
                 directoryPreviewCamera.targetTexture = portrait;
                 directoryPreviewCamera.backgroundColor = background;
                 directoryPreviewCamera.Render();
@@ -113,6 +116,7 @@ namespace CrazyElevator.Managers
             {
                 directoryPreviewCamera.targetTexture = previousTexture;
                 directoryPreviewCamera.backgroundColor = previousBackground;
+                if (previewWasVisible) directoryPreviewModel.SetActive(true);
                 RenderTexture.active = previousActive;
                 model.gameObject.SetActive(false);
                 Destroy(model.gameObject);
@@ -149,6 +153,9 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(header, MenuPresentation.Paper, MenuPresentation.Metal, 8f);
             MenuPresentation.Fasteners(header, MenuPresentation.Metal);
             DrawLabel(header, "CHOOSE CHARACTER", menuLabelText, MenuPresentation.Ink);
+            DrawLabel(new Rect(header.x, header.yMax + 4f, header.width, 32f),
+                Gamepad.all.Count > 0 ? "MOVE YOUR STICK TO FIND YOUR PLAYER" : "USE THE KEYS SHOWN ON YOUR SIDE",
+                readyLabelText, MenuPresentation.Paper);
             float launch = launching ? Mathf.Clamp01(launchTimer / LaunchSeconds) : 0f;
             float descent = launch * launch * (ArtHeight + 150f);
             DrawLobbySeat(0, playerOneButton, playerOneReadyButton, MenuPresentation.Coral, descent);
@@ -186,12 +193,11 @@ namespace CrazyElevator.Managers
             MenuPresentation.Paint(Expand(card, -10f), LobbyShadow);
             MenuPresentation.Fasteners(card, MenuPresentation.Metal);
 
-            float plateWidth = identifying ? 340f : 248f;
+            const float plateWidth = 248f;
             Rect seatPlate = new Rect(card.center.x - plateWidth * .5f, card.y - 25f, plateWidth, 54f);
             MenuPresentation.Plaque(seatPlate, accent, MenuPresentation.Metal);
             string player = seat == 0 ? "PLAYER 1" : "PLAYER 2";
-            DrawLabel(seatPlate, identifying ? "THIS IS " + player : player,
-                readyLabelText, MenuPresentation.Ink);
+            DrawLabel(seatPlate, player, readyLabelText, MenuPresentation.Ink);
 
             string character = LobbyCharacters[lobbyCharacterSelection[seat]];
             float portraitSize = Mathf.Max(1f, Mathf.Min(card.width - 156f, confirm.y - card.y - 106f));
@@ -203,6 +209,18 @@ namespace CrazyElevator.Managers
                 MenuPresentation.DrawTexture(portrait, texture, ScaleMode.ScaleToFit);
             Rect name = new Rect(portrait.x - 24f, portrait.yMax + 6f, portrait.width + 48f, 47f);
             DrawLabel(name, character, cardTitle, MenuPresentation.Paper);
+
+            InputManager input = InputManager.Instance;
+            bool controller = input != null && input.HasController(seat);
+            bool reserved = input != null && input.HasControllerAssignment(seat);
+            bool keyboard = input != null && input.CanUseSplitKeyboard;
+            string device = controller ? input.ControllerLabelForSeat(seat)
+                : reserved ? "CONTROLLER DISCONNECTED"
+                : keyboard ? (seat == 0 ? "KEYBOARD   A / D" : "KEYBOARD   ← / →")
+                : "PRESS A TO JOIN";
+            Rect devicePlate = new Rect(card.x + 42f, card.yMax + 12f, card.width - 84f, 44f);
+            MenuPresentation.Plaque(devicePlate, identifying ? accent : LobbyPortraitBacking, LobbyShadow);
+            DrawLabel(devicePlate, device, readyLabelText, identifying ? MenuPresentation.Ink : MenuPresentation.Paper);
 
             bool ready = IsLobbySeatReady(seat);
             if (!ready && !launching)
@@ -216,7 +234,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(confirm, ready ? accent : MenuPresentation.Paper, MenuPresentation.Metal);
             DrawLabel(confirm, ready ? "READY" : "CONFIRM", readyLabelText, MenuPresentation.Ink);
             if (launching) return;
-            string key = KeyboardHintsEnabled ? (seat == 0 ? "C" : ".") : "A";
+            string key = controller || !keyboard ? "A" : (seat == 0 ? "C" : ".");
             DrawKeyHint(new Rect(confirm.xMax - 66f, confirm.center.y - 27f, 54f, 54f), key);
             if (GUI.Button(confirm, GUIContent.none, GUIStyle.none))
                 ConfirmLobbySeat(seat);
@@ -227,7 +245,8 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(rect, accent, MenuPresentation.Metal, 4f);
             if (direction < 0) DrawChoiceArrow(rect, false, MenuPresentation.Ink, ref leftChoiceArrowTexture);
             else DrawChoiceArrow(rect, true, MenuPresentation.Ink, ref rightChoiceArrowTexture);
-            if (KeyboardHintsEnabled)
+            if (InputManager.Instance != null && InputManager.Instance.CanUseSplitKeyboard
+                && !InputManager.Instance.HasController(seat))
             {
                 string key = seat == 0 ? (direction < 0 ? "A" : "D") : (direction < 0 ? "←" : "→");
                 DrawKeyHint(new Rect(rect.center.x - 18f, rect.yMax + 6f, 36f, 32f), key);

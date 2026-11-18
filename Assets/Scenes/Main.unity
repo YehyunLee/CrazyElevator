@@ -1120,8 +1120,8 @@ MonoBehaviour:
   floorsPerSecond: 0.85
   candyFloorsPerSecond: 1.25
   underwaterFloorsPerSecond: 0.7
-  boostAcceleration: 1.1
-  maximumTravelSpeed: 2.4
+  boostAcceleration: 0.95
+  maximumTravelSpeed: 1.9
   stopWindow: 0.24
   extendedInterior: 1
   personaPrefab: {fileID: 1004, guid: 12f45dcfd4b05de88943cbfa752d7274, type: 3}

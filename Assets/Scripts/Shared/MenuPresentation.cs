@@ -21,6 +21,9 @@ namespace CrazyElevator.Shared
 
         public static Color DisplayColor(Color color) => UsesLinearGuiTarget ? color.linear : color;
 
+        public static float GameplayHudScale(float width, float height)
+            => Mathf.Max(.01f, Mathf.Min(width / 580f, height / 820f));
+
         public static void ReleaseTextureMaterial()
         {
             if (textureMaterial != null) Object.Destroy(textureMaterial);

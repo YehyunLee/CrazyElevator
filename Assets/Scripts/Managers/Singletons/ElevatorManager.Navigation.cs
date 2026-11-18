@@ -211,7 +211,7 @@ namespace CrazyElevator.Managers
             }
             if (target == null) return;
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
-            float size = Mathf.Clamp(Mathf.Min(view.height / 900f, view.width / 440f), .7f, 3f);
+            float size = MenuPresentation.GameplayHudScale(view.width, view.height);
             DrawDestinationBeacon(view, size, target.Destination, target.DestinationStop, target.IsVip);
         }
 

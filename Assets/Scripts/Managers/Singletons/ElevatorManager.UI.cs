@@ -770,10 +770,13 @@ namespace CrazyElevator.Managers
                 DrawTravelView();
                 DrawHazardImpactFlash(new Rect(0f, 0f, Screen.width, Screen.height));
                 DrawUnderwaterFlood(new Rect(0f, 0f, Screen.width, Screen.height));
-                float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;
+                float hudScale = extendedInterior ? SoloHudScale : 1f;
                 GUI.matrix = Matrix4x4.Scale(Vector3.one * hudScale);
-                if (extendedInterior && compactTopHud) DrawCompactTopHUD();
-                else DrawRoundHUD();
+                if (!MenuManager.TutorialActive)
+                {
+                    if (extendedInterior && compactTopHud) DrawCompactTopHUD();
+                    else DrawRoundHUD();
+                }
                 DrawInteriorHUD();
                 if (extendedInterior) DrawElevatorSpeech(Screen.height / hudScale, Screen.width / hudScale);
                 GUI.matrix = Matrix4x4.identity;
@@ -782,10 +785,10 @@ namespace CrazyElevator.Managers
                 DrawDeliveryPopups(Screen.width, Screen.height);
                 DrawEncounterCard(Screen.width, Screen.height);
                 DrawActionFeedback(Screen.width, Screen.height);
-                DrawScoreFlights(Screen.width, Screen.height, SoloScoreHudAnchor());
+                if (!MenuManager.TutorialActive)
+                    DrawScoreFlights(Screen.width, Screen.height, SoloScoreHudAnchor());
             }
             DrawSessionFade(sessionFadeAlpha);
-            MenuManager.DrawTutorialCardsAboveHud();
         }
 
         void DrawSessionFade(float alpha)
@@ -910,7 +913,7 @@ namespace CrazyElevator.Managers
 
         Vector2 SoloScoreHudAnchor()
         {
-            float hudScale = extendedInterior ? Mathf.Max(1f, Screen.height / 900f) : 1f;
+            float hudScale = extendedInterior ? SoloHudScale : 1f;
             if (extendedInterior && compactTopHud)
             {
                 Rect hud = SoloHudRect();
@@ -931,7 +934,7 @@ namespace CrazyElevator.Managers
             if (scoreFlights.Count == 0 || Event.current.type != EventType.Repaint) return;
 
             Styles();
-            float uiScale = Mathf.Clamp(viewHeight / 900f, .72f, 1.15f);
+            float uiScale = MenuPresentation.GameplayHudScale(viewWidth, viewHeight);
             for (int i = 0; i < scoreFlights.Count; i++)
             {
                 ScoreFlight flight = scoreFlights[i];
@@ -951,8 +954,7 @@ namespace CrazyElevator.Managers
                 float tokenScale = Mathf.Lerp(1.08f, .76f, eased);
                 float width = 78f * uiScale * tokenScale;
                 float height = 32f * uiScale * tokenScale;
-                Color accent = Match != null ? (Seat == 0
-                    ? new Color32(255, 124, 104, 255) : new Color32(75, 226, 202, 255)) : Teal;
+                Color accent = flight.Points < 0 ? Coral : Gold;
 
                 // A short dotted trail makes the flight direction readable without
                 // leaving a persistent line across the playfield.
@@ -977,9 +979,9 @@ namespace CrazyElevator.Managers
                     new Color(accent.r, accent.g, accent.b, alpha));
                 int previousFontSize = scoreFlightStyle.fontSize;
                 Color previousTextColor = scoreFlightStyle.normal.textColor;
-                scoreFlightStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(18f * uiScale), 13, 20);
-                scoreFlightStyle.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, alpha);
-                GUI.Label(token, "+" + flight.Points, scoreFlightStyle);
+                scoreFlightStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(18f * uiScale));
+                scoreFlightStyle.normal.textColor = new Color(accent.r, accent.g, accent.b, alpha);
+                GUI.Label(token, flight.Points.ToString("+0;-0"), scoreFlightStyle);
                 scoreFlightStyle.fontSize = previousFontSize;
                 scoreFlightStyle.normal.textColor = previousTextColor;
             }
@@ -1026,7 +1028,7 @@ namespace CrazyElevator.Managers
             float age = Time.time - actionFeedbackAt;
             if (age < 0f || age >= ActionFeedbackSeconds) return;
 
-            float scale = Mathf.Clamp(viewHeight / 900f, .7f, 1.1f);
+            float scale = MenuPresentation.GameplayHudScale(viewWidth, viewHeight);
             float entrance = EaseOut(Mathf.Clamp01(age / .15f));
             float alpha = Mathf.Clamp01((ActionFeedbackSeconds - age) / .27f) * entrance;
             float maxWidth = viewWidth - 24f;
@@ -1039,7 +1041,7 @@ namespace CrazyElevator.Managers
                 Mathf.Max((actionFeedbackEmphasized ? 330f : 270f) * scale, textWidth + padding));
             float height = (actionFeedbackEmphasized ? 56f : 44f) * scale;
             // Clear the match collision banner and any passenger introduction card.
-            float minimumY = activeEncounterCard != null ? 260f : 154f;
+            float minimumY = (activeEncounterCard != null ? 260f : 154f) * scale;
             float y = Mathf.Clamp(Mathf.Max(minimumY, viewHeight * .18f) + (1f - entrance) * 12f * scale,
                 0f, Mathf.Max(0f, viewHeight - height - 8f));
             Rect cue = new Rect((viewWidth - width) * .5f, y, width, height);
@@ -1066,7 +1068,7 @@ namespace CrazyElevator.Managers
                     deliveryPopups.RemoveAt(i);
             if (deliveryPopups.Count == 0 || Event.current.type != EventType.Repaint) return;
 
-            float uiScale = Mathf.Clamp(viewHeight / 900f, .72f, 1.15f);
+            float uiScale = MenuPresentation.GameplayHudScale(viewWidth, viewHeight);
             for (int i = 0; i < deliveryPopups.Count; i++)
             {
                 DeliveryPopup popup = deliveryPopups[i];
@@ -1115,9 +1117,10 @@ namespace CrazyElevator.Managers
                 rewardPoints.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, alpha);
                 GUI.Label(pointsRect, "+" + popup.Points, rewardPoints);
 
-                string caption = popup.Combo > 1 ? "QUICK COMBO  x" + popup.Combo
-                    : popup.Happy ? "PERFECT DROP!" : "RIGHT FLOOR!";
-                bool floatingPerfect = popup.Happy && popup.Combo <= 1;
+                string caption = popup.ContestedBonus > 0 ? "STEAL BONUS +" + popup.ContestedBonus
+                    : !popup.Happy ? "LATE DELIVERY"
+                    : popup.Combo > 1 ? "QUICK COMBO  x" + popup.Combo : "DELIVERED!";
+                bool floatingPerfect = popup.Happy && popup.Combo <= 1 && popup.ContestedBonus == 0;
                 if (floatingPerfect)
                 {
                     // Perfect drops use the same floating 3D treatment as the
@@ -1161,9 +1164,11 @@ namespace CrazyElevator.Managers
 
         // A single compact strip keeps essential information readable without
         // covering the world with separate status boxes.
+        float SoloHudScale => MenuPresentation.GameplayHudScale(Screen.width, Screen.height);
+
         Rect SoloHudRect()
         {
-            float hudScale = Mathf.Max(1f, Screen.height / 900f);
+            float hudScale = SoloHudScale;
             return new Rect(12f, 8f, Mathf.Min(424f, Screen.width / hudScale - 24f), 58f);
         }
 
@@ -1481,16 +1486,15 @@ namespace CrazyElevator.Managers
 
         Rect ManifestView => Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
 
-        static float ManifestScale(Rect view) => Mathf.Min(Mathf.Clamp(view.height / 900f, .8f, 3f),
-            view.width / 650f);
+        static float ManifestScale(Rect view) => MenuPresentation.GameplayHudScale(view.width, view.height);
 
         Rect ManifestBoardRect(Rect view, float uiScale, int riderCount)
         {
             float width = Mathf.Clamp(view.width * passengerListWidth, 200f * uiScale, 240f * uiScale);
             float contentHeight = riderCount == 0 ? 26f : riderCount * ManifestRowHeight - ManifestRowGap;
             // Keep clear of the rival marker above and the travel controls below.
-            float top = Mathf.Min(view.height * .4f, Mathf.Max(Match != null ? 140f : 102f, view.height * .14f));
-            float availableHeight = Mathf.Max(76f * uiScale, view.height - top - 205f);
+            float top = Mathf.Min(view.height * .4f, Mathf.Max((Match != null ? 124f : 96f) * uiScale, view.height * .14f));
+            float availableHeight = Mathf.Max(76f * uiScale, view.height - top - 177f * uiScale);
             float height = Mathf.Min(Mathf.Min(view.height * .52f, availableHeight),
                 (ManifestHeaderHeight + contentHeight + ManifestInset + ManifestShadow) * uiScale);
             return new Rect(view.xMax - width - 14f * uiScale, view.y + top, width, height);
@@ -1616,7 +1620,7 @@ namespace CrazyElevator.Managers
             float badgeWidth = 42f * uiScale;
             Rect destination = new Rect(textRight - badgeWidth, row.y + 29f * uiScale, badgeWidth, 19f * uiScale);
             ManifestText(manifestDetail, Rect.MinMaxRect(textX, destination.y, destination.x - 4f * uiScale, destination.yMax),
-                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s · +" + round.BaseDeliveryPoints(rider),
+                Mathf.CeilToInt(Mathf.Max(0f, rider.Remaining)) + "s · +" + round.DeliveryPoints(rider),
                 13f * uiScale, urgent ? ManifestUrgentText : MenuPresentation.Wall);
             PaintManifestShape(destination, atStop ? MenuPresentation.Brass : MenuPresentation.Teal, 5f * uiScale);
             string destinationText = PassengerFloorLabel(rider);
@@ -1777,12 +1781,12 @@ namespace CrazyElevator.Managers
             up = down = stop = close = kickout = repair = new Rect();
             if (!extendedInterior || paused) return;
             bool split = Match != null && Match.SplitScreen;
-            float margin = split ? 12f : 18f;
-            float preferredWidth = split ? Mathf.Clamp(ViewWidth * .28f, 156f, 210f)
-                : Mathf.Clamp(ViewWidth * .18f, 204f, 254f);
+            float scale = MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
+            float margin = (split ? 12f : 18f) * scale;
+            float preferredWidth = (split ? 210f : 242f) * scale;
             float width = Mathf.Min(preferredWidth, ViewWidth - margin * 2f);
-            float height = split ? 44f : 50f;
-            float gap = 6f;
+            float height = (split ? 44f : 50f) * scale;
+            float gap = 6f * scale;
             float x = ViewWidth - width - margin;
             if (phase == Phase.Moving)
             {
@@ -1814,8 +1818,8 @@ namespace CrazyElevator.Managers
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
-            DrawMouseControl(up, "HOLD TO GO UP", MenuPresentation.Teal, GameplayUpKey);
-            DrawMouseControl(down, "HOLD TO GO DOWN", MenuPresentation.Teal, GameplayDownKey);
+            DrawMouseControl(up, "HOLD UP", MenuPresentation.Teal, GameplayUpKey);
+            DrawMouseControl(down, "HOLD DOWN", MenuPresentation.Teal, GameplayDownKey);
             DrawMouseControl(stop, phase == Phase.Moving ? "STOP AT F" + ElevatorRound.FloorNumber(GlideStopFloor()) : "STOP",
                 MenuPresentation.Brass, GameplayConfirmKey);
             DrawMouseControl(close, "CLOSE & TRAVEL", MenuPresentation.Brass, GameplayCloseKey);
@@ -1867,7 +1871,7 @@ namespace CrazyElevator.Managers
                 cursor = new Vector2(ViewWidth * (slot == 0 ? .1f : slot == 1 ? .5f : .9f),
                     ViewHeight * .5f);
             }
-            float size = Mathf.Clamp(ViewHeight * .042f, 28f, 38f);
+            float size = 38f * MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
             float inset = size * 1.15f;
             // Side doorways may be partially offscreen. Keep their direction
             // hints visible at the corresponding edge of this player's pane.
@@ -1898,19 +1902,20 @@ namespace CrazyElevator.Managers
             TextAnchor previousAlignment = buttonStyle.alignment;
             bool previousWordWrap = buttonStyle.wordWrap;
             TextClipping previousClipping = buttonStyle.clipping;
-            buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .34f), 14, 20);
+            float scale = MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
+            buttonStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(rect.height * .37f));
             buttonStyle.alignment = TextAnchor.MiddleCenter;
             buttonStyle.wordWrap = false;
             buttonStyle.clipping = TextClipping.Clip;
             Rect labelRect = rect;
             if (!string.IsNullOrEmpty(key))
             {
-                float keySize = Mathf.Min(rect.height - 8f, 42f);
-                const float keyInset = 9f;
-                const float keyGap = 8f;
+                float keySize = rect.height - 8f * scale;
+                float keyInset = 9f * scale;
+                float keyGap = 8f * scale;
                 float maxLabelWidth = Mathf.Max(1f,
-                    rect.width - keyInset - keySize - keyGap - 8f);
-                while (buttonStyle.fontSize > 12 &&
+                    rect.width - keyInset - keySize - keyGap - 8f * scale);
+                while (buttonStyle.fontSize > Mathf.Max(1, Mathf.RoundToInt(12f * scale)) &&
                        buttonStyle.CalcSize(new GUIContent(text)).x > maxLabelWidth)
                 {
                     buttonStyle.fontSize--;
@@ -1964,7 +1969,7 @@ namespace CrazyElevator.Managers
             int previousFontSize = buttonStyle.fontSize;
             TextAnchor previousAlignment = buttonStyle.alignment;
             Color previousTextColor = buttonStyle.normal.textColor;
-            buttonStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * .42f), 11, 20);
+            buttonStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(rect.height * .42f));
             buttonStyle.alignment = TextAnchor.MiddleCenter;
             buttonStyle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
             var label = new GUIContent(key);
@@ -2022,7 +2027,7 @@ namespace CrazyElevator.Managers
             // Round up so zero is shown only when time has actually expired.
             int seconds = Mathf.CeilToInt(round.TimeLeft);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
-            float hudScale = extendedInterior ? Mathf.Max(1, Screen.height / 900f) : 1;
+            float hudScale = extendedInterior ? SoloHudScale : 1f;
             float x = Mathf.Max(12f, Screen.width / hudScale - 258f);
             AngularPanel(new Rect(x, 44, 246, 66), Teal);
             Label(new Rect(x + 12, 50, 222, 28), clock + " LEFT", large);

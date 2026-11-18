@@ -734,6 +734,13 @@ namespace CrazyElevator.Managers
                     DrawTutorialFinale();
                     GUI.depth = previousDepth;
                 }
+                else if (Event.current.type == EventType.Repaint)
+                {
+                    int previousDepth = GUI.depth;
+                    GUI.depth = TutorialOverlayDepth;
+                    DrawTutorialOverlay();
+                    GUI.depth = previousDepth;
+                }
                 DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
                 return;
@@ -762,7 +769,8 @@ namespace CrazyElevator.Managers
             if (!tutorialActive || tutorialGame == null) return;
             int previousDepth = GUI.depth;
             GUI.depth = TutorialOverlayDepth - 1;
-            bool overGameplay = !FullScreenOverlayActive;
+            bool overGameplay = !showingControllerInstructions && (tutorialFinalePhase == TutorialFinalePhase.None
+                || tutorialFinalePhase == TutorialFinalePhase.Collision);
             float scale = Mathf.Clamp(Screen.height / 900f, .8f, 3f);
             float width = 190f * scale, height = 36f * scale;
             Rect button = new Rect(12f * scale, overGameplay ? Screen.height - height - 12f * scale : 18f * scale, width, height);
@@ -771,7 +779,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Paint(key, MenuPresentation.Ink);
             var skipLabel = new GUIStyle(caption) { fontSize = Mathf.RoundToInt(14f * scale), wordWrap = false,
                 alignment = TextAnchor.MiddleCenter, clipping = TextClipping.Clip };
-            MenuPresentation.Label(key, new GUIContent(KeyboardHintsEnabled ? "TAB" : "VIEW"),
+            MenuPresentation.Label(key, new GUIContent(TutorialUsesKeyboard(tutorialGame.Seat) ? "TAB" : "VIEW"),
                 skipLabel, MenuPresentation.Paper);
             MenuPresentation.Label(new Rect(key.xMax, button.y, button.xMax - key.xMax, button.height),
                 new GUIContent("SKIP TUTORIAL"), skipLabel, MenuPresentation.Ink);
@@ -789,6 +797,13 @@ namespace CrazyElevator.Managers
             GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - ArtWidth * scale) * .5f,
                 (Screen.height - ArtHeight * scale) * .5f, 0), Quaternion.identity,
                 new Vector3(scale, scale, 1));
+            if (tutorialActive && (tutorialActors[0] != null || tutorialActors[1] != null))
+            {
+                DrawPracticeControls();
+                GUI.matrix = previousMatrix;
+                GUI.depth = previousDepth;
+                return;
+            }
             GUI.Label(new Rect(100, 34, 1500, 82),
                 KeyboardHintsEnabled ? "KEYBOARD CONTROLS" : "CONTROLLER CONTROLS", title);
             if (KeyboardHintsEnabled) DrawKeyboardInstructions();
@@ -829,6 +844,69 @@ namespace CrazyElevator.Managers
             }
             GUI.matrix = previousMatrix;
             GUI.depth = previousDepth;
+        }
+
+        void DrawPracticeControls()
+        {
+            bool twoPlayers = tutorialActors[0] != null && tutorialActors[1] != null;
+            bool recap = tutorialFinalePhase == TutorialFinalePhase.Controls;
+            DrawTutorialText(new Rect(100f, 94f, ArtWidth - 200f, 110f),
+                recap ? "READY TO PLAY" : "PRACTICE CONTROLS", title, 78, MenuPresentation.Paper);
+            float width = twoPlayers ? 636f : 750f;
+            for (int seat = 0; seat < tutorialActors.Length; seat++)
+            {
+                if (tutorialActors[seat] == null) continue;
+                float center = twoPlayers ? ArtWidth * (seat == 0 ? .29f : .71f) : ArtWidth * .5f;
+                Rect card = new Rect(center - width * .5f, 250f, width, recap ? 430f : 642f);
+                bool keyboard = TutorialUsesKeyboard(seat);
+                Color accent = seat == 0 ? MenuPresentation.Coral : MenuPresentation.Teal;
+                MenuPresentation.HudPlate(card, accent);
+                DrawTutorialText(new Rect(card.x + 28f, card.y + 24f, width - 56f, 57f),
+                    twoPlayers ? "PLAYER " + (seat + 1) : keyboard ? "KEYBOARD" : "CONTROLLER",
+                    cardTitle, 39, accent);
+                if (!recap)
+                {
+                    float y = card.y + 114f;
+                    DrawPracticeControlRow(card, y, keyboard ? (seat == 0 ? "WASD" : "ARROWS") : "STICK",
+                        "Move or open a door", accent);
+                    DrawPracticeControlRow(card, y + 94f, keyboard ? TutorialKeyboardKey(5, seat) : "A",
+                        "Stop or close doors", accent);
+                    DrawPracticeControlRow(card, y + 188f, keyboard ? TutorialKeyboardKey(4, seat) : "LB",
+                        "Hold to boost", accent);
+                    DrawPracticeControlRow(card, y + 282f, keyboard ? TutorialKeyboardKey(7, seat) : "B",
+                        "Kick selected rider", accent);
+                }
+                else
+                {
+                    DrawTutorialText(new Rect(card.x + 22f, card.y + 112f, width - 44f, 56f),
+                        "Deliver riders for points", cardTitle, 35, MenuPresentation.Paper);
+                    DrawTutorialText(new Rect(card.x + 22f, card.y + 173f, width - 44f, 50f),
+                        "Stop on their floor", body, 32, MenuPresentation.Paper);
+                }
+
+                bool ready = controllerInstructionConfirmed[seat];
+                Rect button = new Rect(card.x + 28f, card.yMax - 118f, width - 56f, 86f);
+                MenuPresentation.Plaque(button, ready ? accent : MenuPresentation.Paper, MenuPresentation.Ink, 4f);
+                DrawTutorialText(new Rect(button.x, button.y, button.width - (ready ? 0f : 72f), button.height),
+                    ready ? "READY" : recap ? "READY TO PLAY" : "START PRACTICE", cardTitle, 31, MenuPresentation.Ink);
+                if (ready) continue;
+                string key = keyboard ? TutorialKeyboardKey(2, seat) : "A";
+                DrawTutorialInputCap(new Rect(button.xMax - 82f, button.y + 13f, 62f, 60f), key, accent, false, false);
+                if (GUI.Button(button, GUIContent.none, GUIStyle.none)
+                    && ToggleControllerInstructionConfirmation(seat))
+                {
+                    DismissControllerInstructions();
+                    return;
+                }
+            }
+        }
+
+        void DrawPracticeControlRow(Rect card, float y, string key, string action, Color accent)
+        {
+            Rect keyCap = new Rect(card.x + 36f, y, 154f, 66f);
+            DrawTutorialInputCap(keyCap, key, accent, false, true);
+            DrawTutorialText(new Rect(keyCap.xMax + 24f, y, card.xMax - keyCap.xMax - 54f, 66f),
+                action, cardTitle, 31, MenuPresentation.Paper, TextAnchor.MiddleLeft);
         }
 
         void DrawGamepadInstructions()

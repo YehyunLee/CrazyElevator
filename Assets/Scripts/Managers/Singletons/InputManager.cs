@@ -165,7 +165,7 @@ namespace CrazyElevator.Managers
             => seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0;
 
         public string ControllerLabelForSeat(int seat)
-            => seat == 0 ? "CONTROLLER A" : "CONTROLLER B";
+            => "CONTROLLER " + (seat + 1);
 
         public bool ControllerActiveThisFrame(int seat)
         {

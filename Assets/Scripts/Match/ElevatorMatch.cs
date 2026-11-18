@@ -49,6 +49,9 @@ namespace CrazyElevator.Match
         bool collisionContactActive;
         bool bouncerCollision;
         const int BumpRewardPoints = 50;
+        const int ContestedDeliveryBonus = 30;
+        const float DisplacedPickupSeconds = 6f;
+        readonly (int floor, int stop, float until)[] displacedPickups = new (int, int, float)[2];
         SharedRider matchVip;
         bool hazardEventStarted;
         bool vipRevealStarted;
@@ -316,6 +319,7 @@ namespace CrazyElevator.Match
             collisionContactActive = false;
             bouncerCollision = false;
             collisionCount = 0;
+            System.Array.Clear(displacedPickups, 0, displacedPickups.Length);
             int firstExpressTrack = Random.Range(0, 2);
             expressTrack[0] = firstExpressTrack;
             expressTrack[1] = 1 - firstExpressTrack;
@@ -718,8 +722,13 @@ namespace CrazyElevator.Match
                 || (actor != player && actor != Rival) || rider.BoardedBySeat != actor.Seat)
                 return;
             Game other = actor == player ? Rival : player;
-            if (other == null || !other.ApproachingPickup(rider)) return;
+            var displaced = displacedPickups[actor.Seat];
+            bool claimedAfterBump = displaced.until > 0f && actor.SecondsLeft >= displaced.until
+                && rider.Origin == displaced.floor && rider.OriginStop == displaced.stop;
+            if (other == null || (!claimedAfterBump && !other.ApproachingPickup(rider))) return;
 
+            if (claimedAfterBump) displacedPickups[actor.Seat] = default;
+            rider.ContestedPickupBonus = ContestedDeliveryBonus;
             actor.ShowActionFeedback("STOLEN!", true, true);
             other.ShowActionFeedback("TOO LATE!", false, true);
         }
@@ -732,6 +741,9 @@ namespace CrazyElevator.Match
                 && IsTutorialCollisionParticipant(second);
             Game bumpWinner = MenuManager.TutorialActive || practicePair
                 ? null : ResolveBumpWinner(first, second, verticalDirection, closingSpeed);
+            Game bumped = bumpWinner == null ? null : bumpWinner == first ? second : first;
+            int pickupFloor = -1, pickupStop = -1;
+            bool wasPickingUp = bumped != null && bumped.TryGetPickupStop(out pickupFloor, out pickupStop);
             collisionContactActive = true;
             bool practiceHit = practicePair && !tutorialCollisionCompleted
                 && verticalDirection != 0f && closingSpeed > .05f
@@ -812,8 +824,10 @@ namespace CrazyElevator.Match
                 Vector3 impactPoint = (first.ShaftWorldPosition + second.ShaftWorldPosition) * .5f;
                 if (bumpWinner.AwardBumpPoints(BumpRewardPoints, impactPoint))
                 {
-                    bumpWinner.ShowActionFeedback("+" + BumpRewardPoints + " BUMP!", true, true);
-                    Game bumped = bumpWinner == first ? second : first;
+                    if (wasPickingUp && !bumped.TryGetPickupStop(out _, out _))
+                        displacedPickups[bumpWinner.Seat] = (pickupFloor, pickupStop,
+                            Mathf.Max(.001f, bumpWinner.SecondsLeft - DisplacedPickupSeconds));
+                    bumpWinner.ShowActionFeedback("BUMP WON", true, true);
                     bumped?.ShowActionFeedback("BUMPED!", false);
                 }
             }
@@ -1041,13 +1055,15 @@ namespace CrazyElevator.Match
             if (IsVisibleSeat(0)) DrawSeat(player, 0, MenuPresentation.Coral);
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, MenuPresentation.Teal);
             if (SplitScreen) DrawSplitDivider();
-            DrawSharedRoundHUD();
-            if (IsVisibleSeat(0)) DrawSeatScoreFlights(player, 0);
-            if (IsVisibleSeat(1)) DrawSeatScoreFlights(Rival, 1);
-            DrawCollisionFeedback();
+            if (!MenuManager.TutorialActive)
+            {
+                DrawSharedRoundHUD();
+                if (IsVisibleSeat(0)) DrawSeatScoreFlights(player, 0);
+                if (IsVisibleSeat(1)) DrawSeatScoreFlights(Rival, 1);
+                DrawCollisionFeedback();
+            }
             if (Finished) DrawResultReveal();
             DrawSessionFade(player.SessionFadeAlpha);
-            MenuManager.DrawTutorialCardsAboveHud();
             GUI.matrix = previousMatrix;
             GUI.color = previousColour;
             GUI.contentColor = previousContent;
@@ -1131,34 +1147,41 @@ namespace CrazyElevator.Match
             MenuPresentation.Paint(new Rect(x + width * .5f - 2f, 0, 2f, Screen.height), MenuPresentation.Teal);
         }
 
-        float SharedClockWidth => Mathf.Clamp(Screen.width * .13f, 104f, 160f);
+        float MatchHudScale => MenuPresentation.GameplayHudScale(ViewRect(0).width, Screen.height);
+        const float SharedClockWidth = 148f;
 
         int AbilityIntroPaneSeat => GameManager.Instance != null ? GameManager.Instance.AbilityIntroPaneSeat : -1;
 
         Rect SharedHudRect(float width, float top, float height)
         {
+            float scale = MatchHudScale;
+            width *= scale;
+            top *= scale;
+            height *= scale;
             int introSeat = AbilityIntroPaneSeat;
             if (introSeat < 0) return new Rect((Screen.width - width) * .5f, top, width, height);
 
-            // Keep the shared timer and round label entirely on the pane still playing.
+            // The ability intro leaves the other player in control of their pane.
             Rect activeView = ViewRect(1 - introSeat);
-            width = Mathf.Min(width, activeView.width - 20f);
-            float x = introSeat == 0 ? activeView.x + 10f : activeView.xMax - width - 10f;
+            width = Mathf.Min(width, activeView.width - 20f * scale);
+            float x = introSeat == 0 ? activeView.x + 10f * scale : activeView.xMax - width - 10f * scale;
             return new Rect(x, top, width, height);
         }
 
         Rect SharedClockRect => SharedHudRect(SharedClockWidth, 8f, 58f);
-        Rect SharedRoundStatusRect => SharedHudRect(Mathf.Min(Screen.width - 16f, 520f), 70f, 26f);
+        Rect SharedRoundStatusRect => SharedHudRect(520f, 70f, 26f);
 
         Rect SeatScoreBarRect(int seat)
         {
             Rect view = ViewRect(seat);
-            float clockSpace = AbilityIntroPaneSeat == 1 - seat ? SharedClockWidth + 4f : SharedClockWidth * .5f;
-            float availableWidth = SplitScreen ? view.width - clockSpace - 16f
-                : (view.width - SharedClockWidth) * .5f - 16f;
-            float barWidth = Mathf.Clamp(availableWidth, 1f, 290f);
-            float barX = SplitScreen && seat == 1 ? view.xMax - 8f - barWidth : view.x + 8f;
-            return new Rect(barX, view.y + 8f, barWidth, 58f);
+            float scale = MatchHudScale;
+            bool introOnOtherSide = AbilityIntroPaneSeat == 1 - seat;
+            float clockSpace = SharedClockWidth * (introOnOtherSide ? 1f : .5f) * scale;
+            float availableWidth = SplitScreen ? view.width - clockSpace - 24f * scale
+                : (view.width - SharedClockWidth * scale) * .5f - 16f * scale;
+            float barWidth = Mathf.Clamp(availableWidth, 1f, 290f * scale);
+            float barX = SplitScreen && seat == 1 ? view.xMax - 8f * scale - barWidth : view.x + 8f * scale;
+            return new Rect(barX, view.y + 8f * scale, barWidth, 58f * scale);
         }
 
         static Rect SeatScoreTile(Rect bar) =>
@@ -1170,7 +1193,7 @@ namespace CrazyElevator.Match
             Rect view = ViewRect(seat);
             Rect bar = SeatScoreBarRect(seat);
             Vector2 anchor = SeatScoreTile(bar).center - view.position;
-            anchor.y += 8f;
+            anchor.y += 8f * MatchHudScale;
             Matrix4x4 previousMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.Translate(new Vector3(view.x, view.y, 0f));
             actor.DrawScoreFlights(view.width, view.height, anchor);
@@ -1183,12 +1206,15 @@ namespace CrazyElevator.Match
             actor.DrawMatchViewGUI();
             DrawRivalInteractions(actor, seat, view);
             DrawPlayerScreenBorder(view, colour);
+            if (MenuManager.TutorialActive) return;
             Rect bar = SeatScoreBarRect(seat);
             MenuPresentation.HudPlate(bar, colour);
-            Rect badge = new Rect(bar.x + 6f, bar.y + 7f, bar.width * .34f - 12f, bar.height - 14f);
+            float scale = MatchHudScale;
+            Rect badge = new Rect(bar.x + 6f * scale, bar.y + 7f * scale,
+                bar.width * .34f - 12f * scale, bar.height - 14f * scale);
             MenuPresentation.Plaque(badge, colour, MenuPresentation.Metal, 2f);
-            DrawResultLabel(badge, badge.width >= 78f ? "PLAYER " + (seat + 1) : "P" + (seat + 1),
-                roundStatus, 1f, MenuPresentation.Ink);
+            DrawHudLabel(badge, badge.width >= 78f * scale ? "PLAYER " + (seat + 1) : "P" + (seat + 1),
+                roundStatus, MenuPresentation.Ink);
 
             Rect scoreTile = SeatScoreTile(bar);
             DrawSeatTile(scoreTile, "SCORE", actor.Points.ToString(), MenuPresentation.Brass);
@@ -1213,8 +1239,9 @@ namespace CrazyElevator.Match
                     if (target.z > 0f)
                     {
                         float x = Mathf.Clamp(target.x, view.x + 60f, view.xMax - 60f);
+                        float markerTop = view.y + 174f * MatchHudScale;
                         float y = Mathf.Clamp(Screen.height - target.y - markerHeight,
-                            hintTop, Mathf.Max(hintTop, view.yMax - 80f - markerHeight));
+                            markerTop, Mathf.Max(markerTop, view.yMax - 80f - markerHeight));
                         Rect marker = new Rect(x - 54f, y, 108f, markerHeight);
                         Fill(marker, Ink);
                         var targetLabel = new GUIStyle(centred) { fontSize = 18 };
@@ -1265,9 +1292,10 @@ namespace CrazyElevator.Match
             Vector2 direction = target - view.center;
             if (projected.z < 0f) direction = -direction;
 
-            float sideInset = Mathf.Clamp(view.width * .06f, 24f, 42f);
-            Rect safeView = Rect.MinMaxRect(view.xMin + sideInset, view.yMin + 82f,
-                view.xMax - sideInset, view.yMax - 72f);
+            float scale = MatchHudScale;
+            float sideInset = 42f * scale;
+            Rect safeView = Rect.MinMaxRect(view.xMin + sideInset, SharedRoundStatusRect.yMax + 36f * scale,
+                view.xMax - sideInset, view.yMax - 88f * scale);
             if (safeView.width <= 0f || safeView.height <= 0f) return;
 
             bool targetVisible = projected.z > 0f && safeView.Contains(target);
@@ -1285,7 +1313,7 @@ namespace CrazyElevator.Match
                 marker = center + direction * Mathf.Min(xDistance, yDistance);
             }
 
-            float size = Mathf.Clamp(view.width * .055f, 36f, 52f);
+            float size = 44f * scale;
             var arrow = new GUIStyle(centred)
             {
                 fontSize = Mathf.RoundToInt(size),
@@ -1296,7 +1324,7 @@ namespace CrazyElevator.Match
             arrow.normal.textColor = Gold;
             if (targetVisible)
             {
-                float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f;
+                float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f * scale;
                 GUI.Label(new Rect(marker.x - size * .5f, marker.y - size + bob,
                     size, size), "▼", arrow);
                 DrawVipTag(new Vector2(marker.x, marker.y - size * 1.25f + bob), view);
@@ -1321,15 +1349,16 @@ namespace CrazyElevator.Match
 
         void DrawVipTag(Vector2 center, Rect view)
         {
-            float width = Mathf.Min(view.width, Mathf.Clamp(view.width * .09f, 54f, 78f));
-            const float height = 24f;
+            float scale = MatchHudScale;
+            float width = 65f * scale;
+            float height = 24f * scale;
             Rect tag = new Rect(Mathf.Clamp(center.x - width * .5f, view.xMin, view.xMax - width),
                 Mathf.Clamp(center.y - height * .5f, view.yMin, view.yMax - height), width, height);
             Fill(tag, Gold);
             Fill(new Rect(tag.x + 2f, tag.y + 2f, tag.width - 4f, tag.height - 4f), Ink);
             var style = new GUIStyle(centred)
             {
-                fontSize = 14,
+                fontSize = Mathf.Max(1, Mathf.RoundToInt(14f * scale)),
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
                 wordWrap = false
@@ -1345,33 +1374,45 @@ namespace CrazyElevator.Match
             float remaining = session != null ? session.MainTimer : player.SecondsLeft;
             int seconds = Mathf.CeilToInt(remaining);
             string clock = (seconds / 60) + ":" + (seconds % 60).ToString("00");
+            float scale = MatchHudScale;
             Rect timer = SharedClockRect;
             Color clockFace = seconds <= 10 ? MenuPresentation.Coral : MenuPresentation.Paper;
-            MenuPresentation.Plaque(timer, clockFace, MenuPresentation.Metal, 3f);
-            DrawResultLabel(new Rect(timer.x, timer.y + 4f, timer.width, 15f),
-                "TIME", tileCaption, 1f, MenuPresentation.Ink);
-            DrawResultLabel(new Rect(timer.x, timer.y + 16f, timer.width, 39f),
-                clock, sharedClock, 1f, MenuPresentation.Ink);
+            MenuPresentation.Plaque(timer, clockFace, MenuPresentation.Metal, 3f * scale);
+            DrawHudLabel(new Rect(timer.x, timer.y + 4f * scale, timer.width, 15f * scale),
+                "TIME", tileCaption, MenuPresentation.Ink);
+            DrawHudLabel(new Rect(timer.x, timer.y + 16f * scale, timer.width, 39f * scale),
+                clock, sharedClock, MenuPresentation.Ink);
             if (session == null) return;
             Rect status = SharedRoundStatusRect;
             float statusWidth = status.width;
             MenuPresentation.HudPlate(status, MenuPresentation.Brass);
-            var badge = new Rect(status.x + 4f, status.y + 4f, statusWidth * .22f - 4f, status.height - 6f);
+            var badge = new Rect(status.x + 4f * scale, status.y + 4f * scale,
+                statusWidth * .22f - 4f * scale, status.height - 6f * scale);
             MenuPresentation.Paint(badge, MenuPresentation.Ink);
-            DrawResultLabel(badge, "ROUND " + session.RoundNumber + " / " + GameManager.RoundsPerMatch,
-                roundStatus, 1f, MenuPresentation.Paper);
-            DrawResultLabel(new Rect(badge.xMax + 4f, status.y + 2f, statusWidth * .36f - 8f, status.height - 2f),
-                session.ActiveDimensionName, roundStatus, 1f, MenuPresentation.Paper);
+            DrawHudLabel(badge, "ROUND " + session.RoundNumber + " / " + GameManager.RoundsPerMatch,
+                roundStatus, MenuPresentation.Paper);
+            DrawHudLabel(new Rect(badge.xMax + 4f * scale, status.y + 2f * scale,
+                statusWidth * .36f - 8f * scale, status.height - 2f * scale),
+                session.ActiveDimensionName, roundStatus, MenuPresentation.Paper);
             float winsWidth = statusWidth * .21f;
             for (int seat = 0; seat < 2; seat++)
             {
                 float x = status.x + statusWidth * .58f + winsWidth * seat;
                 Color accent = seat == 0 ? MenuPresentation.Coral : MenuPresentation.Teal;
-                DrawResultLabel(new Rect(x, status.y, 26, status.height), "P" + (seat + 1),
-                    roundStatus, 1f, accent);
-                DrawRoundWinMarkers(new Rect(x + 26f, status.y + 9f, winsWidth - 28f, 9f),
+                DrawHudLabel(new Rect(x, status.y, 26f * scale, status.height), "P" + (seat + 1),
+                    roundStatus, accent);
+                DrawRoundWinMarkers(new Rect(x + 26f * scale, status.y + 9f * scale,
+                    winsWidth - 28f * scale, 9f * scale),
                     seat == 0 ? session.PlayerOneWins : session.PlayerTwoWins, accent, menuColours: true);
             }
+        }
+
+        void DrawHudLabel(Rect area, string value, GUIStyle style, Color colour)
+        {
+            int previousSize = style.fontSize;
+            style.fontSize = Mathf.Max(1, Mathf.RoundToInt(previousSize * MatchHudScale));
+            MenuPresentation.Label(area, new GUIContent(value), style, colour);
+            style.fontSize = previousSize;
         }
 
         void DrawPlayerScreenBorder(Rect view, Color playerColour)
@@ -1384,11 +1425,13 @@ namespace CrazyElevator.Match
 
         void DrawSeatTile(Rect area, string caption, string value, Color valueColour)
         {
-            MenuPresentation.Paint(new Rect(area.x, area.y + 11f, 1f, area.height - 22f), MenuPresentation.Ink);
-            DrawResultLabel(new Rect(area.x, area.y + 5f, area.width, 18f),
-                caption, tileCaption, 1f, MenuPresentation.Paper);
-            DrawResultLabel(new Rect(area.x, area.y + 21f, area.width, 30f),
-                value, tileValue, 1f, valueColour);
+            float scale = MatchHudScale;
+            MenuPresentation.Paint(new Rect(area.x, area.y + 11f * scale, scale, area.height - 22f * scale),
+                MenuPresentation.Ink);
+            DrawHudLabel(new Rect(area.x, area.y + 5f * scale, area.width, 18f * scale),
+                caption, tileCaption, MenuPresentation.Paper);
+            DrawHudLabel(new Rect(area.x, area.y + 21f * scale, area.width, 30f * scale),
+                value, tileValue, valueColour);
         }
 
         void DrawCollisionFeedback()

@@ -57,6 +57,7 @@ namespace CrazyElevator.Shared
         public int PickupQueueSlot = -1;
         public int Space;
         public int Bonus;
+        public int ContestedPickupBonus;
 
         // Patience and mood.
         // 2 = happy, 1 = reduced mood, 0 = unhappy.
@@ -98,6 +99,8 @@ namespace CrazyElevator.Shared
             return floor % FloorsPerDimension + 1;
         }
         public const int Capacity = 9;
+        public const int MissedStopPenalty = 35;
+        public const int WaitingTimeoutPenalty = 20;
         public const int PracticePassengersPerSeat = 2;
         public const float Duration = 90f;
         // Seconds into the shift when candy (1) and underwater (2) open.
@@ -654,7 +657,7 @@ namespace CrazyElevator.Shared
                 if (!Owns(p) || !AtDestination(p)) continue;
                 p.Mood = Math.Max(0, p.Mood - 1);
                 p.Status = "You passed my floor!";
-                Score -= 35; missedHere++;
+                Score -= MissedStopPenalty; missedHere++;
             }
             return missedHere;
         }
@@ -695,7 +698,7 @@ namespace CrazyElevator.Shared
         {
             if (count <= 0) return;
             Missed += count;
-            Score -= 20 * count;
+            Score -= WaitingTimeoutPenalty * count;
         }
 
         // Arrival only opens the doors. Delivery is deliberately manual: the
@@ -719,7 +722,7 @@ namespace CrazyElevator.Shared
             return waitingToExit;
         }
 
-        // The list shows this live base value; passenger and VIP bonuses are extra.
+        // Patience and mood determine the base value of a delivery.
         public int BaseDeliveryPoints(Rider rider)
         {
             if (rider == null) return 0;
@@ -727,6 +730,15 @@ namespace CrazyElevator.Shared
                 ? 100 + (int)(50 * rider.Remaining / Math.Max(.001f, rider.Patience))
                 : LateDeliveriesScore ? 25 : 0;
             return rider.Mood == 1 ? reward / 2 : reward;
+        }
+
+        public int DeliveryPoints(Rider rider)
+        {
+            if (rider == null) return 0;
+            int points = BaseDeliveryPoints(rider);
+            if (rider.Remaining > 0f && rider.Mood > 0)
+                points += rider.Bonus + rider.ContestedPickupBonus;
+            return points;
         }
 
         // Resolve a delivery and calculate its reward or penalty.
@@ -740,14 +752,9 @@ namespace CrazyElevator.Shared
                 return OffboardResult.WrongFloor;
             }
 
-            // Base points depend on remaining patience; type bonuses come next.
             bool onTime = p.Remaining > 0;
-            int reward = BaseDeliveryPoints(p);
-            if (onTime && p.Mood > 0)
-            {
-                Happy++;
-                reward += p.Bonus;
-            }
+            int reward = DeliveryPoints(p);
+            if (onTime && p.Mood > 0) Happy++;
             Score += reward;
             p.Status = onTime && p.Mood > 0 ? "Made it!" : "Finally...";
             return onTime && p.Mood > 0 ? OffboardResult.Happy : OffboardResult.Late;

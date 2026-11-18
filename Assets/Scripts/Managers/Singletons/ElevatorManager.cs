@@ -202,11 +202,11 @@ namespace CrazyElevator.Managers
                     && other.DiscreteStop == round.Stop)
                 {
                     other.round.AddWaitingMisses(waitingMisses);
-                    other.ShowActionFeedback("PASSENGER LEFT  -" + 20 * waitingMisses, false);
+                    other.ShowScorePenalty("PASSENGER LEFT", ElevatorRound.WaitingTimeoutPenalty * waitingMisses);
                 }
             }
             if (waitingMisses > 0)
-                ShowActionFeedback("PASSENGER LEFT  -" + 20 * waitingMisses, false);
+                ShowScorePenalty("PASSENGER LEFT", ElevatorRound.WaitingTimeoutPenalty * waitingMisses);
             elevatorSpeechTime = Mathf.Max(0, elevatorSpeechTime - dt);
             // End before accepting another drop-off, even if an exit animation
             // is still running. The score is locked when the clock reaches zero.
@@ -476,8 +476,8 @@ namespace CrazyElevator.Managers
         [Range(.2f, 2f)] public float candyFloorsPerSecond = 1.25f;
         [Tooltip("Initial travel speed in the underwater world before rust slows the elevator.")]
         [Range(.2f, 2f)] public float underwaterFloorsPerSecond = .6f;
-        [Min(.1f)] public float boostAcceleration = 1.1f;
-        [Min(.2f)] public float maximumTravelSpeed = 2.4f;
+        [Min(.1f)] public float boostAcceleration = .95f;
+        [Min(.2f)] public float maximumTravelSpeed = 1.9f;
         [Range(.1f, .4f)] public float stopWindow = .24f;
         float travelFloor, dockingStart, dockingSeconds = .45f;
         // Riders for this floor walk out on their own, one after another.
@@ -521,7 +521,7 @@ namespace CrazyElevator.Managers
             passedFloors.Clear(); passedFloors.Add(round.Floor);
             int missed = round.LeaveFloor();
             if (missed > 0)
-                ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
+                ShowScorePenalty("MISSED STOP", ElevatorRound.MissedStopPenalty * missed);
             travelFloor = round.Floor;
             // Depart at the world's normal cruising speed. Boost should feel
             // like extra acceleration, not a requirement to overcome a sluggish launch.
@@ -558,7 +558,7 @@ namespace CrazyElevator.Managers
             if (!MenuManager.TutorialAllowsStopAt(this, target, stop))
             {
                 notice = stop == CenterStop ? "Not this floor. Keep going." : "Steer toward the center stop.";
-                if (stop != CenterStop) ShowActionFeedback("STEER TOWARD CENTER", false);
+                ShowActionFeedback(stop != CenterStop ? "RETURN TO THE SHAFT" : "KEEP GOING", false);
                 Play(buzz);
                 return;
             }
@@ -566,7 +566,7 @@ namespace CrazyElevator.Managers
             // Ease out from the current speed so the car visibly brakes into the floor
             // and slides sideways onto the nearest stop.
             float distance = Mathf.Abs(target - travelFloor);
-            dockingSeconds = Mathf.Clamp(2f * distance / Mathf.Max(.6f, RouteSpeed), .35f, 1f);
+            dockingSeconds = Mathf.Clamp(2f * distance / Mathf.Max(.6f, RouteSpeed), .3f, .85f);
             BeginStopLineUp(stop);
             destination = target; dockingStart = travelFloor;
             travelVelocity = 0; boostAxis = 0; boostHeld = false;
@@ -630,10 +630,18 @@ namespace CrazyElevator.Managers
                 travelVelocity = oldVelocity; // Let the cars visibly separate before player/NPC thrust resumes.
             else if (boostHeld && Mathf.Abs(boostAxis) > .25f)
                 travelVelocity = Mathf.Clamp(oldVelocity + boostAxis * CurrentAcceleration * dt, -SpeedLimit, SpeedLimit);
-            else if (oldVelocity * travelDirection < CruiseSpeed)
-                travelVelocity = Mathf.MoveTowards(oldVelocity, travelDirection * CruiseSpeed, CurrentAcceleration * .7f * dt);
-            else travelVelocity = oldVelocity; // Releasing boost preserves the accumulated momentum.
+            else travelVelocity = EaseTowardCruise(oldVelocity, travelDirection, dt);
             float candidate = Mathf.Clamp(before + (oldVelocity + travelVelocity) * .5f * dt, MinTravelFloor, MaxTravelFloor);
+            // Keep the car in travel view at the practice floor until the player presses Stop.
+            if (OnMainShaft(RouteLateralX) && MenuManager.TryGetTutorialStopFloor(this, out int tutorialFloor)
+                && ReachedTutorialTarget(before, candidate, tutorialFloor))
+            {
+                travelFloor = tutorialFloor;
+                travelVelocity = boostAxis = 0f;
+                boostHeld = false;
+                ClearRouteTurns();
+                return;
+            }
             candidate = ConstrainToRoute(before, candidate, ref travelVelocity);
             travelFloor = Match != null
                 ? Match.ConstrainTravel(this, before, candidate, ref travelVelocity)
@@ -655,12 +663,17 @@ namespace CrazyElevator.Managers
                 int missed = round.LeaveFloor();
                 round.Floor = dockedFloor; round.Stop = dockedStop;
                 if (missed > 0)
-                    ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
+                    ShowScorePenalty("MISSED STOP", ElevatorRound.MissedStopPenalty * missed);
             }
             if (!railRiding && Mathf.Approximately(before, travelFloor))
                 notice = "End of track. " + GameplayHorizontalKeys + " takes this floor's rail. "
                     + GameplayConfirmKey + " stops. You can also reverse.";
         }
+
+        static bool ReachedTutorialTarget(float before, float after, float target)
+            => Mathf.Approximately(before, target)
+                || (before < target ? after >= target : after <= target);
+
         void ResetBuildingTravel()
         {
             travelFloor = round.Floor; travelDirection = 1; destination = -1; passedFloors.Clear();
@@ -906,7 +919,7 @@ namespace CrazyElevator.Managers
             origin = round.Floor;
             int missed = round.LeaveFloor();
             if (missed > 0)
-                ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
+                ShowScorePenalty("MISSED STOP", ElevatorRound.MissedStopPenalty * missed);
             travelDuration = 1.1f + Mathf.Abs(destination - origin) * .8f;
             phase = Phase.Moving; phaseTime = 0;
             SetControlStatus("GOING " + ElevatorRound.FloorNumber(destination));
@@ -1628,6 +1641,12 @@ namespace CrazyElevator.Managers
         float CurrentAcceleration => boostAcceleration * AccelerationMultiplier;
         float SpeedLimit => maximumTravelSpeed * SpeedMultiplier;
 
+        float EaseTowardCruise(float velocity, int direction, float dt)
+        {
+            float acceleration = velocity * direction > CruiseSpeed ? CurrentAcceleration * 1.6f : CurrentAcceleration * .7f;
+            return Mathf.MoveTowards(velocity, direction * CruiseSpeed, acceleration * dt);
+        }
+
         [Header("Passenger data")]
         public PassengerCatalog passengerCatalog;
 
@@ -1994,12 +2013,13 @@ namespace CrazyElevator.Managers
         void DrawTravelView()
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
-            bool practicingShaftReturn = MenuManager.TutorialSidewaysPractice(this);
-            bool practicingTargetStop = MenuManager.TryGetTutorialStopFloor(this, out _);
             DrawSpeedLines();
             DrawWorldEventCue();
-            if (!practicingShaftReturn && !practicingTargetStop) DrawDestinationBeacons();
-            DrawPassengerList();
+            if (!MenuManager.TutorialActive)
+            {
+                DrawDestinationBeacons();
+                DrawPassengerList();
+            }
             DrawPassengerAbilityFeedback();
         }
 
@@ -2587,7 +2607,7 @@ namespace CrazyElevator.Managers
                 travelFloor = round.Floor;
                 int missed = round.LeaveFloor();
                 if (missed > 0)
-                    ShowActionFeedback("MISSED STOP  -" + 35 * missed, false);
+                    ShowScorePenalty("MISSED STOP", ElevatorRound.MissedStopPenalty * missed);
             }
             passedFloors.Clear();
             passedFloors.Add(round.Floor);

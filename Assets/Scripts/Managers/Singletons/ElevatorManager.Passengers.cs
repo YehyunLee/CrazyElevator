@@ -21,6 +21,7 @@ namespace CrazyElevator.Managers
         readonly Dictionary<Material, Material> passengerFinishes = new Dictionary<Material, Material>();
 
         public bool HasChosenBoardingDoor => hasChosenBoardingDoor;
+        public bool TutorialDoorOpen(int slot) => boardingDoorOpen[(int)BoardingDoorAtScreenSlot(slot)];
         public int OpenBoardingDoorCount
         {
             get
@@ -1279,9 +1280,9 @@ namespace CrazyElevator.Managers
             BeginKick(rider, figure, start, result, points);
             phaseTime = 0;
             if (result == OffboardResult.WrongFloor)
-                ShowActionFeedback("WRONG FLOOR  " + points, false, true);
-            else if (result == OffboardResult.Late)
-                ShowActionFeedback("UNHAPPY DROP", false);
+                ShowActionFeedback("WRONG STOP", false, true);
+            else if (result == OffboardResult.Late && points == 0)
+                ShowActionFeedback("LATE DELIVERY · 0 POINTS", false);
             PlayDeliveryReaction(rider, result, points);
         }
     }
@@ -1298,7 +1299,6 @@ namespace CrazyElevator.Managers
         const float DeliveryComboWindow = 3.5f;
         const float DeliveryPopupDuration = 1.35f;
         const float ScoreFlightDuration = .62f;
-        const float ScoreFlightSpacing = .1f;
         readonly Dictionary<Rider, KickVisual> kicks = new Dictionary<Rider, KickVisual>();
         readonly List<DeliveryPopup> deliveryPopups = new List<DeliveryPopup>();
         readonly List<ScoreFlight> scoreFlights = new List<ScoreFlight>();
@@ -1311,7 +1311,6 @@ namespace CrazyElevator.Managers
             public Quaternion Rotation;
             public bool Gentle, WrongFloor;
             public Transform[] Puffs;
-            public TextMesh Feedback;
             public SpriteRenderer FeedbackIcon;
             public Sprite FeedbackSprite;
             public Texture2D FeedbackTexture;
@@ -1323,6 +1322,7 @@ namespace CrazyElevator.Managers
             public float StartedAt;
             public int Points, Combo, Serial;
             public bool Happy;
+            public int ContestedBonus;
         }
 
         sealed class ScoreFlight
@@ -1353,25 +1353,10 @@ namespace CrazyElevator.Managers
                 Destroy(kick.Puffs[i].GetComponent<Collider>());
                 kick.Puffs[i].gameObject.SetActive(false);
             }
-            string caption = result == OffboardResult.WrongFloor ? "WRONG FLOOR"
-                : result == OffboardResult.Happy ? "DELIVERED!"
-                : points == 0 ? "NO POINTS" : "LATE DELIVERY";
-            // Correct-delivery points now live in the crisp 2D reward popup.
-            // Keep only status on the moving 3D rider; wrong-floor penalties
-            // remain attached to the mistake so the consequence is obvious.
-            if (result != OffboardResult.WrongFloor && points == 0)
-            {
+            if (result == OffboardResult.Late && points == 0)
                 kick.FeedbackIcon = CreateKickFeedbackIcon(start + Vector3.up * 2.25f,
                     Coral, out kick.FeedbackTexture, out kick.FeedbackSprite);
-            }
-            else
-            {
-                string worldFeedback = result == OffboardResult.WrongFloor
-                    ? caption + "\n" + points : caption;
-                kick.Feedback = Sign(worldFeedback,
-                    start + Vector3.up * 2.25f, .025f, points >= 0 ? Gold : Coral);
-            }
-            RegisterDeliveryPopup(start, result, points);
+            RegisterDeliveryPopup(start, result, points, rider.ContestedPickupBonus);
             kicks[rider] = kick;
         }
 
@@ -1393,28 +1378,22 @@ namespace CrazyElevator.Managers
         }
 
         // The combo celebrates quick correct drop-offs without changing the score.
-        void RegisterDeliveryPopup(Vector3 localPosition, OffboardResult result, int points)
+        void RegisterDeliveryPopup(Vector3 localPosition, OffboardResult result, int points, int contestedBonus)
         {
-            if (result == OffboardResult.WrongFloor || points <= 0)
+            float now = Time.unscaledTime;
+            Vector3 worldPosition = stage.TransformPoint(localPosition + Vector3.up * 1.45f);
+            Vector2 viewport = ScoreFeedbackPosition(eye, worldPosition);
+            if (points <= 0)
             {
                 deliveryCombo = 0;
                 lastRewardedDeliveryAt = -1000f;
+                QueueScoreFlight(viewport, points, now);
                 return;
             }
 
-            float now = Time.unscaledTime;
             deliveryCombo = now - lastRewardedDeliveryAt <= DeliveryComboWindow
                 ? deliveryCombo + 1 : 1;
             lastRewardedDeliveryAt = now;
-
-            Vector2 viewport = new Vector2(.5f, .48f);
-            if (eye != null && stage != null)
-            {
-                Vector3 point = eye.WorldToViewportPoint(stage.TransformPoint(localPosition + Vector3.up * 1.45f));
-                if (point.z > 0)
-                    viewport = new Vector2(Mathf.Clamp(point.x, .18f, .82f), Mathf.Clamp(point.y, .28f, .76f));
-            }
-
             if (deliveryPopups.Count >= 4) deliveryPopups.RemoveAt(0);
             deliveryPopups.Add(new DeliveryPopup
             {
@@ -1423,28 +1402,43 @@ namespace CrazyElevator.Managers
                 Points = points,
                 Combo = deliveryCombo,
                 Serial = deliveryPopupSerial++,
-                Happy = result == OffboardResult.Happy
+                Happy = result == OffboardResult.Happy,
+                ContestedBonus = result == OffboardResult.Happy ? contestedBonus : 0
             });
-            QueueScoreFlights(viewport, points, now);
+            QueueScoreFlight(viewport, points, now + .4f);
         }
 
-        void QueueScoreFlights(Vector2 viewport, int points, float now)
+        static Vector2 ScoreFeedbackPosition(Camera camera, Vector3 worldPosition)
         {
-            int count = Mathf.Clamp(Mathf.CeilToInt(points / 65f), 2, 5);
-            int remaining = points;
-            for (int i = 0; i < count; i++)
+            if (camera != null)
             {
-                int value = Mathf.CeilToInt(remaining / (float)(count - i));
-                remaining -= value;
-                if (scoreFlights.Count >= 40) scoreFlights.RemoveAt(0);
-                scoreFlights.Add(new ScoreFlight
-                {
-                    Viewport = viewport,
-                    StartedAt = now + i * ScoreFlightSpacing,
-                    Points = value,
-                    Serial = deliveryPopupSerial++
-                });
+                Vector3 point = camera.WorldToViewportPoint(worldPosition);
+                if (point.z > 0f)
+                    return new Vector2(Mathf.Clamp(point.x, .16f, .84f), Mathf.Clamp(point.y, .2f, .8f));
             }
+            return new Vector2(.5f, .48f);
+        }
+
+        void QueueScoreFlight(Vector2 viewport, int points, float start)
+        {
+            if (points == 0) return;
+            if (scoreFlights.Count >= 20) scoreFlights.RemoveAt(0);
+            scoreFlights.Add(new ScoreFlight
+            {
+                Viewport = viewport,
+                StartedAt = start,
+                Points = points,
+                Serial = deliveryPopupSerial++
+            });
+        }
+
+        void ShowScorePenalty(string reason, int points)
+        {
+            ShowActionFeedback(reason, false);
+            bool travel = DisplayBuildingView && exteriorCar != null;
+            Vector3 source = travel ? exteriorCar.position : stage != null ? stage.position : transform.position;
+            QueueScoreFlight(ScoreFeedbackPosition(travel ? exteriorCamera : eye, source),
+                -points, Time.unscaledTime);
         }
 
         // Match collisions use the same animated score trail as passenger
@@ -1454,17 +1448,9 @@ namespace CrazyElevator.Managers
             if (round == null || round.Finished || points <= 0) return false;
             round.Score += points;
 
-            Vector2 viewport = new Vector2(.5f, .48f);
             Camera sourceCamera = sceneView != null ? sceneView.exteriorCamera : null;
             if (sourceCamera == null) sourceCamera = eye;
-            if (sourceCamera != null)
-            {
-                Vector3 point = sourceCamera.WorldToViewportPoint(worldPosition);
-                if (point.z > 0f)
-                    viewport = new Vector2(Mathf.Clamp(point.x, .16f, .84f),
-                        Mathf.Clamp(point.y, .2f, .8f));
-            }
-            QueueScoreFlights(viewport, points, Time.unscaledTime);
+            QueueScoreFlight(ScoreFeedbackPosition(sourceCamera, worldPosition), points, Time.unscaledTime);
             return true;
         }
 
@@ -1513,20 +1499,10 @@ namespace CrazyElevator.Managers
                 figure.localRotation = Quaternion.Euler(0, 180, 0);
                 AnimateKickPuffs(kick, landing);
             }
-            // Keep the score/icon readable instead of rotating it with the passenger.
-            Vector3 feedbackPosition = Vector3.Lerp(kick.Start, kick.Target, .6f)
-                + Vector3.up * (2.2f + t * .55f);
-            if (kick.Feedback != null)
+            if (kick.FeedbackIcon != null)
             {
-                kick.Feedback.transform.localPosition = feedbackPosition;
-                kick.Feedback.transform.rotation = Quaternion.LookRotation(
-                    kick.Feedback.transform.position - eye.transform.position);
-                Color color = kick.Feedback.color;
-                color.a = 1 - Mathf.Clamp01((t - .8f) / .2f);
-                kick.Feedback.color = color;
-            }
-            else if (kick.FeedbackIcon != null)
-            {
+                Vector3 feedbackPosition = Vector3.Lerp(kick.Start, kick.Target, .6f)
+                    + Vector3.up * (2.2f + t * .55f);
                 kick.FeedbackIcon.transform.localPosition = feedbackPosition;
                 kick.FeedbackIcon.transform.rotation = Quaternion.LookRotation(
                     kick.FeedbackIcon.transform.position - eye.transform.position);
@@ -1556,7 +1532,6 @@ namespace CrazyElevator.Managers
         {
             if (!kicks.TryGetValue(rider, out var kick)) return;
             foreach (var puff in kick.Puffs) Destroy(puff.gameObject);
-            if (kick.Feedback != null) Destroy(kick.Feedback.gameObject);
             if (kick.FeedbackIcon != null) Destroy(kick.FeedbackIcon.gameObject);
             if (kick.FeedbackSprite != null) Destroy(kick.FeedbackSprite);
             if (kick.FeedbackTexture != null) Destroy(kick.FeedbackTexture);
