@@ -21,6 +21,7 @@ public static class ExtendedInteriorChecks
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
     static IEnumerator tutorialChecks;
     static int tutorialCheckFrame = -1;
+    static string tutorialCheckOutput = "Temp/TutorialChecks";
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
     static object Get(Game game, string name)
     {
@@ -263,12 +264,13 @@ public static class ExtendedInteriorChecks
             catch (Exception error)
             {
                 tutorialExitCode = 1;
-                Directory.CreateDirectory("Temp/TutorialChecks");
-                File.WriteAllText("Temp/TutorialChecks/result.txt", "FAIL: " + error);
+                Directory.CreateDirectory(tutorialCheckOutput);
+                File.WriteAllText(tutorialCheckOutput + "/result.txt", "FAIL: " + error);
                 Debug.LogException(error);
             }
             (tutorialChecks as IDisposable)?.Dispose();
             tutorialChecks = null;
+            tutorialCheckOutput = "Temp/TutorialChecks";
             if (Application.isBatchMode) EditorApplication.Exit(tutorialExitCode);
             else EditorApplication.isPlaying = false;
             return;
@@ -279,6 +281,16 @@ public static class ExtendedInteriorChecks
         try { action = File.ReadAllText(request).Trim(); }
         catch (IOException) { return; }
         if (action.Length == 0) return;
+        if (action == "controller-assignments" && EditorApplication.timeSinceStartup
+            - SessionState.GetFloat("CrazyElevator.ControllerAssignmentCheckStart", 0f) > 180f)
+        {
+            File.Delete(request);
+            File.WriteAllText("Logs/ControllerAssignmentChecks/result.txt", "FAIL: Main did not finish starting within three minutes.");
+            Debug.LogError("Controller assignment checks timed out waiting for Main.");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            else EditorApplication.isPlaying = false;
+            return;
+        }
         if (action == "authored-reference")
         {
             File.Delete(request);
@@ -335,11 +347,13 @@ public static class ExtendedInteriorChecks
             return;
         }
         var game = UnityEngine.Object.FindAnyObjectByType<Game>();
-        if (!game || game.gameObject.scene.path != Scene || Get(game, "round") == null) return;
-        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare")
+        if (!game || game.gameObject.scene.path != Scene) return;
+        if (action == "match-prepare" || action == "single-dimension-prepare" || action == "bouncer-prepare" || action == "interaction-prepare" || action == "tutorial-prepare" || action == "tutorial-lateral-prepare")
         {
+            EditorApplication.isPaused = false;
             bool singleDimension = action != "match-prepare";
             File.WriteAllText(request, action == "tutorial-prepare" ? "tutorial-run"
+                : action == "tutorial-lateral-prepare" ? "tutorial-lateral-run"
                 : action == "interaction-prepare" ? "interaction-run"
                 : action == "bouncer-prepare" ? "bouncer-run"
                 : singleDimension ? "single-dimension-run" : "match-run");
@@ -362,14 +376,25 @@ public static class ExtendedInteriorChecks
             UnityEngine.SceneManagement.SceneManager.LoadScene(Scene);
             return;
         }
+        if (Get(game, "round") == null) return;
         try { File.Delete(request); }
         catch (IOException) { return; }
         int exitCode = 0;
         try
         {
             if (action == "zoe-ui") tutorialChecks = RunZoeUiChecks();
+            else if (action == "controller-assignments")
+            {
+                tutorialCheckOutput = "Logs/ControllerAssignmentChecks";
+                tutorialChecks = RunControllerAssignmentChecks();
+            }
             else if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
+            else if (action == "tutorial-lateral-run")
+            {
+                tutorialCheckOutput = "Logs/TutorialLateralChecks";
+                tutorialChecks = RunTutorialPracticeChecks(lateralOnly: true);
+            }
             else if (action == "boost-checks") RunBoost(game);
             else if (action == "repair-checks") RunRepair(game);
             else if (action == "match-run") RunMatch();
@@ -1756,6 +1781,227 @@ public static class ExtendedInteriorChecks
         }
     }
 
+    [MenuItem("Tools/Crazy Elevator/Check Persistent Controller Assignments")]
+    public static void CheckControllerAssignmentsBatch()
+    {
+        Require(!EditorApplication.isPlayingOrWillChangePlaymode,
+            "Stop Play Mode before running the controller assignment checks.");
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty,
+                "Save scene edits before running the controller assignment checks.");
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        Directory.CreateDirectory("Logs/ControllerAssignmentChecks");
+        File.WriteAllText("Logs/ControllerAssignmentChecks/result.txt", "RUNNING: waiting for Main to start.\n");
+        SessionState.SetFloat("CrazyElevator.ControllerAssignmentCheckStart", (float)EditorApplication.timeSinceStartup);
+        File.WriteAllText(Work + "/request.txt", "controller-assignments");
+    }
+
+    static IEnumerator RunControllerAssignmentChecks()
+    {
+        const string output = "Logs/ControllerAssignmentChecks";
+        string sceneBefore = File.ReadAllText(Scene);
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        var menu = CrazyElevator.Managers.MenuManager.Current;
+        Require(input && menu, "Controller checks need the authored Main input and menu managers.");
+        Type inputType = input.GetType(), menuType = menu.GetType();
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        var oldGamepads = new List<Gamepad>(Gamepad.all);
+        var oldGamepadEnabled = new List<bool>();
+        Gamepad oldCurrent = Gamepad.current;
+        object oldKeyboardHints = menuType.GetField("keyboardHints", statics).GetValue(null);
+        object oldHintsLoaded = menuType.GetField("inputHintsLoaded", statics).GetValue(null);
+        InputSettings originalSettings = InputSystem.settings;
+        HideFlags originalSettingsFlags = originalSettings.hideFlags;
+        // The Input System destroys replaced settings with exactly HideAndDontSave.
+        originalSettings.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        var testSettings = UnityEngine.Object.Instantiate(originalSettings);
+        testSettings.hideFlags = HideFlags.HideAndDontSave;
+        string result = null;
+        // Create B first to prove the active controller wins Player 1, rather than Gamepad.all[0].
+        Gamepad second = null, first = null, extra = null;
+        try
+        {
+            // EditorApplication.update can otherwise route virtual events into editor-only buffers in batch mode.
+            testSettings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            testSettings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            testSettings.updateMode = InputSettings.UpdateMode.ProcessEventsInDynamicUpdate;
+            InputSystem.settings = testSettings;
+            foreach (Gamepad pad in oldGamepads)
+            {
+                oldGamepadEnabled.Add(pad.enabled);
+                if (pad.enabled) InputSystem.DisableDevice(pad);
+            }
+            input.enabled = false;
+            input.ResetRegistrations();
+            for (int i = 0; i < 3; i++) yield return null;
+            second = InputSystem.AddDevice<Gamepad>("Controller assignment B");
+            first = InputSystem.AddDevice<Gamepad>("Controller assignment A");
+            extra = InputSystem.AddDevice<Gamepad>("Controller assignment C");
+            InputSystem.QueueStateEvent(first, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            inputType.GetMethod("DetectMenuInputSource", Flags).Invoke(input, null);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            var firstPlayer = PlayerInput.GetPlayerByIndex(0);
+            Require(firstPlayer && firstPlayer.playerIndex == 0 && PlayerUsesDevice(firstPlayer, first)
+                && input.HasControllerAssignment(0) && !input.HasControllerAssignment(1),
+                "The controller that first enters setup must own Player 1, regardless of device enumeration order. "
+                + "A=" + first.deviceId + ", stick=" + first.leftStick.ReadValue() + "; " + ControllerAssignmentDetails(input));
+
+            InputSystem.QueueStateEvent(first, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.right });
+            InputSystem.Update();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            var secondPlayer = PlayerInput.GetPlayerByIndex(1);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, true);
+            Require(firstPlayer.neverAutoSwitchControlSchemes && secondPlayer.neverAutoSwitchControlSchemes,
+                "Joined controllers must not automatically change control schemes or seats.");
+
+            InputSystem.RemoveDevice(first);
+            InputSystem.QueueStateEvent(extra, new GamepadState { leftStick = Vector2.left });
+            InputSystem.Update();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+            Require(!PlayerUsesDevice(firstPlayer, extra) && !PlayerUsesDevice(secondPlayer, extra),
+                "A third controller must not take a disconnected player's reserved seat.");
+            input.DeregisterSeat(0);
+            input.DeregisterSeat(1);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+            input.EndControllerJoining();
+
+            var previousInput = input;
+            CrazyElevator.Managers.MenuManager.ReturnToLobby();
+            for (int i = 0; i < 180 && ReferenceEquals(input, CrazyElevator.Managers.InputManager.Instance); i++)
+                yield return null;
+            input = CrazyElevator.Managers.InputManager.Instance;
+            menu = CrazyElevator.Managers.MenuManager.Current;
+            Require(input && menu && !ReferenceEquals(input, previousInput),
+                "Returning to the lobby must reload the authored Main managers.");
+            input.enabled = false;
+            input.BeginControllerJoining();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+
+            previousInput = input;
+            CrazyElevator.Managers.MenuManager.ReturnToMainMenu();
+            for (int i = 0; i < 180 && ReferenceEquals(input, CrazyElevator.Managers.InputManager.Instance); i++)
+                yield return null;
+            input = CrazyElevator.Managers.InputManager.Instance;
+            menu = CrazyElevator.Managers.MenuManager.Current;
+            Require(input && menu && !ReferenceEquals(input, previousInput),
+                "Returning to the title must reload the authored Main managers.");
+            input.enabled = false;
+            // B acts first on the next setup, while A is still disconnected.
+            InputSystem.QueueStateEvent(extra, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            inputType.GetMethod("DetectMenuInputSource", Flags).Invoke(input, null);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+
+            InputSystem.AddDevice(first);
+            InputSystem.QueueStateEvent(first, new GamepadState { leftStick = Vector2.down });
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, true);
+            var one = input.ReadForSeat(0, true);
+            var two = input.ReadForSeat(1, true);
+            Require(one.Move.y < -.9f && two.Move.y > .9f,
+                "Reconnecting A after B re-enters setup must restore A to Player 1 and keep B on Player 2.");
+
+            InputSystem.QueueStateEvent(first, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState());
+            InputSystem.Update();
+            menuType.GetField("keyboardHints", statics).SetValue(null, false);
+            menuType.GetField("inputHintsLoaded", statics).SetValue(null, true);
+            menuType.GetField("transition", Flags).SetValue(menu, 10f);
+            input.enabled = true;
+            if (!Application.isBatchMode)
+            {
+                for (int i = 0; i < 12; i++) yield return null;
+                ScreenCapture.CaptureScreenshot(output + "/01-controller-lobby.png");
+                for (int i = 0; i < 8; i++) yield return null;
+                menuType.GetMethod("ResetControllerInstructionConfirmations", Flags).Invoke(menu, null);
+                menuType.GetField("showingControllerInstructions", Flags).SetValue(menu, true);
+                for (int i = 0; i < 8; i++) yield return null;
+                ScreenCapture.CaptureScreenshot(output + "/02-controller-controls.png");
+                for (int i = 0; i < 8; i++) yield return null;
+                Require(File.Exists(output + "/01-controller-lobby.png") && File.Exists(output + "/02-controller-controls.png"),
+                    "The interactive controller checks did not produce both screenshots.");
+            }
+            foreach (string name in new[] { "GameManager", "InputManager", "MenuManager", "SfxManager", "MusicManager" })
+                Require(GameObject.Find(name)?.GetComponent(name) != null,
+                    "Controller setup must preserve the authored manager " + name + ".");
+            Require(sceneBefore == File.ReadAllText(Scene), "Controller checks must not save or modify Main.");
+            result = "PASS: first active controller owns Player 1; independent PlayerInput indexes and devices; "
+                + "automatic switching disabled; disconnected seat reserved against a third controller and deregistration; "
+                + "real lobby/title scene reloads preserve both PlayerInput objects and seat IDs; "
+                + "opposite activation order does not swap seats; reconnect restores original inputs; "
+                + "named Main managers and saved scene unchanged; "
+                + (Application.isBatchMode ? "visual capture skipped in batch mode.\n" : "lobby and controls screenshots captured.\n");
+        }
+        finally
+        {
+            if (CrazyElevator.Managers.InputManager.Instance)
+                CrazyElevator.Managers.InputManager.Instance.ResetRegistrations();
+            foreach (Gamepad pad in new[] { first, second, extra })
+                if (pad != null && pad.added) InputSystem.RemoveDevice(pad);
+            InputSystem.settings = originalSettings;
+            originalSettings.hideFlags = originalSettingsFlags;
+            UnityEngine.Object.DestroyImmediate(testSettings);
+            for (int i = 0; i < oldGamepads.Count && i < oldGamepadEnabled.Count; i++)
+                if (oldGamepadEnabled[i] && oldGamepads[i].added) InputSystem.EnableDevice(oldGamepads[i]);
+            if (oldCurrent != null && oldCurrent.added) oldCurrent.MakeCurrent();
+            menuType.GetField("keyboardHints", statics).SetValue(null, oldKeyboardHints);
+            menuType.GetField("inputHintsLoaded", statics).SetValue(null, oldHintsLoaded);
+        }
+        File.WriteAllText(output + "/result.txt", result);
+        Debug.Log(result);
+    }
+
+    static bool PlayerUsesDevice(PlayerInput player, InputDevice expected)
+    {
+        if (player == null) return false;
+        foreach (InputDevice device in player.devices)
+            if (device == expected) return true;
+        return false;
+    }
+
+    static string ControllerAssignmentDetails(CrazyElevator.Managers.InputManager input)
+    {
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        Type type = input.GetType();
+        string details = "update=" + InputState.currentUpdateType + ", source="
+            + type.GetField("menuInputSource", Flags).GetValue(input) + ", menuPad="
+            + type.GetField("menuGamepad", Flags).GetValue(input) + ", keyboardSeat="
+            + type.GetField("keyboardMouseSeat", statics).GetValue(null) + ", ids="
+            + string.Join(",", (int[])type.GetField("joinedGamepadIds", statics).GetValue(null))
+            + ", players=" + PlayerInput.all.Count;
+        foreach (PlayerInput player in PlayerInput.all)
+        {
+            details += "; P" + player.playerIndex + " " + player.currentControlScheme + " devices=";
+            foreach (InputDevice device in player.devices) details += device.deviceId + ":" + device.name + ",";
+        }
+        return details;
+    }
+
+    static void CheckControllerAssignments(Gamepad first, Gamepad second,
+        PlayerInput firstPlayer, PlayerInput secondPlayer, bool firstConnected)
+    {
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        var ids = (int[])input.GetType().GetField("joinedGamepadIds", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+        Require(input.HasControllerAssignment(0) && input.HasControllerAssignment(1)
+            && ids[0] == first.deviceId && ids[1] == second.deviceId,
+            "The first controller assignments must stay reserved for their original players.");
+        Require(PlayerInput.GetPlayerByIndex(0) == firstPlayer && PlayerInput.GetPlayerByIndex(1) == secondPlayer
+            && firstPlayer.playerIndex == 0 && secondPlayer.playerIndex == 1,
+            "Scene reloads must preserve both original PlayerInput objects and player indexes.");
+        Require(input.HasController(0) == firstConnected && input.HasController(1)
+            && PlayerUsesDevice(secondPlayer, second) && !PlayerUsesDevice(secondPlayer, first)
+            && (!firstConnected || PlayerUsesDevice(firstPlayer, first)),
+            "Disconnecting and reconnecting Player 1 must never move Player 2's controller.");
+    }
+
     static void RunSingleDimensionMatch()
     {
         var match = UnityEngine.Object.FindAnyObjectByType<CrazyElevator.Match.ElevatorMatch>();
@@ -1967,7 +2213,16 @@ public static class ExtendedInteriorChecks
         File.WriteAllText(Work + "/request.txt", "tutorial-prepare");
     }
 
-    static IEnumerator RunTutorialPracticeChecks()
+    [MenuItem("Tools/Crazy Elevator/Check Tutorial Side Stops")]
+    public static void RequestTutorialLateralChecks()
+    {
+        Directory.CreateDirectory(Work);
+        Directory.CreateDirectory("Logs/TutorialLateralChecks");
+        File.WriteAllText("Logs/TutorialLateralChecks/result.txt", "RUNNING: preparing tutorial side-stop practice.\n");
+        File.WriteAllText(Work + "/request.txt", "tutorial-lateral-prepare");
+    }
+
+    static IEnumerator RunTutorialPracticeChecks(bool lateralOnly = false)
     {
         const string output = "Temp/TutorialChecks";
         Directory.CreateDirectory(output);
@@ -2003,6 +2258,13 @@ public static class ExtendedInteriorChecks
             object settled = Enum.Parse(motions.GetType().GetElementType(), "Settled");
             menuType.GetField("tutorialFinalePhase", Flags).SetValue(menu,
                 Enum.Parse(menuType.GetField("tutorialFinalePhase", Flags).FieldType, "None"));
+            if (lateralOnly)
+            {
+                for (int seat = 0; seat < actors.Length; seat++) tutorialActors[seat] = actors[seat];
+                input.ClearTutorialInputLocks();
+                CheckTutorialLateralPractice(menu, actors);
+                yield break;
+            }
             for (int seat = 0; seat < actors.Length; seat++)
             {
                 Game actor = actors[seat];
@@ -2074,6 +2336,11 @@ public static class ExtendedInteriorChecks
             {
                 Game attacker = actors[seat], target = actors[1 - seat];
                 Require(match.BeginTutorialCollisionPractice(seat), "Could not stage collision for seat " + seat);
+                // Staging separates the cars. Run the normal update that clears
+                // the previous contact before simulating another collision.
+                match.enabled = true;
+                typeof(CrazyElevator.Match.ElevatorMatch).GetMethod("Update", Flags).Invoke(match, null);
+                match.enabled = false;
                 input.UnlockTutorialInput(seat);
                 input.SetTutorialInputMode(seat, CrazyElevator.Managers.InputManager.TutorialInputMode.Collision);
                 input.LockTutorialInput(1 - seat);
@@ -2103,6 +2370,7 @@ public static class ExtendedInteriorChecks
             match.ConstrainTravel(actors[0], 2f, 3.2f, ref incoming);
             Require(actors[1].TravelVelocity == 0f && actors[1].CurrentFloor == 3f,
                 "Ordinary tutorial collisions stopped protecting the non-participating target.");
+            CheckTutorialLateralPractice(menu, actors);
             File.WriteAllText(output + "/result.txt", "PASS: both seats retain one highlighted kick target; repeated preparation does not duplicate; normal drop-off cannot complete kicking; actual kicks complete; live collision unlocks only learner; both seats cause real contact and displace locked target; no timeout completion; practice clock unchanged; staged exception clears; ordinary tutorial target protection remains.\n");
             Debug.Log(File.ReadAllText(output + "/result.txt"));
         }
@@ -2115,6 +2383,100 @@ public static class ExtendedInteriorChecks
             for (int seat = 0; seat < actors.Length; seat++) actors[seat].enabled = enabledBefore[seat];
             match.enabled = matchEnabled;
             menu.enabled = menuEnabled;
+        }
+    }
+
+    static void CheckTutorialLateralPractice(CrazyElevator.Managers.MenuManager menu, Game[] actors)
+    {
+        const string output = "Logs/TutorialLateralChecks";
+        Directory.CreateDirectory(output);
+        File.WriteAllText(output + "/result.txt", "RUNNING: checking tutorial side-stop practice.\n");
+        var type = menu.GetType();
+        var goals = (int[])type.GetField("tutorialLateralGoalsReached", Flags).GetValue(menu);
+        var steps = (int[])type.GetField("tutorialSteps", Flags).GetValue(menu);
+        var track = type.GetMethod("TrackTutorialShaftReturn", Flags);
+        var complete = type.GetMethod("TutorialStepCompletedForActor", Flags);
+        var enter = type.GetMethod("BeginTutorialCardTransition", Flags);
+        bool Finished(int seat)
+        {
+            track.Invoke(menu, new object[] { seat });
+            return (bool)complete.Invoke(menu, new object[] { seat, 9 });
+        }
+        void Tick(Game actor, float horizontal, float vertical = 0f, float seconds = 1f / 60f)
+        {
+            Call(actor, "ReadRouteInput", horizontal, vertical, false);
+            actor.SetTravelInput(actor.OnFloorRail ? 0f : vertical, false);
+            Call(actor, "AdvanceBuildingTravel", seconds);
+        }
+        try
+        {
+            for (int seat = 0; seat < actors.Length; seat++)
+            {
+                Game actor = actors[seat];
+                float clock = actor.SecondsLeft;
+                int floor = actor.ActiveMinFloor + 2; // These rails have no teleport gate in any world.
+                Require(actor.StageTutorialCollision(floor), "Could not stage side-stop practice for seat " + seat);
+                enter.Invoke(menu, new object[] { seat, 9, true });
+                steps[seat] = 9;
+                Require(goals[seat] == 0 && !Finished(seat), "Entering sideways practice must reset its goals.");
+                Require(CrazyElevator.Managers.MenuManager.TutorialSidewaysPractice(actor),
+                    "Sideways input guidance must be active for the practicing elevator.");
+                Tick(actor, 1f, seconds: .02f);
+                Require(actor.OnFloorRail, "The first sideways press must enter a floor rail rather than only switching lanes.");
+                Finished(seat);
+                Tick(actor, -1f, seconds: .02f);
+                Require(!Finished(seat) && goals[seat] == 0,
+                    "Tiny left/right reversals inside the central shafts must not complete a side-stop goal.");
+
+                int[] stops = { 3, 4, 1, 0 };
+                for (int goal = 0; goal < stops.Length; goal++)
+                {
+                    int direction = goal < 2 ? 1 : -1;
+                    for (int frame = 0; frame < 700 && goals[seat] == goal; frame++)
+                    {
+                        Tick(actor, direction);
+                        Require(!Finished(seat), "Side-stop practice completed before returning to the main shaft.");
+                    }
+                    Require(goals[seat] == goal + 1,
+                        "Actual rail travel did not reach lateral goal " + goal + " for seat " + seat);
+                    Require(Mathf.Abs(actor.RouteLateralX - Game.StopWorldX(stops[goal])) <= 2f,
+                        "Lateral goal counted before the elevator reached its actual side-stop position.");
+                    if (goal == 1)
+                    {
+                        for (int frame = 0; frame < 10; frame++) { Tick(actor, 1f); Finished(seat); }
+                        Require(goals[seat] == 2, "Holding right at far right must not count leftward goals.");
+                    }
+                }
+                Require(actor.OnFloorRail && !Finished(seat),
+                    "Reaching far left must still require a real return to the main shaft.");
+                type.GetField("tutorialActive", Flags).SetValue(menu, false);
+                Require(!CrazyElevator.Managers.MenuManager.TutorialSidewaysPractice(actor),
+                    "Sideways input guidance must be disabled outside the tutorial.");
+                track.Invoke(menu, new object[] { seat });
+                Require(goals[seat] == stops.Length, "Progress must remain unchanged outside the tutorial.");
+                type.GetField("tutorialActive", Flags).SetValue(menu, true);
+                for (int frame = 0; frame < 700 && !actor.TutorialReadyToRejoin; frame++)
+                {
+                    Tick(actor, actor.TutorialShaftDirection);
+                    Require(!Finished(seat), "Returning along a floor rail must still require a vertical turn.");
+                }
+                Require(actor.TutorialReadyToRejoin && !Finished(seat),
+                    "Reaching the shaft on a floor rail must not finish the lesson.");
+                for (int frame = 0; frame < 200 && !actor.OnMainVerticalTrack; frame++)
+                    Tick(actor, actor.TutorialShaftDirection, actor.TutorialRejoinVerticalDirection);
+                Require(actor.OnMainVerticalTrack && Finished(seat),
+                    "All four side stops plus a real main-shaft return must complete lateral practice.");
+                Require(actor.SecondsLeft == clock, "Sideways practice consumed the live round timer.");
+                enter.Invoke(menu, new object[] { seat, 9, true });
+                Require(goals[seat] == 0 && !Finished(seat), "Repeating the lesson retained completed side-stop goals.");
+            }
+            File.WriteAllText(output + "/result.txt", "PASS: both seats enter a floor rail on the first sideways press, reach right, far right, left, and far left through actual rail motion, and rejoin a main vertical track; tiny reversals cannot skip goals; far-right holding cannot count left goals; a vertical turn is required; guidance stays tutorial-only; entry resets progress; round clocks unchanged.\n");
+            Debug.Log(File.ReadAllText(output + "/result.txt"));
+        }
+        catch (Exception error)
+        {
+            File.WriteAllText(output + "/result.txt", "FAIL: " + error);
+            throw;
         }
     }
 

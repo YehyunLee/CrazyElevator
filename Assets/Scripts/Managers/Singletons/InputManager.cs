@@ -160,6 +160,27 @@ namespace CrazyElevator.Managers
         public bool HasController(int seat)
             => JoinedGamepad(seat) != null;
 
+        // A disconnected controller still owns its seat until the game closes.
+        public bool HasControllerAssignment(int seat)
+            => seat >= 0 && seat < joinedGamepadIds.Length && joinedGamepadIds[seat] >= 0;
+
+        public string ControllerLabelForSeat(int seat)
+            => seat == 0 ? "CONTROLLER A" : "CONTROLLER B";
+
+        public bool ControllerActiveThisFrame(int seat)
+        {
+            var pad = JoinedGamepad(seat);
+            return pad != null && (pad.leftStick.ReadValue().magnitude >= .55f
+                || pad.rightStick.ReadValue().magnitude >= .55f
+                || pad.dpad.ReadValue().magnitude >= .55f
+                || pad.buttonSouth.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame
+                || pad.buttonEast.wasPressedThisFrame || pad.buttonWest.wasPressedThisFrame
+                || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame
+                || pad.leftTrigger.wasPressedThisFrame || pad.rightTrigger.wasPressedThisFrame
+                || pad.leftStickButton.wasPressedThisFrame || pad.rightStickButton.wasPressedThisFrame
+                || pad.startButton.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame);
+        }
+
         public bool HasInput(int seat)
             => HasController(seat) || keyboardMouseSeat == seat || ExistingPlayerInput(seat) != null;
 
@@ -182,7 +203,9 @@ namespace CrazyElevator.Managers
         public bool HasLobbyInput(int seat)
             => HasInput(seat) || (seat >= 0 && seat < 2 && CanUseSplitKeyboard);
 
-        int NextAvailableSeat => !HasInput(0) ? 0 : !HasInput(1) ? 1 : -1;
+        bool SeatReserved(int seat) => HasControllerAssignment(seat) || HasInput(seat);
+
+        int NextAvailableSeat => !SeatReserved(0) ? 0 : !SeatReserved(1) ? 1 : -1;
 
         public void BeginControllerJoining()
         {
@@ -194,14 +217,15 @@ namespace CrazyElevator.Managers
             // happen before the source detector sees a keyboard event. Claim
             // the keyboard immediately when no controller source was chosen so
             // the lobby can always receive WASD/C input.
-            if (!HasInput(0) && menuInputSource != InputSource.Gamepad
+            if (!SeatReserved(0) && menuInputSource != InputSource.Gamepad
                 && Keyboard.current != null && Mouse.current != null)
             {
                 menuInputSource = InputSource.KeyboardMouse;
                 keyboardModeSession = true;
                 RegisterKeyboardMouse(0);
             }
-            else if (!HasController(0) && menuGamepad != null)
+            else if (!SeatReserved(0) && menuGamepad != null
+                && menuGamepad.deviceId != joinedGamepadIds[1])
             {
                 var playerInput = JoinGamepad(playerInputManager, 0, menuGamepad);
                 if (playerInput != null)
@@ -209,9 +233,19 @@ namespace CrazyElevator.Managers
             }
         }
 
+        public void EndControllerJoining()
+        {
+            controllerJoining = false;
+            GetComponent<PlayerInputManager>()?.DisableJoining();
+        }
+
         PlayerInput JoinGamepad(PlayerInputManager manager, int seat, Gamepad gamepad)
         {
-            if (manager == null || gamepad == null) return null;
+            if (manager == null || gamepad == null || seat < 0 || seat >= joinedGamepadIds.Length)
+                return null;
+            if (HasControllerAssignment(seat) && joinedGamepadIds[seat] != gamepad.deviceId)
+                return null;
+            if (joinedGamepadIds[1 - seat] == gamepad.deviceId) return null;
             var existing = ExistingPlayerInput(seat);
             if (existing != null)
             {
@@ -221,6 +255,7 @@ namespace CrazyElevator.Managers
             manager.EnableJoining();
             var playerInput = manager.JoinPlayer(seat, -1, "Gamepad", gamepad);
             manager.DisableJoining();
+            RegisterPlayerInput(playerInput);
             return playerInput;
         }
 
@@ -235,7 +270,7 @@ namespace CrazyElevator.Managers
         void RegisterKeyboardMouse(int requestedSeat)
         {
             if (keyboardMouseSeat >= 0 || Keyboard.current == null || Mouse.current == null) return;
-            int seat = requestedSeat >= 0 && !HasInput(requestedSeat)
+            int seat = requestedSeat >= 0 && !SeatReserved(requestedSeat)
                 ? requestedSeat : NextAvailableSeat;
             if (seat < 0) return;
             var manager = GetComponent<PlayerInputManager>();
@@ -335,29 +370,13 @@ namespace CrazyElevator.Managers
         public void DeregisterSeat(int seat)
         {
             if (seat < 0 || seat >= joinedGamepadIds.Length) return;
-            int replacementGamepad = seat == 0 ? joinedGamepadIds[1] : -1;
-            bool replacementKeyboard = seat == 0 && keyboardMouseSeat == 1;
+            // Back/select must never release a controller or promote Player 2.
+            if (HasControllerAssignment(seat)) return;
             RemovePlayerInput(PlayerInput.GetPlayerByIndex(seat));
-            joinedGamepadIds[seat] = -1;
             if (keyboardMouseSeat == seat)
             {
                 keyboardMouseSeat = -1;
                 if (seat == 0) keyboardModeSession = false;
-            }
-            if (seat == 0)
-            {
-                RemovePlayerInput(PlayerInput.GetPlayerByIndex(1));
-                joinedGamepadIds[1] = -1;
-                if (keyboardMouseSeat == 1) keyboardMouseSeat = -1;
-                if (replacementGamepad >= 0)
-                {
-                    foreach (var pad in Gamepad.all)
-                        if (pad.deviceId == replacementGamepad
-                            && JoinGamepad(GetComponent<PlayerInputManager>(), 0, pad) != null)
-                        { joinedGamepadIds[0] = replacementGamepad; break; }
-                }
-                else if (replacementKeyboard)
-                    RegisterKeyboardMouse(0);
             }
             OnControllerJoined?.Invoke(-1);
         }
@@ -387,6 +406,7 @@ namespace CrazyElevator.Managers
         public void RegisterPlayerInput(PlayerInput playerInput)
         {
             if (!controllerJoining || playerInput == null) return;
+            playerInput.neverAutoSwitchControlSchemes = true;
             int seat = playerInput.playerIndex;
             if (seat < 0 || seat >= joinedGamepadIds.Length) return;
 
@@ -395,6 +415,9 @@ namespace CrazyElevator.Managers
             {
                 if (device is Gamepad gamepad)
                 {
+                    if (HasControllerAssignment(seat) && joinedGamepadIds[seat] != gamepad.deviceId)
+                        return;
+                    if (joinedGamepadIds[1 - seat] == gamepad.deviceId) return;
                     if (keyboardMouseSeat == seat) keyboardMouseSeat = -1;
                     joinedGamepadIds[seat] = gamepad.deviceId;
                     OnControllerJoined?.Invoke(seat);
@@ -403,7 +426,7 @@ namespace CrazyElevator.Managers
                 if (device is Keyboard || device is Mouse)
                     keyboardAssigned = true;
             }
-            if (keyboardAssigned)
+            if (keyboardAssigned && !HasControllerAssignment(seat))
             {
                 keyboardMouseSeat = seat;
                 if (seat == 0) keyboardModeSession = true;
@@ -428,7 +451,7 @@ namespace CrazyElevator.Managers
             if (assigned != null) return assigned;
             if (!controllerJoining && ActiveView == GameView.Menu
                 && joinedGamepadIds[0] < 0 && seat == 0 && menuInputSource == InputSource.Gamepad
-                && Gamepad.all.Count > 0) return Gamepad.all[0];
+                && menuGamepad != null) return menuGamepad;
             return null;
         }
 
