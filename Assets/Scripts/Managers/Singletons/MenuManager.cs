@@ -762,15 +762,18 @@ namespace CrazyElevator.Managers
             int previousDepth = GUI.depth;
             GUI.depth = TutorialOverlayDepth - 1;
             bool overGameplay = !FullScreenOverlayActive;
-            float top = overGameplay ? (tutorialGame.Match != null ? 102f : 76f) : 18f;
-            Rect button = new Rect(Screen.width - 184f, top, 172f, 32f);
+            float scale = Mathf.Clamp(Screen.height / 900f, .8f, 3f);
+            float width = 190f * scale, height = 36f * scale;
+            Rect button = new Rect(12f * scale, overGameplay ? Screen.height - height - 12f * scale : 18f * scale, width, height);
             MenuPresentation.Plaque(button, MenuPresentation.Paper, MenuPresentation.Metal, 3f);
-            Rect key = new Rect(button.x + 4f, button.y + 4f, 40f, 24f);
+            Rect key = new Rect(button.x + 4f * scale, button.y + 4f * scale, 42f * scale, 28f * scale);
             MenuPresentation.Paint(key, MenuPresentation.Ink);
+            var skipLabel = new GUIStyle(caption) { fontSize = Mathf.RoundToInt(14f * scale), wordWrap = false,
+                alignment = TextAnchor.MiddleCenter, clipping = TextClipping.Clip };
             MenuPresentation.Label(key, new GUIContent(KeyboardHintsEnabled ? "TAB" : "VIEW"),
-                caption, MenuPresentation.Paper);
-            MenuPresentation.Label(new Rect(key.xMax, button.y, button.width - 44f, button.height),
-                new GUIContent("SKIP TUTORIAL"), caption, MenuPresentation.Ink);
+                skipLabel, MenuPresentation.Paper);
+            MenuPresentation.Label(new Rect(key.xMax, button.y, button.xMax - key.xMax, button.height),
+                new GUIContent("SKIP TUTORIAL"), skipLabel, MenuPresentation.Ink);
             if (GUI.Button(button, GUIContent.none, GUIStyle.none)) SkipTutorial();
             GUI.depth = previousDepth;
         }

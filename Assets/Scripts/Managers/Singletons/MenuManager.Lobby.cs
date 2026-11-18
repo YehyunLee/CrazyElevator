@@ -60,19 +60,20 @@ namespace CrazyElevator.Managers
             }
         }
 
-        internal RenderTexture GetManifestPortrait(PassengerView prefab, Material jacket)
+        internal RenderTexture GetManifestPortrait(PassengerView prefab, Material jacket,
+            Dictionary<Material, Material> finishes)
         {
             var key = (prefab, jacket.color);
             if (manifestPortraits.TryGetValue(key, out RenderTexture portrait)) return portrait;
 
-            portrait = CapturePassengerPortrait(prefab, 128, Color.clear, jacket);
+            portrait = CapturePassengerPortrait(prefab, 128, Color.clear, jacket, finishes);
             manifestPortraits.Add(key, portrait);
             return portrait;
         }
 
         // Capture a still from the same front-facing preview stage used by the guide.
         RenderTexture CapturePassengerPortrait(PassengerView prefab, int size, Color background,
-            Material jacket = null)
+            Material jacket = null, Dictionary<Material, Material> finishes = null)
         {
             EnsureDirectoryPreviewStage();
             PassengerView model = Instantiate(prefab, directoryPreviewStage, false);
@@ -82,6 +83,7 @@ namespace CrazyElevator.Managers
             if (jacket != null && model.jackets != null)
                 foreach (Renderer renderer in model.jackets)
                     if (renderer != null) renderer.sharedMaterial = jacket;
+            if (finishes != null) model.ApplyMatteFinish(finishes);
             foreach (TextMesh label in model.GetComponentsInChildren<TextMesh>(true))
                 label.gameObject.SetActive(false);
             PrepareDirectoryPreviewModel(model.gameObject);

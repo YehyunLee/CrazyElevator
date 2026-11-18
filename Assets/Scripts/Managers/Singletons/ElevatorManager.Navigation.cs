@@ -128,6 +128,8 @@ namespace CrazyElevator.Managers
         }
 
         public static string DestinationTag(Rider rider) => StopTag(rider.Destination, rider.DestinationStop);
+        static string PassengerFloorLabel(Rider rider)
+            => (rider.DestinationStop == CenterStop ? "F" : "") + DestinationTag(rider);
 
         static string StopSide(int stop)
         {
@@ -192,52 +194,42 @@ namespace CrazyElevator.Managers
         }
 
         // ---------- Destination beacons (shaft view) ----------
-        readonly Dictionary<int, List<Rider>> beaconGroups = new Dictionary<int, List<Rider>>();
-        readonly List<Rect> beaconTags = new List<Rect>();
-        readonly List<int> beaconOrder = new List<int>();
-
         void DrawDestinationBeacons()
         {
             if (round == null || exteriorCamera == null || exteriorCar == null) return;
-            bool filterTutorialTarget = MenuManager.TryGetTutorialStopFloor(this, out int tutorialTarget);
-            foreach (List<Rider> group in beaconGroups.Values) group.Clear();
+            Rider target = null;
+            float bestDistance = float.PositiveInfinity;
             foreach (Rider rider in round.Riders)
             {
                 if (!round.Owns(rider) || exiting.ContainsKey(rider)) continue;
-                if (filterTutorialTarget && rider.Destination != tutorialTarget) continue;
-                int key = rider.Destination * ElevatorRound.Stops + rider.DestinationStop;
-                if (!beaconGroups.TryGetValue(key, out List<Rider> group))
-                    beaconGroups[key] = group = new List<Rider>();
-                group.Add(rider);
+                if (target != null && target.IsVip && !rider.IsVip) continue;
+                float distance = Mathf.Abs(rider.Destination - travelFloor) * ShaftFloorHeight
+                    + Mathf.Abs(StopX(rider.DestinationStop) - RouteLateralX);
+                if (target != null && target.IsVip == rider.IsVip && distance >= bestDistance) continue;
+                target = rider;
+                bestDistance = distance;
             }
+            if (target == null) return;
             Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
-            float size = Mathf.Max(1f, view.height / 900f);
-            beaconTags.Clear();
-            beaconOrder.Clear();
-            foreach (KeyValuePair<int, List<Rider>> pair in beaconGroups)
-                if (pair.Value.Count > 0) beaconOrder.Add(pair.Key);
-            // Nearest destinations claim their spot first.
-            beaconOrder.Sort((a, b) => Mathf.Abs(a / ElevatorRound.Stops - travelFloor)
-                .CompareTo(Mathf.Abs(b / ElevatorRound.Stops - travelFloor)));
-            foreach (int key in beaconOrder)
-                DrawDestinationBeacon(view, size, key / ElevatorRound.Stops, key % ElevatorRound.Stops, beaconGroups[key]);
+            float size = Mathf.Clamp(Mathf.Min(view.height / 900f, view.width / 440f), .7f, 3f);
+            DrawDestinationBeacon(view, size, target.Destination, target.DestinationStop, target.IsVip);
         }
 
         // On screen the landing glows under a bouncing arrow. Off screen an arrow on the view edge points at it.
-        void DrawDestinationBeacon(Rect view, float size, int floor, int stop, List<Rider> riders)
+        void DrawDestinationBeacon(Rect view, float size, int floor, int stop, bool vip)
         {
-            float x = StopWorldX(stop), y = floor * ShaftFloorHeight;
+            float x = StopX(stop), y = floor * ShaftFloorHeight;
             Vector2 spot = GuiPoint(new Vector3(x, y + 1.6f, BeaconDepth), out bool inFront);
             string label = "F" + ElevatorRound.FloorNumber(floor) + StopSide(stop);
             if (inFront && Inset(view, 12f * size, 12f * size, 12f * size, 12f * size).Contains(spot))
-                DrawLandingHighlight(view, size, x, y, stop == CenterStop ? 4.6f : 2.6f, label, riders);
+                DrawLandingHighlight(view, size, x, y, stop == CenterStop ? 4.6f : 2.6f, label, vip);
             else
-                DrawEdgePointer(view, size, spot, inFront, label, riders);
+                DrawEdgePointer(view, size, spot, inFront, label, vip);
         }
 
         const float BeaconDepth = .7f;
 
-        void DrawLandingHighlight(Rect view, float size, float x, float y, float halfWidth, string label, List<Rider> riders)
+        void DrawLandingHighlight(Rect view, float size, float x, float y, float halfWidth, string label, bool vip)
         {
             Vector2 left = GuiPoint(new Vector3(x - halfWidth, y + .1f, BeaconDepth), out _);
             Vector2 right = GuiPoint(new Vector3(x + halfWidth, y + .1f, BeaconDepth), out _);
@@ -253,14 +245,13 @@ namespace CrazyElevator.Managers
             float bounce = Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f)) * 8f * size;
             Vector2 arrowCentre = new Vector2(top.x, top.y - arrow * .5f - bounce);
             DrawBeaconArrow(arrowCentre, 90f, arrow);
-            Vector2 tagSize = BeaconTagSize(size, label, riders.Count);
+            Vector2 tagSize = BeaconTagSize(size, label);
             Rect tag = ClampInto(view, new Rect(top.x - tagSize.x * .5f,
                 arrowCentre.y - arrow * .5f - 4f * size - tagSize.y, tagSize.x, tagSize.y));
-            tag.position += ClearOfBeaconTags(tag, new Vector2(0f, -(tagSize.y + 4f * size)));
-            DrawBeaconTag(ClampInto(view, tag), size, label, riders);
+            DrawBeaconTag(ClampInto(view, tag), size, label, vip);
         }
 
-        void DrawEdgePointer(Rect view, float size, Vector2 target, bool inFront, string label, List<Rider> riders)
+        void DrawEdgePointer(Rect view, float size, Vector2 target, bool inFront, string label, bool vip)
         {
             // Keep clear of the status HUD and route banner above and the controls below.
             Rect safe = Inset(view, 40f * size, view.height * .16f, 40f * size, view.height * .13f);
@@ -272,71 +263,39 @@ namespace CrazyElevator.Managers
             Vector2 tip = safe.center + outward * Mathf.Min(1f, Mathf.Min(reachX, reachY));
 
             float arrow = 40f * size;
-            Vector2 tagSize = BeaconTagSize(size, label, riders.Count);
+            Vector2 tagSize = BeaconTagSize(size, label);
             float tagReach = Mathf.Abs(pointing.x) * tagSize.x * .5f + Mathf.Abs(pointing.y) * tagSize.y * .5f;
             Vector2 tagCentre = tip - pointing * (arrow + tagReach + 4f * size);
             Rect tag = new Rect(tagCentre - tagSize * .5f, tagSize);
             Rect arrowBox = new Rect(tip - pointing * arrow * .5f - Vector2.one * arrow * .5f, Vector2.one * arrow);
 
-            // Move arrow and tag together: out of the cabin preview, then off earlier tags along the edge.
+            // Move the arrow and tag together when the manifest is in the way.
             Vector2 shift = PassengerListClearance(Union(tag, arrowBox), 12f * size);
             tag.position += shift;
-            Vector2 step = Mathf.Abs(pointing.x) > Mathf.Abs(pointing.y)
-                ? new Vector2(0f, (tag.center.y > view.center.y ? -1f : 1f) * (tagSize.y + 6f * size))
-                : new Vector2((tag.center.x > view.center.x ? -1f : 1f) * (tagSize.x + 6f * size), 0f);
-            Vector2 slide = ClearOfBeaconTags(tag, step);
-            tag.position += slide;
-            shift += slide;
-
             Vector2 arrowCentre = arrowBox.center + shift;
             if (inFront && (target - arrowCentre).sqrMagnitude > 1f) pointing = (target - arrowCentre).normalized;
             float nudge = (.5f + .5f * Mathf.Sin(Time.unscaledTime * 7f)) * 6f * size;
             DrawBeaconArrow(arrowCentre + pointing * nudge, Mathf.Atan2(pointing.y, pointing.x) * Mathf.Rad2Deg, arrow);
-            DrawBeaconTag(ClampInto(view, tag), size, label, riders);
+            DrawBeaconTag(ClampInto(view, tag), size, label, vip);
         }
 
-        Vector2 BeaconTagSize(float size, string text, int riderCount)
+        Vector2 BeaconTagSize(float size, string text)
         {
             int previousSize = calloutNumber.fontSize;
             calloutNumber.fontSize = Mathf.RoundToInt(20f * size);
-            float textWidth = calloutNumber.CalcSize(new GUIContent(text)).x + 12f * size;
+            float width = calloutNumber.CalcSize(new GUIContent(text)).x + 20f * size;
             calloutNumber.fontSize = previousSize;
-            int icons = Mathf.Min(3, riderCount);
-            return new Vector2(10f * size + icons * 28f * size + textWidth, 36f * size);
+            return new Vector2(width, 34f * size);
         }
 
-        void DrawBeaconTag(Rect tag, float size, string text, List<Rider> riders)
+        void DrawBeaconTag(Rect tag, float size, string text, bool vip)
         {
-            beaconTags.Add(tag);
-            FramedPanel(tag, Gold, 3f);
-            float icon = 26f * size, cursor = tag.x + 6f * size;
-            for (int i = 0; i < Mathf.Min(3, riders.Count); i++)
-            {
-                Rider rider = riders[i];
-                DrawPassengerBadgeIcon(new Rect(cursor, tag.y + (tag.height - icon) * .5f, icon, icon),
-                    rider.Kind, Palette[rider.Color % Palette.Length]);
-                cursor += icon + 2f * size;
-            }
+            DrawDestinationPlate(tag, vip ? MenuPresentation.Paper : MenuPresentation.Teal, vip);
             int previousSize = calloutNumber.fontSize;
             calloutNumber.fontSize = Mathf.RoundToInt(20f * size);
-            OutlinedLabel(new Rect(cursor, tag.y, tag.xMax - cursor - 2f, tag.height), text, calloutNumber, Gold);
+            MenuPresentation.Label(tag, new GUIContent(text), calloutNumber,
+                vip ? MenuPresentation.Ink : MenuPresentation.Paper);
             calloutNumber.fontSize = previousSize;
-        }
-
-        // Slide a tag by `step` until it clears the tags already drawn this frame.
-        Vector2 ClearOfBeaconTags(Rect tag, Vector2 step)
-        {
-            Vector2 shift = Vector2.zero;
-            for (int attempt = 0; attempt < 6; attempt++)
-            {
-                Rect moved = new Rect(tag.position + shift, tag.size);
-                bool overlaps = false;
-                foreach (Rect used in beaconTags)
-                    if (moved.Overlaps(used)) { overlaps = true; break; }
-                if (!overlaps) break;
-                shift += step;
-            }
-            return shift;
         }
 
         // Keep destination cues clear of the passenger list.
@@ -489,7 +448,8 @@ namespace CrazyElevator.Managers
             if (view.destination != null)
             {
                 view.destination.gameObject.SetActive(true);
-                view.destination.text = rider.IsVip ? "VIP " + DestinationTag(rider) : DestinationTag(rider);
+                string destination = PassengerFloorLabel(rider);
+                view.destination.text = rider.IsVip ? "VIP " + destination : destination;
                 view.destination.transform.position = figure.Root.TransformPoint(new Vector3(0f, 2.65f, 0f));
                 Camera camera = exteriorCamera;
                 if (InPassengerStop && round.IsOffered(rider)) camera = eye;

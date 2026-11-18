@@ -18,7 +18,7 @@ namespace CrazyElevator.Managers
         readonly float[] boardingDoorOpenness = new float[3];
         readonly Dictionary<Renderer, MaterialPropertyBlock> doorFrameMaterials = new Dictionary<Renderer, MaterialPropertyBlock>();
         MaterialPropertyBlock doorFrameTint;
-        static readonly Color DoorFrameIdle = new Color32(88, 105, 124, 255);
+        readonly Dictionary<Material, Material> passengerFinishes = new Dictionary<Material, Material>();
 
         public bool HasChosenBoardingDoor => hasChosenBoardingDoor;
         public int OpenBoardingDoorCount
@@ -325,7 +325,6 @@ namespace CrazyElevator.Managers
         {
             if (frame == null) return;
             bool open = choosing && boardingDoorOpen[(int)door];
-            Color color = open ? Teal : DoorFrameIdle;
             if (doorFrameTint == null) doorFrameTint = new MaterialPropertyBlock();
             foreach (Renderer renderer in frame)
             {
@@ -337,6 +336,9 @@ namespace CrazyElevator.Managers
                     doorFrameMaterials.Add(renderer, original);
                 }
                 if (!choosing) { renderer.SetPropertyBlock(original); continue; }
+                Color trim = renderer.sharedMaterial != null ? renderer.sharedMaterial.color : MenuPresentation.Brass;
+                Color color = open ? Color.Lerp(trim, MenuPresentation.Paper, .35f)
+                    : Color.Lerp(MenuPresentation.Wall, trim, .62f);
                 renderer.GetPropertyBlock(doorFrameTint);
                 doorFrameTint.SetColor("_BaseColor", color);
                 doorFrameTint.SetColor("_Color", color);
@@ -1593,8 +1595,8 @@ namespace CrazyElevator.Managers
             public TextMesh Label;
             public MeshRenderer LabelRenderer;
         }
-        const float FloorMarkerPanelWidth = .44f;
-        const float FloorMarkerPanelDepth = .30f;
+        const float FloorMarkerPanelWidth = .57f;
+        const float FloorMarkerPanelDepth = .34f;
         readonly Dictionary<Rider, FloorMarker> floorMarkers = new Dictionary<Rider, FloorMarker>();
         readonly Dictionary<Rider, float> exiting = new Dictionary<Rider, float>();
         readonly Dictionary<Rider, Vector3> exitStarts = new Dictionary<Rider, Vector3>();
@@ -1657,6 +1659,7 @@ namespace CrazyElevator.Managers
             Material jacketMaterial = PassengerJacket(rider);
             foreach (Renderer jacket in view.jackets)
                 if (jacket != null) jacket.sharedMaterial = jacketMaterial;
+            view.ApplyMatteFinish(passengerFinishes);
             return view;
         }
 
@@ -1729,10 +1732,10 @@ namespace CrazyElevator.Managers
             root.SetParent(stage, false);
 
             Transform border = Shape("Destination floor marker border", PrimitiveType.Cube,
-                new Vector3(0, -.018f, 0), new Vector3(.54f, .022f, .40f), Cream, root);
+                new Vector3(0, -.018f, 0), new Vector3(.63f, .022f, .40f), MenuPresentation.Teal, root);
             Transform panel = Shape("Destination floor marker panel", PrimitiveType.Cube,
                 new Vector3(0, .002f, 0), new Vector3(FloorMarkerPanelWidth, .028f, FloorMarkerPanelDepth),
-                Ink, root);
+                rider.IsVip ? MenuPresentation.Brass : MenuPresentation.Wall, root);
             DisableCollider(border);
             DisableCollider(panel);
 
@@ -1749,7 +1752,7 @@ namespace CrazyElevator.Managers
             label.characterSize = .030f;
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;
-            label.color = Cream;
+            label.color = rider.IsVip ? MenuPresentation.Ink : MenuPresentation.Paper;
             GameTypography.Apply(label, true);
             MeshRenderer renderer = label.GetComponent<MeshRenderer>();
             if (renderer != null)
@@ -1774,7 +1777,7 @@ namespace CrazyElevator.Managers
 
             marker.Root.position = PassengerFloorMarkerAnchor(rider, figure);
             marker.Root.localRotation = Quaternion.identity;
-            string destination = DestinationTag(rider);
+            string destination = PassengerFloorLabel(rider);
             if (marker.Label.text != destination)
             {
                 marker.Label.text = destination;
@@ -1789,7 +1792,7 @@ namespace CrazyElevator.Managers
             bool selected = rider == selectedRider || rider == draggedRider;
             Color borderColor = selected
                 ? selectionTint == BoardingInvalid ? BoardingInvalid : BoardingValid
-                : Cream;
+                : rider.IsVip ? MenuPresentation.Brass : MenuPresentation.Teal;
             Renderer borderRenderer = marker.Border.GetComponent<Renderer>();
             if (borderRenderer != null) borderRenderer.sharedMaterial = Mat(borderColor);
         }

@@ -971,6 +971,14 @@ namespace CrazyElevator.Managers
             if (step == LateralTravelStep && tutorialReachedSide[index] && !tutorialRejoinedShaft[index])
                 DrawTutorialShaftMarker(view, tutorialActors[index]);
 
+            // Layout in a consistent coordinate space so a 4K screen does not
+            // make the fixed-size tutorial card appear half as large.
+            Rect pixelView = view;
+            float tutorialScale = Mathf.Clamp(Mathf.Min(view.height / 900f, view.width / 620f), .7f, 3f);
+            GUI.matrix = Matrix4x4.TRS(new Vector3(view.x, view.y, 0f), Quaternion.identity,
+                new Vector3(tutorialScale, tutorialScale, 1f));
+            view = new Rect(0f, 0f, view.width / tutorialScale, view.height / tutorialScale);
+
             const float margin = 14f;
             bool split = tutorialGame.Match != null && tutorialGame.Match.SplitScreen;
             float width = Mathf.Min(700f, view.width - margin * 2f);
@@ -1059,7 +1067,10 @@ namespace CrazyElevator.Managers
                 TutorialBody(step, index), body);
 
             if (step == 5 && tutorialTargetFloor[index] >= 0 && !stopping)
+            {
+                DrawTutorialFloorMarker(pixelView, card, index, tutorialScale);
                 DrawTutorialStopGuide(view, card, index);
+            }
 
             if (collisionPractice)
             {
@@ -1144,6 +1155,27 @@ namespace CrazyElevator.Managers
                 wordWrap = false, padding = new RectOffset(0, 0, 0, 0) };
             style.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
             GUI.Label(guide, arrow + "  " + target, style);
+        }
+
+        void DrawTutorialFloorMarker(Rect view, Rect card, int index, float scale)
+        {
+            if (Mathf.Abs(TutorialStopDirection(index)) == 2) return;
+            ElevatorManager actor = tutorialActors[index];
+            if (!actor.TryGetTutorialFloorScreenPosition(tutorialTargetFloor[index], out Vector3 point)) return;
+            float x = (point.x - view.x) / scale;
+            float y = (Screen.height - point.y - view.y) / scale;
+            // The guide below the card handles floors outside the visible area.
+            if (x < 60f || x > view.width / scale - 60f || y < card.yMax + 70f || y > view.height / scale - 45f) return;
+            float bounce = Mathf.Abs(Mathf.Sin(Time.unscaledTime * 4f)) * 5f;
+            Rect marker = new Rect(x - 55f, y - 62f - bounce, 110f, 42f);
+            MenuPresentation.HudPlate(marker, MenuPresentation.Brass);
+            var style = new GUIStyle(cardTitle) { fontSize = 23, alignment = TextAnchor.MiddleCenter,
+                wordWrap = false, padding = new RectOffset(0, 0, 0, 0) };
+            style.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
+            GUI.Label(marker, "FLOOR " + ElevatorRound.FloorNumber(tutorialTargetFloor[index]), style);
+            style.fontSize = 30;
+            style.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Brass);
+            GUI.Label(new Rect(x - 22f, marker.yMax - 1f, 44f, 34f), "↓", style);
         }
 
         void DrawPulsingTutorialKey(Rect rect, string key, Color accent)

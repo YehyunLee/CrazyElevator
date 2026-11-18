@@ -19,6 +19,14 @@ namespace CrazyElevator.Managers
         public bool TravelInputActive => Mathf.Abs(boostAxis) > .25f;
         public float TravelInputAxis => boostAxis;
         public bool TutorialStopInProgress => phase == Phase.Docking || phase == Phase.Opening;
+        public bool TryGetTutorialFloorScreenPosition(int floor, out Vector3 point)
+        {
+            point = Vector3.zero;
+            if (exteriorCamera == null || !exteriorCamera.enabled) return false;
+            point = exteriorCamera.WorldToScreenPoint(new Vector3(StopWorldX(CenterStop),
+                floor * ShaftFloorHeight + 3f, BeaconDepth));
+            return point.z > 0f;
+        }
         // 0 means stop now, +/-1 means move vertically, +/-2 means return to the shaft.
         public int TutorialStopNavigation(int target)
         {

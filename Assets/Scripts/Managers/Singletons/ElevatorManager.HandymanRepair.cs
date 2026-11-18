@@ -57,6 +57,7 @@ namespace CrazyElevator.Managers
             repairScale = figure.localScale;
 
             rustExposure = 0;
+            observedRustStage = 0;
             repairProgress = 0;
             UpdateImpairmentIndicators();
             ElevatorSays("Casey is cleaning the gears!", 1.6f);
