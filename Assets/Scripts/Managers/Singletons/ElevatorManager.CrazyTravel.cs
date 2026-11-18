@@ -122,6 +122,31 @@ namespace CrazyElevator.Managers
         public bool OnFloorRail => phase == Phase.Moving && railRiding;
         public bool OnMainVerticalTrack => MovingInShaft && !railRiding && OnMainShaft(RouteLateralX);
 
+        public bool TutorialOffMainShaft => MovingInShaft && !OnMainShaft(RouteLateralX);
+        public int TutorialShaftDirection => NearestShaftX(RouteLateralX) < RouteLateralX ? -1 : 1;
+        public int TutorialRejoinVerticalDirection => railFloor >= MaxTravelFloor ? -1 : 1;
+        public bool TutorialReadyToRejoin
+        {
+            get
+            {
+                if (!OnFloorRail) return false;
+                float delta = NearestShaftX(RouteLateralX) - RouteLateralX;
+                return Mathf.Abs(delta) <= 4f
+                    && (Mathf.Abs(delta) <= TrackCatchGrace
+                        || Mathf.Abs(railVelocity) < .05f || railVelocity * delta > 0f);
+            }
+        }
+
+        public bool TryGetTutorialShaftScreenPosition(out Vector3 screen)
+        {
+            screen = default;
+            if (exteriorCamera == null || !exteriorCamera.enabled || exteriorCar == null
+                || exteriorCar.parent == null) return false;
+            Vector3 local = CrazyTravelLocalPosition(NearestShaftX(RouteLateralX), travelFloor);
+            screen = exteriorCamera.WorldToScreenPoint(exteriorCar.parent.TransformPoint(local));
+            return screen.z > 0f;
+        }
+
         // The two centre shafts plus the lane-change space between them.
         bool OnMainShaft(float x) => x >= LeftShaftX - ShaftAlignReach && x <= RightShaftX + ShaftAlignReach;
 
@@ -199,8 +224,12 @@ namespace CrazyElevator.Managers
                 if (v != 0) pendingTrackDirection = v;
                 return;
             }
-            if (horizontalPressed) laneSwitchHeld = TrySwitchDuelLane(h);
-            if (h != 0 && !laneSwitchHeld) pendingRailDirection = h;
+            // The practice lesson demonstrates entering a floor rail; a lane
+            // change on the first press would hide that action from the learner.
+            bool sidewaysPractice = MenuManager.TutorialSidewaysPractice(this);
+            if (horizontalPressed && !sidewaysPractice)
+                laneSwitchHeld = TrySwitchDuelLane(h);
+            if (h != 0 && (!laneSwitchHeld || sidewaysPractice)) pendingRailDirection = h;
         }
 
         // In 1v1, A/D between the centre shafts still changes lane first.

@@ -1758,6 +1758,7 @@ namespace CrazyElevator.Managers
 
         void DrawMouseControls()
         {
+            if (MenuManager.TryGetTutorialStopFloor(this, out _)) return;
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
             GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);

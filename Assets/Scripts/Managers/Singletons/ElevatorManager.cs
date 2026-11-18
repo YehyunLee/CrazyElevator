@@ -1944,8 +1944,9 @@ namespace CrazyElevator.Managers
         float AdvanceCameraView(bool travelView, float dt)
         {
             float target = travelView ? 1f : 0f;
+            float transitionSeconds = MenuManager.TutorialActive ? .8f : CameraSwitchSeconds;
             cameraViewBlend = cameraViewReady
-                ? Mathf.MoveTowards(cameraViewBlend, target, Mathf.Max(0f, dt) / CameraSwitchSeconds) : target;
+                ? Mathf.MoveTowards(cameraViewBlend, target, Mathf.Max(0f, dt) / transitionSeconds) : target;
             cameraViewReady = true;
             return Mathf.SmoothStep(0f, 1f, cameraViewBlend);
         }
@@ -1974,12 +1975,16 @@ namespace CrazyElevator.Managers
         void DrawTravelView()
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
+            bool practicingShaftReturn = MenuManager.TutorialSidewaysPractice(this);
+            bool practicingTargetStop = MenuManager.TryGetTutorialStopFloor(this, out _);
             DrawSpeedLines();
-            DrawDestinationBeacons();
+            if (!practicingShaftReturn && !practicingTargetStop) DrawDestinationBeacons();
             DrawPassengerList();
-            DrawCrazyJunctionGuide();
+            if (!practicingShaftReturn && !practicingTargetStop) DrawCrazyJunctionGuide();
             DrawPassengerAbilityFeedback();
             DrawWorldEventCue();
+            // During this lesson the shaft marker is the only navigation cue.
+            if (practicingShaftReturn || practicingTargetStop) return;
             // While moving, the marker shows the stop a stop press would glide into.
             bool moving = phase == Phase.Moving;
             int floor = moving ? GlideStopFloor() : NearbyFloor;

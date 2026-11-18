@@ -243,6 +243,8 @@ namespace CrazyElevator.Managers
 
         void OnDestroy()
         {
+            foreach (Texture2D mask in tutorialSpotlightMasks)
+                if (mask != null) Destroy(mask);
             MenuPresentation.ReleaseTextureMaterial();
             ReleasePassengerPortraits();
             OnDestroyDirectoryPreview();

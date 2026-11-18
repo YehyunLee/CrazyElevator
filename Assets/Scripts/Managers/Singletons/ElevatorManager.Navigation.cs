@@ -199,10 +199,12 @@ namespace CrazyElevator.Managers
         void DrawDestinationBeacons()
         {
             if (round == null || exteriorCamera == null || exteriorCar == null) return;
+            bool filterTutorialTarget = MenuManager.TryGetTutorialStopFloor(this, out int tutorialTarget);
             foreach (List<Rider> group in beaconGroups.Values) group.Clear();
             foreach (Rider rider in round.Riders)
             {
                 if (!round.Owns(rider) || exiting.ContainsKey(rider)) continue;
+                if (filterTutorialTarget && rider.Destination != tutorialTarget) continue;
                 int key = rider.Destination * ElevatorRound.Stops + rider.DestinationStop;
                 if (!beaconGroups.TryGetValue(key, out List<Rider> group))
                     beaconGroups[key] = group = new List<Rider>();

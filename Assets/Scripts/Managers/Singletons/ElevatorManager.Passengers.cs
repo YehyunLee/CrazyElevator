@@ -21,6 +21,34 @@ namespace CrazyElevator.Managers
         static readonly Color DoorFrameIdle = new Color32(88, 105, 124, 255);
 
         public bool HasChosenBoardingDoor => hasChosenBoardingDoor;
+        public int OpenBoardingDoorCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (bool open in boardingDoorOpen)
+                    if (open) count++;
+                return count;
+            }
+        }
+
+        // The tutorial demonstrates a closed door that can serve a waiting
+        // rider. Input remains free: the player can choose any door.
+        public int TutorialSuggestedDoorSlot(int example)
+        {
+            if (round == null) return 1;
+            for (int pass = 0; pass < 2; pass++)
+                for (int offset = 0; offset < 3; offset++)
+                {
+                    int slot = (example + offset) % 3;
+                    BoardingDoor door = BoardingDoorAtScreenSlot(slot);
+                    if (boardingDoorOpen[(int)door]) continue;
+                    if (pass == 1) return slot;
+                    foreach (Rider rider in round.Riders)
+                        if (round.IsOffered(rider) && CanBoardThroughDoor(rider, door)) return slot;
+                }
+            return 1;
+        }
 
         public void OpenBoardingDoor(BoardingDoor door)
         {
