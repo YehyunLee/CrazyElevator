@@ -21,6 +21,7 @@ public static class ExtendedInteriorChecks
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
     static IEnumerator tutorialChecks;
     static int tutorialCheckFrame = -1;
+    static string tutorialCheckOutput = "Temp/TutorialChecks";
     static ExtendedInteriorChecks() { EditorApplication.update += Poll; }
     static object Get(Game game, string name)
     {
@@ -263,12 +264,13 @@ public static class ExtendedInteriorChecks
             catch (Exception error)
             {
                 tutorialExitCode = 1;
-                Directory.CreateDirectory("Temp/TutorialChecks");
-                File.WriteAllText("Temp/TutorialChecks/result.txt", "FAIL: " + error);
+                Directory.CreateDirectory(tutorialCheckOutput);
+                File.WriteAllText(tutorialCheckOutput + "/result.txt", "FAIL: " + error);
                 Debug.LogException(error);
             }
             (tutorialChecks as IDisposable)?.Dispose();
             tutorialChecks = null;
+            tutorialCheckOutput = "Temp/TutorialChecks";
             if (Application.isBatchMode) EditorApplication.Exit(tutorialExitCode);
             else EditorApplication.isPlaying = false;
             return;
@@ -279,6 +281,16 @@ public static class ExtendedInteriorChecks
         try { action = File.ReadAllText(request).Trim(); }
         catch (IOException) { return; }
         if (action.Length == 0) return;
+        if (action == "controller-assignments" && EditorApplication.timeSinceStartup
+            - SessionState.GetFloat("CrazyElevator.ControllerAssignmentCheckStart", 0f) > 180f)
+        {
+            File.Delete(request);
+            File.WriteAllText("Logs/ControllerAssignmentChecks/result.txt", "FAIL: Main did not finish starting within three minutes.");
+            Debug.LogError("Controller assignment checks timed out waiting for Main.");
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            else EditorApplication.isPlaying = false;
+            return;
+        }
         if (action == "authored-reference")
         {
             File.Delete(request);
@@ -368,6 +380,11 @@ public static class ExtendedInteriorChecks
         try
         {
             if (action == "zoe-ui") tutorialChecks = RunZoeUiChecks();
+            else if (action == "controller-assignments")
+            {
+                tutorialCheckOutput = "Logs/ControllerAssignmentChecks";
+                tutorialChecks = RunControllerAssignmentChecks();
+            }
             else if (action == "checks") { Run(game); RunBoost(game); }
             else if (action == "tutorial-run") tutorialChecks = RunTutorialPracticeChecks();
             else if (action == "boost-checks") RunBoost(game);
@@ -1754,6 +1771,227 @@ public static class ExtendedInteriorChecks
             if (oldKeyboard != null && oldKeyboard.added) oldKeyboard.MakeCurrent();
             if (oldGamepad != null && oldGamepad.added) oldGamepad.MakeCurrent();
         }
+    }
+
+    [MenuItem("Tools/Crazy Elevator/Check Persistent Controller Assignments")]
+    public static void CheckControllerAssignmentsBatch()
+    {
+        Require(!EditorApplication.isPlayingOrWillChangePlaymode,
+            "Stop Play Mode before running the controller assignment checks.");
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty,
+                "Save scene edits before running the controller assignment checks.");
+        EditorSceneManager.OpenScene(Scene);
+        Directory.CreateDirectory(Work);
+        Directory.CreateDirectory("Logs/ControllerAssignmentChecks");
+        File.WriteAllText("Logs/ControllerAssignmentChecks/result.txt", "RUNNING: waiting for Main to start.\n");
+        SessionState.SetFloat("CrazyElevator.ControllerAssignmentCheckStart", (float)EditorApplication.timeSinceStartup);
+        File.WriteAllText(Work + "/request.txt", "controller-assignments");
+    }
+
+    static IEnumerator RunControllerAssignmentChecks()
+    {
+        const string output = "Logs/ControllerAssignmentChecks";
+        string sceneBefore = File.ReadAllText(Scene);
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        var menu = CrazyElevator.Managers.MenuManager.Current;
+        Require(input && menu, "Controller checks need the authored Main input and menu managers.");
+        Type inputType = input.GetType(), menuType = menu.GetType();
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        var oldGamepads = new List<Gamepad>(Gamepad.all);
+        var oldGamepadEnabled = new List<bool>();
+        Gamepad oldCurrent = Gamepad.current;
+        object oldKeyboardHints = menuType.GetField("keyboardHints", statics).GetValue(null);
+        object oldHintsLoaded = menuType.GetField("inputHintsLoaded", statics).GetValue(null);
+        InputSettings originalSettings = InputSystem.settings;
+        HideFlags originalSettingsFlags = originalSettings.hideFlags;
+        // The Input System destroys replaced settings with exactly HideAndDontSave.
+        originalSettings.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        var testSettings = UnityEngine.Object.Instantiate(originalSettings);
+        testSettings.hideFlags = HideFlags.HideAndDontSave;
+        string result = null;
+        // Create B first to prove the active controller wins Player 1, rather than Gamepad.all[0].
+        Gamepad second = null, first = null, extra = null;
+        try
+        {
+            // EditorApplication.update can otherwise route virtual events into editor-only buffers in batch mode.
+            testSettings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            testSettings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            testSettings.updateMode = InputSettings.UpdateMode.ProcessEventsInDynamicUpdate;
+            InputSystem.settings = testSettings;
+            foreach (Gamepad pad in oldGamepads)
+            {
+                oldGamepadEnabled.Add(pad.enabled);
+                if (pad.enabled) InputSystem.DisableDevice(pad);
+            }
+            input.enabled = false;
+            input.ResetRegistrations();
+            for (int i = 0; i < 3; i++) yield return null;
+            second = InputSystem.AddDevice<Gamepad>("Controller assignment B");
+            first = InputSystem.AddDevice<Gamepad>("Controller assignment A");
+            extra = InputSystem.AddDevice<Gamepad>("Controller assignment C");
+            InputSystem.QueueStateEvent(first, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            inputType.GetMethod("DetectMenuInputSource", Flags).Invoke(input, null);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            var firstPlayer = PlayerInput.GetPlayerByIndex(0);
+            Require(firstPlayer && firstPlayer.playerIndex == 0 && PlayerUsesDevice(firstPlayer, first)
+                && input.HasControllerAssignment(0) && !input.HasControllerAssignment(1),
+                "The controller that first enters setup must own Player 1, regardless of device enumeration order. "
+                + "A=" + first.deviceId + ", stick=" + first.leftStick.ReadValue() + "; " + ControllerAssignmentDetails(input));
+
+            InputSystem.QueueStateEvent(first, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.right });
+            InputSystem.Update();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            var secondPlayer = PlayerInput.GetPlayerByIndex(1);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, true);
+            Require(firstPlayer.neverAutoSwitchControlSchemes && secondPlayer.neverAutoSwitchControlSchemes,
+                "Joined controllers must not automatically change control schemes or seats.");
+
+            InputSystem.RemoveDevice(first);
+            InputSystem.QueueStateEvent(extra, new GamepadState { leftStick = Vector2.left });
+            InputSystem.Update();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+            Require(!PlayerUsesDevice(firstPlayer, extra) && !PlayerUsesDevice(secondPlayer, extra),
+                "A third controller must not take a disconnected player's reserved seat.");
+            input.DeregisterSeat(0);
+            input.DeregisterSeat(1);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+            input.EndControllerJoining();
+
+            var previousInput = input;
+            CrazyElevator.Managers.MenuManager.ReturnToLobby();
+            for (int i = 0; i < 180 && ReferenceEquals(input, CrazyElevator.Managers.InputManager.Instance); i++)
+                yield return null;
+            input = CrazyElevator.Managers.InputManager.Instance;
+            menu = CrazyElevator.Managers.MenuManager.Current;
+            Require(input && menu && !ReferenceEquals(input, previousInput),
+                "Returning to the lobby must reload the authored Main managers.");
+            input.enabled = false;
+            input.BeginControllerJoining();
+            inputType.GetMethod("RegisterNextGamepad", Flags).Invoke(input, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+
+            previousInput = input;
+            CrazyElevator.Managers.MenuManager.ReturnToMainMenu();
+            for (int i = 0; i < 180 && ReferenceEquals(input, CrazyElevator.Managers.InputManager.Instance); i++)
+                yield return null;
+            input = CrazyElevator.Managers.InputManager.Instance;
+            menu = CrazyElevator.Managers.MenuManager.Current;
+            Require(input && menu && !ReferenceEquals(input, previousInput),
+                "Returning to the title must reload the authored Main managers.");
+            input.enabled = false;
+            // B acts first on the next setup, while A is still disconnected.
+            InputSystem.QueueStateEvent(extra, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            inputType.GetMethod("DetectMenuInputSource", Flags).Invoke(input, null);
+            menuType.GetMethod("BeginModeSelection", Flags).Invoke(menu, null);
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, false);
+
+            InputSystem.AddDevice(first);
+            InputSystem.QueueStateEvent(first, new GamepadState { leftStick = Vector2.down });
+            InputSystem.QueueStateEvent(second, new GamepadState { leftStick = Vector2.up });
+            InputSystem.Update();
+            CheckControllerAssignments(first, second, firstPlayer, secondPlayer, true);
+            var one = input.ReadForSeat(0, true);
+            var two = input.ReadForSeat(1, true);
+            Require(one.Move.y < -.9f && two.Move.y > .9f,
+                "Reconnecting A after B re-enters setup must restore A to Player 1 and keep B on Player 2.");
+
+            InputSystem.QueueStateEvent(first, new GamepadState());
+            InputSystem.QueueStateEvent(second, new GamepadState());
+            InputSystem.Update();
+            menuType.GetField("keyboardHints", statics).SetValue(null, false);
+            menuType.GetField("inputHintsLoaded", statics).SetValue(null, true);
+            menuType.GetField("transition", Flags).SetValue(menu, 10f);
+            input.enabled = true;
+            if (!Application.isBatchMode)
+            {
+                for (int i = 0; i < 12; i++) yield return null;
+                ScreenCapture.CaptureScreenshot(output + "/01-controller-lobby.png");
+                for (int i = 0; i < 8; i++) yield return null;
+                menuType.GetMethod("ResetControllerInstructionConfirmations", Flags).Invoke(menu, null);
+                menuType.GetField("showingControllerInstructions", Flags).SetValue(menu, true);
+                for (int i = 0; i < 8; i++) yield return null;
+                ScreenCapture.CaptureScreenshot(output + "/02-controller-controls.png");
+                for (int i = 0; i < 8; i++) yield return null;
+                Require(File.Exists(output + "/01-controller-lobby.png") && File.Exists(output + "/02-controller-controls.png"),
+                    "The interactive controller checks did not produce both screenshots.");
+            }
+            foreach (string name in new[] { "GameManager", "InputManager", "MenuManager", "SfxManager", "MusicManager" })
+                Require(GameObject.Find(name)?.GetComponent(name) != null,
+                    "Controller setup must preserve the authored manager " + name + ".");
+            Require(sceneBefore == File.ReadAllText(Scene), "Controller checks must not save or modify Main.");
+            result = "PASS: first active controller owns Player 1; independent PlayerInput indexes and devices; "
+                + "automatic switching disabled; disconnected seat reserved against a third controller and deregistration; "
+                + "real lobby/title scene reloads preserve both PlayerInput objects and seat IDs; "
+                + "opposite activation order does not swap seats; reconnect restores original inputs; "
+                + "named Main managers and saved scene unchanged; "
+                + (Application.isBatchMode ? "visual capture skipped in batch mode.\n" : "lobby and controls screenshots captured.\n");
+        }
+        finally
+        {
+            if (CrazyElevator.Managers.InputManager.Instance)
+                CrazyElevator.Managers.InputManager.Instance.ResetRegistrations();
+            foreach (Gamepad pad in new[] { first, second, extra })
+                if (pad != null && pad.added) InputSystem.RemoveDevice(pad);
+            InputSystem.settings = originalSettings;
+            originalSettings.hideFlags = originalSettingsFlags;
+            UnityEngine.Object.DestroyImmediate(testSettings);
+            for (int i = 0; i < oldGamepads.Count && i < oldGamepadEnabled.Count; i++)
+                if (oldGamepadEnabled[i] && oldGamepads[i].added) InputSystem.EnableDevice(oldGamepads[i]);
+            if (oldCurrent != null && oldCurrent.added) oldCurrent.MakeCurrent();
+            menuType.GetField("keyboardHints", statics).SetValue(null, oldKeyboardHints);
+            menuType.GetField("inputHintsLoaded", statics).SetValue(null, oldHintsLoaded);
+        }
+        File.WriteAllText(output + "/result.txt", result);
+        Debug.Log(result);
+    }
+
+    static bool PlayerUsesDevice(PlayerInput player, InputDevice expected)
+    {
+        if (player == null) return false;
+        foreach (InputDevice device in player.devices)
+            if (device == expected) return true;
+        return false;
+    }
+
+    static string ControllerAssignmentDetails(CrazyElevator.Managers.InputManager input)
+    {
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        Type type = input.GetType();
+        string details = "update=" + InputState.currentUpdateType + ", source="
+            + type.GetField("menuInputSource", Flags).GetValue(input) + ", menuPad="
+            + type.GetField("menuGamepad", Flags).GetValue(input) + ", keyboardSeat="
+            + type.GetField("keyboardMouseSeat", statics).GetValue(null) + ", ids="
+            + string.Join(",", (int[])type.GetField("joinedGamepadIds", statics).GetValue(null))
+            + ", players=" + PlayerInput.all.Count;
+        foreach (PlayerInput player in PlayerInput.all)
+        {
+            details += "; P" + player.playerIndex + " " + player.currentControlScheme + " devices=";
+            foreach (InputDevice device in player.devices) details += device.deviceId + ":" + device.name + ",";
+        }
+        return details;
+    }
+
+    static void CheckControllerAssignments(Gamepad first, Gamepad second,
+        PlayerInput firstPlayer, PlayerInput secondPlayer, bool firstConnected)
+    {
+        var input = CrazyElevator.Managers.InputManager.Instance;
+        var ids = (int[])input.GetType().GetField("joinedGamepadIds", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+        Require(input.HasControllerAssignment(0) && input.HasControllerAssignment(1)
+            && ids[0] == first.deviceId && ids[1] == second.deviceId,
+            "The first controller assignments must stay reserved for their original players.");
+        Require(PlayerInput.GetPlayerByIndex(0) == firstPlayer && PlayerInput.GetPlayerByIndex(1) == secondPlayer
+            && firstPlayer.playerIndex == 0 && secondPlayer.playerIndex == 1,
+            "Scene reloads must preserve both original PlayerInput objects and player indexes.");
+        Require(input.HasController(0) == firstConnected && input.HasController(1)
+            && PlayerUsesDevice(secondPlayer, second) && !PlayerUsesDevice(secondPlayer, first)
+            && (!firstConnected || PlayerUsesDevice(firstPlayer, first)),
+            "Disconnecting and reconnecting Player 1 must never move Player 2's controller.");
     }
 
     static void RunSingleDimensionMatch()

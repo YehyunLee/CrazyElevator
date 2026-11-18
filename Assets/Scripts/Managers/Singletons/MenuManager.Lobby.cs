@@ -18,6 +18,7 @@ namespace CrazyElevator.Managers
             new Dictionary<(PassengerView prefab, Color jacket), RenderTexture>();
         readonly int[] lobbyHeldDirection = new int[2];
         readonly int[] lobbyConfirmFrame = { -1, -1 };
+        readonly float[] lobbyControllerActivityUntil = new float[2];
 
         static void ResetLobbyCharacterSelection()
         {
@@ -36,6 +37,8 @@ namespace CrazyElevator.Managers
 
         void UpdateLobbyCharacterNavigation(int seat, float horizontal)
         {
+            if (InputManager.Instance != null && InputManager.Instance.ControllerActiveThisFrame(seat))
+                lobbyControllerActivityUntil[seat] = Time.unscaledTime + .8f;
             int direction = Mathf.Abs(horizontal) >= .55f ? (horizontal < 0f ? -1 : 1) : 0;
             if (direction != 0 && direction != lobbyHeldDirection[seat])
                 StepLobbyCharacter(seat, direction);
@@ -148,6 +151,10 @@ namespace CrazyElevator.Managers
             float descent = launch * launch * (ArtHeight + 150f);
             DrawLobbySeat(0, playerOneButton, playerOneReadyButton, MenuPresentation.Coral, descent);
             DrawLobbySeat(1, rivalButton, playerTwoReadyButton, MenuPresentation.Teal, descent);
+            if (!launching)
+                DrawLabel(new Rect(200f, 868f, 1300f, 42f),
+                    "MOVE YOUR STICK TO FIND YOUR PLAYER  ·  ASSIGNMENTS STAY BETWEEN MATCHES",
+                    caption, MenuPresentation.Paper);
 
             Rect versus = new Rect(814f, 497f, 72f, 58f);
             MenuPresentation.Plaque(versus, MenuPresentation.Brass, MenuPresentation.Metal);
@@ -175,13 +182,19 @@ namespace CrazyElevator.Managers
         {
             card.y += descent;
             confirm.y += descent;
-            MenuPresentation.Plaque(card, MenuPresentation.Brass, MenuPresentation.Metal, 10f);
+            bool identifying = !launching && Time.unscaledTime < lobbyControllerActivityUntil[seat];
+            MenuPresentation.Plaque(card, identifying ? accent : MenuPresentation.Brass,
+                MenuPresentation.Metal, 10f);
             MenuPresentation.Paint(Expand(card, -10f), LobbyShadow);
             MenuPresentation.Fasteners(card, MenuPresentation.Metal);
 
-            Rect seatPlate = new Rect(card.center.x - 124f, card.y - 25f, 248f, 54f);
+            float plateWidth = identifying ? 340f : 248f;
+            Rect seatPlate = new Rect(card.center.x - plateWidth * .5f, card.y - 25f, plateWidth, 54f);
             MenuPresentation.Plaque(seatPlate, accent, MenuPresentation.Metal);
-            DrawLabel(seatPlate, seat == 0 ? "PLAYER 1" : "PLAYER 2", readyLabelText, MenuPresentation.Ink);
+            string player = seat == 0 ? "PLAYER 1" : "PLAYER 2";
+            DrawLabel(seatPlate, identifying ? "THIS IS " + player : player,
+                readyLabelText, MenuPresentation.Ink);
+            DrawLobbyDeviceLabel(seat, card, accent);
 
             string character = LobbyCharacters[lobbyCharacterSelection[seat]];
             float portraitSize = Mathf.Max(1f, Mathf.Min(card.width - 156f, confirm.y - card.y - 106f));
@@ -206,10 +219,26 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(confirm, ready ? accent : MenuPresentation.Paper, MenuPresentation.Metal);
             DrawLabel(confirm, ready ? "READY" : "CONFIRM", readyLabelText, MenuPresentation.Ink);
             if (launching) return;
-            string key = KeyboardHintsEnabled ? (seat == 0 ? "C" : ".") : "A";
+            bool hasController = InputManager.Instance != null && InputManager.Instance.HasController(seat);
+            string key = hasController ? "A" : seat == 0 ? "C" : ".";
             DrawKeyHint(new Rect(confirm.xMax - 66f, confirm.center.y - 27f, 54f, 54f), key);
             if (GUI.Button(confirm, GUIContent.none, GUIStyle.none))
                 ConfirmLobbySeat(seat);
+        }
+
+        void DrawLobbyDeviceLabel(int seat, Rect card, Color accent)
+        {
+            InputManager input = InputManager.Instance;
+            bool assigned = input != null && input.HasControllerAssignment(seat);
+            bool connected = input != null && input.HasController(seat);
+            string label = assigned
+                ? input.ControllerLabelForSeat(seat) + (connected
+                    ? "  ·  PLAYER " + (seat + 1) : "  ·  DISCONNECTED")
+                : seat == 0 ? "KEYBOARD  ·  WASD + C" : "KEYBOARD  ·  ARROWS + .";
+            Rect device = new Rect(card.x + 20f, card.yMax + 18f, card.width - 40f, 46f);
+            MenuPresentation.Plaque(device, connected ? accent : MenuPresentation.Paper,
+                MenuPresentation.Metal, 4f);
+            DrawLabel(device, label, readyLabelText, MenuPresentation.Ink);
         }
 
         void DrawLobbyArrow(Rect rect, int seat, int direction, Color accent)
@@ -217,7 +246,7 @@ namespace CrazyElevator.Managers
             MenuPresentation.Plaque(rect, accent, MenuPresentation.Metal, 4f);
             if (direction < 0) DrawChoiceArrow(rect, false, MenuPresentation.Ink, ref leftChoiceArrowTexture);
             else DrawChoiceArrow(rect, true, MenuPresentation.Ink, ref rightChoiceArrowTexture);
-            if (KeyboardHintsEnabled)
+            if (InputManager.Instance == null || !InputManager.Instance.HasController(seat))
             {
                 string key = seat == 0 ? (direction < 0 ? "A" : "D") : (direction < 0 ? "←" : "→");
                 DrawKeyHint(new Rect(rect.center.x - 18f, rect.yMax + 6f, 36f, 32f), key);

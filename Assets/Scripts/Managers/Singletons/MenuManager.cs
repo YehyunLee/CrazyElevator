@@ -671,7 +671,7 @@ namespace CrazyElevator.Managers
             fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
             pauseOpen = false;
-            InputManager.Instance?.ResetRegistrations();
+            InputManager.Instance?.EndControllerJoining();
             SceneManager.LoadScene(DuelScene);
         }
 
@@ -690,7 +690,7 @@ namespace CrazyElevator.Managers
             playerTwoSelected = false;
             playerOneCpuOnLoad = false;
             InputManager.Instance?.ClearTutorialInputLocks();
-            InputManager.Instance?.ResetRegistrations();
+            InputManager.Instance?.EndControllerJoining();
             SceneManager.LoadScene(SinglePlayerScene);
         }
 
