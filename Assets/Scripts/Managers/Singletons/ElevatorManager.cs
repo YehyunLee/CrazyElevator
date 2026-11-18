@@ -1924,6 +1924,7 @@ namespace CrazyElevator.Managers
                 || GameManager.Instance != null && GameManager.Instance.IsAbilityIntroActor(this)
                 || Match != null && (Match.Paused || Match.DimensionRevealActive);
             float dt = cameraPaused ? 0f : Time.deltaTime;
+            UpdateHudScore(dt);
             bool initializeView = !cameraViewReady;
             float viewBlend = AdvanceCameraView(showingTravelView, dt);
             bool visible = Match == null || Match.IsVisibleSeat(Seat);

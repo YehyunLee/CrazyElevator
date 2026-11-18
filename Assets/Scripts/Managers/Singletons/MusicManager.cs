@@ -11,11 +11,15 @@ namespace CrazyElevator.Managers
         public AudioClip[] themes = System.Array.Empty<AudioClip>();
         public AudioClip tutorialTheme;
         [SerializeField, Range(0f, 1f)] float musicVolume = .32f;
+        readonly float[] spectrum = new float[1024];
         AudioSource music;
+        AudioClip sampledTheme;
+        float averageBass;
         bool muted;
         bool tutorialMode, themeWasPlayingBeforeTutorial;
         AudioClip themeBeforeTutorial;
         float themeTimeBeforeTutorial;
+        internal float BassPulse { get; private set; }
 
         void Awake()
         {
@@ -34,6 +38,39 @@ namespace CrazyElevator.Managers
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
+        }
+
+        void Update()
+        {
+            if (music == null || !music.isPlaying || music.mute || music.volume <= 0f)
+            {
+                BassPulse = 0f;
+                averageBass = 0f;
+                sampledTheme = null;
+                return;
+            }
+
+            if (sampledTheme != music.clip)
+            {
+                sampledTheme = music.clip;
+                averageBass = 0f;
+                BassPulse = 0f;
+            }
+
+            music.GetSpectrumData(spectrum, 0, FFTWindow.Hanning);
+            float binWidth = AudioSettings.outputSampleRate / (2f * spectrum.Length);
+            int firstBin = Mathf.Max(1, Mathf.CeilToInt(40f / binWidth));
+            int lastBin = Mathf.Min(spectrum.Length - 1, Mathf.FloorToInt(180f / binWidth));
+            float bass = 0f;
+            for (int i = firstBin; i <= lastBin; i++)
+                bass = Mathf.Max(bass, spectrum[i]);
+
+            // Compare each hit to the track's recent bass level so different mixes can drive the glow.
+            float dt = Time.unscaledDeltaTime;
+            averageBass = Mathf.Lerp(averageBass, bass, 1f - Mathf.Exp(-dt / .6f));
+            float hit = Mathf.Clamp01((bass - averageBass * 1.1f) / Mathf.Max(.001f, averageBass));
+            float response = hit > BassPulse ? .035f : .23f;
+            BassPulse = Mathf.Lerp(BassPulse, hit, 1f - Mathf.Exp(-dt / response));
         }
 
         public void PlayMusic(AudioClip clip = null)

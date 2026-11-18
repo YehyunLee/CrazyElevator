@@ -12,6 +12,12 @@ namespace CrazyElevator.Managers
     {
         // State owned by this part of the prototype.
         float scale, offsetX, offsetY;
+        ElevatorRound hudScoreRound;
+        float hudScoreValue, hudScoreStart, hudScoreProgress = 1f;
+        int hudScoreTarget;
+        internal int HudScore => hudScoreRound == round ? Mathf.RoundToInt(hudScoreValue) : Points;
+        internal float HudScorePulse => hudScoreTarget > hudScoreStart
+            ? Mathf.Sin(hudScoreProgress * Mathf.PI) : 0f;
         GUIStyle title, large, body, small, buttonStyle, inkBody, inkLarge, inkSmall, logo, stampWord,
             rewardPoints, rewardCaption, scoreFlightStyle, actionWord, calloutNumber, selectionArrow,
             encounterKicker, encounterTitle, encounterBody, encounterPrompt, encounterBadge,
@@ -1160,6 +1166,29 @@ namespace CrazyElevator.Managers
         // covering the world with separate status boxes.
         float SoloHudScale => MenuPresentation.GameplayHudScale(Screen.width, Screen.height);
 
+        void UpdateHudScore(float dt)
+        {
+            if (hudScoreRound != round || round.Finished || MenuManager.TutorialActive)
+            {
+                hudScoreRound = round;
+                hudScoreTarget = round.Score;
+                hudScoreValue = hudScoreStart = hudScoreTarget;
+                hudScoreProgress = 1f;
+                return;
+            }
+            if (round.Score != hudScoreTarget)
+            {
+                hudScoreStart = hudScoreValue;
+                hudScoreTarget = round.Score;
+                hudScoreProgress = 0f;
+            }
+            if (hudScoreProgress >= 1f) return;
+
+            float duration = hudScoreTarget > hudScoreStart ? .9f : .36f;
+            hudScoreProgress = Mathf.MoveTowards(hudScoreProgress, 1f, dt / duration);
+            hudScoreValue = Mathf.Lerp(hudScoreStart, hudScoreTarget, EaseOut(hudScoreProgress));
+        }
+
         Rect SoloHudRect()
         {
             float hudScale = SoloHudScale;
@@ -1177,8 +1206,10 @@ namespace CrazyElevator.Managers
             Rect time = new Rect(points.xMax, hud.y, hud.width * .28f, hud.height);
             DrawHudTile(floor, MenuPresentation.Paper, WorldName(round.Floor),
                 "F" + ElevatorRound.FloorNumber(round.Floor));
-            DrawHudTile(points, MenuPresentation.Brass, "SCORE", round.Score.ToString());
-            DrawHudTile(time, seconds <= 10 ? MenuPresentation.Coral : MenuPresentation.Paper, "TIME", clock);
+            DrawHudTile(points, MenuPresentation.Brass, "SCORE", HudScore.ToString(),
+                Mathf.RoundToInt(32f + 4f * HudScorePulse));
+            DrawHudTile(time, seconds <= GameManager.FinalCountdownSeconds ? MenuPresentation.Coral
+                : MenuPresentation.Paper, "TIME", clock);
         }
 
         readonly List<Rect> passengerBadgeObstacles = new List<Rect>();
@@ -1837,17 +1868,20 @@ namespace CrazyElevator.Managers
             return texture;
         }
 
-        void DrawHudTile(Rect area, Color color, string caption, string value)
+        void DrawHudTile(Rect area, Color color, string caption, string value, int valueSize = 24)
         {
             MenuPresentation.Paint(new Rect(area.x, area.y + 11f, 1f, area.height - 22f), MenuPresentation.Ink);
             Color oldSmall = inkSmall.normal.textColor;
             Color oldLarge = inkLarge.normal.textColor;
+            int oldSize = inkLarge.fontSize;
             inkSmall.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Paper);
             inkLarge.normal.textColor = MenuPresentation.DisplayColor(color);
             GUI.Label(new Rect(area.x + 10f, area.y + 5f, area.width - 15f, 18f), caption, inkSmall);
-            GUI.Label(new Rect(area.x + 10f, area.y + 21f, area.width - 15f, 30f), value, inkLarge);
+            inkLarge.fontSize = valueSize;
+            GUI.Label(new Rect(area.x + 10f, area.y + 19f, area.width - 15f, 37f), value, inkLarge);
             inkSmall.normal.textColor = oldSmall;
             inkLarge.normal.textColor = oldLarge;
+            inkLarge.fontSize = oldSize;
         }
 
         // Show remaining time and current score.
@@ -1860,7 +1894,7 @@ namespace CrazyElevator.Managers
             float x = Mathf.Max(12f, Screen.width / hudScale - 258f);
             AngularPanel(new Rect(x, 44, 246, 66), Teal);
             Label(new Rect(x + 12, 50, 222, 28), clock + " LEFT", large);
-            Label(new Rect(x + 12, 80, 222, 24), "SCORE  " + round.Score + "  |  HAPPY  " + round.Happy, small);
+            Label(new Rect(x + 12, 80, 222, 24), "SCORE  " + HudScore + "  |  HAPPY  " + round.Happy, small);
         }
 
         // Animate the opening title.
