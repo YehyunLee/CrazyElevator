@@ -1185,8 +1185,16 @@ namespace CrazyElevator.Managers
             if (hudScoreProgress >= 1f) return;
 
             float duration = hudScoreTarget > hudScoreStart ? .9f : .36f;
+            float previousProgress = hudScoreProgress;
             hudScoreProgress = Mathf.MoveTowards(hudScoreProgress, 1f, dt / duration);
             hudScoreValue = Mathf.Lerp(hudScoreStart, hudScoreTarget, EaseOut(hudScoreProgress));
+            if (dt > 0f && hudScoreTarget > hudScoreStart)
+            {
+                if (hudScoreProgress >= 1f && previousProgress < 1f)
+                    SfxManager.Instance?.PlaySfx(chime, .35f);
+                else if (Mathf.FloorToInt(previousProgress * 6f) < Mathf.FloorToInt(hudScoreProgress * 6f))
+                    SfxManager.Instance?.PlaySfx(click, .2f);
+            }
         }
 
         Rect SoloHudRect()
