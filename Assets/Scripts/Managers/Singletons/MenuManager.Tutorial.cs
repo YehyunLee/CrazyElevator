@@ -208,23 +208,25 @@ namespace CrazyElevator.Managers
 
         bool InitializeTutorialActors()
         {
-            if (tutorialGame != null && (tutorialActors[0] != null || tutorialActors[1] != null)) return true;
-            tutorialGame = GameManager.Instance != null ? GameManager.Instance.Player : null;
+            ElevatorManager availableGame = GameManager.Instance != null ? GameManager.Instance.Player : null;
+            if (availableGame != null) tutorialGame = availableGame;
             if (tutorialGame == null) return false;
             if (tutorialGame != null && tutorialGame.IsNpc && tutorialGame.Match != null
                 && tutorialGame.Match.Rival != null && !tutorialGame.Match.Rival.IsNpc)
                 tutorialGame = tutorialGame.Match.Rival;
             // Keep tutorial slots aligned with input seats. A CPU in seat 0
             // must not duplicate Player 2 into both slots or require its keys.
-            tutorialActors[0] = tutorialGame != null && tutorialGame.Match != null
+            ElevatorManager first = tutorialGame != null && tutorialGame.Match != null
                 ? (!tutorialGame.Match.player.IsNpc ? tutorialGame.Match.player : null)
                 : tutorialGame;
-            tutorialActors[1] = tutorialGame != null && tutorialGame.Match != null
+            ElevatorManager second = tutorialGame != null && tutorialGame.Match != null
                 && tutorialGame.Match.Rival != null && !tutorialGame.Match.Rival.IsNpc
                 ? tutorialGame.Match.Rival : null;
             for (int i = 0; i < tutorialActors.Length; i++)
             {
-                ElevatorManager actor = tutorialActors[i];
+                ElevatorManager actor = i == 0 ? first : second;
+                if (tutorialActors[i] == actor) continue;
+                tutorialActors[i] = actor;
                 tutorialSteps[i] = actor != null ? -1 : TutorialWaitingStep;
                 tutorialNextSteps[i] = -1;
                 tutorialCardMotions[i] = TutorialCardMotion.Hidden;
@@ -246,8 +248,13 @@ namespace CrazyElevator.Managers
                 tutorialRejoinedShaft[i] = false;
                 tutorialBoostCompleted[i] = false;
                 tutorialStopCompleted[i] = false;
+                if (actor != null && tutorialIntroReady)
+                {
+                    tutorialCardMotions[i] = TutorialCardMotion.Entering;
+                    tutorialCardMotionTimes[i] = 0f;
+                }
             }
-            if (showingControllerInstructions) PauseTutorialGame();
+            if (showingControllerInstructions && (first != null || second != null)) PauseTutorialGame();
             return true;
         }
 
