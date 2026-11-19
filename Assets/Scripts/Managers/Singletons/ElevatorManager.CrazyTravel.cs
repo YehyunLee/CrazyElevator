@@ -80,14 +80,15 @@ namespace CrazyElevator.Managers
         float teleportCooldown;
         float cameraFollowBlend;
         Vector2 cameraFraming;
+        Vector2 cameraFramingVelocity;
         Vector2 cameraLookAhead;
         Vector2 cameraRivalOffset;
         float cameraPullback;
         Vector2 cameraImpactDirection;
         float cameraImpactTime;
         int cameraFramingFrame = -10;
-        const float CameraFollowRate = 9f;
-        const float CameraSnapDistance = 80f;
+        const float CameraFollowSmoothTime = .22f;
+        const float CameraVerticalDeadZone = .35f;
         const float StopCameraHeight = 12f;
         const float StopCameraDepth = -40f;
         const float StopCameraFieldOfView = 68f;
@@ -464,17 +465,28 @@ namespace CrazyElevator.Managers
             cameraFollowBlend = Mathf.MoveTowards(cameraFollowBlend, followCar ? 1f : 0f, dt * 1.6f);
             float cameraX = Mathf.Lerp(ElevatorMatchType.ShaftCenterX, carLocal.x,
                 Mathf.Lerp(.18f, 1f, Mathf.SmoothStep(0f, 1f, cameraFollowBlend)));
-            // A short lag rounds off rail/track corners and turns a warp into a quick swoop.
+            // Ignore tiny vertical changes, then ease the camera through reversals and warps.
             Vector2 framing = new Vector2(cameraX, carLocal.y);
-            bool snap = cameraFramingFrame < 0
-                || (framing - cameraFraming).sqrMagnitude > CameraSnapDistance * CameraSnapDistance;
-            if (snap)
+            if (cameraFramingFrame < 0)
             {
+                cameraFraming = framing;
+                cameraFramingVelocity = Vector2.zero;
                 cameraLookAhead = cameraRivalOffset = Vector2.zero;
                 cameraPullback = cameraImpactTime = 0f;
             }
-            cameraFraming = snap ? framing
-                : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));
+            else
+            {
+                Vector2 followTarget = framing;
+                if (Mathf.Abs(framing.y - cameraFraming.y) < CameraVerticalDeadZone)
+                {
+                    followTarget.y = cameraFraming.y;
+                    cameraFramingVelocity.y = 0f;
+                }
+                float followTime = Mathf.Lerp(CameraFollowSmoothTime, .65f,
+                    Mathf.Clamp01((framing - cameraFraming).magnitude / 80f));
+                cameraFraming = Vector2.SmoothDamp(cameraFraming, followTarget,
+                    ref cameraFramingVelocity, followTime, Mathf.Infinity, dt);
+            }
             cameraFramingFrame = Time.frameCount;
             float stopViewBlend = phase == Phase.Docking
                 ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(phaseTime / Mathf.Max(.01f, dockingSeconds)))
