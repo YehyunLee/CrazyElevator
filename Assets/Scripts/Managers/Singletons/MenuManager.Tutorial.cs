@@ -968,26 +968,21 @@ namespace CrazyElevator.Managers
             Color previousColor = GUI.color;
             Color previousContent = GUI.contentColor;
             GUI.matrix = Matrix4x4.identity;
-            GUI.BeginGroup(pixelView);
             GUI.color = GUI.contentColor = Color.white;
             try
             {
+                float scale = MenuPresentation.GameplayHudScale(pixelView.width, pixelView.height);
+                var view = new Rect(0f, 0f, pixelView.width / scale, pixelView.height / scale);
+                if (step >= 0 && (step != TutorialWaitingStep || collision))
+                    DrawTutorialElevatorSpotlight(pixelView, index, step);
+                GUI.matrix = Matrix4x4.TRS(new Vector3(pixelView.x, pixelView.y, 0f),
+                    Quaternion.identity, Vector3.one * scale);
                 if (step < 0)
                 {
-                    DrawPracticeMessage(pixelView, index);
+                    DrawPracticeMessage(view, index);
                     return;
                 }
 
-                if (step != TutorialWaitingStep || collision)
-                {
-                    DrawTutorialElevatorSpotlight(pixelView, index, step);
-                    if (step == LateralTravelStep && TutorialLateralStopsReached(index) && !tutorialRejoinedShaft[index])
-                        DrawTutorialShaftMarker(pixelView, actor);
-                }
-
-                float scale = MenuPresentation.GameplayHudScale(pixelView.width, pixelView.height);
-                GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
-                var view = new Rect(0f, 0f, pixelView.width / scale, pixelView.height / scale);
                 if (step == TutorialWaitingStep && !collision)
                 {
                     bool twoPlayers = tutorialActors[0] != null && tutorialActors[1] != null;
@@ -1005,6 +1000,8 @@ namespace CrazyElevator.Managers
                 Rect card = new Rect((view.width - width) * .5f, top + offset, width, 136f);
                 Color accent = actor.Seat == 0 && tutorialGame.Match != null && tutorialGame.Match.SplitScreen
                     ? MenuPresentation.Coral : MenuPresentation.Teal;
+                if (step == LateralTravelStep && TutorialLateralStopsReached(index) && !tutorialRejoinedShaft[index])
+                    DrawTutorialShaftMarker(pixelView, actor, scale);
                 if (step == 5 && !actor.TutorialStopInProgress)
                 {
                     if (tutorialTargetFloor[index] >= 0 && !DrawTutorialFloorMarker(pixelView, card, index, scale)
@@ -1021,7 +1018,6 @@ namespace CrazyElevator.Managers
                 GUI.matrix = previousMatrix;
                 GUI.color = previousColor;
                 GUI.contentColor = previousContent;
-                GUI.EndGroup();
             }
         }
 
@@ -1209,11 +1205,12 @@ namespace CrazyElevator.Managers
             return true;
         }
 
-        void DrawTutorialShaftMarker(Rect view, ElevatorManager actor)
+        void DrawTutorialShaftMarker(Rect view, ElevatorManager actor, float scale)
         {
             if (!actor.TryGetTutorialShaftScreenPosition(out Vector3 target)) return;
-            float x = Mathf.Clamp(target.x - view.x, 60f, view.width - 60f);
-            float y = Mathf.Clamp(Screen.height - target.y - view.y - 76f, view.height * .42f, view.height - 90f);
+            float x = Mathf.Clamp((target.x - view.x) / scale, 60f, view.width / scale - 60f);
+            float y = Mathf.Clamp((Screen.height - target.y - view.y - 76f) / scale,
+                view.height / scale * .42f, view.height / scale - 90f);
             float pulse = .5f + .5f * Mathf.Sin(Time.unscaledTime * 5f);
             var background = new Rect(x - 52f, y, 104f, 55f);
             MenuPresentation.HudPlate(background, MenuPresentation.Brass);
@@ -1227,7 +1224,8 @@ namespace CrazyElevator.Managers
             GUI.Label(new Rect(background.x, background.y + 2f, background.width, 23f), "SHAFT", label);
             label.fontSize = 30;
             label.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Brass);
-            string arrow = target.x < view.x + 60f ? "←" : target.x > view.xMax - 60f ? "→" : "↓";
+            string arrow = target.x < view.x + 60f * scale ? "←"
+                : target.x > view.xMax - 60f * scale ? "→" : "↓";
             GUI.Label(new Rect(background.x, background.y + 21f + pulse * 3f, background.width, 30f), arrow, label);
         }
 
@@ -1253,7 +1251,7 @@ namespace CrazyElevator.Managers
             Texture2D mask = TutorialSpotlightMask(index, view, x, y, radius);
             Color previous = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, alpha);
-            GUI.DrawTexture(new Rect(0f, 0f, view.width, view.height), mask, ScaleMode.StretchToFill, true);
+            GUI.DrawTexture(new Rect(view.x, view.y, view.width, view.height), mask, ScaleMode.StretchToFill, true);
             GUI.color = previous;
         }
 
