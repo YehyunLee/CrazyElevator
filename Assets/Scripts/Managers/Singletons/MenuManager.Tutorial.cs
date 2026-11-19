@@ -726,10 +726,8 @@ namespace CrazyElevator.Managers
                 case TutorialFinalePhase.FadeToControls:
                     if (tutorialFinaleTimer >= TutorialHandoffFadeSeconds)
                     {
-                        tutorialFinalePhase = TutorialFinalePhase.Controls;
+                        tutorialFinalePhase = TutorialFinalePhase.Countdown;
                         tutorialFinaleTimer = 0f;
-                        ResetControllerInstructionConfirmations();
-                        showingControllerInstructions = true;
                     }
                     break;
                 case TutorialFinalePhase.Countdown:
