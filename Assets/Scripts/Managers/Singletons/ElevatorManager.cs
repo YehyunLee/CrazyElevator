@@ -66,7 +66,7 @@ namespace CrazyElevator.Managers
         Phase phase;
         float phaseTime, introTime, countdownTime, doors = 1;
         float sessionFadeAlpha;
-        bool paused, stampPlayed;
+        bool paused, stampPlayed, roundStartMusicTransitionRequested;
         int passengerExitCount, kickoutCount;
         int travelStartCount, floorStopCount;
         string notice = "Welcome aboard. Your shift starts when you are ready.";
@@ -88,10 +88,13 @@ namespace CrazyElevator.Managers
             ResetRouteLateral();
             phase = Phase.Intro;
             introTime = 0;
-            sessionFadeAlpha = 1f;
+            sessionFadeAlpha = MenuManager.TransitionScreenIsBlack ? 0f : 1f;
             doors = 0;
             SetDoors(doors);
             SyncFigures(0);
+            if (!MenuManager.TutorialWillStart && MusicManager.Instance != null
+                && MusicManager.Instance.IsWaitingForSceneMusic)
+                BeginPreRoundMusic();
         }
 
         // Advance gameplay each frame; menus and pause stop the clock.
@@ -150,6 +153,12 @@ namespace CrazyElevator.Managers
                 countdownTime += Time.unscaledDeltaTime;
                 if (countdownTime >= 3f)
                 {
+                    if (!roundStartMusicTransitionRequested)
+                    {
+                        roundStartMusicTransitionRequested = true;
+                        MusicManager.Instance?.PlayRoundTheme();
+                    }
+                    if (MusicManager.Instance != null && MusicManager.Instance.ThemeTransitionActive) return;
                     countdownTime = 0f;
                     phase = Phase.Boarding;
                     phaseTime = 0f;
@@ -300,9 +309,9 @@ namespace CrazyElevator.Managers
             ResetBoardingDoors();
             if (!MenuManager.TutorialActive) OpenAllBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
-            // The tutorial's intro reveal already provides the transition into
-            // practice. Starting the practice round must not cover its first card.
-            sessionFadeAlpha = MenuManager.TutorialActive ? 0f : 1f;
+            // MusicManager owns fresh-round handoffs, so a second local fade
+            // must not delay the reveal after the theme changes.
+            sessionFadeAlpha = 0f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
             SetFloorDisplayText(ElevatorRound.FloorNumber(round.Floor).ToString());
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
@@ -2159,14 +2168,23 @@ namespace CrazyElevator.Managers
             }
             if (currentBand == musicBand) return;
 
-            // Keep the current playback position when crossing world bands.
-            AudioClip next = currentBand == WorldBand.Candy
-                ? MusicManager.Instance.ThemeAt(1)
-                : currentBand == WorldBand.Water
-                    ? MusicManager.Instance.ThemeAt(2)
-                    : groove;
-            MusicManager.Instance.SetTheme(next);
+            MusicManager.Instance.SetTheme(ThemeForBand(currentBand));
             musicBand = currentBand;
+        }
+
+        AudioClip ThemeForBand(WorldBand band)
+        {
+            if (band == WorldBand.Candy) return MusicManager.Instance.ThemeAt(1) ?? groove;
+            if (band == WorldBand.Water) return MusicManager.Instance.ThemeAt(2) ?? groove;
+            return MusicManager.Instance.ThemeAt(0) ?? groove;
+        }
+
+        public void BeginPreRoundMusic()
+        {
+            if (IsNpc || round == null || MusicManager.Instance == null) return;
+            musicBand = BandForFloor(round.Floor);
+            musicBandKnown = true;
+            MusicManager.Instance.PlayPreRoundMusic(ThemeForBand(musicBand));
         }
 
         public void PlayEndingDrum() => SfxManager.Instance?.PlaySfx(endingDrumSfx);
@@ -2494,6 +2512,7 @@ namespace CrazyElevator.Managers
         // The world and passenger cards finish before this countdown begins.
         public void BeginRoundIntroduction()
         {
+            BeginPreRoundMusic();
             BeginRoundCountdown();
             BeginDimensionReveal(round != null && round.ActiveDimension >= 0 ? round.ActiveDimension : 0);
         }
@@ -2501,6 +2520,7 @@ namespace CrazyElevator.Managers
         public void BeginRoundCountdown()
         {
             countdownTime = 0f;
+            roundStartMusicTransitionRequested = false;
             phase = Phase.Countdown;
             phaseTime = 0f;
         }

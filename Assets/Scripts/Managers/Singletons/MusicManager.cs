@@ -1,4 +1,6 @@
+using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace CrazyElevator.Managers
 {
@@ -19,6 +21,13 @@ namespace CrazyElevator.Managers
         bool tutorialMode, themeWasPlayingBeforeTutorial;
         AudioClip themeBeforeTutorial;
         float themeTimeBeforeTutorial;
+        AudioClip preRoundTheme;
+        bool preRoundMusicActive;
+        bool fading, transitionPending, restartLobbyTrackAfterTransition;
+        bool transitionRevealPending;
+        float fadeStartVolume, fadeTargetVolume, fadeDuration, fadeElapsed;
+        Coroutine sceneTransition, themeTransition;
+        const float SceneFadeOutSeconds = .35f;
         internal float BassPulse { get; private set; }
 
         void Awake()
@@ -33,16 +42,20 @@ namespace CrazyElevator.Managers
             music.spatialBlend = 0f;
             music.ignoreListenerPause = true;
             music.volume = musicVolume;
+            SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
         void OnDestroy()
         {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             if (Instance == this) Instance = null;
         }
 
         void Update()
         {
-            if (music == null || !music.isPlaying || music.mute || music.volume <= 0f)
+            if (music == null) return;
+            UpdateFade();
+            if (!music.isPlaying || music.mute || music.volume <= 0f)
             {
                 BassPulse = 0f;
                 averageBass = 0f;
@@ -73,8 +86,132 @@ namespace CrazyElevator.Managers
             BassPulse = Mathf.Lerp(BassPulse, hit, 1f - Mathf.Exp(-dt / response));
         }
 
+        void UpdateFade()
+        {
+            if (!fading) return;
+            fadeElapsed += Time.unscaledDeltaTime;
+            float t = fadeDuration <= 0f ? 1f : Mathf.Clamp01(fadeElapsed / fadeDuration);
+            music.volume = Mathf.Lerp(fadeStartVolume, fadeTargetVolume, t);
+            if (t < 1f) return;
+            music.volume = fadeTargetVolume;
+            fading = false;
+        }
+
+        void FadeTo(float target, float seconds)
+        {
+            fadeStartVolume = music.volume;
+            fadeTargetVolume = target;
+            fadeDuration = seconds;
+            fadeElapsed = 0f;
+            fading = true;
+        }
+
+        public void LoadSceneWithFade(string sceneName, bool restartLobbyTrack)
+        {
+            if (music == null)
+            {
+                MenuManager.BeginTransitionToBlack(0f);
+                transitionRevealPending = true;
+                transitionPending = true;
+                restartLobbyTrackAfterTransition = restartLobbyTrack;
+                SceneManager.LoadScene(sceneName);
+                return;
+            }
+            if (sceneTransition != null) StopCoroutine(sceneTransition);
+            if (themeTransition != null) StopCoroutine(themeTransition);
+            themeTransition = null;
+            transitionPending = true;
+            restartLobbyTrackAfterTransition = restartLobbyTrack;
+            MenuManager.BeginTransitionToBlack(SceneFadeOutSeconds);
+            sceneTransition = StartCoroutine(LoadSceneAfterFade(sceneName));
+        }
+
+        IEnumerator LoadSceneAfterFade(string sceneName)
+        {
+            FadeTo(0f, SceneFadeOutSeconds);
+            while (fading || !MenuManager.TransitionScreenIsBlack) yield return null;
+            music.Pause();
+            music.volume = 0f;
+            transitionRevealPending = true;
+            sceneTransition = null;
+            SceneManager.LoadScene(sceneName);
+        }
+
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (!transitionPending) return;
+            transitionPending = false;
+            bool restartLobbyTrack = restartLobbyTrackAfterTransition;
+            if (restartLobbyTrackAfterTransition)
+            {
+                AudioClip lobbyTheme = ThemeAt(0);
+                if (music != null) PlayTrackAndReveal(lobbyTheme, true);
+                preRoundTheme = null;
+                preRoundMusicActive = false;
+                tutorialMode = false;
+                themeBeforeTutorial = null;
+                themeTimeBeforeTutorial = 0f;
+                themeWasPlayingBeforeTutorial = false;
+            }
+            restartLobbyTrackAfterTransition = false;
+            if (music == null)
+            {
+                transitionRevealPending = false;
+                MenuManager.RevealFromTransitionBlack();
+            }
+            else if (transitionRevealPending && !restartLobbyTrack)
+            {
+                music.Stop();
+                music.volume = 0f;
+                music.mute = muted;
+            }
+        }
+
+        void SwitchTrackWithBlackFade(AudioClip clip, bool restart)
+        {
+            if (music == null || clip == null) return;
+            if (transitionRevealPending)
+            {
+                PlayTrackAndReveal(clip, restart);
+                return;
+            }
+            if (themeTransition != null) StopCoroutine(themeTransition);
+            MenuManager.BeginTransitionToBlack(SceneFadeOutSeconds);
+            themeTransition = StartCoroutine(SwitchTrackAfterFade(clip, restart));
+        }
+
+        IEnumerator SwitchTrackAfterFade(AudioClip clip, bool restart)
+        {
+            FadeTo(0f, SceneFadeOutSeconds);
+            while (fading || !MenuManager.TransitionScreenIsBlack) yield return null;
+            PlayTrackAndReveal(clip, restart);
+            themeTransition = null;
+        }
+
+        void PlayTrackAndReveal(AudioClip clip, bool restart)
+        {
+            if (music != null)
+            {
+                music.Stop();
+                if (clip != null) music.clip = clip;
+                if (restart) music.time = 0f;
+                music.volume = musicVolume;
+                music.mute = muted;
+                if (music.clip != null) music.Play();
+            }
+            transitionRevealPending = false;
+            MenuManager.RevealFromTransitionBlack();
+        }
+
         public void PlayMusic(AudioClip clip = null)
         {
+            if (preRoundMusicActive && !tutorialMode)
+            {
+                if (clip != null) preRoundTheme = clip;
+                if (music.clip == tutorialTheme && !music.isPlaying) music.Play();
+                music.mute = muted;
+                return;
+            }
             if (tutorialMode)
             {
                 if (clip != null && clip != tutorialTheme)
@@ -98,6 +235,11 @@ namespace CrazyElevator.Managers
         public void SetTheme(AudioClip clip)
         {
             if (clip == null || music == null) return;
+            if (preRoundMusicActive && !tutorialMode)
+            {
+                preRoundTheme = clip;
+                return;
+            }
             if (tutorialMode)
             {
                 if (clip == themeBeforeTutorial) return;
@@ -121,21 +263,50 @@ namespace CrazyElevator.Managers
             music.mute = muted;
         }
 
+        public void PlayPreRoundMusic(AudioClip roundTheme)
+        {
+            if (music == null || roundTheme == null) return;
+            bool endingTutorial = tutorialMode;
+            tutorialMode = false;
+            themeBeforeTutorial = null;
+            themeTimeBeforeTutorial = 0f;
+            themeWasPlayingBeforeTutorial = false;
+            preRoundTheme = roundTheme;
+            preRoundMusicActive = true;
+            AudioClip introTheme = tutorialTheme != null ? tutorialTheme : roundTheme;
+            bool alreadyPlayingIntro = music.clip == introTheme && music.isPlaying && !endingTutorial;
+            if (transitionRevealPending)
+                PlayTrackAndReveal(introTheme, restart: true);
+            else if (!alreadyPlayingIntro)
+                SwitchTrackWithBlackFade(introTheme, restart: true);
+        }
+
+        public void PlayRoundTheme()
+        {
+            if (music == null || tutorialMode || !preRoundMusicActive) return;
+            AudioClip roundTheme = preRoundTheme;
+            preRoundTheme = null;
+            preRoundMusicActive = false;
+            if (roundTheme == null) return;
+            if (transitionRevealPending) PlayTrackAndReveal(roundTheme, restart: true);
+            else SwitchTrackWithBlackFade(roundTheme, restart: true);
+        }
+
         public void SetTutorialMode(bool enabled)
         {
             if (music == null || tutorialMode == enabled) return;
             tutorialMode = enabled;
             if (enabled)
             {
-                themeBeforeTutorial = music.clip;
-                themeTimeBeforeTutorial = music.clip != null ? music.time : 0f;
-                themeWasPlayingBeforeTutorial = music.isPlaying;
+                themeBeforeTutorial = preRoundMusicActive ? preRoundTheme : music.clip;
+                themeTimeBeforeTutorial = preRoundMusicActive ? 0f : music.clip != null ? music.time : 0f;
+                themeWasPlayingBeforeTutorial = preRoundMusicActive || music.isPlaying;
+                preRoundTheme = null;
+                preRoundMusicActive = false;
                 if (tutorialTheme != null)
                 {
-                    music.Stop();
-                    music.clip = tutorialTheme;
-                    music.time = 0f;
-                    music.Play();
+                    if (transitionRevealPending) PlayTrackAndReveal(tutorialTheme, restart: true);
+                    else SwitchTrackWithBlackFade(tutorialTheme, restart: true);
                 }
                 music.mute = muted;
                 return;
@@ -158,9 +329,14 @@ namespace CrazyElevator.Managers
         public AudioClip ThemeAt(int index)
             => themes != null && index >= 0 && index < themes.Length ? themes[index] : null;
 
+        public bool IsWaitingForSceneMusic => transitionRevealPending;
+        public bool ThemeTransitionActive => themeTransition != null;
+
         public void StopMusic()
         {
             if (music != null) music.Stop();
+            preRoundTheme = null;
+            preRoundMusicActive = false;
         }
 
         public void SetMuted(bool value)

@@ -98,6 +98,9 @@ namespace CrazyElevator.Managers
         static bool passengerOverlayOpen;
         static ElevatorManager overlayGame;
         float menuFadeAlpha;
+        const int TransitionFadeDepth = -32000;
+        static bool transitionFadeActive, transitionFadeHolding;
+        static float transitionFadeAlpha, transitionFadeElapsed, transitionFadeDuration;
         public static bool IsOpen { get; private set; }
         public static bool PauseOpen => pauseOpen;
         public static MenuManager Current { get; private set; }
@@ -196,6 +199,8 @@ namespace CrazyElevator.Managers
             fadeMenuOnLoad = false;
             tutorialOnLoad = false;
             TutorialActive = false;
+            transitionFadeActive = transitionFadeHolding = false;
+            transitionFadeAlpha = transitionFadeElapsed = transitionFadeDuration = 0f;
             overlayGame = null;
             inputHintsLoaded = false;
             tutorialModeLoaded = false;
@@ -262,6 +267,7 @@ namespace CrazyElevator.Managers
 
         void Update()
         {
+            UpdateTransitionFade();
             menuFadeAlpha = Mathf.MoveTowards(menuFadeAlpha, 0f,
                 Time.unscaledDeltaTime / MenuFadeSeconds);
             if (tutorialActive)
@@ -585,6 +591,43 @@ namespace CrazyElevator.Managers
         }
 
         public static void Open() => IsOpen = true;
+
+        public static void BeginTransitionToBlack(float duration)
+        {
+            if (transitionFadeActive || transitionFadeHolding) return;
+            transitionFadeElapsed = 0f;
+            transitionFadeDuration = Mathf.Max(0f, duration);
+            transitionFadeAlpha = 0f;
+            transitionFadeActive = true;
+            transitionFadeHolding = false;
+            if (transitionFadeDuration <= 0f)
+            {
+                transitionFadeAlpha = 1f;
+                transitionFadeActive = false;
+                transitionFadeHolding = true;
+            }
+        }
+
+        public static bool TransitionScreenIsBlack => transitionFadeAlpha >= .999f;
+
+        public static void RevealFromTransitionBlack()
+        {
+            transitionFadeActive = transitionFadeHolding = false;
+            transitionFadeAlpha = transitionFadeElapsed = transitionFadeDuration = 0f;
+        }
+
+        void UpdateTransitionFade()
+        {
+            if (!transitionFadeActive) return;
+            transitionFadeElapsed += Time.unscaledDeltaTime;
+            float progress = transitionFadeDuration <= 0f ? 1f
+                : Mathf.Clamp01(transitionFadeElapsed / transitionFadeDuration);
+            transitionFadeAlpha = Mathf.SmoothStep(0f, 1f, progress);
+            if (progress < 1f) return;
+            transitionFadeAlpha = 1f;
+            transitionFadeActive = false;
+            transitionFadeHolding = true;
+        }
         public static void Close()
         {
             IsOpen = false;
@@ -669,18 +712,16 @@ namespace CrazyElevator.Managers
 
         public static void ReturnToLobby()
         {
-            MusicManager.Instance?.SetTutorialMode(false);
             openLobbyOnLoad = true;
             fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
             pauseOpen = false;
             InputManager.Instance?.EndControllerJoining();
-            SceneManager.LoadScene(DuelScene);
+            LoadSceneWithMusicFade(DuelScene, true);
         }
 
         public static void ReturnToMainMenu()
         {
-            MusicManager.Instance?.SetTutorialMode(false);
             openLobbyOnLoad = false;
             fadeMenuOnLoad = true;
             showControllerInstructionsOnLoad = false;
@@ -694,7 +735,15 @@ namespace CrazyElevator.Managers
             playerOneCpuOnLoad = false;
             InputManager.Instance?.ClearTutorialInputLocks();
             InputManager.Instance?.EndControllerJoining();
-            SceneManager.LoadScene(SinglePlayerScene);
+            LoadSceneWithMusicFade(SinglePlayerScene, true);
+        }
+
+        static void LoadSceneWithMusicFade(string sceneName, bool restartLobbyTrack)
+        {
+            if (MusicManager.Instance != null)
+                MusicManager.Instance.LoadSceneWithFade(sceneName, restartLobbyTrack);
+            else
+                SceneManager.LoadScene(sceneName);
         }
 
         void OnGUI()
@@ -711,11 +760,13 @@ namespace CrazyElevator.Managers
                 else if (showingOptions) DrawOptionsScreen();
                 else DrawModeSelect();
                 DrawMenuFade();
+                DrawTransitionFade();
                 return;
             }
             if (pauseOpen)
             {
                 DrawPauseScreen();
+                DrawTransitionFade();
                 return;
             }
             if (tutorialActive)
@@ -725,6 +776,7 @@ namespace CrazyElevator.Managers
                     DrawControllerInstructions();
                     DrawTutorialSkip();
                     DrawMenuFade();
+                    DrawTransitionFade();
                     return;
                 }
                 if (tutorialFinalePhase != TutorialFinalePhase.None)
@@ -743,6 +795,7 @@ namespace CrazyElevator.Managers
                 }
                 DrawTutorialSkip();
                 if (!TutorialWaitingPanelActive) DrawMenuFade();
+                DrawTransitionFade();
                 return;
             }
             if (roundPassengerIntroductionActive)
@@ -751,10 +804,12 @@ namespace CrazyElevator.Managers
                 GUI.depth = TutorialOverlayDepth;
                 DrawRoundPassengerIntroduction();
                 GUI.depth = previousDepth;
+                DrawTransitionFade();
                 return;
             }
             if (passengerOverlayOpen) DrawPassengerOverlay();
             DrawMenuFade();
+            DrawTransitionFade();
         }
 
         void DrawMenuFade()
@@ -762,6 +817,21 @@ namespace CrazyElevator.Managers
             if (menuFadeAlpha <= .001f) return;
             Panel(new Rect(0, 0, Screen.width, Screen.height),
                 new Color(0f, 0f, 0f, menuFadeAlpha));
+        }
+
+        static void DrawTransitionFade()
+        {
+            if (transitionFadeAlpha <= .001f) return;
+            int previousDepth = GUI.depth;
+            Matrix4x4 previousMatrix = GUI.matrix;
+            GUI.depth = TransitionFadeDepth;
+            GUI.matrix = Matrix4x4.identity;
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, transitionFadeAlpha);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
+            GUI.matrix = previousMatrix;
+            GUI.depth = previousDepth;
         }
 
         void DrawTutorialSkip()
@@ -1432,7 +1502,7 @@ namespace CrazyElevator.Managers
             playerTwoHumanOnLoad = true;
             playerOneCpuOnLoad = false;
             InputManager.Instance?.EnableSplitKeyboard();
-            SceneManager.LoadScene(DuelScene);
+            LoadSceneWithMusicFade(DuelScene, false);
         }
 
         static void Panel(Rect rect, Color colour)

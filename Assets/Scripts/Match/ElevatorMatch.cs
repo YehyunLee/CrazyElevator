@@ -453,6 +453,7 @@ namespace CrazyElevator.Match
 
         void BeginRoundIntroduction()
         {
+            player.BeginPreRoundMusic();
             dimensionRevealIndex = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
             dimensionRoulette.Clear();
             var session = GameManager.Instance;

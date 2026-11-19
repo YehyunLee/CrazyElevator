@@ -744,7 +744,6 @@ namespace CrazyElevator.Managers
             tutorialGame?.FinishTutorialCharacter();
             tutorialActive = false;
             TutorialActive = false;
-            MusicManager.Instance?.SetTutorialMode(false);
             tutorialFinalePhase = TutorialFinalePhase.None;
             showingControllerInstructions = false;
             InputManager.Instance?.ClearTutorialInputLocks();
@@ -759,7 +758,6 @@ namespace CrazyElevator.Managers
                 if (tutorialGame.Match != null) tutorialGame.Match.StartMatch();
                 else tutorialGame.StartSoloRound();
             }
-            menuFadeAlpha = 1f;
             InputManager.Instance?.SetView(GameView.ControlElevator);
         }
 
