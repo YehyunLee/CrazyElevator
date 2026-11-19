@@ -217,6 +217,8 @@ namespace CrazyElevator.Managers
         static bool StopReachable(int floor, int stop)
         {
             if (stop == CenterStop) return true;
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            if (!TeleportersEnabledInRound(roundNumber)) return true;
             float low = Mathf.Min(ElevatorMatchType.ShaftCenterX, StopWorldX(stop)) - 1f;
             float high = Mathf.Max(ElevatorMatchType.ShaftCenterX, StopWorldX(stop)) + 1f;
             foreach (TeleportGate gate in TeleportGates)

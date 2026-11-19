@@ -131,6 +131,8 @@ namespace CrazyElevator.Managers
             return roundNumber == 3;
         }
 
+        public static bool TeleportersEnabledInRound(int roundNumber) => roundNumber == 3;
+
         public float RouteLateralX => routeLateralReady ? routeLateralX : DefaultRouteLateralX;
         float DefaultRouteLateralX => Match != null
             ? Match.LaneX(this)
@@ -439,7 +441,8 @@ namespace CrazyElevator.Managers
         }
 
         bool TeleportGateOpen(TeleportGate gate) =>
-            gate.Floor >= MinTravelFloor && gate.Floor <= MaxTravelFloor
+            TeleportersEnabledInRound(GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1)
+            && gate.Floor >= MinTravelFloor && gate.Floor <= MaxTravelFloor
             && gate.Target >= MinTravelFloor && gate.Target <= MaxTravelFloor;
 
         void CheckTeleportGates(float fromX, float toX)
@@ -730,7 +733,7 @@ namespace CrazyElevator.Managers
             RefreshTeleportGateViews(world);
         }
 
-        // Only gates whose entrance and exit both belong to this round can open.
+        // Teleporters unlock in round three, and both ends must stay in the active world.
         void RefreshTeleportGateViews(Transform world)
         {
             if (teleportGateViews == null)

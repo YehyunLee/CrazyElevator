@@ -2071,6 +2071,9 @@ public static class ExtendedInteriorChecks
         try
         {
             match.StartMatch();
+            Require(!Game.TeleportersEnabledInRound(1) && !Game.TeleportersEnabledInRound(2)
+                && Game.TeleportersEnabledInRound(3) && !Game.TeleportersEnabledInRound(4),
+                "Teleporters must be introduced only in round three.");
             for (int index = 0; index < CrazyElevator.Managers.GameManager.RoundsPerMatch; index++)
             {
                 int dimension = session.ActiveDimension;
@@ -2138,9 +2141,10 @@ public static class ExtendedInteriorChecks
                 {
                     bool open = (bool)typeof(Game).GetMethod("TeleportGateOpen", Flags)
                         .Invoke(player, new object[] { gate });
-                    Require(open == (gate.Floor >= first && gate.Floor <= last
+                    Require(open == (Game.TeleportersEnabledInRound(session.RoundNumber)
+                        && gate.Floor >= first && gate.Floor <= last
                         && gate.Target >= first && gate.Target <= last),
-                        "Teleport gates must never leave the active dimension.");
+                        "Teleport gates must only open in round three and stay inside the active dimension.");
                 }
                 foreach (Game car in new[] { player, rival })
                 {
