@@ -200,8 +200,17 @@ namespace CrazyElevator.Managers
             tutorialFinalePhase = TutorialFinalePhase.None;
             tutorialFinaleTimer = 0f;
             tutorialStoryIndex = 0;
-            tutorialGame = GameManager.Instance != null
-                ? GameManager.Instance.Player : FindAnyObjectByType<ElevatorManager>();
+            tutorialGame = null;
+            tutorialActors[0] = tutorialActors[1] = null;
+            InitializeTutorialActors();
+            InputManager.Instance?.SetView(GameView.ControlElevator);
+        }
+
+        bool InitializeTutorialActors()
+        {
+            if (tutorialGame != null && (tutorialActors[0] != null || tutorialActors[1] != null)) return true;
+            tutorialGame = GameManager.Instance != null ? GameManager.Instance.Player : null;
+            if (tutorialGame == null) return false;
             if (tutorialGame != null && tutorialGame.IsNpc && tutorialGame.Match != null
                 && tutorialGame.Match.Rival != null && !tutorialGame.Match.Rival.IsNpc)
                 tutorialGame = tutorialGame.Match.Rival;
@@ -239,13 +248,14 @@ namespace CrazyElevator.Managers
                 tutorialStopCompleted[i] = false;
             }
             if (showingControllerInstructions) PauseTutorialGame();
-            InputManager.Instance?.SetView(GameView.ControlElevator);
+            return true;
         }
 
         void UpdateTutorial()
         {
             if (!tutorialActive) return;
             TutorialActive = true;
+            if (!InitializeTutorialActors()) return;
             InputManager inputManager = InputManager.Instance;
             InputManager.SeatInput input = inputManager != null
                 ? inputManager.ReadForSeat(0, true) : default;
@@ -266,15 +276,6 @@ namespace CrazyElevator.Managers
                     DismissControllerInstructions();
                 return;
             }
-            if (tutorialGame == null)
-            {
-                tutorialGame = GameManager.Instance != null
-                    ? GameManager.Instance.Player : FindAnyObjectByType<ElevatorManager>();
-                if (tutorialGame == null) return;
-                for (int i = 0; i < tutorialActors.Length; i++)
-                    tutorialActors[i]?.SuppressEncounterCards();
-            }
-
             // Esc always exits, even when seat 0 plays on a controller and its
             // seat input ignores the keyboard.
             bool escape = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
