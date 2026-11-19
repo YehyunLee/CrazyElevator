@@ -12,7 +12,7 @@ namespace CrazyElevator.Managers
     public sealed partial class ElevatorManager
     {
         // Offsets from the shaft centre. Side stops sit on the side-track columns.
-        public static readonly float[] StopOffsets = { -25f, -14f, 0f, 14f, 25f };
+        public static readonly float[] StopOffsets = { -18f, -10f, 0f, 10f, 18f };
         const float StopReach = 1.5f;
         const int CenterStop = ElevatorRound.CenterStop;
         int dockingStop = CenterStop;

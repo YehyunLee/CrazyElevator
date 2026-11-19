@@ -122,7 +122,8 @@ public static class NewWorldsChecks
             GameManager.Instance.ResetMatchProgress();
             game.StartMatchShift();
             ElevatorRound round = Round(game);
-            Require(round.ActiveDimension == dimension && round.Floor == dimension * 8
+            Require(round.ActiveDimension == dimension
+                && round.Floor == dimension * ElevatorRound.FloorsPerDimension
                 && round.Riders.Exists(rider => rider.Kind == kinds[dimension]),
                 "An existing world lost its expected starting floor or passengers.");
             CheckWorldEvent(game, dimension);
@@ -137,7 +138,8 @@ public static class NewWorldsChecks
         ElevatorRound round = Round(game);
         Require(round != null && round.ActiveDimension == dimension, "Wrong active world for seat " + game.Seat);
         int min = dimension * ElevatorRound.FloorsPerDimension;
-        Require(round.MinFloor == min && round.MaxFloor == min + 7 && round.Floor == min,
+        int max = min + ElevatorRound.FloorsPerDimension - 1;
+        Require(round.MinFloor == min && round.MaxFloor == max && round.Floor == min,
             "Wrong floor range in world " + dimension);
         string[] kinds = dimension == 3 ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }
             : new[] { "ASTRONAUT", "ALIEN" };
@@ -145,10 +147,10 @@ public static class NewWorldsChecks
             "Forest or Space event prefab is not assigned in ElevatorScene.");
         foreach (string kind in kinds)
         {
-            for (int floor = min; floor <= min + 7; floor++)
+            for (int floor = min; floor <= max; floor++)
             {
                 SharedRider waiting = round.Riders.Find(r => r.Kind == kind && r.Origin == floor);
-                Require(waiting != null && waiting.Destination >= min && waiting.Destination <= min + 7
+                Require(waiting != null && waiting.Destination >= min && waiting.Destination <= max
                     && waiting.Destination != floor, "Missing or invalid " + kind + " on floor " + floor);
             }
             SharedRider rider = round.Riders.Find(r => r.Kind == kind && r.Origin == min);
@@ -175,7 +177,7 @@ public static class NewWorldsChecks
             "World backdrop missing from Main.");
         Require(backgrounds.Find(dimension == 3 ? "Forest Backdrop" : "Space Backdrop").gameObject.activeSelf,
             "Active world backdrop is hidden.");
-        foreach (int floor in new[] { min, min + 7 })
+        foreach (int floor in new[] { min, max })
         {
             Require(world.Find("World landing " + floor) != null && world.Find("Shaft landing " + floor) != null
                 && world.Find("Sign • " + floor) != null && world.Find("Floor Rails/Floor rail " + floor) != null,

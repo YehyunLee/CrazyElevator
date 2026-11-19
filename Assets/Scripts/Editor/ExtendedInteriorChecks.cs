@@ -3187,7 +3187,8 @@ public static class ExtendedInteriorChecks
         {
             Call(game, "Restart");
             var round = (Round)Get(game, "round");
-            var handyman = round.Riders.Find(r => r.Kind == "HANDYMAN" && r.Origin == 8);
+            var handyman = round.Riders.Find(r => r.Kind == "HANDYMAN"
+                && r.Origin == Round.FloorsPerDimension);
             Require(handyman != null && round.Riders.FindAll(r => r.Kind == "HANDYMAN").Count == 4
                 && round.Riders.TrueForAll(r => r.Kind != "HANDYMAN" || r.Origin >= 8),
                 "Handymen must wait only on underwater floors.");

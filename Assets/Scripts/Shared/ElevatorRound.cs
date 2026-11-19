@@ -89,7 +89,7 @@ namespace CrazyElevator.Shared
     // Pure game rules; independent of scene objects and frame rate.
     public sealed class ElevatorRound
     {
-        public const int Floors = 40;
+        public const int Floors = 30;
         public const int Dimensions = 5;
         public const int FloorsPerDimension = Floors / Dimensions;
         // Authored floor indices stay global; every world's signs start at 1.

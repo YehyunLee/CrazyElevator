@@ -5,7 +5,7 @@ One Main scene. Liam's singleton managers own the public design.
 
 Each round lasts **90 seconds** in one enabled world. The pool cycles through **office -> candy -> underwater -> mystical forest -> space**; the first player to win two rounds takes the best-of-three match. Higher delivery score wins the round; ties award no win and the next round still changes worlds. `GameManager` owns the round number and match wins. Both elevators reset their score, passengers, position, and clock together. Results offer **Next Round**, or **Play Again** after a match winner. Solo practice uses the same world rotation.
 
-Every world displays floors **1–8**, including the HUD, cabin indicator, world signs, passenger destinations, and teleport gates. `ElevatorRound.FloorNumber` converts the authored floor indices (0–39) for display; movement and delivery still use those original indices. Passenger destination generators stay inside the passenger's origin world and never request the origin floor.
+Every world displays floors **1–6**, including the HUD, cabin indicator, world signs, passenger destinations, and teleport gates. `ElevatorRound.FloorNumber` converts the authored floor indices (0–29) for display; movement and delivery still use those original indices. Passenger destination generators stay inside the passenger's origin world and never request the origin floor.
 
 Mystical Forest uses the art team's fairy, goblin and mushroom models; Space uses the astronaut and alien. These passengers currently follow ordinary boarding and scoring rules. The team's FBX backgrounds are saved in the exterior-world prefab, and the five passenger wrappers are editable prefabs in `Assets/Prefabs/Resources/`. Use the dimension pool menu to choose either world for the next round.
 

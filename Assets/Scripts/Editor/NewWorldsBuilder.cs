@@ -42,10 +42,12 @@ namespace CrazyElevator.EditorTools
                 Transform floorRails = Require(world, "Floor Rails");
                 Transform railTemplate = Require(floorRails, "Floor rail 0");
 
-                for (int floor = 24; floor < ElevatorRound.Floors; floor++)
+                int forestStart = ElevatorRound.FloorsPerDimension * 3;
+                int spaceStart = ElevatorRound.FloorsPerDimension * 4;
+                for (int floor = forestStart; floor < ElevatorRound.Floors; floor++)
                 {
-                    Material landing = floor < 32 ? forestFloor : spaceFloor;
-                    Material shaft = floor < 32 ? forestShaft : spaceShaft;
+                    Material landing = floor < spaceStart ? forestFloor : spaceFloor;
+                    Material shaft = floor < spaceStart ? forestShaft : spaceShaft;
                     CopyFloor(world, "World landing 0", "World landing " + floor, floor, landing);
                     CopyFloor(world, "World landing 0 right", "World landing " + floor + " right", floor, landing);
                     CopyFloor(world, "Shaft landing 0", "Shaft landing " + floor, floor, shaft);
@@ -104,7 +106,7 @@ namespace CrazyElevator.EditorTools
             for (int i = 0; i < Game.SideTracks.Length; i++)
             {
                 Game.SideTrack side = Game.SideTracks[i];
-                if (side.Top < 24) continue;
+                if (side.Top < ElevatorRound.FloorsPerDimension * 3) continue;
                 Transform source = templates.Find(t => Mathf.Abs(t.localPosition.x - side.X) < .01f) ?? templates[0];
                 var stale = new List<GameObject>();
                 foreach (Transform track in tracks)

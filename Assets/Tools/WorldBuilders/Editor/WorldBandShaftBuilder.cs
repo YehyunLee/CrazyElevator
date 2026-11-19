@@ -143,7 +143,7 @@ namespace CrazyElevator.Tools.WorldBuilders
             var candy = LoadBand("CandyBand");
             var water = LoadBand("WaterBand");
 
-            int stacks = Mathf.Max(1, FloorsPerDimension / FloorsPerBand);
+            int stacks = Mathf.Max(1, Mathf.CeilToInt(FloorsPerDimension / (float)FloorsPerBand));
             for (int i = 0; i < stacks; i++)
             {
                 int officeFloor = i * FloorsPerBand;
@@ -164,7 +164,8 @@ namespace CrazyElevator.Tools.WorldBuilders
         // Candy props sit ~11 units up each floor, on the next slab, and the sky puffs
         // hang just under the band top. On the top candy stack both would land on the
         // first water floor, so hide them there.
-        const string CandyTopFloor = "Candy Floor 7";
+        static string CandyTopFloor => "Candy Floor "
+            + (CandyBandAuthoredFloor + (FloorsPerDimension - 1) % FloorsPerBand);
         const float SpilloverHeight = 9f;
 
         static void HideSpillover(Transform band, string floorName)

@@ -1458,19 +1458,19 @@ MonoBehaviour:
   dimensions:
   - name: office
     firstFloor: 0
-    lastFloor: 7
+    lastFloor: 5
   - name: candyland
-    firstFloor: 8
-    lastFloor: 15
+    firstFloor: 6
+    lastFloor: 11
   - name: underwater
-    firstFloor: 16
-    lastFloor: 23
+    firstFloor: 12
+    lastFloor: 17
   - name: mystical forest
-    firstFloor: 24
-    lastFloor: 31
+    firstFloor: 18
+    lastFloor: 23
   - name: space
-    firstFloor: 32
-    lastFloor: 39
+    firstFloor: 24
+    lastFloor: 29
 --- !u!1 &910000011
 GameObject:
   m_ObjectHideFlags: 0

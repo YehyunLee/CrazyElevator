@@ -36,7 +36,7 @@ namespace CrazyElevator.Managers
         const float TrackGlideSpeed = 14f;
         const float ShaftAlignReach = 1.35f;
         // Floor rails span the whole building, both wings included.
-        public const float GroundTrackSpan = 29f;
+        public const float GroundTrackSpan = 22f;
         const float SoloShaftOffset = 2.5f;
         const float TeleportCooldownSeconds = .6f;
 
@@ -44,7 +44,7 @@ namespace CrazyElevator.Managers
         // segment starts. Each segment is SideTrackLength floors, then a gap.
         const int SideTrackLength = 3;
         const int SideTrackPeriod = 5;
-        static readonly float[] SideTrackOffsets = { -25f, -14f, 14f, 25f };
+        static readonly float[] SideTrackOffsets = { -19f, -10f, 10f, 19f };
         static readonly int[] SideTrackStarts = { 0, 2, 1, 3 };
         public static readonly SideTrack[] SideTracks = BuildSideTracks();
 
@@ -52,10 +52,11 @@ namespace CrazyElevator.Managers
         // have a gate at the same x, so a warp cannot chain into another warp.
         public static readonly TeleportGate[] TeleportGates =
         {
-            Gate(-20f, 1, 6), Gate(8f, 3, 7), Gate(20f, 4, 0),
-            Gate(-20f, 7, 11), Gate(20f, 9, 14), Gate(-8f, 12, 4),
-            Gate(-20f, 14, 19), Gate(8f, 17, 22), Gate(20f, 20, 10),
-            Gate(-20f, 23, 15)
+            Gate(-16f, 1, 4), Gate(6f, 3, 0),
+            Gate(-16f, 7, 10), Gate(6f, 9, 6),
+            Gate(16f, 13, 16), Gate(-6f, 15, 12),
+            Gate(6f, 19, 22), Gate(16f, 21, 18),
+            Gate(-16f, 25, 28), Gate(6f, 27, 24)
         };
 
         Transform crazyRouteMap;

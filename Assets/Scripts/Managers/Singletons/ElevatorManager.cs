@@ -54,14 +54,10 @@ namespace CrazyElevator.Managers
         static readonly string[] FloorNames =
         {
             "LOBBY", "MAIL ROOM", "GARDENS", "OFFICES", "STUDIO", "CAFETERIA",
-            "LIBRARY", "BOARDROOM", "CANDY LOBBY", "SUGAR HALL", "ARCADE",
-            "COTTON LOUNGE", "PARTY DECK", "BONBON BAR", "CANDY ROOF", "CLOUD DECK",
-            "REEF LOBBY", "KELP HALL", "CORAL LAB", "PRESSURE LOCK", "SUB BAY",
-            "TRENCH VIEW", "ATLANTIS", "DEEP DECK",
-            "FOREST ENTRY", "MOSS PATH", "MUSHROOM GROVE", "FAIRY GLEN", "ANCIENT ROOTS",
-            "MOONLIT WOODS", "ENCHANTED CLEARING", "TREE CANOPY",
-            "SPACEPORT", "ORBITAL DECK", "LUNAR BAY", "STAR STATION", "NEBULA LAB",
-            "ASTEROID BELT", "PLANET VIEW", "DEEP SPACE"
+            "CANDY LOBBY", "SUGAR HALL", "ARCADE", "COTTON LOUNGE", "PARTY DECK", "BONBON BAR",
+            "REEF LOBBY", "KELP HALL", "CORAL LAB", "PRESSURE LOCK", "SUB BAY", "TRENCH VIEW",
+            "FOREST ENTRY", "MOSS PATH", "MUSHROOM GROVE", "FAIRY GLEN", "ANCIENT ROOTS", "MOONLIT WOODS",
+            "SPACEPORT", "ORBITAL DECK", "LUNAR BAY", "STAR STATION", "NEBULA LAB", "ASTEROID BELT"
         };
         const float IntroRevealStart = 3.05f;
         const float IntroRevealDuration = 4.2f;
