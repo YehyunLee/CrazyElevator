@@ -991,7 +991,7 @@ namespace CrazyElevator.Managers
                 }
 
                 float width = Mathf.Min(570f, view.width - 32f);
-                float top = step == LateralTravelStep ? view.height - 193f : 24f;
+                float top = 24f;
                 float t = Mathf.Clamp01(tutorialCardMotionTimes[index] / TutorialCardTravelSeconds);
                 float entrance = Mathf.SmoothStep(0f, 1f, t);
                 TutorialCardMotion motion = tutorialCardMotions[index];
