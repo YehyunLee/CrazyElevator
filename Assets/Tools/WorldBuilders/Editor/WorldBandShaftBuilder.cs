@@ -157,6 +157,8 @@ namespace CrazyElevator.Tools.WorldBuilders
                 {
                     HideSpillover(bands.Find("Candy Band" + suffix), CandyTopFloor);
                     HideSpillover(bands.Find("Candy Band Right" + suffix), CandyTopFloor);
+                    HideWaterSpillover(bands.Find("Water Band" + suffix));
+                    HideWaterSpillover(bands.Find("Water Band Right" + suffix));
                 }
             }
         }
@@ -178,6 +180,14 @@ namespace CrazyElevator.Tools.WorldBuilders
                 foreach (Transform prop in t)
                     if (prop.localPosition.y > SpilloverHeight) prop.gameObject.SetActive(false);
             }
+        }
+
+        static void HideWaterSpillover(Transform band)
+        {
+            if (band == null) return;
+            foreach (Transform child in band.GetComponentsInChildren<Transform>(true))
+                if (child.name == "Reef Floor 10" || child.name == "Reef Floor 11")
+                    child.gameObject.SetActive(false);
         }
 
         static void PlaceBandPair(GameObject prefab, Transform parent, int floor, string name, string[] hidden)
@@ -266,15 +276,19 @@ namespace CrazyElevator.Tools.WorldBuilders
 
         static void StretchShaft(Transform root)
         {
-            float top = FloorY(Floors - 1) + 9f;
+            // The prefab preview and each runtime world stop exactly at floors 1 and 6.
+            float bottom = FloorY(0);
+            float top = FloorY(FloorsPerDimension - 1);
+            float height = top - bottom;
             foreach (string railName in new[] { "Left guide rail", "Right guide rail" })
             {
                 var rail = Required(root, railName);
-                rail.localScale = new Vector3(rail.localScale.x, top, rail.localScale.z);
-                rail.localPosition = new Vector3(rail.localPosition.x, top * .5f - .8f, rail.localPosition.z);
+                rail.localScale = new Vector3(rail.localScale.x, height, rail.localScale.z);
+                rail.localPosition = new Vector3(rail.localPosition.x, (bottom + top) * .5f, rail.localPosition.z);
             }
             var cap = Required(root, "Shaft top");
-            cap.localPosition = new Vector3(cap.localPosition.x, top - .3f, cap.localPosition.z);
+            cap.localPosition = new Vector3(cap.localPosition.x, top, cap.localPosition.z);
+            cap.gameObject.SetActive(false);
 
             Transform bottomCap = root.Find("Shaft bottom");
             if (bottomCap == null)
@@ -283,7 +297,7 @@ namespace CrazyElevator.Tools.WorldBuilders
                     new Vector3(8f, .4f, 2f), Girder);
                 bottomCap = Required(root, "Shaft bottom");
             }
-            bottomCap.localPosition = new Vector3(ShaftCenterX, -.8f, 0f);
+            bottomCap.localPosition = new Vector3(ShaftCenterX, bottom + .2f, 0f);
             bottomCap.localScale = new Vector3(8f, .4f, 2f);
             SetLayer(bottomCap, ExteriorLayer);
         }
@@ -340,8 +354,8 @@ namespace CrazyElevator.Tools.WorldBuilders
                 Game.SideTrack side = Game.SideTracks[i];
                 if (!columns.Contains(side.X)) columns.Add(side.X);
                 Material trim = columnTrims[columns.IndexOf(side.X) % columnTrims.Length];
-                float bottom = FloorY(side.Bottom) + CarLift - 1.45f;
-                float top = FloorY(side.Top) + CarLift + 1.45f;
+                float bottom = FloorY(side.Bottom);
+                float top = FloorY(side.Top);
                 var track = new GameObject($"Side track {i} F{side.Bottom}-F{side.Top}").transform;
                 track.SetParent(tracks, false);
                 track.localPosition = new Vector3(side.X, (bottom + top) * .5f, -.3f);
@@ -349,8 +363,8 @@ namespace CrazyElevator.Tools.WorldBuilders
                 Block(track, "Left post", new Vector3(-1.5f, 0f, 0f), new Vector3(.22f, height, .24f), trim);
                 Block(track, "Right post", new Vector3(1.5f, 0f, 0f), new Vector3(.22f, height, .24f), trim);
                 Block(track, "Spine", new Vector3(0f, 0f, .9f), new Vector3(.35f, height, .2f), Girder);
-                Block(track, "Top bumper", new Vector3(0f, height * .5f + .2f, 0f), new Vector3(3.4f, .4f, .7f), Girder);
-                Block(track, "Bottom bumper", new Vector3(0f, -height * .5f - .2f, 0f), new Vector3(3.4f, .4f, .7f), Girder);
+                Block(track, "Top bumper", new Vector3(0f, height * .5f - .2f, 0f), new Vector3(3.4f, .4f, .7f), Girder);
+                Block(track, "Bottom bumper", new Vector3(0f, -height * .5f + .2f, 0f), new Vector3(3.4f, .4f, .7f), Girder);
             }
         }
 

@@ -1587,6 +1587,28 @@ public static class ExtendedInteriorChecks
         Debug.Log(File.ReadAllText(Work + "/result.txt"));
     }
 
+    static void CheckShaftBounds(Game game, int minFloor, int maxFloor)
+    {
+        Transform world = game.sceneView.exteriorCar.parent;
+        float bottom = minFloor * Game.ShaftFloorHeight;
+        float top = maxFloor * Game.ShaftFloorHeight;
+        float railHeight = top - bottom;
+        float railCentre = (top + bottom) * .5f;
+        foreach (string name in new[] { "Left guide rail", "Right guide rail" })
+        {
+            Transform rail = world.Find(name);
+            Require(rail != null && Mathf.Abs(rail.localScale.y - railHeight) < .001f
+                && Mathf.Abs(rail.localPosition.y - railCentre) < .001f,
+                "The rendered guide rails must stop at this world's local floors 1 and 6.");
+        }
+
+        Transform bottomCap = world.Find("Shaft bottom");
+        Transform topCap = world.Find("Shaft top");
+        Require(bottomCap != null && topCap != null && !topCap.gameObject.activeSelf
+            && Mathf.Abs(bottomCap.localPosition.y - (bottom + .2f)) < .001f,
+            "Shafts must stop at floors 1 and 6 without an extra cap above floor 6.");
+    }
+
     static void RequireLocalFloorDisplay(Game game, string number, int litSegments)
     {
         var sign = (TextMesh)Get(game, "floorSign");
@@ -2064,6 +2086,7 @@ public static class ExtendedInteriorChecks
                     && round.TimeLeft == Round.Duration && other.TimeLeft == Round.Duration
                     && round.Score == 0 && other.Score == 0,
                     "Round " + (index + 1) + " did not reset both cars to the active world's first floor and full configured duration.");
+                CheckShaftBounds(player, first, last);
                 RequireLocalFloorDisplay(player, "1", 2);
                 RequireLocalFloorDisplay(rival, "1", 2);
                 Require(Game.DestinationTag(new SharedRider

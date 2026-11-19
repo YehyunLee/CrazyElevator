@@ -123,6 +123,14 @@ namespace CrazyElevator.Managers
             return tracks.ToArray();
         }
 
+        public static bool SideTrackEnabledInRound(int trackIndex, int roundNumber)
+        {
+            if (trackIndex < 0 || trackIndex >= SideTracks.Length) return false;
+            if (roundNumber == 2)
+                return Mathf.Abs(SideTracks[trackIndex].X - ElevatorMatchType.ShaftCenterX) <= 10.01f;
+            return roundNumber == 3;
+        }
+
         public float RouteLateralX => routeLateralReady ? routeLateralX : DefaultRouteLateralX;
         float DefaultRouteLateralX => Match != null
             ? Match.LaneX(this)
@@ -197,8 +205,11 @@ namespace CrazyElevator.Managers
             bottom = MinTravelFloor;
             top = MaxTravelFloor;
             if (OnMainShaft(x)) return true;
-            foreach (SideTrack track in SideTracks)
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            for (int i = 0; i < SideTracks.Length; i++)
             {
+                if (!SideTrackEnabledInRound(i, roundNumber)) continue;
+                SideTrack track = SideTracks[i];
                 if (Mathf.Abs(x - track.X) > ShaftAlignReach) continue;
                 if (floor < track.Bottom - .02f || floor > track.Top + .02f) continue;
                 trackX = track.X;
@@ -349,8 +360,13 @@ namespace CrazyElevator.Managers
             if (Mathf.Abs(toX - trackCatchBlockX) > ShaftAlignReach) trackCatchBlockX = float.NaN;
             bool found = TrackCatches(fromX, toX, LeftShaftX, MinTravelFloor, MaxTravelFloor)
                 || TrackCatches(fromX, toX, RightShaftX, MinTravelFloor, MaxTravelFloor);
-            foreach (SideTrack track in SideTracks)
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            for (int i = 0; i < SideTracks.Length; i++)
+            {
+                if (!SideTrackEnabledInRound(i, roundNumber)) continue;
+                SideTrack track = SideTracks[i];
                 found = found || TrackCatches(fromX, toX, track.X, track.Bottom, track.Top);
+            }
             if (found) LeaveRailOntoTrack();
         }
 

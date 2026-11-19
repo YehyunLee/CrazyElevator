@@ -25,6 +25,7 @@ namespace CrazyElevator.Managers
             if (WorldOwner != this || round == null || round.ActiveDimension < 0
                 || exteriorCar == null || exteriorCar.parent == null) return;
             Transform world = exteriorCar.parent;
+            SyncShaftBounds(world);
             Transform bands = world.Find("Shaft World Bands");
             if (bands != null)
                 foreach (Transform band in bands)
@@ -33,7 +34,11 @@ namespace CrazyElevator.Managers
                         : band.name.StartsWith("Candy Band") ? 1
                         : band.name.StartsWith("Water Band") ? 2 : -1;
                     if (dimension >= 0)
+                    {
+                        if (dimension == 2 && band.name.Contains("Tall"))
+                            HideWaterBandSpillover(band);
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
+                    }
                 }
 
             Transform backdrops = world.Find("World Backdrops");
@@ -56,8 +61,23 @@ namespace CrazyElevator.Managers
                     if (TryAuthoredFloorNumber(rail.name, "Floor rail ", out int floor))
                         rail.gameObject.SetActive(round.ContainsFloor(floor));
 
+            Transform sideTracks = world.Find("Side Tracks");
+            if (sideTracks != null)
+            {
+                int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+                foreach (Transform trackView in sideTracks)
+                {
+                    if (!TryAuthoredFloorNumber(trackView.name, "Side track ", out int trackIndex)
+                        || trackIndex < 0 || trackIndex >= SideTracks.Length) continue;
+                    SideTrack track = SideTracks[trackIndex];
+                    bool inWorld = track.Bottom < round.MaxFloor && track.Top > round.MinFloor;
+                    if (inWorld) FitSideTrackToWorld(trackView, track, round.MinFloor, round.MaxFloor);
+                    trackView.gameObject.SetActive(inWorld && SideTrackEnabledInRound(trackIndex, roundNumber));
+                }
+            }
+
             // Landings and floor signs are direct children of the world root.
-            // Full-height guide rails and the elevator itself stay in place.
+            // Guide rails and side tracks have already been clipped to these floors.
             foreach (Transform part in world)
             {
                 if (TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out int signFloor))
@@ -69,6 +89,96 @@ namespace CrazyElevator.Managers
                     || TryAuthoredFloorNumber(part.name, "Shaft landing ", out floor)
                     || TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out floor))
                     part.gameObject.SetActive(round.ContainsFloor(floor));
+            }
+        }
+
+        void SyncShaftBounds(Transform world)
+        {
+            // Stop exactly at the first and sixth floor levels. The former
+            // extra margins exposed the shaft into floors outside this round.
+            float bottom = round.MinFloor * ShaftFloorHeight;
+            float top = round.MaxFloor * ShaftFloorHeight;
+            float railHeight = top - bottom;
+            float railCentre = (top + bottom) * .5f;
+
+            foreach (string name in new[] { "Left guide rail", "Right guide rail" })
+            {
+                Transform rail = world.Find(name);
+                if (rail == null) continue;
+                Vector3 scale = rail.localScale;
+                scale.y = railHeight;
+                rail.localScale = scale;
+                Vector3 position = rail.localPosition;
+                position.y = railCentre;
+                rail.localPosition = position;
+            }
+
+            Transform bottomCap = world.Find("Shaft bottom");
+            if (bottomCap != null)
+            {
+                Vector3 position = bottomCap.localPosition;
+                // Keep its lower face flush with the bottom floor.
+                position.y = bottom + .2f;
+                bottomCap.localPosition = position;
+            }
+
+            Transform topCap = world.Find("Shaft top");
+            if (topCap != null)
+                topCap.gameObject.SetActive(false);
+        }
+
+        static void HideWaterBandSpillover(Transform band)
+        {
+            // The final four-floor water prefab stack only has room for floors
+            // 5 and 6. Its last two authored reef floors would appear above 6.
+            foreach (Transform child in band.GetComponentsInChildren<Transform>(true))
+                if (child.name == "Reef Floor 10" || child.name == "Reef Floor 11")
+                    child.gameObject.SetActive(false);
+        }
+
+        static void FitSideTrackToWorld(Transform view, SideTrack track, int minFloor, int maxFloor)
+        {
+            int bottomFloor = Mathf.Max(track.Bottom, minFloor);
+            int topFloor = Mathf.Min(track.Top, maxFloor);
+            float bottom = bottomFloor * ShaftFloorHeight;
+            float top = topFloor * ShaftFloorHeight;
+            float height = top - bottom;
+            Vector3 position = view.localPosition;
+            position.y = (bottom + top) * .5f;
+            view.localPosition = position;
+
+            foreach (string name in new[] { "Left post", "Right post", "Spine" })
+            {
+                Transform post = view.Find(name);
+                if (post == null) continue;
+                Vector3 scale = post.localScale;
+                scale.y = height;
+                post.localScale = scale;
+            }
+
+            Transform topBumper = view.Find("Top bumper");
+            if (topBumper != null)
+            {
+                // A clipped endpoint is the level boundary; don't leave a gray
+                // bumper projecting above the sixth floor.
+                topBumper.gameObject.SetActive(track.Top < maxFloor);
+                if (topBumper.gameObject.activeSelf)
+                {
+                    Vector3 bumperPosition = topBumper.localPosition;
+                    bumperPosition.y = height * .5f - .2f;
+                    topBumper.localPosition = bumperPosition;
+                }
+            }
+            Transform bottomBumper = view.Find("Bottom bumper");
+            if (bottomBumper != null)
+            {
+                bottomBumper.gameObject.SetActive(track.Bottom > minFloor);
+                if (bottomBumper.gameObject.activeSelf)
+                {
+                    Vector3 bumperPosition = bottomBumper.localPosition;
+                    bumperPosition.y = -height * .5f + .2f;
+                    bottomBumper.localPosition = bumperPosition;
+                }
             }
         }
 

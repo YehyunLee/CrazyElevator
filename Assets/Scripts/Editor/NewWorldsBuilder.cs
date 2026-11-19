@@ -64,15 +64,18 @@ namespace CrazyElevator.EditorTools
                 }
 
                 ExtendSideTracks(Require(world, "Side Tracks"));
-                float top = (ElevatorRound.Floors - 1) * FloorHeight + 9f;
+                float bottom = 0f;
+                float top = (ElevatorRound.FloorsPerDimension - 1) * FloorHeight;
+                float height = top - bottom;
                 foreach (string name in new[] { "Left guide rail", "Right guide rail" })
                 {
                     Transform rail = Require(world, name);
-                    rail.localScale = new Vector3(rail.localScale.x, top, rail.localScale.z);
-                    rail.localPosition = new Vector3(rail.localPosition.x, top * .5f - .8f, rail.localPosition.z);
+                    rail.localScale = new Vector3(rail.localScale.x, height, rail.localScale.z);
+                    rail.localPosition = new Vector3(rail.localPosition.x, (top + bottom) * .5f, rail.localPosition.z);
                 }
                 Transform cap = Require(world, "Shaft top");
-                cap.localPosition = new Vector3(cap.localPosition.x, top - .3f, cap.localPosition.z);
+                cap.localPosition = new Vector3(cap.localPosition.x, top, cap.localPosition.z);
+                cap.gameObject.SetActive(false);
                 Transform backdrops = Require(world, "World Backdrops");
                 PlaceBackdrop(backdrops, "BG_fairy_world", "Forest Backdrop", 3);
                 PlaceBackdrop(backdrops, "BG_space_world", "Space Backdrop", 4);
@@ -115,8 +118,8 @@ namespace CrazyElevator.EditorTools
                 foreach (GameObject old in stale) Object.DestroyImmediate(old);
                 Transform copy = Object.Instantiate(source, tracks, false);
                 copy.name = $"Side track {i} F{side.Bottom}-F{side.Top}";
-                float bottom = side.Bottom * FloorHeight + 1.4f - 1.45f;
-                float top = side.Top * FloorHeight + 1.4f + 1.45f;
+                float bottom = side.Bottom * FloorHeight;
+                float top = side.Top * FloorHeight;
                 float height = top - bottom;
                 copy.localPosition = new Vector3(side.X, (bottom + top) * .5f, source.localPosition.z);
                 foreach (string name in new[] { "Left post", "Right post", "Spine" })
@@ -125,8 +128,8 @@ namespace CrazyElevator.EditorTools
                     part.localScale = new Vector3(part.localScale.x, height, part.localScale.z);
                 }
                 Transform upper = Require(copy, "Top bumper"), lower = Require(copy, "Bottom bumper");
-                upper.localPosition = new Vector3(upper.localPosition.x, height * .5f + .2f, upper.localPosition.z);
-                lower.localPosition = new Vector3(lower.localPosition.x, -height * .5f - .2f, lower.localPosition.z);
+                upper.localPosition = new Vector3(upper.localPosition.x, height * .5f - .2f, upper.localPosition.z);
+                lower.localPosition = new Vector3(lower.localPosition.x, -height * .5f + .2f, lower.localPosition.z);
             }
         }
 
