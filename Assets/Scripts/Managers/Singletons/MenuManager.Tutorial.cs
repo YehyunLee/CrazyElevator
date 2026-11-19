@@ -960,8 +960,8 @@ namespace CrazyElevator.Managers
             Matrix4x4 previousMatrix = GUI.matrix;
             Color previousColor = GUI.color;
             Color previousContent = GUI.contentColor;
-            GUI.BeginGroup(pixelView);
             GUI.matrix = Matrix4x4.identity;
+            GUI.BeginGroup(pixelView);
             GUI.color = GUI.contentColor = Color.white;
             try
             {
