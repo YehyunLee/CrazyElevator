@@ -2073,10 +2073,9 @@ namespace CrazyElevator.Managers
                     if (p != draggedRider && !AnimatePersonaBoard(p, figure, dt)
                         && !AnimateHandymanRepair(p, figure, dt))
                     {
-                        // Mom keeps facing the player so the carried baby and
-                        // crying/calming effects remain readable after boarding.
-                        float facing = p.HasFeature(PassengerFeature.CryingBaby) ? 180f
-                            : p.Boarded ? 0f : p.PickupDoor == BoardingDoor.Left ? 90f
+                        // Onboard riders face the camera; Mom's baby stays visible too.
+                        float facing = p.Boarded || p.HasFeature(PassengerFeature.CryingBaby) ? 180f
+                            : p.PickupDoor == BoardingDoor.Left ? 90f
                             : p.PickupDoor == BoardingDoor.Right ? -90f : 180f;
                         MoveIdleFigure(p, figure, RiderPosition(p), facing, dt);
                         idle = true;
