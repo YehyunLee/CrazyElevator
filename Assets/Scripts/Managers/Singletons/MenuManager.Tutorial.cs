@@ -306,6 +306,7 @@ namespace CrazyElevator.Managers
                 if (tutorialGame.Match != null && !tutorialGame.Match.Running)
                     tutorialGame.Match.StartMatch();
                 PauseTutorialGame();
+                menuFadeAlpha = 0f;
                 tutorialIntroReady = true;
                 for (int i = 0; i < tutorialActors.Length; i++)
                 {
