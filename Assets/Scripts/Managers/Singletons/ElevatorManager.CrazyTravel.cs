@@ -88,6 +88,9 @@ namespace CrazyElevator.Managers
         int cameraFramingFrame = -10;
         const float CameraFollowRate = 9f;
         const float CameraSnapDistance = 80f;
+        const float StopCameraHeight = 12f;
+        const float StopCameraDepth = -40f;
+        const float StopCameraFieldOfView = 68f;
 
         static TeleportGate Gate(float offset, int floor, int target) =>
             new TeleportGate(ElevatorMatchType.ShaftCenterX + offset, floor, target);
@@ -473,9 +476,14 @@ namespace CrazyElevator.Managers
             cameraFraming = snap ? framing
                 : Vector2.Lerp(cameraFraming, framing, 1f - Mathf.Exp(-CameraFollowRate * dt));
             cameraFramingFrame = Time.frameCount;
+            float stopViewBlend = phase == Phase.Docking
+                ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(phaseTime / Mathf.Max(.01f, dockingSeconds)))
+                : phase == Phase.Opening ? 1f : 0f;
+            float cameraHeight = Mathf.Lerp(5.2f, StopCameraHeight, stopViewBlend);
+            float cameraDepth = Mathf.Lerp(-34f, StopCameraDepth, stopViewBlend);
             Vector2 focus = FrameShaftAction(carLocal, dt);
-            Vector3 cameraLocal = new Vector3(focus.x, focus.y + 5.2f,
-                -34f - cameraPullback + Mathf.Max(0f, carLocal.z + .8f) * .18f);
+            Vector3 cameraLocal = new Vector3(focus.x, focus.y + cameraHeight,
+                cameraDepth - cameraPullback + Mathf.Max(0f, carLocal.z + .8f) * .18f);
             if (cameraImpactTime > 0f)
             {
                 float impact = cameraImpactTime / .26f;
@@ -501,7 +509,8 @@ namespace CrazyElevator.Managers
             exteriorCamera.orthographic = false;
             UpdateSpeedFx(dt);
             // The view widens as the car speeds up, so going fast reads at a glance.
-            exteriorCamera.fieldOfView = Mathf.Lerp(61f + SpeedFovWiden * speedFx, 55f, routeBoostPulse);
+            float travelFieldOfView = Mathf.Lerp(61f + SpeedFovWiden * speedFx, 55f, routeBoostPulse);
+            exteriorCamera.fieldOfView = Mathf.Lerp(travelFieldOfView, StopCameraFieldOfView, stopViewBlend);
         }
 
         Vector2 FrameShaftAction(Vector2 car, float dt)
