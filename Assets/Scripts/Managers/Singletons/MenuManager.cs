@@ -828,7 +828,10 @@ namespace CrazyElevator.Managers
             GUI.matrix = Matrix4x4.identity;
             Color previous = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, transitionFadeAlpha);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            float width = Mathf.Max(1f, Screen.width);
+            float height = Mathf.Max(1f, Screen.height);
+            var fadeRect = new Rect(-width * .5f, -height * .5f, width * 2f, height * 2f);
+            GUI.DrawTexture(fadeRect, Texture2D.whiteTexture);
             GUI.color = previous;
             GUI.matrix = previousMatrix;
             GUI.depth = previousDepth;
