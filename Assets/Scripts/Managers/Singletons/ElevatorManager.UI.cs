@@ -1673,10 +1673,6 @@ namespace CrazyElevator.Managers
             if (phase == Phase.Moving)
             {
                 bool practice = MenuManager.TutorialActive;
-                DrawMouseControl(up, practice ? "HOLD UP" : "↑", MenuPresentation.Teal,
-                    practice || GameplayUpKey != "↑" ? GameplayUpKey : null);
-                DrawMouseControl(down, practice ? "HOLD DOWN" : "↓", MenuPresentation.Teal,
-                    practice || GameplayDownKey != "↓" ? GameplayDownKey : null);
                 DrawMouseControl(stop, (practice ? "STOP AT F" : "STOP F") + ElevatorRound.FloorNumber(GlideStopFloor()),
                     MenuPresentation.Brass, GameplayConfirmKey);
             }
