@@ -93,6 +93,16 @@ namespace CrazyElevator.Managers
         const float StopCameraDepth = -40f;
         const float StopCameraFieldOfView = 68f;
 
+        static Bounds ShaftCameraBounds
+        {
+            get
+            {
+                float top = (ElevatorRound.Floors - 1) * ShaftFloorHeight + StopCameraHeight + 2f;
+                return new Bounds(new Vector3(ElevatorMatchType.ShaftCenterX, top * .5f, -5f),
+                    new Vector3(GroundTrackSpan * 2f + 24f, top, 86f));
+            }
+        }
+
         static TeleportGate Gate(float offset, int floor, int target) =>
             new TeleportGate(ElevatorMatchType.ShaftCenterX + offset, floor, target);
 
@@ -514,6 +524,11 @@ namespace CrazyElevator.Managers
             }
 
             Vector3 targetLocal = new Vector3(focus.x, focus.y + .9f, carLocal.z);
+            // Keep the camera and its focus within the full playable shaft envelope.
+            // The floor-zero edge prevents the view from drifting beneath the level.
+            Bounds cameraBounds = ShaftCameraBounds;
+            cameraLocal = cameraBounds.ClosestPoint(cameraLocal);
+            targetLocal = cameraBounds.ClosestPoint(targetLocal);
             exteriorCamera.transform.position = world.TransformPoint(cameraLocal);
             Vector3 targetWorld = world.TransformPoint(targetLocal);
             exteriorCamera.transform.rotation = Quaternion.LookRotation(
