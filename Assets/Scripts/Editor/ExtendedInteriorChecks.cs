@@ -1513,11 +1513,16 @@ public static class ExtendedInteriorChecks
         Call(game, "LateUpdate");
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
-        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - centre) < .001f
-            && Mathf.Abs(game.sceneView.exteriorCamera.transform.position.x - centre) < .001f
-            && !game.sceneView.exteriorCamera.orthographic,
-            "Solo travel must keep the car and perspective camera aligned straight on.");
         var shaft = game.sceneView.exteriorCar.parent;
+        Vector3 cameraPosition = shaft.InverseTransformPoint(game.sceneView.exteriorCamera.transform.position);
+        float soloShaftOffset = (float)typeof(CrazyElevator.Managers.ElevatorManager)
+            .GetField("SoloShaftOffset", Flags | BindingFlags.Static).GetRawConstantValue();
+        Bounds cameraBounds = (Bounds)typeof(CrazyElevator.Managers.ElevatorManager)
+            .GetProperty("ShaftCameraBounds", Flags | BindingFlags.Static).GetValue(null);
+        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - (centre - soloShaftOffset)) < .001f
+            && !game.sceneView.exteriorCamera.orthographic
+            && (cameraBounds.ClosestPoint(cameraPosition) - cameraPosition).sqrMagnitude < .0004f,
+            "Solo travel must keep the car on its authored lane and perspective camera inside the shaft bounds.");
         foreach (int floor in new[] { 1, 11 })
         {
             float landingHeight = floor * 13.2f;
@@ -1543,13 +1548,22 @@ public static class ExtendedInteriorChecks
         round.AssignStops();
         round.AssignBoardingDoors();
         Call(game, "SyncFigures", 0f);
-        var rider = round.Riders.Find(r => r.Origin == round.Floor);
+        foreach (var waiting in round.Riders)
+            if (waiting.Origin == round.Floor && !waiting.Resolved && !waiting.Boarded)
+                waiting.Arrival = waiting.SpawnDelay = 0f;
+        round.RevealQueue(round.Floor, round.Stop);
+        var rider = round.Riders.Find(r => r.Origin == round.Floor && round.IsOffered(r));
         Require(rider != null, "The active world must have a passenger available for boarding.");
         rider.Arrival = rider.SpawnDelay = 0f;
         rider.Destination = round.MinFloor + 1;
         rider.DestinationStop = Round.CenterStop;
-        Require(round.Board(rider) && game.PassengerLoad == rider.Space
-            && game.CurrentPassengers.Count == 1, "Solo boarding changed.");
+        bool offered = round.IsOffered(rider);
+        bool boarded = round.Board(rider);
+        Require(offered && boarded && game.PassengerLoad == rider.Space && game.CurrentPassengers.Count == 1,
+            "Solo boarding changed (boarded=" + boarded + ", offered=" + offered
+            + ", origin/stop=" + rider.Origin + "/" + rider.OriginStop + ", car=" + round.Floor + "/"
+            + round.Stop + ", arrival=" + rider.Arrival + ", load=" + game.PassengerLoad
+            + ", passengers=" + game.CurrentPassengers.Count + ").");
         float before = round.TimeLeft;
         round.Tick(1f, true);
         Require(Math.Abs(round.TimeLeft - (before - 1f)) < .001f,
@@ -2057,7 +2071,7 @@ public static class ExtendedInteriorChecks
                     "The world's second authored floor must display destination 2.");
                 var bands = player.sceneView.exteriorCar.parent.Find("Shaft World Bands");
                 Require(bands != null, "The authored world bands are missing from Main.");
-                int activeBands = 0;
+                int activeWorldArt = 0;
                 foreach (Transform band in bands)
                 {
                     int bandDimension = band.name.StartsWith("Office Band") ? 0
@@ -2065,9 +2079,22 @@ public static class ExtendedInteriorChecks
                     if (bandDimension < 0) continue;
                     Require(band.gameObject.activeSelf == (bandDimension == dimension),
                         "The visible world did not switch with the round.");
-                    if (band.gameObject.activeSelf) activeBands++;
+                    if (band.gameObject.activeSelf) activeWorldArt++;
                 }
-                Require(activeBands > 0, "No authored world band is visible for this round.");
+                if (dimension >= 3)
+                {
+                    var backdrops = player.sceneView.exteriorCar.parent.Find("World Backdrops");
+                    Require(backdrops != null, "The authored world backdrops are missing from Main.");
+                    string expectedBackdrop = dimension == 3 ? "Forest Backdrop" : "Space Backdrop";
+                    foreach (Transform backdrop in backdrops)
+                    {
+                        bool expected = backdrop.name == expectedBackdrop;
+                        Require(backdrop.gameObject.activeSelf == expected,
+                            "The visible world backdrop did not switch with the round.");
+                        if (expected && backdrop.gameObject.activeSelf) activeWorldArt++;
+                    }
+                }
+                Require(activeWorldArt > 0, "No authored world art is visible for this round.");
                 Require(ReferenceEquals(round.Riders, other.Riders)
                     && !ReferenceEquals(round.Riders, previousPool) && round.Riders.Count > 0
                     && round.Riders.TrueForAll(r => r.Origin >= first && r.Origin <= last
