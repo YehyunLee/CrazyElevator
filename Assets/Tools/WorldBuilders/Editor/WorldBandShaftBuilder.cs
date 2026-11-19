@@ -274,6 +274,17 @@ namespace CrazyElevator.Tools.WorldBuilders
             }
             var cap = Required(root, "Shaft top");
             cap.localPosition = new Vector3(cap.localPosition.x, top - .3f, cap.localPosition.z);
+
+            Transform bottomCap = root.Find("Shaft bottom");
+            if (bottomCap == null)
+            {
+                Block(root, "Shaft bottom", new Vector3(ShaftCenterX, -.8f, 0f),
+                    new Vector3(8f, .4f, 2f), Girder);
+                bottomCap = Required(root, "Shaft bottom");
+            }
+            bottomCap.localPosition = new Vector3(ShaftCenterX, -.8f, 0f);
+            bottomCap.localScale = new Vector3(8f, .4f, 2f);
+            SetLayer(bottomCap, ExteriorLayer);
         }
 
         static Transform Required(Transform root, string name)
