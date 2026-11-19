@@ -302,6 +302,7 @@ namespace CrazyElevator.Managers
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             else if (MenuManager.TutorialActive && Match != null) round.RevealPracticeQueue(2);
             ResetBoardingDoors();
+            if (!MenuManager.TutorialActive) OpenAllBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
             // The tutorial's intro reveal already provides the transition into
             // practice. Starting the practice round must not cover its first card.
@@ -319,7 +320,9 @@ namespace CrazyElevator.Managers
             ResetEncounterCards();
             passengerExitCount = kickoutCount = 0;
             travelStartCount = floorStopCount = 0;
-            RefreshFloorButtons(); SetControlStatus("READY"); notice = "Open any combination of doors. Passengers board automatically.";
+            RefreshFloorButtons(); SetControlStatus("READY"); notice = MenuManager.TutorialActive
+                ? "Open any combination of doors. Passengers board automatically."
+                : "All three doors are open. Passengers board automatically.";
             SyncFigures(0); UpdateInteriorPersona(0); Play(chime);
         }
 
@@ -594,10 +597,12 @@ namespace CrazyElevator.Managers
                     DiscoverWorld(BandForFloor(destination));
                     SetFloorDisplayText(ElevatorRound.FloorNumber(destination).ToString());
                     phase = Phase.Opening; phaseTime = 0;
+                    if (!MenuManager.TutorialActive) OpenAllBoardingDoors();
                     autoDropOffWait = 0f;
                     Play(round.Floor == candyStartsAtFloor && candyWorldDingSfx != null
                         ? candyWorldDingSfx : ding);
-                    notice = waiting > 0 ? "Riders for this stop are getting off." : "Open any combination of doors. Passengers board automatically.";
+                    notice = waiting > 0 ? "Riders for this stop are getting off."
+                        : "All three doors are opening. Passengers board automatically.";
                     UpdateInteriorPersona(0);
                 }
                 return;

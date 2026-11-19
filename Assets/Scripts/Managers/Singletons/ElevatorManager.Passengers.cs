@@ -78,6 +78,15 @@ namespace CrazyElevator.Managers
             System.Array.Clear(boardingDoorOpenness, 0, boardingDoorOpenness.Length);
         }
 
+        void OpenAllBoardingDoors()
+        {
+            selectedBoardingDoor = BoardingDoor.Front;
+            hasChosenBoardingDoor = false;
+            for (int door = 0; door < boardingDoorOpen.Length; door++)
+                boardingDoorOpen[door] = true;
+            autoBoardWait = DoorAnimationSeconds;
+        }
+
         void CloseRequestedBoardingDoors()
             => System.Array.Clear(boardingDoorOpen, 0, boardingDoorOpen.Length);
 
