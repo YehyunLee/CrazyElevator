@@ -8,7 +8,9 @@ namespace CrazyElevator.Managers
         public const float DimensionRevealConfirmDelay = .85f;
         bool dimensionRevealConfirmClicked;
         const float DimensionDoorCloseSeconds = .85f;
+        enum PreRoundRevealStep { Dimension, RoundUnlocks }
         bool dimensionRevealActive;
+        PreRoundRevealStep preRoundRevealStep;
         float dimensionRevealTime;
         int dimensionRevealIndex = -1;
         Phase dimensionResumePhase;
@@ -26,6 +28,7 @@ namespace CrazyElevator.Managers
         {
             index = Mathf.Clamp(index, 0, ElevatorRound.Dimensions - 1);
             if (dimensionRevealActive) return;
+            preRoundRevealStep = PreRoundRevealStep.Dimension;
             dimensionRevealIndex = index;
             dimensionRevealTime = 0f;
             dimensionRevealConfirmClicked = false;
@@ -42,6 +45,19 @@ namespace CrazyElevator.Managers
             }
             notice = "ROUND " + (session != null ? session.RoundNumber : 1)
                 + ": " + DimensionIntroTitle(DimensionWorld(index));
+        }
+
+        public bool BeginRoundUnlockReveal()
+        {
+            if (!dimensionRevealActive || preRoundRevealStep != PreRoundRevealStep.Dimension) return false;
+            preRoundRevealStep = PreRoundRevealStep.RoundUnlocks;
+            dimensionRevealTime = 0f;
+            dimensionRevealConfirmClicked = false;
+            ClearEncounterPreviewModel();
+            ClearDimensionLineup();
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            notice = "ROUND " + roundNumber + ": NEW CHALLENGES";
+            return true;
         }
 
         void MarkDimensionPassengersIntroduced(int index)
@@ -68,6 +84,7 @@ namespace CrazyElevator.Managers
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealConfirmClicked = false;
+            preRoundRevealStep = PreRoundRevealStep.Dimension;
             if (Match == null && !MenuManager.BeginRoundPassengerIntroduction(this, null))
                 BeginRoundCountdown();
         }
@@ -78,6 +95,7 @@ namespace CrazyElevator.Managers
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRevealConfirmClicked = false;
+            preRoundRevealStep = PreRoundRevealStep.Dimension;
             ClearEncounterPreviewModel();
             ClearDimensionLineup();
         }
@@ -86,12 +104,21 @@ namespace CrazyElevator.Managers
         {
             if (paused || MenuManager.IsOpen || Match != null && Match.Paused) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
-            AnimateDimensionLineup(dimensionRevealTime);
-            float close = Mathf.Clamp01(dimensionRevealTime / DimensionDoorCloseSeconds);
-            SetDoors(Mathf.Lerp(dimensionResumeDoors, 0f, close));
+            if (preRoundRevealStep == PreRoundRevealStep.Dimension)
+            {
+                AnimateDimensionLineup(dimensionRevealTime);
+                float close = Mathf.Clamp01(dimensionRevealTime / DimensionDoorCloseSeconds);
+                SetDoors(Mathf.Lerp(dimensionResumeDoors, 0f, close));
+            }
             // ElevatorMatch ends the shared preview for both cars together.
             if (Match == null && dimensionRevealTime >= DimensionRevealConfirmDelay
-                && DimensionRevealConfirmed) FinishDimensionReveal();
+                && DimensionRevealConfirmed)
+            {
+                if (preRoundRevealStep == PreRoundRevealStep.Dimension)
+                    BeginRoundUnlockReveal();
+                else
+                    FinishDimensionReveal();
+            }
         }
 
         public bool DimensionRevealConfirmed => dimensionRevealConfirmClicked
@@ -387,6 +414,12 @@ namespace CrazyElevator.Managers
 
         public void DrawDimensionRevealOverlay(Rect view, float elapsed)
         {
+            if (preRoundRevealStep == PreRoundRevealStep.RoundUnlocks)
+            {
+                DrawRoundUnlockOverlay(view, elapsed);
+                return;
+            }
+
             MenuPresentation.Backdrop(view);
             float alpha = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / DimensionRevealConfirmDelay));
             if (alpha <= .001f) return;
@@ -472,6 +505,127 @@ namespace CrazyElevator.Managers
 
             GUI.matrix = previousMatrix;
             GUI.color = previousColor;
+        }
+
+        public void DrawRoundUnlockOverlay(Rect view, float elapsed)
+        {
+            MenuPresentation.Backdrop(view);
+            float alpha = Mathf.SmoothStep(0f, 1f,
+                Mathf.Clamp01(elapsed / DimensionRevealConfirmDelay));
+            if (alpha <= .001f) return;
+
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColor = GUI.color;
+            GUI.matrix = previousMatrix * MenuPresentation.Fit(view, 1200f, 640f);
+            GUI.color = previousColor * new Color(1f, 1f, 1f, alpha);
+
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            int dimension = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
+            Color accent = DimensionIntroAccent(DimensionWorld(dimension));
+            Color edge = Color.Lerp(accent, MenuPresentation.Ink, .48f);
+            Color paper = MenuPresentation.Paper;
+            Color ink = MenuPresentation.Ink;
+            Rect header = new Rect(70f, 34f, 1060f, 78f);
+            MenuPresentation.Plaque(header, paper, edge, 8f);
+            MenuPresentation.Plaque(new Rect(88f, 51f, 128f, 44f), accent, edge, 4f);
+
+            var badgeText = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 18, alignment = TextAnchor.MiddleCenter, wordWrap = false
+            };
+            GameTypography.Apply(badgeText, true);
+            badgeText.normal.textColor = MenuPresentation.DisplayColor(ink);
+            GUI.Label(new Rect(88f, 51f, 128f, 44f), "ROUND " + roundNumber, badgeText);
+
+            var heading = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 34, alignment = TextAnchor.MiddleLeft, wordWrap = false
+            };
+            GameTypography.Apply(heading, true);
+            heading.normal.textColor = MenuPresentation.DisplayColor(ink);
+            GUI.Label(new Rect(244f, 45f, 840f, 56f), "WHAT'S NEW THIS ROUND?", heading);
+
+            int cardCount = roundNumber >= 3 ? 3 : roundNumber == 2 ? 2 : 1;
+            float cardHeight = cardCount == 3 ? 128f : cardCount == 2 ? 192f : 264f;
+            float gap = 10f;
+            float totalHeight = cardCount * cardHeight + (cardCount - 1) * gap;
+            float cardTop = 132f + (416f - totalHeight) * .5f;
+            for (int i = 0; i < cardCount; i++)
+            {
+                Rect card = new Rect(90f, cardTop + i * (cardHeight + gap), 1020f, cardHeight);
+                if (roundNumber >= 3)
+                {
+                    if (i == 0) DrawRoundUnlockCard(card, accent, edge,
+                        "!", "MONSTERS", "Monsters patrol the shaft and can knock your elevator back.");
+                    else if (i == 1) DrawRoundUnlockCard(card, accent, edge,
+                        "↯", "TORNADOES + WORLD HAZARDS", "Tornadoes sweep the shaft; each world adds its own travel hazard.");
+                    else DrawRoundUnlockCard(card, accent, edge,
+                        "↔", "TELEPORTERS", "Marked gates jump between floors. Check the destination before entering.");
+                }
+                else if (roundNumber == 2)
+                {
+                    if (i == 0) DrawRoundUnlockCard(card, accent, edge,
+                        "VIP", "VIP PASSENGERS", "A VIP appears midway through the shift and is worth a delivery bonus.");
+                    else DrawRoundUnlockCard(card, accent, edge,
+                        "3", "COMING IN ROUND 3", "Monsters, tornadoes, world hazards, and teleporter gates arrive next round.");
+                }
+                else
+                {
+                    DrawRoundUnlockCard(card, accent, edge,
+                        "1", "NO EXTRA HAZARDS YET", "Use this round to learn the world. VIP passengers arrive in round 2; shaft hazards and teleporters arrive in round 3.");
+                }
+            }
+
+            if (elapsed >= DimensionRevealConfirmDelay)
+            {
+                Rect confirm = new Rect(450f, 574f, 300f, 50f);
+                Color face = confirm.Contains(Event.current.mousePosition) ? paper : MenuPresentation.Teal;
+                MenuPresentation.Plaque(confirm, face, ink, 5f);
+                badgeText.fontSize = 19;
+                GUI.Label(confirm, "START ROUND", badgeText);
+                DrawGameplayKeyHint(new Rect(confirm.xMax + 12f, confirm.y, 50f, 50f), GameplayConfirmKey);
+                if (GUI.Button(confirm, GUIContent.none, GUIStyle.none))
+                    dimensionRevealConfirmClicked = true;
+            }
+
+            GUI.matrix = previousMatrix;
+            GUI.color = previousColor;
+        }
+
+        static void DrawRoundUnlockCard(Rect card, Color accent, Color edge,
+            string mark, string title, string description)
+        {
+            MenuPresentation.Plaque(card, MenuPresentation.Paper, edge, 7f);
+            MenuPresentation.Paint(new Rect(card.x, card.y, 8f, card.height), accent);
+            Rect icon = new Rect(card.x + 22f, card.center.y - 42f, 84f, 84f);
+            MenuPresentation.Plaque(icon, Color.Lerp(MenuPresentation.Wall, accent, .22f), edge, 4f);
+
+            var markStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = mark.Length > 2 ? 16 : 25,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false
+            };
+            GameTypography.Apply(markStyle, true);
+            markStyle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
+            GUI.Label(icon, mark, markStyle);
+
+            var titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 26, alignment = TextAnchor.MiddleLeft, wordWrap = false
+            };
+            GameTypography.Apply(titleStyle, true);
+            titleStyle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
+            GUI.Label(new Rect(icon.xMax + 24f, card.y + 16f, card.width - 158f, 38f), title, titleStyle);
+
+            var bodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 19, alignment = TextAnchor.UpperLeft, wordWrap = true
+            };
+            GameTypography.Apply(bodyStyle);
+            bodyStyle.normal.textColor = MenuPresentation.DisplayColor(MenuPresentation.Ink);
+            GUI.Label(new Rect(icon.xMax + 24f, card.y + 58f, card.width - 158f, card.height - 66f),
+                description, bodyStyle);
         }
     }
 }

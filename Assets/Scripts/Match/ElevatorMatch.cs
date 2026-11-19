@@ -93,6 +93,7 @@ namespace CrazyElevator.Match
         ParticleSystem collisionParticles;
         Material collisionParticleMaterial;
         bool dimensionRevealActive;
+        bool roundUnlockRevealStage;
         int dimensionRevealIndex = -1;
         float dimensionRevealTime;
         readonly List<int> dimensionRoulette = new List<int>();
@@ -322,6 +323,7 @@ namespace CrazyElevator.Match
             bool practice = MenuManager.TutorialActive;
             Paused = false;
             dimensionRevealActive = false;
+            roundUnlockRevealStage = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             resultRevealStartedAt = -1f;
@@ -466,6 +468,7 @@ namespace CrazyElevator.Match
             dimensionRoulette.Add(dimensionRevealIndex);
             dimensionRevealTime = 0f;
             dimensionRevealActive = true;
+            roundUnlockRevealStage = false;
             player.BeginDimensionReveal(dimensionRevealIndex);
             Rival?.BeginDimensionReveal(dimensionRevealIndex);
         }
@@ -475,11 +478,23 @@ namespace CrazyElevator.Match
         {
             if (Paused || MenuManager.IsOpen) return;
             dimensionRevealTime += Mathf.Max(0f, dt);
-            if (dimensionRevealTime < DimensionRouletteSeconds + Game.DimensionRevealConfirmDelay
+            float confirmAfter = roundUnlockRevealStage ? Game.DimensionRevealConfirmDelay
+                : DimensionRouletteSeconds + Game.DimensionRevealConfirmDelay;
+            if (dimensionRevealTime < confirmAfter
                 || !(player.DimensionRevealConfirmed || Rival != null && Rival.DimensionRevealConfirmed)) return;
+
+            if (!roundUnlockRevealStage && player.BeginRoundUnlockReveal())
+            {
+                Rival?.BeginRoundUnlockReveal();
+                roundUnlockRevealStage = true;
+                dimensionRevealTime = 0f;
+                return;
+            }
+
             player.FinishDimensionReveal();
             Rival?.FinishDimensionReveal();
             dimensionRevealActive = false;
+            roundUnlockRevealStage = false;
             dimensionRevealIndex = -1;
             dimensionRevealTime = 0f;
             dimensionRoulette.Clear();
@@ -1154,7 +1169,9 @@ namespace CrazyElevator.Match
             }
             if (dimensionRevealActive)
             {
-                if (dimensionRevealTime < DimensionRouletteSeconds)
+                if (roundUnlockRevealStage)
+                    player.DrawRoundUnlockOverlay(new Rect(0f, 0f, Screen.width, Screen.height), dimensionRevealTime);
+                else if (dimensionRevealTime < DimensionRouletteSeconds)
                     DrawDimensionRoulette();
                 else
                     player.DrawDimensionRevealOverlay(new Rect(0f, 0f, Screen.width, Screen.height),
