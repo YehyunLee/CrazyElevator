@@ -100,10 +100,6 @@ namespace CrazyElevator.Managers
             DrawTitlePostcard(new Rect(937, 475, 155, 121), WorldBand.Forest, -7f);
             DrawTitlePostcard(new Rect(1468, 112, 162, 126), WorldBand.Space, 9f);
             DrawTitleNavigation();
-
-            if (transitionAmount > 0f)
-                MenuPresentation.Paint(art, new Color(0f, 0f, 0f,
-                    Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.32f, 1f, transitionAmount))));
         }
 
         void DrawTitleWord(Rect rect, string word, int size, Color edge)
