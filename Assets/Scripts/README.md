@@ -3,7 +3,7 @@
 One Main scene. Liam's singleton managers own the public design.
 `ElevatorManager` + `PassengerManager` sit on each elevator (×2 in 1v1).
 
-Each round lasts **90 seconds** in one enabled world. The pool cycles through **office -> candy -> underwater -> mystical forest -> space**, repeating until someone wins three rounds. Higher delivery score wins the round; ties award no win and the next round still changes worlds. `GameManager` owns the round number and match wins. Both elevators reset their score, passengers, position, and clock together. Results offer **Next Round**, or **Play Again** after a match winner. Solo practice uses the same world rotation.
+Each round lasts **90 seconds** in one enabled world. The pool cycles through **office -> candy -> underwater -> mystical forest -> space**; the first player to win two rounds takes the best-of-three match. Higher delivery score wins the round; ties award no win and the next round still changes worlds. `GameManager` owns the round number and match wins. Both elevators reset their score, passengers, position, and clock together. Results offer **Next Round**, or **Play Again** after a match winner. Solo practice uses the same world rotation.
 
 Every world displays floors **1–8**, including the HUD, cabin indicator, world signs, passenger destinations, and teleport gates. `ElevatorRound.FloorNumber` converts the authored floor indices (0–39) for display; movement and delivery still use those original indices. Passenger destination generators stay inside the passenger's origin world and never request the origin floor.
 
