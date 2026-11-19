@@ -25,6 +25,7 @@ namespace CrazyElevator.Managers
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
         const float ActionFeedbackSeconds = 1.2f;
+        const float GameplayBoostHintWidth = 220f;
         string actionFeedbackText;
         float actionFeedbackAt = -100f;
         bool actionFeedbackPositive, actionFeedbackEmphasized;
@@ -1636,9 +1637,11 @@ namespace CrazyElevator.Managers
                 {
                     float stopWidth = 146f * scale;
                     float moveWidth = 76f * scale;
+                    float boostHintWidth = GameplayBoostHintWidth * scale;
                     float bottom = ViewHeight - margin - height;
                     stop = new Rect(ViewWidth - margin - stopWidth, bottom, stopWidth, height);
-                    down = new Rect(stop.x - gap - moveWidth, bottom, moveWidth, height);
+                    down = new Rect(stop.x - gap * 2f - boostHintWidth - moveWidth,
+                        bottom, moveWidth, height);
                     up = new Rect(down.x - gap - moveWidth, bottom, moveWidth, height);
                     return;
                 }
@@ -1669,12 +1672,17 @@ namespace CrazyElevator.Managers
             if (MenuManager.TryGetTutorialStopFloor(this, out _)) return;
             if (!extendedInterior || IsNpc) return;
             DrawBoardingDoorCue();
-            GetMouseControlRects(out var up, out var down, out var stop, out var close, out var kickout, out var repair);
+            GetMouseControlRects(out _, out _, out var stop, out var close, out var kickout, out var repair);
             if (phase == Phase.Moving)
             {
                 bool practice = MenuManager.TutorialActive;
                 DrawMouseControl(stop, (practice ? "STOP AT F" : "STOP F") + ElevatorRound.FloorNumber(GlideStopFloor()),
                     MenuPresentation.Brass, GameplayConfirmKey);
+                float scale = MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
+                float gap = 6f * scale;
+                float hintWidth = GameplayBoostHintWidth * scale;
+                Rect boostHint = new Rect(stop.x - gap - hintWidth, stop.y, hintWidth, stop.height);
+                DrawGameplayBoostHint(boostHint);
             }
             DrawMouseControl(close, "CLOSE & GO", MenuPresentation.Brass, GameplayCloseKey);
             DrawMouseControl(kickout, "KICK OUT", MenuPresentation.Coral, GameplayKickoutKey);
@@ -1843,6 +1851,107 @@ namespace CrazyElevator.Managers
             buttonStyle.fontSize = previousFontSize;
             buttonStyle.alignment = previousAlignment;
             buttonStyle.normal.textColor = previousTextColor;
+        }
+
+        void DrawGameplayBoostHint(Rect rect)
+        {
+            MenuPresentation.HudPlate(rect, MenuPresentation.Teal);
+            if (GameplayUsesKeyboard)
+            {
+                DrawGameplayTextHint(rect, "Hold " + GameplayBoostKey + " to speed up");
+                return;
+            }
+
+            int previousFontSize = buttonStyle.fontSize;
+            TextAnchor previousAlignment = buttonStyle.alignment;
+            bool previousWordWrap = buttonStyle.wordWrap;
+            TextClipping previousClipping = buttonStyle.clipping;
+            float scale = MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
+            buttonStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(rect.height * .30f));
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            buttonStyle.wordWrap = false;
+            buttonStyle.clipping = TextClipping.Clip;
+
+            GUIContent holdText = new GUIContent("Hold");
+            GUIContent speedText = new GUIContent("to speed up");
+            float iconWidth = rect.height * 1.05f;
+            float iconHeight = rect.height * .56f;
+            float gap = 5f * scale;
+            float padding = 8f * scale;
+            float holdWidth = buttonStyle.CalcSize(holdText).x;
+            float speedWidth = buttonStyle.CalcSize(speedText).x;
+            float contentWidth = holdWidth + speedWidth + 4f + gap * 2f + iconWidth;
+            while (contentWidth > rect.width - padding * 2f && buttonStyle.fontSize > 9)
+            {
+                buttonStyle.fontSize--;
+                holdWidth = buttonStyle.CalcSize(holdText).x;
+                speedWidth = buttonStyle.CalcSize(speedText).x;
+                contentWidth = holdWidth + speedWidth + 4f + gap * 2f + iconWidth;
+            }
+
+            float x = rect.center.x - contentWidth * .5f;
+            var holdRect = new Rect(x, rect.y, holdWidth + 2f, rect.height);
+            MenuPresentation.Label(holdRect, holdText, buttonStyle, MenuPresentation.Paper);
+            x += holdRect.width + gap;
+
+            var iconRect = new Rect(x, rect.center.y - iconHeight * .5f, iconWidth, iconHeight);
+            DrawGameplayBumperIcon(iconRect);
+            MenuPresentation.Label(iconRect, new GUIContent("LB"), buttonStyle, MenuPresentation.Paper);
+            x += iconWidth + gap;
+
+            var speedRect = new Rect(x, rect.y, speedWidth + 2f, rect.height);
+            MenuPresentation.Label(speedRect, speedText, buttonStyle, MenuPresentation.Paper);
+
+            buttonStyle.fontSize = previousFontSize;
+            buttonStyle.alignment = previousAlignment;
+            buttonStyle.wordWrap = previousWordWrap;
+            buttonStyle.clipping = previousClipping;
+        }
+
+        void DrawGameplayTextHint(Rect rect, string text)
+        {
+            int previousFontSize = buttonStyle.fontSize;
+            TextAnchor previousAlignment = buttonStyle.alignment;
+            bool previousWordWrap = buttonStyle.wordWrap;
+            TextClipping previousClipping = buttonStyle.clipping;
+            float scale = MenuPresentation.GameplayHudScale(ViewWidth, ViewHeight);
+            buttonStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(rect.height * .30f));
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            buttonStyle.wordWrap = false;
+            buttonStyle.clipping = TextClipping.Clip;
+
+            var content = new GUIContent(text);
+            while (buttonStyle.CalcSize(content).x > rect.width - 16f * scale && buttonStyle.fontSize > 9)
+                buttonStyle.fontSize--;
+            MenuPresentation.Label(rect, content, buttonStyle, MenuPresentation.Paper);
+
+            buttonStyle.fontSize = previousFontSize;
+            buttonStyle.alignment = previousAlignment;
+            buttonStyle.wordWrap = previousWordWrap;
+            buttonStyle.clipping = previousClipping;
+        }
+
+        static void DrawGameplayBumperIcon(Rect rect)
+        {
+            DrawGameplayBumperCapsule(rect, MenuPresentation.Paper);
+            float inset = Mathf.Max(1f, rect.height * .09f);
+            DrawGameplayBumperCapsule(new Rect(rect.x + inset, rect.y + inset,
+                rect.width - inset * 2f, rect.height - inset * 2f), MenuPresentation.Ink);
+        }
+
+        static void DrawGameplayBumperCapsule(Rect rect, Color color)
+        {
+            float radius = rect.height * .5f;
+            int rows = Mathf.Clamp(Mathf.CeilToInt(rect.height * .6f), 6, 16);
+            for (int row = 0; row < rows; row++)
+            {
+                float stripY = rect.y + rect.height * row / rows;
+                float stripHeight = rect.height / rows + 1f;
+                float dy = Mathf.Abs(stripY + stripHeight * .5f - rect.center.y);
+                float inset = radius - Mathf.Sqrt(Mathf.Max(0f, radius * radius - dy * dy));
+                MenuPresentation.Paint(new Rect(rect.x + inset, stripY,
+                    Mathf.Max(1f, rect.width - inset * 2f), stripHeight), color);
+            }
         }
 
         static Texture2D CreateGameplayKeyIcon()
