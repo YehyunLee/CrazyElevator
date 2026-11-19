@@ -303,7 +303,9 @@ namespace CrazyElevator.Managers
             else if (MenuManager.TutorialActive && Match != null) round.RevealPracticeQueue(2);
             ResetBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
-            sessionFadeAlpha = 1f;
+            // The tutorial's intro reveal already provides the transition into
+            // practice. Starting the practice round must not cover its first card.
+            sessionFadeAlpha = MenuManager.TutorialActive ? 0f : 1f;
             leftDoor.gameObject.SetActive(false); rightDoor.gameObject.SetActive(false);
             SetFloorDisplayText(ElevatorRound.FloorNumber(round.Floor).ToString());
             if (floorLedDigits != null) floorLedDigits.localPosition = floorLedDigitsHome;
