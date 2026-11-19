@@ -407,7 +407,10 @@ namespace CrazyElevator.Match
                 }
                 else if (trail.Life <= 0f) candyTrails.RemoveAt(i);
             }
-            if (!vipRevealStarted && player.SecondsLeft <= ElevatorRound.Duration * .5f)
+            GameManager session = GameManager.Instance;
+            bool vipRound = session != null && session.RoundNumber >= 2
+                && session.RoundNumber <= GameManager.RoundsPerMatch;
+            if (vipRound && !vipRevealStarted && player.SecondsLeft <= ElevatorRound.Duration * .5f)
             {
                 SharedRider arrivingVip = player.ChooseMatchVip(Rival);
                 if (arrivingVip != null)
@@ -417,7 +420,8 @@ namespace CrazyElevator.Match
                     GameManager.Instance?.RequestVipIntro(player, matchVip);
                 }
             }
-            if (!hazardEventStarted && player.SecondsLeft <= 40f)
+            bool hazardRound = session != null && session.RoundNumber >= 3;
+            if (hazardRound && !hazardEventStarted && player.SecondsLeft <= 40f)
             {
                 hazardEventStarted = true;
                 eventMessage = player.StartSharedHazardEvent();

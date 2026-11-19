@@ -152,7 +152,11 @@ namespace CrazyElevator.Managers
             TickWorldEventFeedback();
         }
 
-        bool HazardOpen(HazardSpec spec) => !MenuManager.TutorialActive && round != null
+        bool EnvironmentalHazardsUnlocked => GameManager.Instance != null
+            && GameManager.Instance.RoundNumber >= 3;
+
+        bool HazardOpen(HazardSpec spec) => EnvironmentalHazardsUnlocked
+            && !MenuManager.TutorialActive && round != null
             && spec.Floor >= MinTravelFloor && spec.Floor <= MaxTravelFloor + .5f
             && (spec.Floor >= ElevatorRound.FloorsPerDimension || round.Elapsed >= OfficeHazardDelay);
 
@@ -310,7 +314,7 @@ namespace CrazyElevator.Managers
         void UpdateWorldEvent()
         {
             if (round == null || round.ActiveDimension < 0 || round.ActiveDimension >= ElevatorRound.Dimensions
-                || MenuManager.TutorialActive)
+                || !EnvironmentalHazardsUnlocked || MenuManager.TutorialActive)
             {
                 if (worldEventView != null) worldEventView.SetActive(false);
                 return;
