@@ -1982,13 +1982,13 @@ namespace CrazyElevator.Match
                 "DELIVERY SCORE", resultSmall, reveal, MenuPresentation.Paper);
             MenuPresentation.Paint(new Rect(area.x + 26, area.y + 207, area.width - 52, 1), new Color(1, 1, 1, .1f * reveal));
             DrawResultLabel(new Rect(area.x + 28, area.y + 218, 200, 24),
-                "ROUND WINS", resultSmall, reveal, MenuPresentation.Paper);
+                "FIRST TO " + GameManager.RoundsToWin + " WINS", resultSmall, reveal, MenuPresentation.Paper);
             DrawRoundWinMarkers(new Rect(area.xMax - 122, area.y + 218, 96, 24), wins, accent, reveal, true);
         }
 
         void DrawRoundWinMarkers(Rect area, int wins, Color accent, float alpha = 1f, bool menuColours = false)
         {
-            int target = GameManager.RoundsPerMatch;
+            int target = GameManager.RoundsToWin;
             wins = Mathf.Clamp(wins, 0, target);
             float gap = area.height * .4f;
             float size = Mathf.Min(area.height, (area.width - gap * (target - 1)) / target);
