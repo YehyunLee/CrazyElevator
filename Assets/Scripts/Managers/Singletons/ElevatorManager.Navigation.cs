@@ -158,8 +158,7 @@ namespace CrazyElevator.Managers
 
         static void HideCandyTopFloorSpillover(Transform world, Transform band, ElevatorRound activeRound)
         {
-            // Candy's last six-floor stack has clouds whose models reach above
-            // the final slab even though their pivots are still below it.
+            // Props on Candy's sixth floor extend past the final playable slab.
             int topCandyFloorNumber = 4 + (ElevatorRound.FloorsPerDimension - 1) % 4;
             string topCandyFloorName = "Candy Floor " + topCandyFloorNumber;
             Transform[] parts = band.GetComponentsInChildren<Transform>(true);
@@ -180,7 +179,9 @@ namespace CrazyElevator.Managers
             foreach (Transform part in parts)
                 if (part.name.StartsWith("Sky Puff")) part.gameObject.SetActive(false);
             foreach (Transform prop in topFloor)
-                if (prop.localPosition.y > 7.5f) prop.gameObject.SetActive(false);
+                if (prop.name == "CottonCandyTree" || prop.name == "Petal"
+                    || prop.localPosition.y > 7.5f)
+                    prop.gameObject.SetActive(false);
         }
 
         static void FitSideTrackToWorld(Transform view, SideTrack track, int minFloor, int maxFloor)
