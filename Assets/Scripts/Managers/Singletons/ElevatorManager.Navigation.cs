@@ -35,8 +35,8 @@ namespace CrazyElevator.Managers
                         : band.name.StartsWith("Water Band") ? 2 : -1;
                     if (dimension >= 0)
                     {
-                        if (dimension == 2 && band.name.Contains("Tall"))
-                            HideWaterBandSpillover(band);
+                        if (dimension == round.ActiveDimension)
+                            HideBandSpillover(world, band, round);
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
                     }
                 }
@@ -127,13 +127,20 @@ namespace CrazyElevator.Managers
                 topCap.gameObject.SetActive(false);
         }
 
-        static void HideWaterBandSpillover(Transform band)
+        static void HideBandSpillover(Transform world, Transform band, ElevatorRound activeRound)
         {
-            // The final four-floor water prefab stack only has room for floors
-            // 5 and 6. Its last two authored reef floors would appear above 6.
-            foreach (Transform child in band.GetComponentsInChildren<Transform>(true))
-                if (child.name == "Reef Floor 10" || child.name == "Reef Floor 11")
-                    child.gameObject.SetActive(false);
+            // The authored bands still contain eight floors. Their extra upper
+            // modules include loose walls and scenery as well as floor roots,
+            // so clip every part by its world-space floor instead of relying on
+            // one prefab's child names.
+            Transform[] parts = band.GetComponentsInChildren<Transform>(true);
+            for (int i = 1; i < parts.Length; i++)
+            {
+                int floor = Mathf.RoundToInt(
+                    world.InverseTransformPoint(parts[i].position).y / ShaftFloorHeight);
+                if (!activeRound.ContainsFloor(floor))
+                    parts[i].gameObject.SetActive(false);
+            }
         }
 
         static void FitSideTrackToWorld(Transform view, SideTrack track, int minFloor, int maxFloor)
