@@ -36,7 +36,10 @@ namespace CrazyElevator.Managers
                     if (dimension >= 0)
                     {
                         if (dimension == round.ActiveDimension)
+                        {
                             HideBandSpillover(world, band, round);
+                            if (dimension == 0) HideOfficeOuterWalls(band);
+                        }
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
                     }
                 }
@@ -141,6 +144,15 @@ namespace CrazyElevator.Managers
                 if (!activeRound.ContainsFloor(floor))
                     parts[i].gameObject.SetActive(false);
             }
+        }
+
+        static void HideOfficeOuterWalls(Transform band)
+        {
+            // The authored edge panels span office floors 1 through 5 as single
+            // meshes, so hide the two panels instead of trying to cut them per floor.
+            foreach (Transform part in band.GetComponentsInChildren<Transform>(true))
+                if (part.name == "Left Outer Wall" || part.name == "Right Outer Wall")
+                    part.gameObject.SetActive(false);
         }
 
         static void FitSideTrackToWorld(Transform view, SideTrack track, int minFloor, int maxFloor)
