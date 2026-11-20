@@ -60,6 +60,7 @@ namespace CrazyElevator.Managers
         };
 
         Transform crazyRouteMap;
+        int routeLineMinFloor = int.MinValue, routeLineMaxFloor = int.MinValue;
         Transform[] teleportGateViews;
         float routeBoostPulse;
         float routeLateralX;
@@ -727,8 +728,15 @@ namespace CrazyElevator.Managers
                 {
                     crazyRouteMap = new GameObject(CrazyRouteMapName).transform;
                     crazyRouteMap.SetParent(world, false);
-                    CreateCrazyRouteLines();
                 }
+                routeLineMinFloor = routeLineMaxFloor = int.MinValue;
+            }
+            if (round != null && (routeLineMinFloor != round.MinFloor
+                || routeLineMaxFloor != round.MaxFloor))
+            {
+                CreateCrazyRouteLines();
+                routeLineMinFloor = round.MinFloor;
+                routeLineMaxFloor = round.MaxFloor;
             }
             RefreshTeleportGateViews(world);
         }
@@ -763,18 +771,23 @@ namespace CrazyElevator.Managers
         // Floor rails, side tracks and gates are baked into ExteriorWorld (WorldBandShaftBuilder).
         void CreateCrazyRouteLines()
         {
-            CreateRouteLine("Playable route left", LeftShaftX, 0f,
-                ElevatorRound.Floors - 1f, new Color32(75, 226, 202, 255));
-            CreateRouteLine("Playable route right", RightShaftX, 0f,
-                ElevatorRound.Floors - 1f, new Color32(255, 124, 104, 255));
+            CreateRouteLine("Playable route left", LeftShaftX, round.MinFloor,
+                round.MaxFloor, new Color32(75, 226, 202, 255));
+            CreateRouteLine("Playable route right", RightShaftX, round.MinFloor,
+                round.MaxFloor, new Color32(255, 124, 104, 255));
         }
 
         void CreateRouteLine(string name, float x, float startFloor, float endFloor, Color colour)
         {
-            var route = new GameObject(name);
-            route.layer = 28; // Elevator tracks: independently hidden by the cabin camera.
-            route.transform.SetParent(crazyRouteMap, false);
-            var line = route.AddComponent<LineRenderer>();
+            Transform route = crazyRouteMap.Find(name);
+            if (route == null)
+            {
+                route = new GameObject(name).transform;
+                route.SetParent(crazyRouteMap, false);
+            }
+            route.gameObject.layer = 28; // Elevator tracks: hidden by the cabin camera.
+            var line = route.GetComponent<LineRenderer>();
+            if (line == null) line = route.gameObject.AddComponent<LineRenderer>();
             line.useWorldSpace = false;
             line.positionCount = 2;
             line.startWidth = line.endWidth = .11f;
