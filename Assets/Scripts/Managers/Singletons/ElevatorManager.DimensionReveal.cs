@@ -50,12 +50,14 @@ namespace CrazyElevator.Managers
         public bool BeginRoundUnlockReveal()
         {
             if (!dimensionRevealActive || preRoundRevealStep != PreRoundRevealStep.Dimension) return false;
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            if (roundNumber <= 1) return false;
+
             preRoundRevealStep = PreRoundRevealStep.RoundUnlocks;
             dimensionRevealTime = 0f;
             dimensionRevealConfirmClicked = false;
             ClearEncounterPreviewModel();
             ClearDimensionLineup();
-            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
             notice = "ROUND " + roundNumber + ": NEW CHALLENGES";
             return true;
         }
@@ -114,10 +116,8 @@ namespace CrazyElevator.Managers
             if (Match == null && dimensionRevealTime >= DimensionRevealConfirmDelay
                 && DimensionRevealConfirmed)
             {
-                if (preRoundRevealStep == PreRoundRevealStep.Dimension)
-                    BeginRoundUnlockReveal();
-                else
-                    FinishDimensionReveal();
+                if (preRoundRevealStep == PreRoundRevealStep.Dimension && BeginRoundUnlockReveal()) return;
+                FinishDimensionReveal();
             }
         }
 
@@ -509,6 +509,9 @@ namespace CrazyElevator.Managers
 
         public void DrawRoundUnlockOverlay(Rect view, float elapsed)
         {
+            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
+            if (roundNumber <= 1) return;
+
             MenuPresentation.Backdrop(view);
             float alpha = Mathf.SmoothStep(0f, 1f,
                 Mathf.Clamp01(elapsed / DimensionRevealConfirmDelay));
@@ -519,7 +522,6 @@ namespace CrazyElevator.Managers
             GUI.matrix = previousMatrix * MenuPresentation.Fit(view, 1200f, 640f);
             GUI.color = previousColor * new Color(1f, 1f, 1f, alpha);
 
-            int roundNumber = GameManager.Instance != null ? GameManager.Instance.RoundNumber : 1;
             int dimension = GameManager.Instance != null ? GameManager.Instance.ActiveDimension : 0;
             Color accent = DimensionIntroAccent(DimensionWorld(dimension));
             Color edge = Color.Lerp(accent, MenuPresentation.Ink, .48f);
@@ -545,7 +547,7 @@ namespace CrazyElevator.Managers
             heading.normal.textColor = MenuPresentation.DisplayColor(ink);
             GUI.Label(new Rect(244f, 45f, 840f, 56f), "WHAT'S NEW THIS ROUND?", heading);
 
-            int cardCount = roundNumber >= 3 ? 3 : roundNumber == 2 ? 2 : 1;
+            int cardCount = roundNumber >= 3 ? 3 : 2;
             float cardHeight = cardCount == 3 ? 128f : cardCount == 2 ? 192f : 264f;
             float gap = 10f;
             float totalHeight = cardCount * cardHeight + (cardCount - 1) * gap;
@@ -568,11 +570,6 @@ namespace CrazyElevator.Managers
                         "VIP", "VIP PASSENGERS", "A VIP appears midway through the shift and is worth a delivery bonus.");
                     else DrawRoundUnlockCard(card, accent, edge,
                         "3", "COMING IN ROUND 3", "Monsters, tornadoes, world hazards, and teleporter gates arrive next round.");
-                }
-                else
-                {
-                    DrawRoundUnlockCard(card, accent, edge,
-                        "1", "NO EXTRA HAZARDS YET", "Use this round to learn the world. VIP passengers arrive in round 2; shaft hazards and teleporters arrive in round 3.");
                 }
             }
 
