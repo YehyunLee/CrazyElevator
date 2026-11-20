@@ -44,6 +44,8 @@ namespace CrazyElevator.Managers
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
                     }
                 }
+            if (round.ActiveDimension == 0 && bands != null)
+                SetOfficeTopArtBoundary(world, bands, round);
 
             Transform backdrops = world.Find("World Backdrops");
             if (backdrops != null)
@@ -154,6 +156,56 @@ namespace CrazyElevator.Managers
             foreach (Transform part in band.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Left Outer Wall" || part.name == "Right Outer Wall")
                     part.gameObject.SetActive(false);
+        }
+
+        static void SetOfficeTopArtBoundary(Transform world, Transform bands, ElevatorRound activeRound)
+        {
+            // Stretch the lowest office band to the visual cap. Keep the roof above
+            // the sixth playable floor without adding another gameplay floor.
+            float lowestBandY = float.MaxValue;
+            foreach (Transform band in bands)
+                if (band.name.StartsWith("Office Band"))
+                    lowestBandY = Mathf.Min(lowestBandY,
+                        world.InverseTransformPoint(band.position).y);
+            if (lowestBandY == float.MaxValue) return;
+
+            foreach (Transform band in bands)
+            {
+                if (!band.name.StartsWith("Office Band")) continue;
+                Transform corridor = band.Find("Office Corridor");
+                if (corridor == null) continue;
+
+                bool isLowestBand = Mathf.Abs(
+                    world.InverseTransformPoint(band.position).y - lowestBandY) < .01f;
+                Transform backWall = corridor.Find("End Wall");
+                Transform roof = corridor.Find("Ceiling");
+                if (isLowestBand)
+                {
+                    float height = (activeRound.MaxFloor + 1) * ShaftFloorHeight - lowestBandY;
+                    if (backWall != null)
+                    {
+                        Vector3 wallScale = backWall.localScale;
+                        wallScale.y = height;
+                        backWall.localScale = wallScale;
+                        Vector3 wallPosition = backWall.localPosition;
+                        wallPosition.y = height * .5f;
+                        backWall.localPosition = wallPosition;
+                        backWall.gameObject.SetActive(true);
+                    }
+                    if (roof != null)
+                    {
+                        Vector3 roofPosition = roof.localPosition;
+                        roofPosition.y = height - .15f;
+                        roof.localPosition = roofPosition;
+                        roof.gameObject.SetActive(true);
+                    }
+                }
+                else
+                {
+                    if (backWall != null) backWall.gameObject.SetActive(false);
+                    if (roof != null) roof.gameObject.SetActive(false);
+                }
+            }
         }
 
         static void HideCandyTopFloorSpillover(Transform world, Transform band, ElevatorRound activeRound)
