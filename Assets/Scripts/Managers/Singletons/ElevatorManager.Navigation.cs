@@ -39,6 +39,7 @@ namespace CrazyElevator.Managers
                         {
                             HideBandSpillover(world, band, round);
                             if (dimension == 0) HideOfficeOuterWalls(band);
+                            else if (dimension == 1) HideCandyTopFloorSpillover(world, band, round);
                         }
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
                     }
@@ -153,6 +154,33 @@ namespace CrazyElevator.Managers
             foreach (Transform part in band.GetComponentsInChildren<Transform>(true))
                 if (part.name == "Left Outer Wall" || part.name == "Right Outer Wall")
                     part.gameObject.SetActive(false);
+        }
+
+        static void HideCandyTopFloorSpillover(Transform world, Transform band, ElevatorRound activeRound)
+        {
+            // Candy's last six-floor stack has clouds whose models reach above
+            // the final slab even though their pivots are still below it.
+            int topCandyFloorNumber = 4 + (ElevatorRound.FloorsPerDimension - 1) % 4;
+            string topCandyFloorName = "Candy Floor " + topCandyFloorNumber;
+            Transform[] parts = band.GetComponentsInChildren<Transform>(true);
+            Transform topFloor = null;
+            foreach (Transform part in parts)
+            {
+                if (part.name != topCandyFloorName) continue;
+                int floor = Mathf.RoundToInt(
+                    world.InverseTransformPoint(part.position).y / ShaftFloorHeight);
+                if (floor == activeRound.MaxFloor)
+                {
+                    topFloor = part;
+                    break;
+                }
+            }
+            if (topFloor == null) return;
+
+            foreach (Transform part in parts)
+                if (part.name.StartsWith("Sky Puff")) part.gameObject.SetActive(false);
+            foreach (Transform prop in topFloor)
+                if (prop.localPosition.y > 7.5f) prop.gameObject.SetActive(false);
         }
 
         static void FitSideTrackToWorld(Transform view, SideTrack track, int minFloor, int maxFloor)
