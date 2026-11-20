@@ -69,6 +69,14 @@ namespace CrazyElevator.Managers
                 DrawTitleScreen(transitionAmount);
 
             GUI.matrix = previous;
+            if (launching)
+            {
+                float launch = Mathf.Clamp01(launchTimer / LaunchSeconds);
+                float fade = Mathf.Clamp01((launch - .45f) * 1.82f);
+                GUI.matrix = Matrix4x4.identity;
+                MenuPresentation.Paint(screen, new Color(0f, 0f, 0f, fade));
+                GUI.matrix = previous;
+            }
         }
 
         void DrawTitleScreen(float transitionAmount)

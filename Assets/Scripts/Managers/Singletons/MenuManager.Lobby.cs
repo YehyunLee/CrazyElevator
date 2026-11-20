@@ -168,9 +168,6 @@ namespace CrazyElevator.Managers
                 launching ? MenuPresentation.Brass : LobbyPortraitBacking, LobbyShadow);
             DrawLabel(startButton, launching ? "START" : "WAITING", readyLabelText,
                 launching ? MenuPresentation.Ink : MenuPresentation.Paper);
-
-            if (launching)
-                MenuPresentation.Paint(view, new Color(0f, 0f, 0f, Mathf.Clamp01((launch - .45f) * 1.82f)));
             GUI.EndGroup();
         }
 
