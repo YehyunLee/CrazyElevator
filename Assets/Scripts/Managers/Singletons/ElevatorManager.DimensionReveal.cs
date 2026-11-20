@@ -547,8 +547,8 @@ namespace CrazyElevator.Managers
             heading.normal.textColor = MenuPresentation.DisplayColor(ink);
             GUI.Label(new Rect(244f, 45f, 840f, 56f), "WHAT'S NEW THIS ROUND?", heading);
 
-            int cardCount = roundNumber >= 3 ? 3 : 2;
-            float cardHeight = cardCount == 3 ? 128f : cardCount == 2 ? 192f : 264f;
+            int cardCount = roundNumber >= 3 ? 3 : 1;
+            float cardHeight = cardCount == 3 ? 128f : 264f;
             float gap = 10f;
             float totalHeight = cardCount * cardHeight + (cardCount - 1) * gap;
             float cardTop = 132f + (416f - totalHeight) * .5f;
@@ -566,10 +566,8 @@ namespace CrazyElevator.Managers
                 }
                 else if (roundNumber == 2)
                 {
-                    if (i == 0) DrawRoundUnlockCard(card, accent, edge,
+                    DrawRoundUnlockCard(card, accent, edge,
                         "VIP", "VIP PASSENGERS", "A VIP appears midway through the shift and is worth a delivery bonus.");
-                    else DrawRoundUnlockCard(card, accent, edge,
-                        "3", "COMING IN ROUND 3", "Monsters, tornadoes, world hazards, and teleporter gates arrive next round.");
                 }
             }
 
