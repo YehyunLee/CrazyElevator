@@ -76,6 +76,7 @@ namespace CrazyElevator.Managers
         public AudioClip ElevatorDing => ding;
         public Camera CabinCamera => eye;
         public Camera ShaftCamera => exteriorCamera;
+        Camera ShaftProjectionCamera => Match != null && Match.SharedShaftView ? Match.player.ShaftCamera : exteriorCamera;
         public Camera CinemachineCamera => eye;
         public PassengerView[] PassengerPrefabs => sceneView != null ? sceneView.passengers : null;
         public PassengerManager Passengers => passengerManager;
@@ -108,6 +109,8 @@ namespace CrazyElevator.Managers
         public IReadOnlyList<Rider> AllRiders =>
             round != null ? round.Riders : (IReadOnlyList<Rider>)System.Array.Empty<Rider>();
 
+        internal ElevatorRound MatchRound => round;
+
         public bool TryGetWaitingPassengerWorldPosition(Rider rider, out Vector3 position)
         {
             ElevatorManager owner = WorldOwner;
@@ -134,14 +137,15 @@ namespace CrazyElevator.Managers
             float bestCost = float.MaxValue;
             foreach (var rider in round.Riders)
             {
-                if (!round.IsQueuedAtStop(rider) || rider.Space > 2) continue;
+                if (!round.IsQueuedAtStop(rider)) continue;
                 float playerDistance = PickupRouteDistance(rider);
                 float rivalDistance = rival.PickupRouteDistance(rider);
                 // Keep the longer approach short and give both drivers a reason to turn.
                 float cost = Mathf.Max(playerDistance, rivalDistance)
                     + Mathf.Abs(playerDistance - rivalDistance) * .75f
-                    + Mathf.Abs(rider.Origin - (round.MinFloor + 3.5f)) * .2f;
+                    + Mathf.Abs(rider.Origin - (round.MinFloor + round.MaxFloor) * .5f) * .2f;
                 if (rider.OriginStop != ElevatorRound.CenterStop) cost += 2.5f;
+                if (rider.Space > 2) cost += 2f;
                 if (Mathf.Min(playerDistance, rivalDistance) < .85f) cost += 8f;
                 if (cost >= bestCost) continue;
                 best = rider; bestCost = cost;
@@ -150,15 +154,33 @@ namespace CrazyElevator.Managers
             return best;
         }
 
-        float PickupRouteDistance(Rider rider)
-            => Mathf.Abs(CollisionFloor - rider.Origin)
-                + Mathf.Abs(RouteLateralX - StopX(rider.OriginStop)) / ShaftFloorHeight;
+        float PickupRouteDistance(Rider rider) => PickupRouteDistance(rider.Origin, rider.OriginStop);
 
-        internal bool NearingVipPickup(Rider rider)
+        internal float PickupRouteDistance(int floor, int stop)
+            => Mathf.Abs(CollisionFloor - floor)
+                + Mathf.Abs(RouteLateralX - StopX(stop)) / ShaftFloorHeight;
+
+        internal Rider NearestDuelPickup()
         {
-            if (rider == null || round == null || !round.HasCapacityFor(rider)) return false;
-            if (TryGetPickupStop(out int floor, out int stop))
-                return floor == rider.Origin && stop == rider.OriginStop;
+            if (round == null || round.Load != 0) return null;
+            Rider nearest = null;
+            float nearestDistance = float.PositiveInfinity;
+            foreach (Rider rider in round.DuelPickups)
+            {
+                if (rider.IsVip || rider.Boarded || rider.Resolved) continue;
+                float distance = PickupRouteDistance(rider);
+                if (distance >= nearestDistance) continue;
+                nearest = rider;
+                nearestDistance = distance;
+            }
+            return nearest;
+        }
+
+        internal bool NearingPickup(Rider rider)
+        {
+            if (ApproachingPickup(rider)) return true;
+            if (rider == null || round == null || round.Finished || !round.HasCapacityFor(rider))
+                return false;
             Vector2 towardsPickup = new Vector2(StopX(rider.OriginStop), rider.Origin * ShaftFloorHeight + 1.4f)
                 - ShaftRoutePosition;
             return MovingInShaft && PickupRouteDistance(rider) < 2f

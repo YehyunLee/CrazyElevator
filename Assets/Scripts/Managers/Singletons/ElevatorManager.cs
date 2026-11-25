@@ -202,7 +202,7 @@ namespace CrazyElevator.Managers
             UpdateBabyComboFeedback(dt);
             if (waitingMisses > 0 && Match != null)
             {
-                ElevatorManager other = IsNpc ? Match.player : Match.Rival;
+                ElevatorManager other = Seat == 0 ? Match.Rival : Match.player;
                 if (other != null && other.AtStop && other.DiscreteFloor == round.Floor
                     && other.DiscreteStop == round.Stop)
                 {
@@ -306,6 +306,7 @@ namespace CrazyElevator.Managers
             round = CreateExtendedRound();
             if (sharedPool != null) round.SharePassengerPoolWith(sharedPool, Seat);
             else if (MenuManager.TutorialActive && Match != null) round.RevealPracticeQueue(2);
+            else if (Match != null && Match.SplitScreen) round.EnableDuelPickups();
             ResetBoardingDoors();
             if (!MenuManager.TutorialActive) OpenAllBoardingDoors();
             phase = Phase.Boarding; paused = false; phaseTime = 0; doors = 1;
@@ -1886,11 +1887,11 @@ namespace CrazyElevator.Managers
         {
             switch (BandForFloor(floor))
             {
-                case WorldBand.Office: return "OFFICE  /  floors 1-" + ElevatorRound.FloorsPerDimension;
-                case WorldBand.Candy: return "CANDY  /  floors 1-" + ElevatorRound.FloorsPerDimension;
+                case WorldBand.Office: return "OFFICE  /  floors 1-" + ElevatorRound.PlayableFloorsPerDimension;
+                case WorldBand.Candy: return "CANDY  /  floors 1-" + ElevatorRound.PlayableFloorsPerDimension;
                 case WorldBand.Water: return "UNDERWATER  /  " + (HasHandyman ? "handyman on duty" : repairedFor > 0 ? "patched up" : "rusty & needs repair");
-                case WorldBand.Forest: return "MYSTICAL FOREST  /  floors 1-" + ElevatorRound.FloorsPerDimension;
-                default: return "SPACE  /  floors 1-" + ElevatorRound.FloorsPerDimension;
+                case WorldBand.Forest: return "MYSTICAL FOREST  /  floors 1-" + ElevatorRound.PlayableFloorsPerDimension;
+                default: return "SPACE  /  floors 1-" + ElevatorRound.PlayableFloorsPerDimension;
             }
         }
 
@@ -1940,14 +1941,15 @@ namespace CrazyElevator.Managers
             bool initializeView = !cameraViewReady;
             float viewBlend = AdvanceCameraView(showingTravelView, dt);
             bool visible = Match == null || Match.IsVisibleSeat(Seat);
+            bool sharedShaft = Match != null && Match.SharedShaftView;
             // Keep the shaft behind the growing cabin view until it fills the seat.
-            exteriorCamera.enabled = visible && (showingTravelView || cameraViewBlend > 0f);
-            eye.enabled = visible && (!showingTravelView || cameraViewBlend < 1f);
+            exteriorCamera.enabled = sharedShaft ? Seat == 0 : visible && (showingTravelView || cameraViewBlend > 0f);
+            eye.enabled = !sharedShaft && visible && (!showingTravelView || cameraViewBlend < 1f);
             Rect cameraRect = Match != null ? Match.CameraRect(Seat) : new Rect(0, 0, 1, 1);
             eye.targetTexture = null;
             exteriorCamera.targetTexture = null;
-            exteriorCamera.rect = cameraRect;
-            exteriorCamera.aspect = PixelAspect(cameraRect);
+            exteriorCamera.rect = sharedShaft ? new Rect(0f, 0f, 1f, 1f) : cameraRect;
+            exteriorCamera.aspect = PixelAspect(exteriorCamera.rect);
             eye.rect = BlendCameraRect(cameraRect, CabinTransitionRect(cameraRect), viewBlend);
             eye.depth = exteriorCamera.enabled ? exteriorCamera.depth + 1 : cabinCameraDepth;
             eye.aspect = PixelAspect(eye.rect);
@@ -1984,12 +1986,12 @@ namespace CrazyElevator.Managers
             if (!cameraPaused || initializeView) UpdateRideMotion(dt);
             eye.backgroundColor = WorldSky(travelFloor);
             EnsureCrazyRouteMap();
-            if (!cameraPaused || initializeView)
+            if (!cameraPaused || initializeView || UsesShaftOverview && exteriorCamera.enabled)
             {
                 UpdateCrazyTravelCamera(carLocal, dt);
                 ApplyWorldEventCameraAccent();
             }
-            exteriorCamera.backgroundColor = WorldSky(travelFloor);
+            exteriorCamera.backgroundColor = UsesShaftOverview ? ShaftPalette(round.ActiveDimension) : WorldSky(travelFloor);
             if (visible && showingTravelView && showPassengerList && !MenuManager.IsOpen)
                 UpdateManifestPortraits();
         }
@@ -2028,11 +2030,12 @@ namespace CrazyElevator.Managers
         void DrawTravelView()
         {
             if (!DisplayBuildingView || !exteriorCamera) return;
+            bool sharedShaft = Match != null && Match.SharedShaftView;
             DrawSpeedLines();
-            DrawWorldEventCue();
+            if (!sharedShaft || Seat == 0) DrawWorldEventCue();
             if (!MenuManager.TutorialActive)
             {
-                DrawDestinationBeacons();
+                if (!sharedShaft) DrawDestinationBeacons();
                 DrawPassengerList();
             }
             DrawPassengerAbilityFeedback();

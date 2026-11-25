@@ -54,6 +54,9 @@ namespace CrazyElevator.Match
         bool bouncerCollision;
         const int BumpRewardPoints = 50;
         const int ContestedDeliveryBonus = 30;
+        const float PickupRefillSeconds = 1.25f;
+        float pickupRefillTime;
+        int lastPickupFloor;
         const float DisplacedPickupSeconds = 6f;
         readonly (int floor, int stop, float until)[] displacedPickups = new (int, int, float)[2];
         SharedRider matchVip;
@@ -79,7 +82,7 @@ namespace CrazyElevator.Match
         Game tutorialCollisionAttacker, tutorialCollisionTarget;
         bool tutorialCollisionCompleted;
         float tutorialCollisionStartFloor;
-        static readonly float[] JunctionFloorPositions = { 5.5f, 12.5f, 19.5f };
+        static readonly float[] JunctionFloorPositions = { 2.5f, 12.5f, 19.5f };
         readonly int[] expressTrack = { 0, 1, 0 };
         readonly int[] usedJunctionMask = { 0, 0 };
         readonly float[] expressFlash = { 0f, 0f };
@@ -346,6 +349,10 @@ namespace CrazyElevator.Match
             expressFlash[0] = expressFlash[1] = 0f;
             player.StartMatchShift(countdown: !practice);
             Rival.StartMatchShift(player, countdown: !practice);
+            pickupRefillTime = 0f;
+            lastPickupFloor = -1;
+            if (SplitScreen && !practice)
+                for (int i = 0; i < ElevatorRound.DuelPickupLimit; i++) OfferDuelPickup();
             // Promote one waiting passenger to VIP halfway through the live shift.
             matchVip = null;
             vipClaimSeat = -1;
@@ -376,6 +383,8 @@ namespace CrazyElevator.Match
 
         void UpdateRivalInteractions(float dt)
         {
+            if (SplitScreen && !player.ShiftFinished && !Rival.ShiftFinished)
+                UpdateDuelPickups(dt);
             vipClaimTime = Mathf.Max(0f, vipClaimTime - dt);
             eventMessageTime = Mathf.Max(0f, eventMessageTime - dt);
             for (int seat = 0; seat < 2; seat++)
@@ -431,6 +440,56 @@ namespace CrazyElevator.Match
             }
         }
 
+        void UpdateDuelPickups(float dt)
+        {
+            if (GameManager.Instance?.AbilityIntroActive == true && AbilityIntroPaneSeat < 0) return;
+            ElevatorRound round = player.MatchRound;
+            round.ClearTakenDuelPickups();
+            if (round.DuelPickups.Count >= ElevatorRound.DuelPickupLimit)
+            {
+                pickupRefillTime = 0f;
+                return;
+            }
+
+            pickupRefillTime += dt;
+            if (pickupRefillTime < PickupRefillSeconds) return;
+            pickupRefillTime = 0f;
+            OfferDuelPickup();
+        }
+
+        void OfferDuelPickup()
+        {
+            ElevatorRound round = player.MatchRound;
+            SharedRider best = null;
+            int bestStop = ElevatorRound.CenterStop;
+            float bestCost = float.MaxValue;
+            bool preferSide = Random.value < .5f;
+            foreach (SharedRider rider in round.Riders)
+            {
+                int stop = rider.OriginStop;
+                if (!round.CanOfferDuelPickup(rider, stop)) continue;
+
+                float firstDistance = player.PickupRouteDistance(rider.Origin, stop);
+                float secondDistance = Rival.PickupRouteDistance(rider.Origin, stop);
+                float cost = Mathf.Max(firstDistance, secondDistance)
+                    + Mathf.Abs(firstDistance - secondDistance) * 1.25f
+                    + Random.Range(0f, .75f);
+                if (Mathf.Min(firstDistance, secondDistance) < 1f) cost += 5f;
+                if (preferSide && stop == ElevatorRound.CenterStop) cost += 2f;
+                if (rider.Origin == lastPickupFloor) cost += 2f;
+                foreach (SharedRider waiting in round.DuelPickups)
+                {
+                    if (Mathf.Abs(waiting.Origin - rider.Origin) == 1) cost += 1.5f;
+                    if (waiting.Kind == rider.Kind) cost += 1f;
+                }
+                if (cost >= bestCost) continue;
+                best = rider;
+                bestStop = stop;
+                bestCost = cost;
+            }
+            if (best != null && round.TryOfferDuelPickup(best, bestStop)) lastPickupFloor = best.Origin;
+        }
+
         bool VipWaiting => matchVip != null && !matchVip.Boarded && !matchVip.Resolved;
 
         internal bool TryFrameRival(Game actor, out Vector2 rivalPosition, out float blend)
@@ -448,7 +507,14 @@ namespace CrazyElevator.Match
             float closingSpeed = Vector2.Dot(actor.ShaftRouteVelocity - other.ShaftRouteVelocity,
                 separation.normalized);
             float closing = Mathf.InverseLerp(1f, 6f, closingSpeed);
-            bool racing = VipWaiting && actor.NearingVipPickup(matchVip) && other.NearingVipPickup(matchVip);
+            bool racing = VipWaiting && actor.NearingPickup(matchVip) && other.NearingPickup(matchVip);
+            if (!racing && SplitScreen && !MenuManager.TutorialActive)
+                foreach (SharedRider rider in player.MatchRound.DuelPickups)
+                    if (!rider.Boarded && !rider.Resolved && actor.NearingPickup(rider) && other.NearingPickup(rider))
+                    {
+                        racing = true;
+                        break;
+                    }
             blend = proximity * Mathf.Max(racing ? 1f : closing, collisionFlash / CollisionFlashSeconds);
             return blend > 0f;
         }
@@ -859,8 +925,7 @@ namespace CrazyElevator.Match
             var displaced = displacedPickups[actor.Seat];
             bool claimedAfterBump = displaced.until > 0f && actor.SecondsLeft >= displaced.until
                 && rider.Origin == displaced.floor && rider.OriginStop == displaced.stop;
-            if (other == null || (!claimedAfterBump && !other.ApproachingPickup(rider)
-                && !(rider == matchVip && other.NearingVipPickup(rider)))) return;
+            if (other == null || (!claimedAfterBump && !other.NearingPickup(rider))) return;
 
             if (claimedAfterBump) displacedPickups[actor.Seat] = default;
             rider.ContestedPickupBonus = ContestedDeliveryBonus;
@@ -1113,6 +1178,14 @@ namespace CrazyElevator.Match
 {
     public sealed partial class ElevatorMatch
     {
+        internal bool SharedShaftView => Running && SplitScreen && !Finished
+            && !MenuManager.TutorialActive && !dimensionRevealActive
+            && player != null && Rival != null && player.Traveling && Rival.Traveling
+            && GameManager.Instance?.AbilityIntroActive != true;
+
+        internal Rect ShaftViewRect(int seat) => SharedShaftView
+            ? new Rect(0f, 0f, Screen.width, Screen.height) : ViewRect(seat);
+
         // Only two human players need separate camera panes.
         public Rect ViewRect(int seat)
         {
@@ -1184,7 +1257,8 @@ namespace CrazyElevator.Match
             DrawLeadEdges();
             if (IsVisibleSeat(0)) DrawSeat(player, 0, MenuPresentation.Coral);
             if (IsVisibleSeat(1)) DrawSeat(Rival, 1, MenuPresentation.Teal);
-            if (SplitScreen) DrawSplitDivider();
+            if (SharedShaftView) DrawSharedShaftMap();
+            else if (SplitScreen) DrawSplitDivider();
             if (!MenuManager.TutorialActive)
             {
                 DrawSharedRoundHUD();
@@ -1316,10 +1390,6 @@ namespace CrazyElevator.Match
 
         void DrawSplitDivider()
         {
-            // Keep the split obvious while either cabin is on screen; hide it
-            // when both players are looking at their full shaft-travel views.
-            if (player.Traveling && Rival.Traveling) return;
-
             const float width = 12f;
             float x = Screen.width * .5f;
             MenuPresentation.Paint(new Rect(x - width * .5f, 0, width, Screen.height), MenuPresentation.Ink);
@@ -1372,7 +1442,7 @@ namespace CrazyElevator.Match
         void DrawSeatScoreFlights(Game actor, int seat)
         {
             if (actor == null) return;
-            Rect view = ViewRect(seat);
+            Rect view = ShaftViewRect(seat);
             Vector2 anchor = SharedScoreTile(SharedScoreboardRect, seat).center - view.position;
             anchor.y += 11f * MatchHudScale;
             Matrix4x4 previousMatrix = GUI.matrix;
@@ -1386,6 +1456,7 @@ namespace CrazyElevator.Match
             Rect view = ViewRect(seat);
             actor.DrawMatchViewGUI();
             DrawRivalInteractions(actor, seat, view);
+            if (SharedShaftView) return;
             DrawPlayerScreenBorder(view, colour);
             if (MenuManager.TutorialActive) return;
             Rect bar = SeatInfoRect(seat);
@@ -1397,11 +1468,95 @@ namespace CrazyElevator.Match
             DrawHudLabel(badge, "PLAYER " + (seat + 1), roundStatus, MenuPresentation.Ink);
 
             Rect floorTile = Rect.MinMaxRect(badge.xMax + 6f * scale, bar.y, bar.xMax, bar.yMax);
-            DrawSeatTile(floorTile, "FLOOR", ElevatorRound.FloorNumber(Mathf.Clamp(
-                Mathf.RoundToInt(actor.CurrentFloor), actor.ActiveMinFloor, actor.ActiveMaxFloor)).ToString(),
-                MenuPresentation.Paper);
+            DrawSeatTile(floorTile, "FLOOR", CurrentFloorNumber(actor).ToString(), MenuPresentation.Paper);
             if (seat == vipClaimSeat && vipClaimTime > 0f && !Finished)
                 DrawVipClaim(new Vector2(badge.center.x, bar.yMax + 22f * scale), colour, scale);
+        }
+
+        static int CurrentFloorNumber(Game actor) => ElevatorRound.FloorNumber(Mathf.Clamp(
+            Mathf.RoundToInt(actor.CurrentFloor), actor.ActiveMinFloor, actor.ActiveMaxFloor));
+
+        void DrawSharedShaftMap()
+        {
+            if (Event.current.type != EventType.Repaint || player.ShaftCamera == null) return;
+            Camera camera = player.ShaftCamera;
+            Rect view = ShaftViewRect(0);
+            float scale = MatchHudScale;
+            for (int floor = player.ActiveMinFloor; floor <= player.ActiveMaxFloor; floor++)
+            {
+                Vector3 anchor = player.MapPoint(ShaftCenterX - Game.GroundTrackSpan - 3f, floor);
+                if (TryProjectMapPoint(camera, view, anchor, out Vector2 position))
+                    DrawMapTag(position, 38f, 25f, "F" + ElevatorRound.FloorNumber(floor), MenuPresentation.Paper);
+            }
+
+            foreach (SharedRider rider in player.MatchRound.DuelPickups)
+            {
+                if (rider.Boarded || rider.Resolved
+                    || !player.TryGetWaitingPassengerWorldPosition(rider, out Vector3 worldPosition)
+                    || !TryProjectMapPoint(camera, view, worldPosition + Vector3.up * 2.4f, out Vector2 position))
+                    continue;
+                float wave = Mathf.Repeat(Time.unscaledTime * .9f, 1f);
+                DrawRivalPulse(position, Vector2.one * ((12f + wave * 16f) * scale),
+                    MenuPresentation.Brass, .75f * (1f - wave), 2f * scale);
+                MenuPresentation.Paint(new Rect(position.x - 1f * scale, position.y - 15f * scale,
+                    2f * scale, 15f * scale), MenuPresentation.Brass);
+                DrawMapTag(position - new Vector2(0f, 25f * scale),
+                    72f, 21f, rider.IsVip ? "VIP" : "PICKUP", MenuPresentation.Brass);
+            }
+
+            SharedRider firstDrop = player.NearestDelivery();
+            SharedRider secondDrop = Rival.NearestDelivery();
+            bool sharedDrop = firstDrop != null && secondDrop != null && firstDrop.Destination == secondDrop.Destination
+                && firstDrop.DestinationStop == secondDrop.DestinationStop;
+            DrawMapDropoff(camera, view, firstDrop, 0, sharedDrop);
+            DrawMapDropoff(camera, view, secondDrop, 1, sharedDrop);
+
+            Vector2 first = GuiPoint(camera.WorldToScreenPoint(player.ShaftWorldPosition));
+            Vector2 second = GuiPoint(camera.WorldToScreenPoint(Rival.ShaftWorldPosition));
+            bool firstOnLeft = first.x <= second.x;
+            DrawMapCar(camera, view, player, 0, firstOnLeft ? -1f : 1f);
+            DrawMapCar(camera, view, Rival, 1, firstOnLeft ? 1f : -1f);
+        }
+
+        void DrawMapCar(Camera camera, Rect view, Game actor, int seat, float side)
+        {
+            if (!TryProjectMapPoint(camera, view, actor.ShaftWorldPosition, out Vector2 centre)) return;
+            float scale = MatchHudScale;
+            Color accent = SeatAccent(seat);
+            float x = Mathf.Clamp(centre.x + side * 43f * scale, view.xMin + 20f * scale, view.xMax - 20f * scale);
+            MenuPresentation.Paint(new Rect(Mathf.Min(centre.x, x), centre.y - scale,
+                Mathf.Abs(x - centre.x), 2f * scale), accent);
+            var label = new Vector2(x, centre.y);
+            DrawMapTag(label, 36f, 25f, "P" + (seat + 1), accent);
+            if (seat == vipClaimSeat && vipClaimTime > 0f)
+                DrawVipClaim(label + new Vector2(0f, 32f * scale), accent, scale);
+        }
+
+        void DrawMapDropoff(Camera camera, Rect view, SharedRider rider, int seat, bool sharedDrop)
+        {
+            if (rider == null || !TryProjectMapPoint(camera, view, player.MapLanding(rider), out Vector2 position))
+                return;
+            float scale = MatchHudScale;
+            float offset = sharedDrop ? (seat == 0 ? -37f : 37f) : 0f;
+            DrawMapTag(position + new Vector2(offset, 17f) * scale,
+                67f, 21f, "P" + (seat + 1) + " DROP", SeatAccent(seat));
+        }
+
+        void DrawMapTag(Vector2 centre, float width, float height, string title, Color accent)
+        {
+            float scale = MatchHudScale;
+            Vector2 size = new Vector2(width, height) * scale;
+            var tag = new Rect(centre - size * .5f, size);
+            MenuPresentation.Paint(new Rect(tag.x, tag.y + 2f * scale, tag.width, tag.height), MenuPresentation.Ink);
+            MenuPresentation.Paint(tag, accent);
+            DrawHudLabel(tag, title, roundStatus, MenuPresentation.Ink);
+        }
+
+        static bool TryProjectMapPoint(Camera camera, Rect view, Vector3 worldPosition, out Vector2 point)
+        {
+            Vector3 projected = camera.WorldToScreenPoint(worldPosition);
+            point = GuiPoint(projected);
+            return projected.z > 0f && view.Contains(point);
         }
 
         void DrawRivalInteractions(Game actor, int seat, Rect view)
@@ -1433,7 +1588,7 @@ namespace CrazyElevator.Match
             if (MenuManager.TutorialActive || Finished || actor.IntroPlaying || actor.CountdownPlaying) return;
             var label = new GUIStyle(centred)
                 { fontSize = Mathf.Clamp(Mathf.RoundToInt(view.width * .032f), 13, 20), wordWrap = false };
-            if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f)
+            if (contestMessageTimes[seat] > 0f || eventMessageTime > 0f && (!SharedShaftView || seat == 0))
             {
                 float messageY = Mathf.Max(hintTop, view.y + view.height * .18f);
                 Rect message = new Rect(view.x + view.width * .15f, messageY, view.width * .7f, 38f);
@@ -1441,11 +1596,26 @@ namespace CrazyElevator.Match
                 label.normal.textColor = contestMessageTimes[seat] > 0f ? Gold : Coral;
                 GUI.Label(message, contestMessageTimes[seat] > 0f ? contestMessages[seat] : eventMessage, label);
             }
+            else if (!actor.Traveling && actor.NearestDuelPickup() is SharedRider pickup
+                && (actor.DiscreteFloor != pickup.Origin || actor.DiscreteStop != pickup.OriginStop))
+            {
+                float scale = MatchHudScale;
+                var hint = new Rect(view.center.x - 105f * scale, hintTop, 210f * scale, 26f * scale);
+                MenuPresentation.HudPlate(hint, MenuPresentation.Brass);
+                DrawHudLabel(hint, "PICKUP  " + Game.StopTag(pickup.Origin, pickup.OriginStop),
+                    roundStatus, MenuPresentation.Paper);
+            }
+            if (SharedShaftView && seat != 0) return;
+            if (SharedShaftView) view = ShaftViewRect(seat);
             Camera camera = actor.Traveling ? actor.ShaftCamera : actor.CabinCamera;
             if (camera == null || !camera.enabled) return;
             if (actor.Traveling)
             {
-                DrawVipNavigator(actor, view, camera);
+                if (!SharedShaftView)
+                {
+                    DrawVipNavigator(actor, view, camera);
+                    DrawMapCar(camera, view, actor, seat, seat == 0 ? -1f : 1f);
+                }
                 DrawCollisionFeedback(view, camera);
             }
             foreach (CandyTrail trail in candyTrails)
@@ -1506,7 +1676,7 @@ namespace CrazyElevator.Match
                 if (landing.z > 0f && safeView.Contains(GuiPoint(landing)))
                     DrawRivalPulse(GuiPoint(landing), new Vector2(1f, .36f)
                         * (28f + 50f * wave) * scale, Gold, (1f - wave) * .9f, 3f * scale);
-                if (player.NearingVipPickup(matchVip) && Rival.NearingVipPickup(matchVip))
+                if (player.NearingPickup(matchVip) && Rival.NearingPickup(matchVip))
                 {
                     DrawVipApproach(camera, view, marker, player, -1f, clock, scale);
                     DrawVipApproach(camera, view, marker, Rival, 1f, clock, scale);
@@ -1633,7 +1803,8 @@ namespace CrazyElevator.Match
             MenuPresentation.HudPlate(plate, Color.Lerp(accent, MenuPresentation.Brass, pulse));
             DrawScoreLeadGlow(plate, seat, accent);
             DrawHudLabel(new Rect(plate.x, plate.y + 5f * scale, plate.width, 16f * scale),
-                actor.IsNpc ? "CPU SCORE" : "P" + (seat + 1) + " SCORE", tileCaption, accent);
+                actor.IsNpc ? "CPU SCORE" : "P" + (seat + 1)
+                    + (SharedShaftView ? "  ·  F" + CurrentFloorNumber(actor) : " SCORE"), tileCaption, accent);
 
             Rect number = new Rect(plate.x + 6f * scale, plate.y + 19f * scale,
                 plate.width - 12f * scale, 47f * scale);

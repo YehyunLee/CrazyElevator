@@ -17,6 +17,41 @@ namespace CrazyElevator.Managers
         const int CenterStop = ElevatorRound.CenterStop;
         int dockingStop = CenterStop;
         float dockingStartX, dockingTargetX;
+        static readonly Color MapSteel = new Color32(40, 47, 65, 255);
+        static readonly Color[] MapSkyColours =
+        {
+            new Color32(65, 78, 101, 255),  // Office
+            new Color32(77, 59, 105, 255),  // Candy
+            new Color32(24, 68, 85, 255),   // Underwater
+            new Color32(48, 59, 76, 255),   // Forest
+            new Color32(40, 30, 69, 255)    // Space
+        };
+
+        static Color ShaftPalette(int dimension) => MapSkyColours[Mathf.Clamp(dimension, 0, MapSkyColours.Length - 1)];
+
+        static Color TrackPrimaryColour(int dimension)
+        {
+            switch (dimension)
+            {
+                case 1: return new Color32(255, 119, 190, 255); // Candy pink
+                case 2: return new Color32(83, 224, 232, 255);   // Water cyan
+                case 3: return new Color32(139, 226, 164, 255);  // Forest leaf
+                case 4: return new Color32(130, 169, 255, 255);  // Space blue
+                default: return new Color32(128, 173, 224, 255); // Office steel
+            }
+        }
+
+        static Color TrackSecondaryColour(int dimension)
+        {
+            switch (dimension)
+            {
+                case 1: return new Color32(115, 236, 199, 255); // Candy mint
+                case 2: return new Color32(255, 167, 143, 255); // Water coral
+                case 3: return new Color32(218, 151, 238, 255); // Forest bloom
+                case 4: return new Color32(207, 151, 255, 255); // Space violet
+                default: return new Color32(181, 204, 230, 255);
+            }
+        }
 
         // These are authored groups in Assets/Prefabs/Resources/ExteriorWorld.prefab.
         // Keep every band editable; a round only toggles its visible world art.
@@ -25,7 +60,9 @@ namespace CrazyElevator.Managers
             if (WorldOwner != this || round == null || round.ActiveDimension < 0
                 || exteriorCar == null || exteriorCar.parent == null) return;
             Transform world = exteriorCar.parent;
-            SyncShaftBounds(world);
+            Color sky = ShaftPalette(round.ActiveDimension);
+            Color trackAccent = TrackPrimaryColour(round.ActiveDimension);
+            SyncShaftBounds(world, Color.Lerp(MapSteel, trackAccent, .36f));
             Transform bands = world.Find("Shaft World Bands");
             if (bands != null)
                 foreach (Transform band in bands)
@@ -40,6 +77,7 @@ namespace CrazyElevator.Managers
                             HideBandSpillover(world, band, round);
                             if (dimension == 0) HideOfficeOuterWalls(band);
                             else if (dimension == 1) HideCandyTopFloorSpillover(world, band, round);
+                            GradeShaftScenery(band, sky, .08f);
                         }
                         band.gameObject.SetActive(dimension == round.ActiveDimension);
                     }
@@ -59,13 +97,17 @@ namespace CrazyElevator.Managers
                         backdrop.gameObject.SetActive(round.ActiveDimension == 3);
                     else if (backdrop.name == "Space Backdrop")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 4);
+                    if (backdrop.gameObject.activeSelf) GradeShaftScenery(backdrop, sky, 0f);
                 }
 
             Transform rails = world.Find("Floor Rails");
             if (rails != null)
                 foreach (Transform rail in rails)
                     if (TryAuthoredFloorNumber(rail.name, "Floor rail ", out int floor))
+                    {
                         rail.gameObject.SetActive(round.ContainsFloor(floor));
+                        if (rail.gameObject.activeSelf) StyleFloorRail(rail, trackAccent);
+                    }
 
             Transform sideTracks = world.Find("Side Tracks");
             if (sideTracks != null)
@@ -79,6 +121,16 @@ namespace CrazyElevator.Managers
                     bool inWorld = track.Bottom < round.MaxFloor && track.Top > round.MinFloor;
                     if (inWorld) FitSideTrackToWorld(trackView, track, round.MinFloor, round.MaxFloor);
                     trackView.gameObject.SetActive(inWorld && SideTrackEnabledInRound(trackIndex, roundNumber));
+                    if (trackView.gameObject.activeSelf)
+                    {
+                        StyleRailPart(trackView.Find("Spine"), MapSteel);
+                        StyleRailPart(trackView.Find("Left post"), trackAccent);
+                        StyleRailPart(trackView.Find("Right post"), trackAccent);
+                        StyleRailPart(trackView.Find("Top bumper"), trackAccent);
+                        StyleRailPart(trackView.Find("Bottom bumper"), trackAccent);
+                        StyleThemedSideTrack(trackView, trackIndex, track,
+                            round.ActiveDimension, round.MinFloor, round.MaxFloor);
+                    }
                 }
             }
 
@@ -94,30 +146,201 @@ namespace CrazyElevator.Managers
                 if (TryAuthoredFloorNumber(part.name, "World landing ", out int floor)
                     || TryAuthoredFloorNumber(part.name, "Shaft landing ", out floor)
                     || TryAuthoredFloorNumber(part.name, "Sign \u2022 ", out floor))
+                {
                     part.gameObject.SetActive(round.ContainsFloor(floor));
+                    if (part.gameObject.activeSelf && part.name.Contains("landing"))
+                        GradeShaftScenery(part, sky, .08f);
+                }
             }
         }
 
-        void SyncShaftBounds(Transform world)
+        static void GradeShaftScenery(Transform root, Color sky, float strength)
         {
-            // Stop exactly at the first and sixth floor levels. The former
-            // extra margins exposed the shaft into floors outside this round.
+            var tint = new MaterialPropertyBlock();
+            foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (renderer.GetComponent<TextMesh>() != null) continue;
+                Material[] materials = renderer.sharedMaterials;
+                if (materials.Length == 1 && materials[0] != null
+                    && (materials[0].name == "Candy_Sky" || materials[0].name == "Candy_Hill"
+                        || materials[0].name == "Water_Sky")) renderer.enabled = true;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material material = materials[i];
+                    if (material == null) continue;
+                    tint.Clear();
+                    renderer.GetPropertyBlock(tint, i);
+                    GradeSurfaceColour(material, tint, "_BaseColor", sky, strength);
+                    GradeSurfaceColour(material, tint, "_Color", sky, strength);
+                    GradeSurfaceColour(material, tint, "_StripeColor", sky, strength);
+                    renderer.SetPropertyBlock(tint, i);
+                }
+            }
+        }
+
+        static void GradeSurfaceColour(Material material, MaterialPropertyBlock tint, string property,
+            Color sky, float strength)
+        {
+            if (!material.HasProperty(property)) return;
+            Color original = material.GetColor(property);
+            Color graded = Color.Lerp(original, sky, strength);
+            graded.a = original.a;
+            tint.SetColor(property, graded);
+        }
+
+        // The artists' FBX is fitted to the whole camera, including the wide
+        // shared view. Cache the authored transform so resizing never compounds.
+        readonly Dictionary<Transform, (Vector3 position, Vector3 scale)> authoredBackdrops
+            = new Dictionary<Transform, (Vector3, Vector3)>();
+        readonly Dictionary<Transform, Vector3> authoredBackdropSkies = new Dictionary<Transform, Vector3>();
+
+        void FitAuthoredBackdrop(Transform world, Camera camera)
+        {
+            Transform backdrops = world.Find("World Backdrops");
+            if (backdrops == null || round.ActiveDimension == 0) return;
+            string name = round.ActiveDimension == 1 ? "Candy Backdrop"
+                : round.ActiveDimension == 2 ? "Water Backdrop"
+                : round.ActiveDimension == 3 ? "Forest Backdrop" : "Space Backdrop";
+            Transform backdrop = backdrops.Find(name);
+            if (backdrop == null || !backdrop.gameObject.activeInHierarchy) return;
+            Transform sky = backdrop.Find(round.ActiveDimension == 1 ? "BG" : "pPlane1");
+            Renderer surface = sky != null ? sky.GetComponent<Renderer>() : null;
+            if (surface == null) return;
+            surface.enabled = true;
+            if (!authoredBackdrops.TryGetValue(backdrop, out var authored))
+            {
+                authored = (backdrop.localPosition, backdrop.localScale);
+                authoredBackdrops.Add(backdrop, authored);
+            }
+            backdrop.localPosition = authored.position;
+            backdrop.localScale = authored.scale;
+            if (!authoredBackdropSkies.TryGetValue(sky, out Vector3 skyScale))
+            {
+                skyScale = sky.localScale;
+                authoredBackdropSkies.Add(sky, skyScale);
+            }
+            sky.localScale = skyScale;
+            Bounds bounds = surface.bounds;
+            Vector3 localCentre = world.InverseTransformPoint(bounds.center);
+            Vector3 cameraPosition = world.InverseTransformPoint(camera.transform.position);
+            Vector3 cameraForward = world.InverseTransformDirection(camera.transform.forward);
+            if (Mathf.Abs(cameraForward.z) < .01f || bounds.size.x < .01f || bounds.size.y < .01f) return;
+            float distance = (localCentre.z - cameraPosition.z) / cameraForward.z;
+            if (distance <= 0f) return;
+            Vector3 screenCentre = cameraPosition + cameraForward * distance;
+            float height = 2f * distance * Mathf.Tan(camera.fieldOfView * .5f * Mathf.Deg2Rad) * 1.4f;
+            float width = height * camera.aspect;
+            Vector3 worldScale = world.lossyScale;
+            float authoredHeight = bounds.size.y / Mathf.Max(.001f, Mathf.Abs(worldScale.y));
+            backdrop.localScale = authored.scale * (height / authoredHeight);
+            float skyWidth = surface.bounds.size.x / Mathf.Max(.001f, Mathf.Abs(worldScale.x));
+            if (skyWidth > .01f && skyWidth < width)
+                sky.localScale = Vector3.Scale(skyScale, new Vector3(width / skyWidth, 1f, 1f));
+            // Tilted sky planes need extra coverage at the far edge of the view.
+            sky.localScale *= 1.25f;
+            Vector3 resizedCentre = world.InverseTransformPoint(surface.bounds.center);
+            backdrop.localPosition += new Vector3(screenCentre.x - resizedCentre.x,
+                screenCentre.y - resizedCentre.y, 0f);
+        }
+
+        static void StyleFloorRail(Transform rail, Color accent)
+        {
+            StyleRailPart(rail.Find("Rail"), accent, .38f);
+            StyleRailPart(rail.Find("Girder"), Color.Lerp(MapSteel, accent, .36f), .65f);
+            StyleRailPart(rail.Find("Stop left"), accent);
+            StyleRailPart(rail.Find("Stop right"), accent);
+        }
+
+        readonly Dictionary<Transform, (int dimension, int bottom, int top)> themedTrackStyleCache
+            = new Dictionary<Transform, (int, int, int)>();
+
+        void StyleThemedSideTrack(Transform view, int trackIndex, SideTrack track,
+            int dimension, int minFloor, int maxFloor)
+        {
+            bool curved = dimension > 0;
+            Transform themedRails = view.Find("Themed rails");
+            if (themedRails == null) return;
+
+            int bottom = Mathf.Max(track.Bottom, minFloor);
+            int top = Mathf.Min(track.Top, maxFloor);
+            if (themedTrackStyleCache.TryGetValue(view, out var cached)
+                && cached.dimension == dimension && cached.bottom == bottom && cached.top == top)
+                return;
+            themedTrackStyleCache[view] = (dimension, bottom, top);
+
+            themedRails.gameObject.SetActive(curved);
+            foreach (string partName in new[] { "Spine", "Left post", "Right post" })
+            {
+                Transform part = view.Find(partName);
+                Renderer mesh = part != null ? part.GetComponent<Renderer>() : null;
+                if (mesh != null) mesh.enabled = !curved;
+            }
+            if (!curved || top <= bottom) return;
+
+            int pointCount = Mathf.Max(9, Mathf.CeilToInt((top - bottom) * 8f) + 1);
+            float centreFloor = (bottom + top) * .5f;
+            Color main = TrackPrimaryColour(dimension);
+            Color trim = TrackSecondaryColour(dimension);
+            for (int railIndex = 0; railIndex < themedRails.childCount; railIndex++)
+            {
+                Transform railObject = themedRails.GetChild(railIndex);
+                LineRenderer line = railObject.GetComponent<LineRenderer>();
+                if (line == null) continue;
+                line.enabled = true;
+                line.useWorldSpace = false;
+                line.positionCount = pointCount;
+                line.startWidth = line.endWidth = railIndex == 1 ? .28f : .13f;
+                line.startColor = line.endColor = railIndex == 1 ? main : trim;
+
+                float railOffset = railIndex == 0 ? -1.5f : railIndex == 2 ? 1.5f : 0f;
+                float depth = railIndex == 1 ? .9f : 0f;
+                var points = new Vector3[pointCount];
+                for (int i = 0; i < pointCount; i++)
+                {
+                    float progress = i / (float)(pointCount - 1);
+                    float floor = Mathf.Lerp(bottom, top, progress);
+                    float bend = SideTrackCurveOffset(dimension, trackIndex, floor);
+                    points[i] = new Vector3(railOffset + bend,
+                        (floor - centreFloor) * ShaftFloorHeight, depth);
+                }
+                line.SetPositions(points);
+            }
+        }
+
+        static void StyleRailPart(Transform part, Color colour, float height = 0f)
+        {
+            if (part == null) return;
+            if (height > 0f)
+            {
+                Vector3 scale = part.localScale;
+                scale.y = height;
+                part.localScale = scale;
+            }
+            var renderer = part.GetComponent<Renderer>();
+            if (renderer == null) return;
+            var tint = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(tint);
+            tint.SetColor("_BaseColor", colour);
+            tint.SetColor("_Color", colour);
+            tint.SetFloat("_StripeScale", 0f);
+            renderer.SetPropertyBlock(tint);
+        }
+
+        void SyncShaftBounds(Transform world, Color guideRailColour)
+        {
+            // Trim the rails to the first and last playable landings.
             float bottom = round.MinFloor * ShaftFloorHeight;
             float top = round.MaxFloor * ShaftFloorHeight;
             float railHeight = top - bottom;
             float railCentre = (top + bottom) * .5f;
 
             foreach (string name in new[] { "Left guide rail", "Right guide rail" })
-            {
-                Transform rail = world.Find(name);
-                if (rail == null) continue;
-                Vector3 scale = rail.localScale;
-                scale.y = railHeight;
-                rail.localScale = scale;
-                Vector3 position = rail.localPosition;
-                position.y = railCentre;
-                rail.localPosition = position;
-            }
+                FitGuideRail(world.Find(name), railHeight, railCentre, guideRailColour);
+
+            Transform duelRails = world.Find("Duel guide rails");
+            if (duelRails != null)
+                foreach (Transform rail in duelRails)
+                    FitGuideRail(rail, railHeight, railCentre, guideRailColour);
 
             Transform bottomCap = world.Find("Shaft bottom");
             if (bottomCap != null)
@@ -133,12 +356,19 @@ namespace CrazyElevator.Managers
                 topCap.gameObject.SetActive(false);
         }
 
+        static void FitGuideRail(Transform rail, float height, float centre, Color colour)
+        {
+            if (rail == null) return;
+            StyleRailPart(rail, colour, height);
+            Vector3 position = rail.localPosition;
+            position.y = centre;
+            rail.localPosition = position;
+        }
+
         static void HideBandSpillover(Transform world, Transform band, ElevatorRound activeRound)
         {
-            // The authored bands still contain eight floors. Their extra upper
-            // modules include loose walls and scenery as well as floor roots,
-            // so clip every part by its world-space floor instead of relying on
-            // one prefab's child names.
+            // The upper modules include loose walls and scenery as well as
+            // floor roots, so identify spillover by world height.
             Transform[] parts = band.GetComponentsInChildren<Transform>(true);
             for (int i = 1; i < parts.Length; i++)
             {
@@ -161,7 +391,7 @@ namespace CrazyElevator.Managers
         static void SetOfficeTopArtBoundary(Transform world, Transform bands, ElevatorRound activeRound)
         {
             // Stretch the lowest office band to the visual cap. Keep the roof above
-            // the sixth playable floor without adding another gameplay floor.
+            // the last playable floor without adding another gameplay floor.
             float lowestBandY = float.MaxValue;
             foreach (Transform band in bands)
                 if (band.name.StartsWith("Office Band"))
@@ -210,14 +440,12 @@ namespace CrazyElevator.Managers
 
         static void HideCandyTopFloorSpillover(Transform world, Transform band, ElevatorRound activeRound)
         {
-            // Props on Candy's sixth floor extend past the final playable slab.
-            int topCandyFloorNumber = 4 + (ElevatorRound.FloorsPerDimension - 1) % 4;
-            string topCandyFloorName = "Candy Floor " + topCandyFloorNumber;
+            // Props on Candy's top floor extend past the final playable slab.
             Transform[] parts = band.GetComponentsInChildren<Transform>(true);
             Transform topFloor = null;
             foreach (Transform part in parts)
             {
-                if (part.name != topCandyFloorName) continue;
+                if (!part.name.StartsWith("Candy Floor ")) continue;
                 int floor = Mathf.RoundToInt(
                     world.InverseTransformPoint(part.position).y / ShaftFloorHeight);
                 if (floor == activeRound.MaxFloor)
@@ -260,7 +488,7 @@ namespace CrazyElevator.Managers
             if (topBumper != null)
             {
                 // A clipped endpoint is the level boundary; don't leave a gray
-                // bumper projecting above the sixth floor.
+                // bumper projecting above the top floor.
                 topBumper.gameObject.SetActive(track.Top < maxFloor);
                 if (topBumper.gameObject.activeSelf)
                 {
@@ -409,6 +637,18 @@ namespace CrazyElevator.Managers
         void DrawDestinationBeacons()
         {
             if (round == null || exteriorCamera == null || exteriorCar == null) return;
+            Rider target = NearestDelivery();
+            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
+            float size = MenuPresentation.GameplayHudScale(view.width, view.height);
+            if (target != null)
+                DrawDestinationBeacon(view, size, target.Destination, target.DestinationStop, target.IsVip);
+            else if (NearestDuelPickup() is Rider pickup)
+                DrawDestinationBeacon(view, size, pickup.Origin, pickup.OriginStop, false, pickup: true);
+        }
+
+        internal Rider NearestDelivery()
+        {
+            if (round == null) return null;
             Rider target = null;
             float bestDistance = float.PositiveInfinity;
             foreach (Rider rider in round.Riders)
@@ -421,18 +661,20 @@ namespace CrazyElevator.Managers
                 target = rider;
                 bestDistance = distance;
             }
-            if (target == null) return;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
-            float size = MenuPresentation.GameplayHudScale(view.width, view.height);
-            DrawDestinationBeacon(view, size, target.Destination, target.DestinationStop, target.IsVip);
+            return target;
         }
 
+        internal Vector3 MapPoint(float x, int floor)
+            => exteriorCar.parent.TransformPoint(new Vector3(x, floor * ShaftFloorHeight, -2.15f));
+
+        internal Vector3 MapLanding(Rider rider) => MapPoint(StopX(rider.DestinationStop), rider.Destination);
+
         // On screen the landing glows under a bouncing arrow. Off screen an arrow on the view edge points at it.
-        void DrawDestinationBeacon(Rect view, float size, int floor, int stop, bool vip)
+        void DrawDestinationBeacon(Rect view, float size, int floor, int stop, bool vip, bool pickup = false)
         {
             float x = StopX(stop), y = floor * ShaftFloorHeight;
             Vector2 spot = GuiPoint(new Vector3(x, y + 1.6f, BeaconDepth), out bool inFront);
-            string label = "F" + ElevatorRound.FloorNumber(floor) + StopSide(stop);
+            string label = (pickup ? "PICKUP " : "") + "F" + ElevatorRound.FloorNumber(floor) + StopSide(stop);
             if (inFront && Inset(view, 12f * size, 12f * size, 12f * size, 12f * size).Contains(spot))
                 DrawLandingHighlight(view, size, x, y, stop == CenterStop ? 4.6f : 2.6f, label, vip);
             else

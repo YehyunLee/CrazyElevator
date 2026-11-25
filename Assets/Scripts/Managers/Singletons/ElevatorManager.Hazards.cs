@@ -36,9 +36,9 @@ namespace CrazyElevator.Managers
         // Left / Right are offsets from the shaft centre (side tracks sit at ±14 and ±25).
         static readonly HazardSpec[] HazardLayout =
         {
-            new HazardSpec(HazardKind.Monster, 3.5f, -7f, 7f, 2.4f),
+            new HazardSpec(HazardKind.Monster, 2.5f, -7f, 7f, 2.4f),
             new HazardSpec(HazardKind.Tornado, 6f, -27f, 27f, 4.5f),
-            new HazardSpec(HazardKind.Monster, 9.5f, -7f, 7f, 2.8f),
+            new HazardSpec(HazardKind.Monster, 8.5f, -7f, 7f, 2.8f),
             new HazardSpec(HazardKind.Tornado, 11f, -27f, 27f, 5f),
             new HazardSpec(HazardKind.Monster, 13.5f, -18f, 2f, 3f),
             new HazardSpec(HazardKind.Tornado, 14f, -27f, 27f, 5.5f),
@@ -779,7 +779,7 @@ namespace CrazyElevator.Managers
                 || owner.round == null) return;
             float age = owner.round.Elapsed - owner.worldEventStart;
             if (age >= WorldEventDuration - WorldEventFade) return;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            Rect view = Match != null ? Match.ShaftViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
             bool warning = age < owner.worldEventSweepStart;
             Color accent = warning ? MenuPresentation.Brass : MenuPresentation.Coral;
             float floorY = owner.worldEventFloor * ShaftFloorHeight + .25f;
@@ -820,7 +820,7 @@ namespace CrazyElevator.Managers
         void ApplyWorldEventCameraAccent()
         {
             ElevatorManager owner = WorldOwner;
-            if (!DisplayBuildingView || owner.worldEventId != 1 || owner.worldEventView == null
+            if (UsesShaftOverview || !DisplayBuildingView || owner.worldEventId != 1 || owner.worldEventView == null
                 || !owner.worldEventView.activeSelf || owner.round == null || exteriorCamera == null
                 || Mathf.Abs(CurrentFloor - owner.worldEventFloor) > 3f) return;
             float age = owner.round.Elapsed - owner.worldEventStart;
@@ -894,12 +894,13 @@ namespace CrazyElevator.Managers
         void DrawPassengerAbilityFeedback()
         {
             if (abilityFeedbackTime <= 0f || exteriorCamera == null) return;
-            Vector3 screen = exteriorCamera.WorldToScreenPoint(abilityFeedbackPosition);
+            Camera mapCamera = ShaftProjectionCamera;
+            Vector3 screen = mapCamera.WorldToScreenPoint(abilityFeedbackPosition);
             if (screen.z <= 0f) return;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
+            Rect view = Match != null ? Match.ShaftViewRect(Seat) : new Rect(0, 0, Screen.width, Screen.height);
             if (abilityFeedback == "STUN!" && abilityFeedbackTime > 1f)
             {
-                Vector3 source = exteriorCamera.WorldToScreenPoint(abilityFeedbackOrigin);
+                Vector3 source = mapCamera.WorldToScreenPoint(abilityFeedbackOrigin);
                 if (source.z > 0f)
                 {
                     Vector2 from = new Vector2(source.x, Screen.height - source.y);

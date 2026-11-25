@@ -138,7 +138,7 @@ public static class NewWorldsChecks
         ElevatorRound round = Round(game);
         Require(round != null && round.ActiveDimension == dimension, "Wrong active world for seat " + game.Seat);
         int min = dimension * ElevatorRound.FloorsPerDimension;
-        int max = min + ElevatorRound.FloorsPerDimension - 1;
+        int max = min + ElevatorRound.PlayableFloorsPerDimension - 1;
         Require(round.MinFloor == min && round.MaxFloor == max && round.Floor == min,
             "Wrong floor range in world " + dimension);
         string[] kinds = dimension == 3 ? new[] { "FAIRY", "GOBLIN", "MUSHROOM" }

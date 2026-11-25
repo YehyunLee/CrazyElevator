@@ -1514,15 +1514,11 @@ public static class ExtendedInteriorChecks
         var round = (Round)Get(game, "round");
         float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
         var shaft = game.sceneView.exteriorCar.parent;
-        Vector3 cameraPosition = shaft.InverseTransformPoint(game.sceneView.exteriorCamera.transform.position);
         float soloShaftOffset = (float)typeof(CrazyElevator.Managers.ElevatorManager)
             .GetField("SoloShaftOffset", Flags | BindingFlags.Static).GetRawConstantValue();
-        Bounds cameraBounds = (Bounds)typeof(CrazyElevator.Managers.ElevatorManager)
-            .GetProperty("ShaftCameraBounds", Flags | BindingFlags.Static).GetValue(null);
-        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - (centre - soloShaftOffset)) < .001f
-            && !game.sceneView.exteriorCamera.orthographic
-            && (cameraBounds.ClosestPoint(cameraPosition) - cameraPosition).sqrMagnitude < .0004f,
-            "Solo travel must keep the car on its authored lane and perspective camera inside the shaft bounds.");
+        Require(Mathf.Abs(game.sceneView.exteriorCar.localPosition.x - (centre - soloShaftOffset)) < .001f,
+            "Solo travel must keep the car on its authored lane.");
+        CheckShaftOverview(game);
         foreach (int floor in new[] { 1, 11 })
         {
             float landingHeight = floor * 13.2f;
@@ -1599,14 +1595,14 @@ public static class ExtendedInteriorChecks
             Transform rail = world.Find(name);
             Require(rail != null && Mathf.Abs(rail.localScale.y - railHeight) < .001f
                 && Mathf.Abs(rail.localPosition.y - railCentre) < .001f,
-                "The rendered guide rails must stop at this world's local floors 1 and 6.");
+                "The rendered guide rails must stop at the first and last playable floors.");
         }
 
         Transform bottomCap = world.Find("Shaft bottom");
         Transform topCap = world.Find("Shaft top");
         Require(bottomCap != null && topCap != null && !topCap.gameObject.activeSelf
             && Mathf.Abs(bottomCap.localPosition.y - (bottom + .2f)) < .001f,
-            "Shafts must stop at floors 1 and 6 without an extra cap above floor 6.");
+            "Shafts must stop at the playable floors without an extra cap above the top floor.");
     }
 
     static void RequireLocalFloorDisplay(Game game, string number, int litSegments)
@@ -2080,7 +2076,7 @@ public static class ExtendedInteriorChecks
                 if (index < session.EnabledDimensionCount)
                     Require(playedDimensions.Add(dimension),
                         "A dimension repeated before every enabled pool entry had been played.");
-                int first = dimension * Round.FloorsPerDimension, last = first + Round.FloorsPerDimension - 1;
+                int first = dimension * Round.FloorsPerDimension, last = first + Round.PlayableFloorsPerDimension - 1;
                 var round = (Round)Get(player, "round");
                 var other = (Round)Get(rival, "round");
                 Require(session.RoundNumber == index + 1 && session.ActiveDimension == dimension
@@ -2238,7 +2234,8 @@ public static class ExtendedInteriorChecks
                 && round.IsQueuedAtStop(vip), "VIP must be a real rider shared by both queues.");
             var session = CrazyElevator.Managers.GameManager.Instance;
             session.GetType().GetMethod("StopAbilityIntro", Flags).Invoke(session, null);
-            CheckRivalCamera(actor, rival);
+            CheckShaftOverview(actor);
+            CheckShaftOverview(rival);
             round.Floor = other.Floor = vip.Origin;
             round.Stop = other.Stop = vip.OriginStop;
             vip.Arrival = 0f;
@@ -2273,49 +2270,44 @@ public static class ExtendedInteriorChecks
             Require((float)Get(rival, "collisionSlowTimer") > 0f && trails.Count == 0,
                 "The rival did not consume the trail and slow down.");
         }
-        Debug.Log("PASS: Both seats look ahead, widen for an approaching rival and settle back. Mid-round shared VIP, exclusive claim marker, delivery bonus, hazard event and candy trail.");
+        Debug.Log("PASS: Both seats keep all four floors visible in the shaft view. Mid-round shared VIP, exclusive claim marker, delivery bonus, hazard event and candy trail.");
     }
 
-    static void CheckRivalCamera(Game actor, Game rival)
+    static void CheckShaftOverview(Game actor)
     {
-        float floor = actor.ActiveMinFloor + 3f;
-        Phase(actor, "Moving");
-        Phase(rival, "Moving");
-        Set(actor, "travelFloor", floor);
-        Set(rival, "travelFloor", floor + .65f);
-        Set(actor, "travelVelocity", 1f);
-        Set(rival, "travelVelocity", -1f);
-        Set(actor, "showingTravelView", true);
-        Set(actor, "cameraFramingFrame", -1);
-        actor.ShaftCamera.aspect = .9f;
-        Vector3 car = new Vector3(actor.RouteLateralX, floor * Game.ShaftFloorHeight + 1.4f, -.8f);
-        Call(actor, "UpdateCrazyTravelCamera", car, .2f);
-        float zoomedOut = (float)Get(actor, "cameraPullback");
-        Require(zoomedOut > 1f && ((Vector2)Get(actor, "cameraLookAhead")).y > 1f,
-            "The shaft camera should lead upward and pull back for a closing rival.");
-        var world = actor.sceneView.exteriorCar.parent;
-        Vector3 otherCar = new Vector3(rival.RouteLateralX, (floor + .65f) * Game.ShaftFloorHeight + 1.4f, -.8f);
-        foreach (Vector3 position in new[] { car, otherCar })
+        Camera camera = actor.ShaftCamera;
+        Transform world = actor.sceneView.exteriorCar.parent;
+        float previousAspect = camera.aspect;
+        float centre = CrazyElevator.Match.ElevatorMatch.ShaftCenterX;
+        float bottom = actor.ActiveMinFloor * Game.ShaftFloorHeight;
+        float top = actor.ActiveMaxFloor * Game.ShaftFloorHeight;
+
+        try
         {
-            Vector3 point = actor.ShaftCamera.WorldToViewportPoint(world.TransformPoint(position));
-            Require(point.z > 0f && point.x > .1f && point.x < .9f && point.y > .1f && point.y < .9f,
-                "Both cars should be comfortably inside the widened shaft view.");
+            foreach (float aspect in new[] { 2f / 3f, 8f / 9f, 16f / 9f })
+            {
+                camera.aspect = aspect;
+                Call(actor, "UpdateCrazyTravelCamera", new Vector3(centre, bottom, -.8f), 0f);
+                Vector3 position = camera.transform.position;
+                Require(!camera.orthographic, "The shaft overview should remain a perspective view.");
+                foreach (float x in new[] { centre - Game.GroundTrackSpan, centre + Game.GroundTrackSpan })
+                    foreach (float y in new[] { bottom, top + Game.ShaftFloorHeight * .75f })
+                    {
+                        Vector3 point = camera.WorldToViewportPoint(world.TransformPoint(new Vector3(x, y, -4f)));
+                        Require(point.z > 0f && point.x > .02f && point.x < .98f && point.y > .02f && point.y < .98f,
+                            "The shaft overview clipped a playable landing.");
+                    }
+                Call(actor, "UpdateCrazyTravelCamera",
+                    new Vector3(centre + Game.GroundTrackSpan, top, -.8f), 0f);
+                Require((camera.transform.position - position).sqrMagnitude < .0001f,
+                    "Driving to the opposite corner should keep the whole map in frame.");
+            }
         }
-        Set(actor, "travelVelocity", 0f);
-        Set(rival, "travelVelocity", 0f);
-        Call(actor, "UpdateCrazyTravelCamera", car, .5f);
-        Require((float)Get(actor, "cameraPullback") < zoomedOut * .2f
-            && ((Vector2)Get(actor, "cameraLookAhead")).magnitude < .5f,
-            "The camera should settle when both cars stop.");
-        Set(actor, "railRiding", true);
-        Set(actor, "railVelocity", -1f);
-        Call(actor, "UpdateCrazyTravelCamera", car, .2f);
-        Require(((Vector2)Get(actor, "cameraLookAhead")).x < -1f,
-            "The camera should lead in the direction of sideways travel.");
-        Set(actor, "railRiding", false);
-        Set(actor, "railVelocity", 0f);
-        Phase(actor, "Boarding");
-        Phase(rival, "Boarding");
+        finally
+        {
+            camera.aspect = previousAspect;
+            Call(actor, "UpdateCrazyTravelCamera", actor.sceneView.exteriorCar.localPosition, 0f);
+        }
     }
 
     [MenuItem("Tools/Crazy Elevator/Check Tutorial Practice")]
@@ -2714,11 +2706,19 @@ public static class ExtendedInteriorChecks
             "A 1v1 collision did not emit sparks in the exterior camera layer.");
         trackPositions[1] = 1f;
 
-        var rider = playerRound.Riders.Find(r => r.Origin == 0 && r.Kind == "COURIER");
+        Require(playerRound.DuelPickups.Count == Round.DuelPickupLimit
+            && ReferenceEquals(playerRound.DuelPickups, rivalRound.DuelPickups),
+            "The match must start with two shared pickups.");
+        var rider = playerRound.DuelPickups[0];
+        var second = playerRound.DuelPickups[1];
+        Require(rider.Origin != second.Origin, "The two pickups must be on separate floors.");
+        playerRound.Arrive(rider.Origin, rider.OriginStop);
+        rivalRound.Arrive(rider.Origin, rider.OriginStop);
+        rider.Arrival = 0f;
         Require(rival.ApproachingPickup(rider),
             "A rival already waiting at the shared landing was not treated as a contested pickup.");
         Require(playerRound.Board(rider) && !rivalRound.Board(rider),
-            "Both elevators boarded the same floor-zero passenger.");
+            "Both elevators boarded the same passenger.");
         match.NotifyPassengerBoarded(player, rider);
         Require(rider.ContestedPickupBonus == 30
             && playerRound.DeliveryPoints(rider) == playerRound.BaseDeliveryPoints(rider) + rider.Bonus + 30,
@@ -2726,43 +2726,23 @@ public static class ExtendedInteriorChecks
         Require((string)Get(player, "actionFeedbackText") == "STOLEN!"
             && (string)Get(rival, "actionFeedbackText") == "TOO LATE!",
             "A contested passenger did not show steal feedback in both cars.");
-        Require(player.PassengerLoad == rider.Space && rival.PassengerLoad == 0
-            && player.CurrentPassengers.Count == 1 && rival.CurrentPassengers.Count == 0,
-            "A boarded passenger appeared inside both elevators.");
-        var rivalFigures = (IDictionary)Get(rival, "figures");
-        Require(rivalFigures.Contains(rider), "The NPC was not showing the shared floor passenger.");
-        var departingFigure = (Transform)rivalFigures[rider];
-        Vector3 departureStart = departingFigure.localPosition;
-        rival.RefreshWaitingPublic();
-        Require(departingFigure.gameObject.activeInHierarchy,
-            "A passenger claimed by the player vanished from the NPC view without departing.");
-        Call(rival, "SyncFigures", .3f);
-        Require(departingFigure.gameObject.activeInHierarchy
-            && Vector3.Distance(departingFigure.localPosition, departureStart) > .05f,
-            "A shared passenger did not visibly walk away from the NPC view.");
-        Call(rival, "SyncFigures", 1f);
-        Require(!departingFigure.gameObject.activeInHierarchy,
-            "The NPC kept showing a passenger after their departure animation finished.");
-        foreach (var waiting in rival.WaitingPassengers)
-            Require(!ReferenceEquals(waiting, rider), "A boarded passenger remained in the rival's queue.");
-        Require(rival.NpcBoard() && rival.PassengerLoad > 0 && player.PassengerLoad == rider.Space
-            && rival.CurrentPassengers.Count == 1 && !ReferenceEquals(rival.CurrentPassengers[0], rider),
-            "The NPC could not board a different passenger from the shared queue.");
-        var npcClaim = rival.CurrentPassengers[0];
-        var playerFigures = (IDictionary)Get(player, "figures");
-        Require(playerFigures.Contains(npcClaim), "The player was not showing the NPC's floor passenger.");
-        var playerDeparture = (Transform)playerFigures[npcClaim];
-        Vector3 playerDepartureStart = playerDeparture.localPosition;
-        player.RefreshWaitingPublic();
-        Require(playerDeparture.gameObject.activeInHierarchy,
-            "A passenger claimed by the NPC vanished from the player view without departing.");
-        Call(player, "SyncFigures", .3f);
-        Require(playerDeparture.gameObject.activeInHierarchy
-            && Vector3.Distance(playerDeparture.localPosition, playerDepartureStart) > .05f,
-            "The NPC's passenger did not visibly leave the player view.");
-        Call(player, "SyncFigures", 1f);
-        Require(!playerDeparture.gameObject.activeInHierarchy,
-            "The player kept showing the NPC's passenger after departure finished.");
+        Require(!rivalRound.IsOffered(rider) && player.PassengerLoad == rider.Space
+            && rival.PassengerLoad == 0, "A claimed rider remained available to the rival.");
+
+        var refill = matchType.GetMethod("UpdateDuelPickups", Flags);
+        refill.Invoke(match, new object[] { .5f });
+        Require(playerRound.DuelPickups.Count == 1 && playerRound.DuelPickups[0] == second,
+            "Claiming a pickup should leave a short gap before replacements.");
+        refill.Invoke(match, new object[] { 1f });
+        Require(playerRound.DuelPickups.Count == Round.DuelPickupLimit && rivalRound.IsQueuedAtStop(second),
+            "Refilling the shared pool should keep the remaining pickup available.");
+
+        playerRound.Arrive(second.Origin, second.OriginStop);
+        rivalRound.Arrive(second.Origin, second.OriginStop);
+        second.Arrival = 0f;
+        Require(rivalRound.Board(second) && !playerRound.Board(second)
+            && rival.PassengerLoad == second.Space && player.PassengerLoad == rider.Space,
+            "Player 2 must be able to claim a shared rider and prevent Player 1 from boarding them.");
 
         player.ResetRoundPublic();
         FinishMatchRoundIntroduction(match);

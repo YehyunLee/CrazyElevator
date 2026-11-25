@@ -25,7 +25,7 @@ namespace CrazyElevator.Managers
         static readonly Color UiBlack = new Color32(9, 11, 16, 255);
         static readonly Color UiWhite = new Color32(255, 252, 241, 255);
         const float ActionFeedbackSeconds = 1.2f;
-        const float GameplayBoostHintWidth = 220f;
+        float GameplayBoostHintWidth => Match != null && Match.SharedShaftView ? 164f : 220f;
         string actionFeedbackText;
         float actionFeedbackAt = -100f;
         bool actionFeedbackPositive, actionFeedbackEmphasized;
@@ -1446,7 +1446,9 @@ namespace CrazyElevator.Managers
             float top = (Match != null ? 118f : 86f) * uiScale;
             float height = (ManifestHeaderHeight + riderCount * ManifestRowHeight
                 - ManifestRowGap + ManifestInset + ManifestShadow) * uiScale;
-            return new Rect(view.xMax - width - 12f * uiScale, view.y + top, width, height);
+            bool left = Match != null && Match.SharedShaftView && Seat == 0;
+            float x = left ? view.x + 12f * uiScale : view.xMax - width - 12f * uiScale;
+            return new Rect(x, view.y + top, width, height);
         }
 
         Rect PassengerListRect()
@@ -1639,10 +1641,12 @@ namespace CrazyElevator.Managers
                     float moveWidth = 76f * scale;
                     float boostHintWidth = GameplayBoostHintWidth * scale;
                     float bottom = ViewHeight - margin - height;
-                    stop = new Rect(ViewWidth - margin - stopWidth, bottom, stopWidth, height);
-                    down = new Rect(stop.x - gap * 2f - boostHintWidth - moveWidth,
-                        bottom, moveWidth, height);
-                    up = new Rect(down.x - gap - moveWidth, bottom, moveWidth, height);
+                    bool left = Match != null && Match.SharedShaftView && Seat == 0;
+                    float stopX = left ? margin + boostHintWidth + gap : ViewWidth - margin - stopWidth;
+                    stop = new Rect(stopX, bottom, stopWidth, height);
+                    float downX = left ? stop.xMax + gap : stop.x - gap * 2f - boostHintWidth - moveWidth;
+                    down = new Rect(downX, bottom, moveWidth, height);
+                    up = new Rect(left ? down.xMax + gap : down.x - gap - moveWidth, bottom, moveWidth, height);
                     return;
                 }
                 float y = ViewHeight - margin - height * 3 - gap * 2;
@@ -1858,7 +1862,9 @@ namespace CrazyElevator.Managers
             MenuPresentation.HudPlate(rect, MenuPresentation.Teal);
             if (GameplayUsesKeyboard)
             {
-                DrawGameplayTextHint(rect, "Hold " + GameplayBoostKey + " to speed up");
+                bool shared = Match != null && Match.SharedShaftView;
+                DrawGameplayTextHint(rect, shared ? "Hold " + (Seat == 0 ? "SHIFT" : "R SHIFT") + " · Boost"
+                    : "Hold " + GameplayBoostKey + " to speed up");
                 return;
             }
 

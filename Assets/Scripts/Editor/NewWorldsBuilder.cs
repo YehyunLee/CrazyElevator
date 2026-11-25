@@ -29,6 +29,21 @@ namespace CrazyElevator.EditorTools
             Debug.Log("Built the forest and space worlds and passenger prefabs.");
         }
 
+        [MenuItem("Tools/Crazy Elevator/Build Dimension Track Routes")]
+        public static void BuildDimensionTrackRoutes()
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(ExteriorPath);
+            try
+            {
+                ExtendSideTracks(Require(root.transform, "Side Tracks"));
+                PrefabUtility.SaveAsPrefabAsset(root, ExteriorPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("Built the denser, dimension-ready side-track routes in ExteriorWorld.");
+        }
+
         static void ExtendExterior()
         {
             GameObject root = PrefabUtility.LoadPrefabContents(ExteriorPath);
@@ -101,27 +116,35 @@ namespace CrazyElevator.EditorTools
 
         static void ExtendSideTracks(Transform tracks)
         {
-            var templates = new List<Transform>();
+            Transform source = null;
             foreach (Transform track in tracks)
                 if (track.Find("Left post") != null && TrackBottom(track.name) >= 0
-                    && TrackBottom(track.name) < 20) templates.Add(track);
-            if (templates.Count == 0) throw new InvalidOperationException("No side-track templates found.");
+                    && TrackBottom(track.name) < 20)
+                {
+                    source = track;
+                    break;
+                }
+            if (source == null) throw new InvalidOperationException("No side-track template found.");
+
+            EnsureThemedTrackRails(source);
+            float sourceZ = source.localPosition.z;
+            var oldTracks = new List<GameObject>();
+            foreach (Transform track in tracks)
+                if (track != source && track.Find("Left post") != null)
+                    oldTracks.Add(track.gameObject);
+            foreach (GameObject old in oldTracks) Object.DestroyImmediate(old);
+
             for (int i = 0; i < Game.SideTracks.Length; i++)
             {
                 Game.SideTrack side = Game.SideTracks[i];
-                if (side.Top < ElevatorRound.FloorsPerDimension * 3) continue;
-                Transform source = templates.Find(t => Mathf.Abs(t.localPosition.x - side.X) < .01f) ?? templates[0];
-                var stale = new List<GameObject>();
-                foreach (Transform track in tracks)
-                    if (Mathf.Abs(track.localPosition.x - side.X) < .01f && TrackBottom(track.name) == side.Bottom)
-                        stale.Add(track.gameObject);
-                foreach (GameObject old in stale) Object.DestroyImmediate(old);
-                Transform copy = Object.Instantiate(source, tracks, false);
+                Transform copy = i == 0 ? source : Object.Instantiate(source, tracks, false);
                 copy.name = $"Side track {i} F{side.Bottom}-F{side.Top}";
                 float bottom = side.Bottom * FloorHeight;
                 float top = side.Top * FloorHeight;
                 float height = top - bottom;
-                copy.localPosition = new Vector3(side.X, (bottom + top) * .5f, source.localPosition.z);
+                copy.localPosition = new Vector3(side.X, (bottom + top) * .5f, sourceZ);
+                copy.localRotation = Quaternion.identity;
+                copy.localScale = Vector3.one;
                 foreach (string name in new[] { "Left post", "Right post", "Spine" })
                 {
                     Transform part = Require(copy, name);
@@ -130,7 +153,55 @@ namespace CrazyElevator.EditorTools
                 Transform upper = Require(copy, "Top bumper"), lower = Require(copy, "Bottom bumper");
                 upper.localPosition = new Vector3(upper.localPosition.x, height * .5f - .2f, upper.localPosition.z);
                 lower.localPosition = new Vector3(lower.localPosition.x, -height * .5f + .2f, lower.localPosition.z);
+                EnsureThemedTrackRails(copy);
             }
+        }
+
+        static void EnsureThemedTrackRails(Transform track)
+        {
+            const string groupName = "Themed rails";
+            Transform group = track.Find(groupName);
+            if (group == null)
+            {
+                group = new GameObject(groupName).transform;
+                group.SetParent(track, false);
+            }
+            group.localPosition = Vector3.zero;
+            group.localRotation = Quaternion.identity;
+            group.localScale = Vector3.one;
+            group.gameObject.layer = 28;
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>("Assets/Prefabs/Resources/GameJam2Lit.mat");
+            if (material == null) throw new InvalidOperationException("Missing GameJam2Lit track material.");
+            string[] names = { "Outer ribbon left", "Main ribbon", "Outer ribbon right" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                Transform rail = group.Find(names[i]);
+                if (rail == null)
+                {
+                    rail = new GameObject(names[i]).transform;
+                    rail.SetParent(group, false);
+                }
+                rail.localPosition = Vector3.zero;
+                rail.localRotation = Quaternion.identity;
+                rail.localScale = Vector3.one;
+                rail.gameObject.layer = 28;
+
+                LineRenderer line = rail.GetComponent<LineRenderer>();
+                if (line == null) line = rail.gameObject.AddComponent<LineRenderer>();
+                line.useWorldSpace = false;
+                line.loop = false;
+                line.positionCount = 2;
+                line.startWidth = line.endWidth = 1f;
+                line.numCornerVertices = 5;
+                line.numCapVertices = 3;
+                line.alignment = LineAlignment.View;
+                line.textureMode = LineTextureMode.Stretch;
+                line.sharedMaterial = material;
+                line.startColor = line.endColor = Color.white;
+                line.enabled = false;
+            }
+            group.gameObject.SetActive(true);
         }
 
         static int TrackBottom(string name)

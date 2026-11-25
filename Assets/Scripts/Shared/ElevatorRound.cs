@@ -91,7 +91,10 @@ namespace CrazyElevator.Shared
     {
         public const int Floors = 30;
         public const int Dimensions = 5;
+        // Keep the authored bands spaced six floors apart. Each round uses
+        // the first four landings of its band.
         public const int FloorsPerDimension = Floors / Dimensions;
+        public const int PlayableFloorsPerDimension = 4;
         // Authored floor indices stay global; every world's signs start at 1.
         public static int FloorNumber(int floor)
         {
@@ -102,6 +105,7 @@ namespace CrazyElevator.Shared
         public const int MissedStopPenalty = 35;
         public const int WaitingTimeoutPenalty = 20;
         public const int PracticePassengersPerSeat = 2;
+        public const int DuelPickupLimit = 2;
         public const float Duration = 90f;
         // Seconds into the shift when candy (1) and underwater (2) open.
         static readonly float[] DimensionUnlockSeconds = { 0f, 40f, 110f, 150f, 190f };
@@ -116,7 +120,7 @@ namespace CrazyElevator.Shared
         // -1 retains the full-building rules for previews and standalone rule checks.
         public int ActiveDimension { get; private set; } = -1;
         public int MinFloor => ActiveDimension < 0 ? 0 : ActiveDimension * FloorsPerDimension;
-        public int MaxFloor => ActiveDimension < 0 ? Floors - 1 : MinFloor + FloorsPerDimension - 1;
+        public int MaxFloor => ActiveDimension < 0 ? Floors - 1 : MinFloor + PlayableFloorsPerDimension - 1;
         public bool ContainsFloor(int floor) => floor >= MinFloor && floor <= MaxFloor;
         public int Floor, PeakFloor, Score, Delivered, Happy, Missed, TurnedAway;
         // Each floor has five stops, left to right. The car is parked at Stop on Floor.
@@ -150,6 +154,9 @@ namespace CrazyElevator.Shared
         // The first visible group at a landing is its finite roster for this shift.
         // Both elevators share these identities, just as they share Riders.
         Dictionary<int, HashSet<Rider>> revealedQueues = new Dictionary<int, HashSet<Rider>>();
+        // A duel has one small set of visible pickups shared by both cars.
+        List<Rider> duelPickups;
+        public IReadOnlyList<Rider> DuelPickups => duelPickups ?? (IReadOnlyList<Rider>)Array.Empty<Rider>();
         bool OwnsPassengerPoolClock = true;
         // Scene variants can opt out of the prototype's consolation points for
         // passengers whose patience has completely expired.
@@ -223,10 +230,11 @@ namespace CrazyElevator.Shared
             PeakTime = 0f;
             TimeLeft = Duration;
             revealedQueues.Clear();
+            duelPickups = null;
             Riders.RemoveAll(rider => rider == null || !ContainsFloor(rider.Origin));
             foreach (Rider rider in Riders)
                 rider.Destination = MinFloor + DestinationFor(rider.Kind,
-                    rider.Origin - MinFloor, FloorsPerDimension - 1);
+                    rider.Origin - MinFloor, MaxFloor - MinFloor);
         }
 
         void SeedDefaults()
@@ -328,9 +336,33 @@ namespace CrazyElevator.Shared
             {
                 Riders = source.Riders;
                 revealedQueues = source.revealedQueues;
+                duelPickups = source.duelPickups;
                 OwnsPassengerPoolClock = false;
             }
             Seat = seat;
+        }
+
+        public void EnableDuelPickups() => duelPickups = new List<Rider>(DuelPickupLimit);
+
+        public void ClearTakenDuelPickups() => duelPickups?.RemoveAll(rider => rider.Boarded || rider.Resolved);
+
+        public bool CanOfferDuelPickup(Rider rider, int stop)
+        {
+            if (duelPickups == null || duelPickups.Count >= DuelPickupLimit || rider == null
+                || stop < 0 || stop >= Stops || rider.Boarded || rider.Resolved || rider.SpawnDelay > 0
+                || !ContainsFloor(rider.Origin) || !ContainsFloor(rider.Destination)
+                || !StopIsOpen(rider.Origin, stop)) return false;
+            return !duelPickups.Exists(waiting => waiting.Origin == rider.Origin);
+        }
+
+        public bool TryOfferDuelPickup(Rider rider, int stop)
+        {
+            if (!Riders.Contains(rider) || !CanOfferDuelPickup(rider, stop)) return false;
+            rider.OriginStop = stop;
+            rider.PickupDoor = BoardingDoor.Front;
+            rider.PickupQueueSlot = 0;
+            duelPickups.Add(rider);
+            return true;
         }
 
         public bool Owns(Rider rider) => rider != null && rider.Boarded
@@ -427,7 +459,8 @@ namespace CrazyElevator.Shared
                 if (key / Stops != keepFloor) revealedQueues.Remove(key);
             foreach (var rider in Riders)
             {
-                if (rider.Resolved || rider.Boarded || rider.Origin == keepFloor) continue;
+                if (rider.Resolved || rider.Boarded || rider.Origin == keepFloor
+                    || duelPickups != null && duelPickups.Contains(rider)) continue;
                 rider.OriginStop = PickStop(rider.Origin);
                 rider.DestinationStop = PickStop(rider.Destination);
             }
@@ -528,7 +561,9 @@ namespace CrazyElevator.Shared
         // Capture before showing a landing or changing its passengers. Merely
         // querying an unseen stop (for example for CPU navigation) stays read-only.
         public void RevealQueue(int floor, int stop)
-            => RevealQueue(floor, stop, OfferLimitAt(floor), readyImmediately: false);
+        {
+            if (duelPickups == null) RevealQueue(floor, stop, OfferLimitAt(floor), readyImmediately: false);
+        }
 
         public void RevealPracticeQueue(int seatCount)
             => RevealQueue(Floor, Stop, PracticePassengersPerSeat * seatCount, readyImmediately: true);
@@ -561,6 +596,7 @@ namespace CrazyElevator.Shared
             if (candidate == null || candidate.Resolved || candidate.Boarded || candidate.SpawnDelay > 0
                 || !ContainsFloor(candidate.Origin) || !ContainsFloor(candidate.Destination))
                 return false;
+            if (duelPickups != null) return duelPickups.Contains(candidate);
             int key = candidate.Origin * Stops + candidate.OriginStop;
             if (revealedQueues.TryGetValue(key, out HashSet<Rider> queue)) return queue.Contains(candidate);
             if (!IsPassengerTypeUnlocked(candidate)) return false;
@@ -597,6 +633,8 @@ namespace CrazyElevator.Shared
         bool HasRoomForRelocatedPassenger(int floor, int stop)
         {
             if (!StopIsOpen(floor, stop)) return false;
+            if (duelPickups != null) return !duelPickups.Exists(rider => !rider.Boarded
+                && !rider.Resolved && rider.Origin == floor);
             int key = floor * Stops + stop;
             if (!revealedQueues.TryGetValue(key, out HashSet<Rider> queue))
                 return QueueCandidatesAt(floor, stop).Count < OfferLimitAt(floor);
@@ -620,9 +658,12 @@ namespace CrazyElevator.Shared
             rider.OriginStop = targetStop;
             if (rider.Destination == newFloor)
             {
-                rider.Destination = DestinationFor(rider.Kind, newFloor);
+                rider.Destination = ActiveDimension < 0
+                    ? DestinationFor(rider.Kind, newFloor)
+                    : MinFloor + DestinationFor(rider.Kind, newFloor - MinFloor, MaxFloor - MinFloor);
                 rider.DestinationStop = PickStop(rider.Destination);
             }
+            if (duelPickups != null) return true;
             int newKey = newFloor * Stops + targetStop;
             if (revealedQueues.TryGetValue(newKey, out HashSet<Rider> newQueue))
                 newQueue.Add(rider);

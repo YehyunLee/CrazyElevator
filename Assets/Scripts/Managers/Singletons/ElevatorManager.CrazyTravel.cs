@@ -41,9 +41,9 @@ namespace CrazyElevator.Managers
         const float TeleportCooldownSeconds = .6f;
 
         // Side track columns (offset from the shaft centre) and where their first
-        // segment starts. Each segment is SideTrackLength floors, then a gap.
+        // segment starts. Shorter gaps keep each compact world full of route choices.
         const int SideTrackLength = 3;
-        const int SideTrackPeriod = 5;
+        const int SideTrackPeriod = 4;
         static readonly float[] SideTrackOffsets = { -19f, -10f, 10f, 19f };
         static readonly int[] SideTrackStarts = { 0, 2, 1, 3 };
         public static readonly SideTrack[] SideTracks = BuildSideTracks();
@@ -52,11 +52,11 @@ namespace CrazyElevator.Managers
         // have a gate at the same x, so a warp cannot chain into another warp.
         public static readonly TeleportGate[] TeleportGates =
         {
-            Gate(-16f, 1, 4), Gate(6f, 3, 0),
-            Gate(-16f, 7, 10), Gate(6f, 9, 6),
-            Gate(16f, 13, 16), Gate(-6f, 15, 12),
-            Gate(6f, 19, 22), Gate(16f, 21, 18),
-            Gate(-16f, 25, 28), Gate(6f, 27, 24)
+            Gate(-16f, 1, 3), Gate(6f, 3, 0),
+            Gate(-16f, 7, 9), Gate(6f, 9, 6),
+            Gate(16f, 13, 15), Gate(-6f, 15, 12),
+            Gate(6f, 19, 21), Gate(16f, 21, 18),
+            Gate(-16f, 25, 27), Gate(6f, 27, 24)
         };
 
         Transform crazyRouteMap;
@@ -94,6 +94,7 @@ namespace CrazyElevator.Managers
         const float StopCameraHeight = 12f;
         const float StopCameraDepth = -40f;
         const float StopCameraFieldOfView = 68f;
+        bool UsesShaftOverview => round != null && round.ActiveDimension >= 0 && !MenuManager.TutorialActive;
 
         static Bounds ShaftCameraBounds
         {
@@ -126,11 +127,30 @@ namespace CrazyElevator.Managers
 
         public static bool SideTrackEnabledInRound(int trackIndex, int roundNumber)
         {
-            if (trackIndex < 0 || trackIndex >= SideTracks.Length) return false;
-            if (roundNumber == 2)
-                return Mathf.Abs(SideTracks[trackIndex].X - ElevatorMatchType.ShaftCenterX) <= 10.01f;
-            return roundNumber == 3;
+            return trackIndex >= 0 && trackIndex < SideTracks.Length && roundNumber >= 1;
         }
+
+        static float SideTrackCurveOffset(int dimension, int trackIndex, float floor)
+        {
+            if (dimension <= 0) return 0f;
+
+            // The wave passes through every landing, keeping the floor stops
+            // aligned while giving each world a different route shape.
+            float phase = Mathf.PI * floor;
+            float wave = Mathf.Sin(phase);
+            float shape = dimension switch
+            {
+                1 => wave, // Candy: broad, alternating taffy bends.
+                2 => .72f * wave + .28f * Mathf.Sin(phase * 3f), // Water: a faster current ripple.
+                3 => .76f * wave + .24f * Mathf.Sin(phase * 2f), // Forest: loose vine-like sweeps.
+                _ => .68f * wave + .32f * Mathf.Sin(phase * 3f) // Space: tighter orbital arcs.
+            };
+            float direction = trackIndex % 2 == 0 ? 1f : -1f;
+            return direction * shape * 1.8f;
+        }
+
+        float SideTrackXAt(int trackIndex, SideTrack track, float floor)
+            => track.X + SideTrackCurveOffset(round != null ? round.ActiveDimension : 0, trackIndex, floor);
 
         public static bool TeleportersEnabledInRound(int roundNumber) => roundNumber == 3;
 
@@ -213,9 +233,10 @@ namespace CrazyElevator.Managers
             {
                 if (!SideTrackEnabledInRound(i, roundNumber)) continue;
                 SideTrack track = SideTracks[i];
-                if (Mathf.Abs(x - track.X) > ShaftAlignReach) continue;
+                float curvedX = SideTrackXAt(i, track, floor);
+                if (Mathf.Abs(x - curvedX) > ShaftAlignReach) continue;
                 if (floor < track.Bottom - .02f || floor > track.Top + .02f) continue;
-                trackX = track.X;
+                trackX = curvedX;
                 bottom = Mathf.Max(track.Bottom, MinTravelFloor);
                 top = Mathf.Min(track.Top, MaxTravelFloor);
                 return bottom <= top && floor >= bottom - .02f && floor <= top + .02f;
@@ -368,7 +389,7 @@ namespace CrazyElevator.Managers
             {
                 if (!SideTrackEnabledInRound(i, roundNumber)) continue;
                 SideTrack track = SideTracks[i];
-                found = found || TrackCatches(fromX, toX, track.X, track.Bottom, track.Top);
+                found = found || TrackCatches(fromX, toX, SideTrackXAt(i, track, railFloor), track.Bottom, track.Top);
             }
             if (found) LeaveRailOntoTrack();
         }
@@ -490,6 +511,13 @@ namespace CrazyElevator.Managers
         void UpdateCrazyTravelCamera(Vector3 carLocal, float dt)
         {
             Transform world = exteriorCar.parent;
+            if (UsesShaftOverview)
+            {
+                FrameWholeShaft(world, dt);
+                routeBoostPulse = Mathf.MoveTowards(routeBoostPulse, 0f, dt * 1.55f);
+                UpdateSpeedFx(dt);
+                return;
+            }
             // Follow the car across the building on rails and side tracks;
             // stay framed on the centre shafts otherwise.
             bool followCar = railRiding || !OnMainShaft(carLocal.x);
@@ -561,6 +589,42 @@ namespace CrazyElevator.Managers
             exteriorCamera.fieldOfView = Mathf.Lerp(travelFieldOfView, StopCameraFieldOfView, stopViewBlend);
         }
 
+        void FrameWholeShaft(Transform world, float dt)
+        {
+            const float fov = 52f;
+            const float pitch = 5f;
+            const float halfWidth = GroundTrackSpan + 4f;
+            const float halfDepth = 3f;
+            float bottom = MinTravelFloor * ShaftFloorHeight - 2.5f;
+            float top = MaxTravelFloor * ShaftFloorHeight + 6f;
+            float halfHeight = (top - bottom) * .5f;
+            float sine = Mathf.Sin(pitch * Mathf.Deg2Rad);
+            float cosine = Mathf.Cos(pitch * Mathf.Deg2Rad);
+            float verticalExtent = halfHeight * cosine + halfDepth * sine;
+            float nearestDepth = halfDepth * cosine + halfHeight * sine;
+            float tanVertical = Mathf.Tan(fov * .5f * Mathf.Deg2Rad);
+            float tanHorizontal = tanVertical * Mathf.Max(.1f, exteriorCamera.aspect);
+            // Fit the nearer edge of the map even in a narrow split-screen pane.
+            float distance = nearestDepth + Mathf.Max(verticalExtent / (.92f * tanVertical),
+                halfWidth / (.96f * tanHorizontal));
+
+            Vector3 focus = new Vector3(ElevatorMatchType.ShaftCenterX, (top + bottom) * .5f, 0f);
+            Quaternion angle = Quaternion.Euler(pitch, 0f, 0f);
+            Vector3 position = focus - angle * Vector3.forward * distance;
+            if (cameraImpactTime > 0f)
+            {
+                float impact = cameraImpactTime / .26f;
+                position += (Vector3)(cameraImpactDirection * (.5f * Mathf.Sin(impact * Mathf.PI)));
+                cameraImpactTime = Mathf.Max(0f, cameraImpactTime - dt);
+            }
+            exteriorCamera.orthographic = false;
+            exteriorCamera.fieldOfView = fov;
+            exteriorCamera.farClipPlane = Mathf.Max(exteriorCamera.farClipPlane, distance + 80f);
+            exteriorCamera.transform.SetPositionAndRotation(world.TransformPoint(position), world.rotation * angle);
+            if (WorldOwner == this || WorldOwner.exteriorCamera == null || !WorldOwner.exteriorCamera.enabled)
+                WorldOwner.FitAuthoredBackdrop(world, exteriorCamera);
+        }
+
         Vector2 FrameShaftAction(Vector2 car, float dt)
         {
             // Follow momentum for less than half a second and keep the car in the foreground.
@@ -608,12 +672,15 @@ namespace CrazyElevator.Managers
         void DrawSpeedLines()
         {
             if (phase != Phase.Moving || speedFx <= .02f) return;
-            Rect view = Match != null ? Match.ViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
+            Rect view = Match != null ? Match.ShaftViewRect(Seat) : new Rect(0f, 0f, Screen.width, Screen.height);
             float size = Mathf.Max(1f, view.height / 900f);
             bool sideways = railRiding;
             int direction = sideways ? (railVelocity >= 0f ? 1 : -1) : (travelVelocity >= 0f ? 1 : -1);
-            DrawSpeedEdgeTint(view, sideways);
-            DrawSpeedStreaks(view, size, sideways, direction);
+            if (Match == null || !Match.SharedShaftView)
+            {
+                DrawSpeedEdgeTint(view, sideways);
+                DrawSpeedStreaks(view, size, sideways, direction);
+            }
             DrawCarTrail(view, size, sideways, direction);
         }
 
@@ -701,8 +768,9 @@ namespace CrazyElevator.Managers
                 else bounds.Encapsulate(part.bounds);
             }
             if (!any) return false;
-            Vector3 low = exteriorCamera.WorldToScreenPoint(bounds.min);
-            Vector3 high = exteriorCamera.WorldToScreenPoint(bounds.max);
+            Camera mapCamera = ShaftProjectionCamera;
+            Vector3 low = mapCamera.WorldToScreenPoint(bounds.min);
+            Vector3 high = mapCamera.WorldToScreenPoint(bounds.max);
             if (low.z <= 0f || high.z <= 0f) return false;
             rect = Rect.MinMaxRect(Mathf.Min(low.x, high.x), Screen.height - Mathf.Max(low.y, high.y),
                 Mathf.Max(low.x, high.x), Screen.height - Mathf.Min(low.y, high.y));
@@ -719,7 +787,7 @@ namespace CrazyElevator.Managers
 
         void EnsureCrazyRouteMap()
         {
-            if (exteriorCar == null || exteriorCar.parent == null) return;
+            if (WorldOwner != this || exteriorCar == null || exteriorCar.parent == null) return;
             Transform world = exteriorCar.parent;
             if (crazyRouteMap == null)
             {
@@ -772,9 +840,9 @@ namespace CrazyElevator.Managers
         void CreateCrazyRouteLines()
         {
             CreateRouteLine("Playable route left", LeftShaftX, round.MinFloor,
-                round.MaxFloor, new Color32(75, 226, 202, 255));
+                round.MaxFloor, new Color32(200, 214, 229, 255));
             CreateRouteLine("Playable route right", RightShaftX, round.MinFloor,
-                round.MaxFloor, new Color32(255, 124, 104, 255));
+                round.MaxFloor, new Color32(200, 214, 229, 255));
         }
 
         void CreateRouteLine(string name, float x, float startFloor, float endFloor, Color colour)
@@ -790,12 +858,12 @@ namespace CrazyElevator.Managers
             if (line == null) line = route.gameObject.AddComponent<LineRenderer>();
             line.useWorldSpace = false;
             line.positionCount = 2;
-            line.startWidth = line.endWidth = .11f;
+            line.startWidth = line.endWidth = .27f;
             line.numCornerVertices = 3;
             line.numCapVertices = 2;
             line.sharedMaterial = Mat(colour);
-            line.SetPosition(0, CrazyTravelLocalPosition(x, startFloor));
-            line.SetPosition(1, CrazyTravelLocalPosition(x, endFloor));
+            line.SetPosition(0, new Vector3(x, startFloor * ShaftFloorHeight - .05f, -2.06f));
+            line.SetPosition(1, new Vector3(x, endFloor * ShaftFloorHeight - .05f, -2.06f));
         }
     }
 }
