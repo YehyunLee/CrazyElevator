@@ -94,6 +94,8 @@ namespace CrazyElevator.Managers
                     else if (backdrop.name == "Water Backdrop")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 2);
                     else if (backdrop.name == "Forest Backdrop")
+                        backdrop.gameObject.SetActive(false);
+                    else if (backdrop.name == "Forest Illustration")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 3);
                     else if (backdrop.name == "Space Backdrop")
                         backdrop.gameObject.SetActive(round.ActiveDimension == 4);
@@ -198,9 +200,14 @@ namespace CrazyElevator.Managers
         {
             Transform backdrops = world.Find("World Backdrops");
             if (backdrops == null || round.ActiveDimension == 0) return;
+            if (round.ActiveDimension == 3)
+            {
+                FitForestIllustration(world, camera, backdrops.Find("Forest Illustration"));
+                return;
+            }
             string name = round.ActiveDimension == 1 ? "Candy Backdrop"
                 : round.ActiveDimension == 2 ? "Water Backdrop"
-                : round.ActiveDimension == 3 ? "Forest Backdrop" : "Space Backdrop";
+                : "Space Backdrop";
             Transform backdrop = backdrops.Find(name);
             if (backdrop == null || !backdrop.gameObject.activeInHierarchy) return;
             Transform sky = backdrop.Find(round.ActiveDimension == 1 ? "BG" : "pPlane1");
@@ -241,6 +248,31 @@ namespace CrazyElevator.Managers
             Vector3 resizedCentre = world.InverseTransformPoint(surface.bounds.center);
             backdrop.localPosition += new Vector3(screenCentre.x - resizedCentre.x,
                 screenCentre.y - resizedCentre.y, 0f);
+        }
+
+        static void FitForestIllustration(Transform world, Camera camera, Transform illustration)
+        {
+            if (illustration == null || !illustration.gameObject.activeInHierarchy) return;
+            const float backdropDepth = 60f;
+            const float safety = 1.16f;
+            Vector3 cameraPosition = world.InverseTransformPoint(camera.transform.position);
+            Vector3 cameraForward = world.InverseTransformDirection(camera.transform.forward);
+            if (cameraForward.z <= .01f) return;
+            float distance = (backdropDepth - cameraPosition.z) / cameraForward.z;
+            if (distance <= 0f) return;
+
+            Vector3 centre = cameraPosition + cameraForward * distance;
+            float viewHeight = 2f * distance * Mathf.Tan(camera.fieldOfView * .5f * Mathf.Deg2Rad);
+            float viewWidth = viewHeight * camera.aspect;
+            Renderer renderer = illustration.GetComponent<Renderer>();
+            Texture texture = renderer != null && renderer.sharedMaterial != null
+                ? renderer.sharedMaterial.GetTexture("_BaseMap") : null;
+            float imageAspect = texture != null && texture.height > 0
+                ? texture.width / (float)texture.height : 1.43f;
+            float height = Mathf.Max(viewHeight, viewWidth / imageAspect) * safety;
+            illustration.localPosition = new Vector3(centre.x, centre.y, backdropDepth);
+            illustration.localRotation = Quaternion.identity;
+            illustration.localScale = new Vector3(height * imageAspect, height, 1f);
         }
 
         static void StyleFloorRail(Transform rail, Color accent)

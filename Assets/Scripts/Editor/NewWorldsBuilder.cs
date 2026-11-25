@@ -44,6 +44,21 @@ namespace CrazyElevator.EditorTools
             Debug.Log("Built the denser, dimension-ready side-track routes in ExteriorWorld.");
         }
 
+        [MenuItem("Tools/Crazy Elevator/Build Forest Illustration Backdrop")]
+        public static void BuildForestIllustrationBackdrop()
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(ExteriorPath);
+            try
+            {
+                EnsureForestIllustration(Require(root.transform, "World Backdrops"));
+                PrefabUtility.SaveAsPrefabAsset(root, ExteriorPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("Built the illustrated forest backdrop in ExteriorWorld.");
+        }
+
         static void ExtendExterior()
         {
             GameObject root = PrefabUtility.LoadPrefabContents(ExteriorPath);
@@ -94,6 +109,7 @@ namespace CrazyElevator.EditorTools
                 Transform backdrops = Require(world, "World Backdrops");
                 PlaceBackdrop(backdrops, "BG_fairy_world", "Forest Backdrop", 3);
                 PlaceBackdrop(backdrops, "BG_space_world", "Space Backdrop", 4);
+                EnsureForestIllustration(backdrops);
                 PrefabUtility.SaveAsPrefabAsset(root, ExteriorPath);
             }
             finally { PrefabUtility.UnloadPrefabContents(root); }
@@ -237,6 +253,55 @@ namespace CrazyElevator.EditorTools
             t.localPosition = new Vector3(9f, (top + bottom) * .5f, 60f) - facing * (bounds.center * scale);
             foreach (Transform child in t.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = 31;
             instance.SetActive(false);
+        }
+
+        static void EnsureForestIllustration(Transform parent)
+        {
+            const string materialPath = "Assets/Art/Worlds/Materials/ForestIllustration.mat";
+            const string texturePath = "Assets/Art/Reference/world-forest.png";
+            Transform illustration = parent.Find("Forest Illustration");
+            if (illustration == null)
+            {
+                GameObject plane = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                plane.name = "Forest Illustration";
+                illustration = plane.transform;
+                illustration.SetParent(parent, false);
+                Collider collider = plane.GetComponent<Collider>();
+                if (collider != null) Object.DestroyImmediate(collider);
+            }
+
+            illustration.localPosition = new Vector3(9f, 0f, 60f);
+            illustration.localRotation = Quaternion.identity;
+            illustration.localScale = Vector3.one;
+            illustration.gameObject.layer = 31;
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (material == null)
+            {
+                Shader shader = Shader.Find("CrazyElevator/Interior World Backdrop");
+                if (shader == null) throw new InvalidOperationException("Missing forest backdrop shader.");
+                material = new Material(shader) { name = "ForestIllustration" };
+                AssetDatabase.CreateAsset(material, materialPath);
+            }
+
+            Texture texture = AssetDatabase.LoadAssetAtPath<Texture>(texturePath);
+            if (texture == null) throw new InvalidOperationException("Missing forest reference art.");
+            material.SetTexture("_BaseMap", texture);
+            material.SetVector("_Region", new Vector4(-1f, 1f, 1f, 0f));
+            material.SetColor("_Tint", Color.white);
+            material.SetFloat("_Grade", 1f);
+            material.SetFloat("_Posterize", 0f);
+            material.SetFloat("_PatternStrength", .008f);
+            material.SetFloat("_PatternScale", 36f);
+            material.SetFloat("_PatternMode", 0f);
+
+            Renderer renderer = illustration.GetComponent<Renderer>();
+            if (renderer == null) throw new InvalidOperationException("Forest illustration has no renderer.");
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            illustration.gameObject.SetActive(false);
+            EditorUtility.SetDirty(material);
         }
 
         static Material Material(string name, Color color)

@@ -1178,10 +1178,11 @@ namespace CrazyElevator.Match
 {
     public sealed partial class ElevatorMatch
     {
+        // Keep the duel on one readable map view for the full live round.
+        // The split camera remains available for the tutorial and round reveal.
         internal bool SharedShaftView => Running && SplitScreen && !Finished
             && !MenuManager.TutorialActive && !dimensionRevealActive
-            && player != null && Rival != null && player.Traveling && Rival.Traveling
-            && GameManager.Instance?.AbilityIntroActive != true;
+            && player != null && Rival != null;
 
         internal Rect ShaftViewRect(int seat) => SharedShaftView
             ? new Rect(0f, 0f, Screen.width, Screen.height) : ViewRect(seat);
