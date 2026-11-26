@@ -87,7 +87,10 @@ namespace CrazyElevator.Managers
         static bool playerTwoHumanOnLoad;
         bool showingControllerInstructions;
         static bool playerTwoSelected;
-        static bool playerOneCpuOnLoad;
+#if UNITY_EDITOR
+        const string DevelopmentCpuMatchSessionKey = "CrazyElevator.DevelopmentCpuMatchOnPlay";
+        static bool developmentCpuRivalOnLoad;
+#endif
         static bool openLobbyOnLoad;
         static bool fadeMenuOnLoad;
         static int pauseSelection;
@@ -185,6 +188,11 @@ namespace CrazyElevator.Managers
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetForPlay()
         {
+#if UNITY_EDITOR
+            bool startDevelopmentCpuMatch = UnityEditor.SessionState.GetBool(
+                DevelopmentCpuMatchSessionKey, false);
+            UnityEditor.SessionState.SetBool(DevelopmentCpuMatchSessionKey, false);
+#endif
             sessionReady = false;
             IsOpen = false;
             pauseOpen = false;
@@ -194,7 +202,9 @@ namespace CrazyElevator.Managers
             showControllerInstructionsOnLoad = false;
             playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
-            playerOneCpuOnLoad = false;
+#if UNITY_EDITOR
+            developmentCpuRivalOnLoad = false;
+#endif
             openLobbyOnLoad = false;
             fadeMenuOnLoad = false;
             tutorialOnLoad = false;
@@ -206,6 +216,18 @@ namespace CrazyElevator.Managers
             tutorialModeLoaded = false;
             tutorialMode = true;
             ResetLobbyCharacterSelection();
+#if UNITY_EDITOR
+            if (startDevelopmentCpuMatch)
+            {
+                sessionReady = true;
+                IsOpen = false;
+                startDuelOnLoad = true;
+                playerTwoHumanOnLoad = false;
+                developmentCpuRivalOnLoad = true;
+                tutorialOnLoad = false;
+                showControllerInstructionsOnLoad = false;
+            }
+#endif
         }
 
         void Awake()
@@ -583,12 +605,17 @@ namespace CrazyElevator.Managers
             return requested;
         }
 
-        public static bool ConsumePlayerOneCpuRequest()
+#if UNITY_EDITOR
+        public static bool ConsumeDevelopmentCpuRivalRequest()
         {
-            bool requested = playerOneCpuOnLoad;
-            playerOneCpuOnLoad = false;
+            bool requested = developmentCpuRivalOnLoad;
+            developmentCpuRivalOnLoad = false;
             return requested;
         }
+
+        public static void RequestDevelopmentCpuMatchOnPlay()
+            => UnityEditor.SessionState.SetBool(DevelopmentCpuMatchSessionKey, true);
+#endif
 
         public static void Open() => IsOpen = true;
 
@@ -732,7 +759,9 @@ namespace CrazyElevator.Managers
             startDuelOnLoad = false;
             playerTwoHumanOnLoad = false;
             playerTwoSelected = false;
-            playerOneCpuOnLoad = false;
+#if UNITY_EDITOR
+            developmentCpuRivalOnLoad = false;
+#endif
             InputManager.Instance?.ClearTutorialInputLocks();
             InputManager.Instance?.EndControllerJoining();
             LoadSceneWithMusicFade(SinglePlayerScene, true);
@@ -1503,7 +1532,9 @@ namespace CrazyElevator.Managers
             showControllerInstructionsOnLoad = false;
             startDuelOnLoad = true;
             playerTwoHumanOnLoad = true;
-            playerOneCpuOnLoad = false;
+#if UNITY_EDITOR
+            developmentCpuRivalOnLoad = false;
+#endif
             InputManager.Instance?.EnableSplitKeyboard();
             LoadSceneWithMusicFade(DuelScene, false);
         }

@@ -34,6 +34,7 @@ namespace CrazyElevator.Match
         bool humanRival;
         bool humanPlayer;
         public bool SplitScreen => humanPlayer && humanRival;
+        bool HasCompetitiveOpponent => SplitScreen || Rival != null && Rival.IsNpc;
         public bool IsVisibleSeat(int seat) => SplitScreen
             || seat == (humanPlayer || !humanRival ? 0 : 1);
         public bool Finished => Running && player != null && Rival != null
@@ -113,11 +114,15 @@ namespace CrazyElevator.Match
                 enabled = false;
                 return;
             }
-            // Every playable match has two human seats. Old menu flags must
-            // never silently turn a disconnected player into a CPU.
-            MenuManager.ConsumePlayerOneCpuRequest();
+            // CPU matches are only launchable from the Unity Editor's dev menu.
+#if UNITY_EDITOR
+            bool cpuRival = MenuManager.ConsumeDevelopmentCpuRivalRequest();
+#else
+            const bool cpuRival = false;
+#endif
             MenuManager.ConsumePlayerTwoRequest();
-            humanPlayer = humanRival = true;
+            humanPlayer = true;
+            humanRival = !cpuRival;
 
             if (player == null || player.sceneView == null)
             {
@@ -175,7 +180,11 @@ namespace CrazyElevator.Match
             actor.AddComponent<PassengerManager>().Bind(Rival);
             Rival.sceneView = rivalView;
             player.CopyMatchSettingsTo(Rival);
-            Rival.ConfigureMatch(this, 1, false);
+            Rival.ConfigureMatch(this, 1, !humanRival);
+#if UNITY_EDITOR
+            if (!humanRival)
+                actor.AddComponent<NpcElevator>().game = Rival;
+#endif
             actor.SetActive(true);
             ApplyCarTrim(source, playerOneCarTrim);
             ApplyCarTrim(rivalView, playerTwoCarTrim);
@@ -351,7 +360,7 @@ namespace CrazyElevator.Match
             Rival.StartMatchShift(player, countdown: !practice);
             pickupRefillTime = 0f;
             lastPickupFloor = -1;
-            if (SplitScreen && !practice)
+            if (HasCompetitiveOpponent && !practice)
                 for (int i = 0; i < ElevatorRound.DuelPickupLimit; i++) OfferDuelPickup();
             // Promote one waiting passenger to VIP halfway through the live shift.
             matchVip = null;
@@ -383,7 +392,7 @@ namespace CrazyElevator.Match
 
         void UpdateRivalInteractions(float dt)
         {
-            if (SplitScreen && !player.ShiftFinished && !Rival.ShiftFinished)
+            if (HasCompetitiveOpponent && !player.ShiftFinished && !Rival.ShiftFinished)
                 UpdateDuelPickups(dt);
             vipClaimTime = Mathf.Max(0f, vipClaimTime - dt);
             eventMessageTime = Mathf.Max(0f, eventMessageTime - dt);
@@ -508,7 +517,7 @@ namespace CrazyElevator.Match
                 separation.normalized);
             float closing = Mathf.InverseLerp(1f, 6f, closingSpeed);
             bool racing = VipWaiting && actor.NearingPickup(matchVip) && other.NearingPickup(matchVip);
-            if (!racing && SplitScreen && !MenuManager.TutorialActive)
+            if (!racing && HasCompetitiveOpponent && !MenuManager.TutorialActive)
                 foreach (SharedRider rider in player.MatchRound.DuelPickups)
                     if (!rider.Boarded && !rider.Resolved && actor.NearingPickup(rider) && other.NearingPickup(rider))
                     {
@@ -1180,7 +1189,7 @@ namespace CrazyElevator.Match
     {
         // Keep the duel on one readable map view for the full live round.
         // The split camera remains available for the tutorial and round reveal.
-        internal bool SharedShaftView => Running && SplitScreen && !Finished
+        internal bool SharedShaftView => Running && HasCompetitiveOpponent && !Finished
             && !MenuManager.TutorialActive && !dimensionRevealActive
             && player != null && Rival != null;
 
