@@ -51,6 +51,7 @@ namespace CrazyElevator.Managers
             if (launching || IsLobbySeatReady(seat)) return;
             int count = LobbyCharacters.Length;
             lobbyCharacterSelection[seat] = (lobbyCharacterSelection[seat] + direction + count) % count;
+            SfxManager.Instance?.PlayCharacterSwitch();
         }
 
         void UpdateLobbyPortraits()

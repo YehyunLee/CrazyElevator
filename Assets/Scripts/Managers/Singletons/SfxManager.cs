@@ -11,6 +11,19 @@ namespace CrazyElevator.Managers
 
         [SerializeField, Range(1, 16)] int poolSize = 8;
         [SerializeField, Range(0f, 1f)] float sfxVolume = .65f;
+        [Header("UI sounds")]
+        [SerializeField] AudioClip worldShuffle;
+        [SerializeField] AudioClip mainMenu;
+        [SerializeField] AudioClip pointsAwarded;
+        [SerializeField] AudioClip characterSwitch;
+        [SerializeField] AudioClip characterConfirm;
+
+        public void PlayWorldShuffle() => PlaySfx(worldShuffle);
+        public void PlayMainMenu() => PlaySfx(mainMenu);
+        public void PlayPointsAwarded() => PlaySfx(pointsAwarded);
+        public void PlayCharacterSwitch() => PlaySfx(characterSwitch);
+        public void PlayCharacterConfirm() => PlaySfx(characterConfirm);
+
         readonly Queue<AudioSource> idle = new Queue<AudioSource>();
         readonly List<AudioSource> all = new List<AudioSource>();
 

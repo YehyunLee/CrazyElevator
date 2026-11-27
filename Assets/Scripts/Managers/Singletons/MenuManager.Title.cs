@@ -35,6 +35,7 @@ namespace CrazyElevator.Managers
             titleMoveHeld = moving;
             if (choosingMode || !movePressed) return;
 
+            int previousSelection = titleSelection;
             Rect selected = TitleButtonRects[titleSelection];
             float closestDistance = float.PositiveInfinity;
             for (int i = 0; i < TitleButtonRects.Length; i++)
@@ -53,6 +54,7 @@ namespace CrazyElevator.Managers
                 closestDistance = offset.sqrMagnitude;
                 titleSelection = i;
             }
+            if (titleSelection != previousSelection) SfxManager.Instance?.PlayMainMenu();
         }
 
         void DrawModeSelect()

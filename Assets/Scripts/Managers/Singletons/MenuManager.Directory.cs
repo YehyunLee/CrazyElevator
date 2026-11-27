@@ -311,6 +311,7 @@ namespace CrazyElevator.Managers
         {
             if (directoryEntries.Count == 0) return;
             directorySelection = (directorySelection + amount + directoryEntries.Count) % directoryEntries.Count;
+            SfxManager.Instance?.PlayCharacterSwitch();
             UpdateDirectoryPreview();
         }
 

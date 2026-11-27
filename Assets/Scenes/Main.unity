@@ -1607,6 +1607,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrazyElevator.Managers.SfxManager
   poolSize: 8
   sfxVolume: 0.65
+  worldShuffle: {fileID: 8300000, guid: f87c33def3d8ace4aa2ada6ebf95e79d, type: 3}
+  mainMenu: {fileID: 8300000, guid: 90c3c699cfd43234ca51c1b370a52519, type: 3}
+  pointsAwarded: {fileID: 8300000, guid: a23f35452bf12c3438376220cb630b55, type: 3}
+  characterSwitch: {fileID: 8300000, guid: f458c6780d2d0b242b062b95da42e4e2, type: 3}
+  characterConfirm: {fileID: 8300000, guid: bd7de47e7f5c81c4b8422ec0a0d34e3d, type: 3}
 --- !u!1 &910000031
 GameObject:
   m_ObjectHideFlags: 0

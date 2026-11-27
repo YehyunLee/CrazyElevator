@@ -464,6 +464,7 @@ namespace CrazyElevator.Match
                     if (session.IsDimensionEnabled(dimension)) dimensionRoulette.Add(dimension);
             if (dimensionRoulette.Count == 0) dimensionRoulette.Add(dimensionRevealIndex);
             ShuffleDimensionRoulette();
+            SfxManager.Instance?.PlayWorldShuffle();
             dimensionRoulette.Remove(dimensionRevealIndex);
             dimensionRoulette.Add(dimensionRevealIndex);
             dimensionRevealTime = 0f;

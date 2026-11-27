@@ -424,11 +424,12 @@ namespace CrazyElevator.Managers
             SyncTitlePreview();
         }
 
-        public void OnTitleStart() { titleSelection = 0; BeginModeSelection(); }
-        public void OnTitleDimensionPool() => OpenDimensionPool();
-        public void OnTitlePassengerGuide() => OpenPassengerGuide();
+        public void OnTitleStart() { titleSelection = 0; ActivateTitleSelection(); }
+        public void OnTitleDimensionPool() { titleSelection = 1; ActivateTitleSelection(); }
+        public void OnTitlePassengerGuide() { titleSelection = 2; ActivateTitleSelection(); }
         public void OnTitleOptions()
         {
+            SfxManager.Instance?.PlayMainMenu();
             titleSelection = 3;
             showingOptions = true;
             optionsSelection = 0;
@@ -436,13 +437,17 @@ namespace CrazyElevator.Managers
             optionsVerticalHeld = false;
             SyncTitleButtons();
         }
-        public void OnTitleExit() { titleSelection = 4; ExitGame(); }
+        public void OnTitleExit() { titleSelection = 4; ActivateTitleSelection(); }
 
         void UpdateTitleMouseCursor()
         {
             if (!TryGetMenuArtPointer(out Vector2 pointer)) return;
             int hovered = MenuRectIndex(pointer, TitleButtonRects);
-            if (hovered >= 0) titleSelection = hovered;
+            if (hovered >= 0 && hovered != titleSelection)
+            {
+                titleSelection = hovered;
+                SfxManager.Instance?.PlayMainMenu();
+            }
         }
 
         void UpdateOptionsNavigation()
@@ -519,6 +524,7 @@ namespace CrazyElevator.Managers
             if (launching) return;
             if (seat == 0) playerOneReady = !playerOneReady;
             else playerTwoReady = !playerTwoReady;
+            if (IsLobbySeatReady(seat)) SfxManager.Instance?.PlayCharacterConfirm();
         }
 
         Vector2 KeyboardMenuMove(bool splitKeyboard)
@@ -1168,6 +1174,8 @@ namespace CrazyElevator.Managers
 
         void ActivateTitleSelection()
         {
+            // Options has its own public callback, which also handles authored UI buttons.
+            if (titleSelection != 3) SfxManager.Instance?.PlayMainMenu();
             if (titleSelection == 0) BeginModeSelection();
             else if (titleSelection == 1) OpenDimensionPool();
             else if (titleSelection == 2) OpenPassengerGuide();

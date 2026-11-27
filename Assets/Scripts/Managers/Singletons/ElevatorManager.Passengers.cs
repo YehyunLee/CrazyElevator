@@ -1431,6 +1431,7 @@ namespace CrazyElevator.Managers
         void QueueScoreFlight(Vector2 viewport, int points, float start)
         {
             if (points == 0) return;
+            if (points > 0 && !IsNpc) SfxManager.Instance?.PlayPointsAwarded();
             if (scoreFlights.Count >= 20) scoreFlights.RemoveAt(0);
             scoreFlights.Add(new ScoreFlight
             {
